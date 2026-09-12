@@ -45,5 +45,9 @@ Match MagicBlock **private-counter (Anchor)** + PER quickstart, not random lates
 
 ```toml
 # programs/.../Cargo.toml (sketch)
-anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
-ephemeral-rollups-sdk = { version = "0.16.2", features = ["anchor", "access-control"] }
+# Exact `=` pins. Cargo `version = "1.0.2"` is ^1.0.2 and will pull 1.2.x.
+anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
+ephemeral-rollups-sdk = { version = "=0.16.2", features = ["anchor", "access-control"] }
+```
+
+Anchor CLI 1.0.2 `anchor test` defaults to Surfpool. Until S5, run `./scripts/test.sh` or `anchor test --validator legacy`.

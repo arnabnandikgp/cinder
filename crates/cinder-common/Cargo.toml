@@ -1,0 +1,7 @@
+[package]
+name = "cinder-common"
+version = "0.1.0"
+description = "Shared Cinder constants and halt helpers (docs/03-phase4-freeze.md)"
+edition = "2021"
+
+[dependencies]
