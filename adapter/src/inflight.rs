@@ -9,6 +9,8 @@ pub struct InFlight {
     pub asset_id: u16,
     pub lots_delta: i64,
     pub inserted_at_ms: u64,
+    /// Venue accepted a fill. Do not later `ack_fail` this row.
+    pub venue_filled: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -29,6 +31,12 @@ impl InFlightTable {
         self.entries.get(oid)
     }
 
+    pub fn mark_venue_filled(&mut self, oid: &ClientOid) {
+        if let Some(row) = self.entries.get_mut(oid) {
+            row.venue_filled = true;
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -41,7 +49,10 @@ impl InFlightTable {
     pub fn expired(&self, now_ms: u64) -> Vec<InFlight> {
         self.entries
             .values()
-            .filter(|r| now_ms.saturating_sub(r.inserted_at_ms) > cc::IN_FLIGHT_TTL_MS)
+            .filter(|r| {
+                !r.venue_filled
+                    && now_ms.saturating_sub(r.inserted_at_ms) > cc::IN_FLIGHT_TTL_MS
+            })
             .cloned()
             .collect()
     }

@@ -15,6 +15,7 @@ import {
 import { expect } from "chai";
 import nacl from "tweetnacl";
 import {
+  EPHEMERAL_VAULT_ID,
   getAuthToken,
   MAGIC_PROGRAM_ID,
   PERMISSION_PROGRAM_ID,
@@ -26,9 +27,7 @@ import { CinderLedger } from "../target/types/cinder_ledger";
 const ER_VALIDATOR = new PublicKey(
   "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
 );
-const EPHEMERAL_VAULT = new PublicKey(
-  "MagicVau1t999999999999999999999999999999999"
-);
+const EPHEMERAL_VAULT = EPHEMERAL_VAULT_ID;
 const BASE = process.env.PROVIDER_ENDPOINT || "http://127.0.0.1:8899";
 const ER = process.env.EPHEMERAL_PROVIDER_ENDPOINT || "http://127.0.0.1:7799";
 const QFS = process.env.TEE_PROVIDER_ENDPOINT || "http://127.0.0.1:6699";

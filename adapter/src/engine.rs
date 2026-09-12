@@ -60,6 +60,7 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             asset_id: oid.asset_id,
             lots_delta: oid.lots_delta,
             inserted_at_ms: now_ms,
+            venue_filled: false,
         });
 
         let order = MarketOrder {
@@ -78,6 +79,14 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                 })
             }
             PlaceResult::Fill(fill) => {
+                if fill.client_oid != oid.client_oid || fill.asset_id != oid.asset_id {
+                    let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
+                    self.ledger.write_halt(flags)?;
+                    return Ok(HedgeOutcome::InvariantBroken {
+                        asset_id: oid.asset_id,
+                    });
+                }
+                self.inflight.mark_venue_filled(&oid.client_oid);
                 self.ledger.ack_fill(&oid.user, &fill)?;
                 self.inflight.remove(&oid.client_oid);
                 if !i1_holds(&self.phoenix, &self.ledger, fill.asset_id) {
@@ -224,5 +233,40 @@ mod tests {
             ad.ledger.config_halt(),
             cc::HALT_ENTRIES | cc::OPERATOR_DOWN
         );
+    }
+
+    #[test]
+    fn mismatched_fill_identity_halts_without_ack() {
+        let mut phoenix = MockPhoenix::new();
+        phoenix.fill_next(Fill {
+            client_oid: oid(99),
+            asset_id: 2,
+            filled_lots: 10,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+        });
+        let mut ad = adapter_with(phoenix);
+        let out = ad.hedge_pending(1_000, &pending(5, 10, 1_000)).unwrap();
+        assert!(matches!(out, HedgeOutcome::InvariantBroken { asset_id: 1 }));
+        assert!(ad.ledger.fills.is_empty());
+        assert_eq!(ad.inflight.len(), 1);
+        assert_eq!(ad.ledger.config_halt() & cc::INVARIANT_BROKEN, cc::INVARIANT_BROKEN);
+    }
+
+    #[test]
+    fn expire_does_not_fail_ack_venue_filled_rows() {
+        let mut ad = adapter_with(MockPhoenix::new());
+        ad.inflight.insert(InFlight {
+            user: user(),
+            client_oid: oid(8),
+            asset_id: 1,
+            lots_delta: 10,
+            inserted_at_ms: 0,
+            venue_filled: true,
+        });
+        let expired = ad.expire_inflight(cc::IN_FLIGHT_TTL_MS + 10).unwrap();
+        assert!(expired.is_empty());
+        assert!(ad.ledger.fails.is_empty());
+        assert_eq!(ad.inflight.len(), 1);
     }
 }

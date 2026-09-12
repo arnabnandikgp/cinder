@@ -8,7 +8,7 @@ cd "${root}"
 
 if ! command -v mb-stack >/dev/null 2>&1; then
   echo "stack-c: installing @magicblock-labs/ephemeral-validator (provides mb-stack)..."
-  npm i -g @magicblock-labs/ephemeral-validator@latest
+  npm i -g @magicblock-labs/ephemeral-validator@0.14.10
 fi
 
 if ! command -v mb-stack >/dev/null 2>&1; then

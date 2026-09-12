@@ -13,10 +13,19 @@ pub trait TeeAuth {
 }
 
 /// In-memory operator credential. One token, not a user map.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct OperatorAuth {
     token: Option<String>,
     qfs_url: String,
+}
+
+impl std::fmt::Debug for OperatorAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OperatorAuth")
+            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .field("qfs_url", &self.qfs_url)
+            .finish()
+    }
 }
 
 impl OperatorAuth {

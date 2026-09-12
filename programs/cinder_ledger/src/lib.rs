@@ -104,7 +104,7 @@ pub mod cinder_ledger {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require!(!cc::entries_blocked(cfg.paused), LedgerError::Halted);
         require!(!cc::entries_blocked(ctx.accounts.book.halt), LedgerError::Halted);
-        require!(cfg.is_allowlisted(asset_id), LedgerError::AssetNotAllowlisted);
+        require!(asset_allowlisted(&cfg, asset_id), LedgerError::AssetNotAllowlisted);
 
         let ledger = &mut ctx.accounts.user_ledger;
         require_keys_eq!(ledger.user, ctx.accounts.user.key(), LedgerError::Unauthorized);
@@ -142,9 +142,8 @@ pub mod cinder_ledger {
             .free
             .checked_add(ledger.reserved)
             .ok_or(LedgerError::Overflow)?;
-        let notional = cc::stub_notional(new_lots.unsigned_abs()).ok_or(LedgerError::Overflow)?;
+        let notional = stub_notional_all(ledger)?;
         if equity > 0 {
-            // leverage = notional / equity; reject if notional > equity * MAX_USER_LEVERAGE
             let cap = equity
                 .checked_mul(cfg.max_user_leverage as u64)
                 .ok_or(LedgerError::Overflow)?;
@@ -616,50 +615,32 @@ pub struct Residual {
     pub lots: i64,
 }
 
-#[allow(dead_code)]
-#[derive(AnchorDeserialize, Clone)]
-struct VaultConfig {
-    pub admin: Pubkey,
-    pub adapter: Pubkey,
-    pub vault_authority: Pubkey,
-    pub phoenix_trader: Pubkey,
-    pub usdc_mint: Pubkey,
-    pub vault_usdc_ata: Pubkey,
-    pub er_validator: Pubkey,
-    pub paused: u8,
-    pub user_im_mult_bps: u16,
-    pub user_mm_mult_bps: u16,
-    pub max_user_leverage: u16,
-    pub buffer_min_bps: u16,
-    pub buffer_floor_usdc: u64,
-    pub allowlist_len: u8,
-    pub allowlist_assets: [u16; 32],
-    pub bump_config: u8,
-    pub bump_vault_authority: u8,
+fn asset_allowlisted(cfg: &cinder_vault::Config, asset_id: u16) -> bool {
+    cfg.allowlist_assets
+        .iter()
+        .take(cfg.allowlist_len as usize)
+        .any(|a| *a == asset_id)
 }
 
-impl VaultConfig {
-    fn is_allowlisted(&self, asset_id: u16) -> bool {
-        self.allowlist_assets
-            .iter()
-            .take(self.allowlist_len as usize)
-            .any(|a| *a == asset_id)
-    }
-}
-
-/// sha256("account:Config")[0..8] — Anchor account discriminator.
-const CONFIG_DISCRIMINATOR: [u8; 8] = [155, 12, 170, 224, 30, 250, 204, 130];
-
-fn load_vault_config(info: &AccountInfo) -> Result<VaultConfig> {
+fn load_vault_config(info: &AccountInfo) -> Result<cinder_vault::Config> {
     require_keys_eq!(*info.owner, VAULT_PROGRAM_ID, LedgerError::InvalidConfig);
     let data = info.try_borrow_data()?;
-    require!(data.len() >= 8, LedgerError::InvalidConfig);
-    require!(data[0..8] == CONFIG_DISCRIMINATOR, LedgerError::InvalidConfig);
-    VaultConfig::try_from_slice(&data[8..]).map_err(|_| error!(LedgerError::InvalidConfig))
+    let mut slice: &[u8] = &data;
+    cinder_vault::Config::try_deserialize(&mut slice)
+        .map_err(|_| error!(LedgerError::InvalidConfig))
 }
 
 fn stub_im(lots: i64) -> Result<u64> {
     cc::stub_cinder_im(lots.unsigned_abs()).ok_or(error!(LedgerError::Overflow))
+}
+
+fn stub_notional_all(ledger: &UserLedger) -> Result<u64> {
+    let mut n = 0u64;
+    for p in ledger.positions[..ledger.positions_len as usize].iter() {
+        let piece = cc::stub_notional(p.lots.unsigned_abs()).ok_or(LedgerError::Overflow)?;
+        n = n.checked_add(piece).ok_or(LedgerError::Overflow)?;
+    }
+    Ok(n)
 }
 
 fn apply_im_delta(ledger: &mut UserLedger, old_im: u64, new_im: u64) -> Result<()> {
@@ -777,7 +758,7 @@ fn oid_slot_free(oid: &OpenOid) -> bool {
     match oid.state {
         cc::OID_PENDING => oid.lots_delta == 0,
         cc::OID_ACKED | cc::OID_FAILED => true,
-        cc::OID_LIQUIDATING => false,
+        cc::OID_LIQUIDATING => oid.lots_delta == 0,
         _ => true,
     }
 }
@@ -813,6 +794,7 @@ fn revert_pending_on_asset(ledger: &mut UserLedger, asset_id: u16) -> Result<()>
         apply_im_delta(ledger, old_im, new_im)?;
         set_position_lots(ledger, oid.asset_id, restored, new_im)?;
         ledger.open_oids[idx].state = cc::OID_LIQUIDATING;
+        ledger.open_oids[idx].lots_delta = 0;
         ledger.pending_oid_count = ledger
             .pending_oid_count
             .checked_sub(1)
