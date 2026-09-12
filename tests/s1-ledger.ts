@@ -307,4 +307,121 @@ describe("S1 accounts and order machine", () => {
       expect(code).to.match(/Unsupported/);
     }
   });
+
+  describe("S3 order machine", () => {
+    const placeAccounts = () => ({
+      user: user.publicKey,
+      config: configPda,
+      book: bookPda,
+      userLedger: userLedgerPda,
+    });
+
+    it("replay nonce fails", async () => {
+      try {
+        await ledger.methods
+          .placeOrder(ASSET_SOL, new BN(1), oid(4), 50, false, new BN(0))
+          .accounts(placeAccounts())
+          .signers([user])
+          .rpc();
+        expect.fail("replayed nonce should fail");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/BadNonce/);
+      }
+    });
+
+    it("reduce-only that would increase exposure fails", async () => {
+      try {
+        await ledger.methods
+          .placeOrder(ASSET_SOL, new BN(1), oid(5), 50, true, new BN(2))
+          .accounts(placeAccounts())
+          .signers([user])
+          .rpc();
+        expect.fail("reduce-only increase should fail");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/ReduceOnlyIncrease/);
+      }
+    });
+
+    it("liquidate_user is adapter-signed and flattens one asset", async () => {
+      try {
+        await ledger.methods
+          .liquidateUser(ASSET_SOL)
+          .accounts({
+            adapter: user.publicKey,
+            config: configPda,
+            userLedger: userLedgerPda,
+            book: bookPda,
+          })
+          .signers([user])
+          .rpc();
+        expect.fail("user must not be able to liquidate");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/Unauthorized/);
+      }
+
+      await ledger.methods
+        .liquidateUser(ASSET_SOL)
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: userLedgerPda,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const ul = await ledger.account.userLedger.fetch(userLedgerPda);
+      expect(ul.positionsLen).to.equal(0);
+      expect(ul.reserved.toNumber()).to.equal(0);
+      expect(ul.free.toNumber()).to.equal(CREDIT);
+      expect(ul.pendingOidCount).to.equal(0);
+
+      const book = await ledger.account.book.fetch(bookPda);
+      expect(book.residualLen).to.equal(0);
+    });
+
+    it("ninth concurrent oid fails", async () => {
+      const startNonce = (
+        await ledger.account.userLedger.fetch(userLedgerPda)
+      ).nonce.toNumber();
+      for (let i = 0; i < 8; i++) {
+        await ledger.methods
+          .placeOrder(
+            ASSET_SOL,
+            new BN(1),
+            oid(20 + i),
+            50,
+            false,
+            new BN(startNonce + i)
+          )
+          .accounts(placeAccounts())
+          .signers([user])
+          .rpc();
+      }
+      const mid = await ledger.account.userLedger.fetch(userLedgerPda);
+      expect(mid.pendingOidCount).to.equal(8);
+
+      try {
+        await ledger.methods
+          .placeOrder(
+            ASSET_SOL,
+            new BN(1),
+            oid(40),
+            50,
+            false,
+            new BN(startNonce + 8)
+          )
+          .accounts(placeAccounts())
+          .signers([user])
+          .rpc();
+        expect.fail("ninth concurrent oid should fail");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/OidCap/);
+      }
+    });
+  });
 });

@@ -295,6 +295,26 @@ pub mod cinder_ledger {
         Ok(())
     }
 
+    /// Flatten one asset. Adapter only. Reverts pending oids on that asset, then
+    /// zeros remaining lots and subtracts them from Book.
+    pub fn liquidate_user(ctx: Context<LiquidateUser>, asset_id: u16) -> Result<()> {
+        let cfg = load_vault_config(&ctx.accounts.config)?;
+        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+
+        let ledger = &mut ctx.accounts.user_ledger;
+        revert_pending_on_asset(ledger, asset_id)?;
+
+        let lots = position_lots(ledger, asset_id);
+        if lots != 0 {
+            let old_im = stub_im(lots)?;
+            apply_im_delta(ledger, old_im, 0)?;
+            set_position_lots(ledger, asset_id, 0, 0)?;
+            add_book_lots(&mut ctx.accounts.book, asset_id, -lots)?;
+        }
+        ctx.accounts.book.last_ack_slot_er = Clock::get()?.slot;
+        Ok(())
+    }
+
     pub fn delegate_user(ctx: Context<DelegateUser>) -> Result<()> {
         privacy::delegate_user_handler(ctx)
     }
@@ -512,6 +532,27 @@ pub struct AdapterBook<'info> {
         owner = VAULT_PROGRAM_ID
     )]
     pub config: UncheckedAccount<'info>,
+    #[account(mut, seeds = [cc::SEED_BOOK], bump = book.bump)]
+    pub book: Box<Account<'info, Book>>,
+}
+
+#[derive(Accounts)]
+pub struct LiquidateUser<'info> {
+    pub adapter: Signer<'info>,
+    /// CHECK: vault Config
+    #[account(
+        seeds = [cc::SEED_CONFIG],
+        bump,
+        seeds::program = VAULT_PROGRAM_ID,
+        owner = VAULT_PROGRAM_ID
+    )]
+    pub config: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [cc::SEED_USER, user_ledger.user.as_ref()],
+        bump = user_ledger.bump
+    )]
+    pub user_ledger: Box<Account<'info, UserLedger>>,
     #[account(mut, seeds = [cc::SEED_BOOK], bump = book.bump)]
     pub book: Box<Account<'info, Book>>,
 }
@@ -749,6 +790,35 @@ fn oid_duplicate(ledger: &UserLedger, client_oid: &[u8; 16]) -> bool {
 
 fn find_free_oid_slot(ledger: &UserLedger) -> Option<usize> {
     ledger.open_oids.iter().position(oid_slot_free)
+}
+
+fn revert_pending_on_asset(ledger: &mut UserLedger, asset_id: u16) -> Result<()> {
+    let idxs: Vec<usize> = ledger
+        .open_oids
+        .iter()
+        .enumerate()
+        .filter(|(_, o)| {
+            o.asset_id == asset_id && o.state == cc::OID_PENDING && o.lots_delta != 0
+        })
+        .map(|(i, _)| i)
+        .collect();
+    for idx in idxs {
+        let oid = ledger.open_oids[idx];
+        let tentative = position_lots(ledger, oid.asset_id);
+        let restored = tentative
+            .checked_sub(oid.lots_delta)
+            .ok_or(LedgerError::Overflow)?;
+        let old_im = stub_im(tentative)?;
+        let new_im = stub_im(restored)?;
+        apply_im_delta(ledger, old_im, new_im)?;
+        set_position_lots(ledger, oid.asset_id, restored, new_im)?;
+        ledger.open_oids[idx].state = cc::OID_LIQUIDATING;
+        ledger.pending_oid_count = ledger
+            .pending_oid_count
+            .checked_sub(1)
+            .ok_or(LedgerError::Overflow)?;
+    }
+    Ok(())
 }
 
 fn take_pending_oid(ledger: &UserLedger, client_oid: &[u8; 16]) -> Result<(usize, OpenOid)> {

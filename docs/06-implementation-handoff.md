@@ -9,7 +9,7 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 | S0 | Repo + toolchain | Workspace, pins, reference dumps, scripts stubs | closed | `anchor --version` is 1.0.2; `anchor build` of skeleton programs succeeds; `docs/reference/mb-docs.md` and `phoenix-docs.md` present |
 | S1 | Ledger + vault accounts | Anchor accounts and ixs from freeze, no cluster privacy yet | closed | `anchor test` inits Config, UserLedger, Book, FeeAccrual; seeds match freeze |
 | S2 | PER privacy (stage C ACL) | Delegate, EphemeralPermission, QFS tokens | closed | User A token reads A; user B token cannot read A; adapter token reads both; traffic on `:6699` |
-| S3 | Order machine without Phoenix | place / dummy ack / fail / nonce / halt bits | open | Fail-ack restores lots and free; double-nonce rejected; HALT_ENTRIES blocks place |
+| S3 | Order machine without Phoenix | place / dummy ack / fail / nonce / halt bits | closed | Fail-ack restores lots and free; double-nonce rejected; HALT_ENTRIES blocks place |
 | S4 | Adapter skeleton | Operator token, halt mirror, in-flight registry, I1/I2 checker (Phoenix mocked) | open | Mock fill path updates Book; mock I1 break sets INVARIANT_BROKEN on Book + Config |
 | S5 | Surfpool venue boot | Fork, register trader 128, delegate position_authority, Ember post/pull | open | Rise trader-state shows collateral after post; pull returns USDC to vault ATA |
 | S6 | One-user residual hedge | Window=0 market/IOC on one allowlisted asset | open | After ack, Book lots == Phoenix lots; user reserved ≥ Cinder IM |
@@ -140,7 +140,9 @@ Still no Phoenix. Tests may call ack directly.
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- S1 already had nonce (monotonic, must equal `ledger.nonce`), oid cap 8, allowlist, reduce-only (same sign and strictly smaller abs, or flat), tentative lots, pending 0/1/2, HALT bits, fail-ack restore. S3 adds `liquidate_user` and the remaining tests. Still no Phoenix; acks are called directly.
+- `liquidate_user(asset_id)` is adapter-only (`Config.adapter`). Reverts pending oids on that asset (state → 3 liquidating), then zeros remaining lots, releases IM, and `Book -=` those lots. User signer is rejected. Halt does not block liquidation.
+- Tests nested under S1 local suite (`tests/s1-ledger.ts`, `./scripts/test.sh`): replay nonce → `BadNonce`; reduce-only +1 on a long → `ReduceOnlyIncrease`; user cannot liquidate, adapter flatten zeros position + Book; ninth concurrent oid → `OidCap`. 9 passing with S1.
 
 ---
 
