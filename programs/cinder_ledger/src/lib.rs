@@ -1,11 +1,16 @@
 use anchor_lang::prelude::*;
 use cinder_common as cc;
+use ephemeral_rollups_sdk::anchor::ephemeral;
+
+mod privacy;
+pub use privacy::*;
 
 declare_id!("h3Bw2xjj69JssRkaxr8Jxh6TtamvrjSxASXbfLeWyPg");
 
 /// `cinder_vault` program id. Ledger adapter ixs authenticate against that Config.
 pub const VAULT_PROGRAM_ID: Pubkey = pubkey!("9zhBFVgk13gnYT6iVuKPGfQiAvVfr6cYQq2bY2QUzXmg");
 
+#[ephemeral]
 #[program]
 pub mod cinder_ledger {
     use super::*;
@@ -27,6 +32,19 @@ pub mod cinder_ledger {
         fees.phoenix_fees_paid = 0;
         fees.cinder_fees_accrued = 0;
         fees.bump = ctx.bumps.fee_accrual;
+
+        privacy::fund_permission_rent(
+            ctx.accounts.adapter.to_account_info(),
+            ctx.accounts.book.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            cc::MAX_POOL_PERMISSION_MEMBERS,
+        )?;
+        privacy::fund_permission_rent(
+            ctx.accounts.adapter.to_account_info(),
+            ctx.accounts.fee_accrual.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            cc::MAX_POOL_PERMISSION_MEMBERS,
+        )?;
         Ok(())
     }
 
@@ -46,6 +64,13 @@ pub mod cinder_ledger {
         ledger.positions = [Position::default(); cc::MAX_USER_POSITIONS];
         ledger.open_oids = [OpenOid::default(); cc::MAX_OPEN_OIDS_PER_USER];
         ledger.bump = ctx.bumps.user_ledger;
+
+        privacy::fund_permission_rent(
+            ctx.accounts.adapter.to_account_info(),
+            ctx.accounts.user_ledger.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            cc::MAX_USER_PERMISSION_MEMBERS,
+        )?;
         Ok(())
     }
 
@@ -268,6 +293,30 @@ pub mod cinder_ledger {
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
         ctx.accounts.book.phoenix_collateral = phoenix_collateral;
         Ok(())
+    }
+
+    pub fn delegate_user(ctx: Context<DelegateUser>) -> Result<()> {
+        privacy::delegate_user_handler(ctx)
+    }
+
+    pub fn delegate_book(ctx: Context<DelegateBook>) -> Result<()> {
+        privacy::delegate_book_handler(ctx)
+    }
+
+    pub fn delegate_fees(ctx: Context<DelegateFees>) -> Result<()> {
+        privacy::delegate_fees_handler(ctx)
+    }
+
+    pub fn init_user_permission(ctx: Context<UserPermission>) -> Result<()> {
+        privacy::init_user_permission_handler(ctx)
+    }
+
+    pub fn init_book_permission(ctx: Context<BookPermission>) -> Result<()> {
+        privacy::init_book_permission_handler(ctx)
+    }
+
+    pub fn init_fees_permission(ctx: Context<FeesPermission>) -> Result<()> {
+        privacy::init_fees_permission_handler(ctx)
     }
 }
 
@@ -795,4 +844,8 @@ pub enum LedgerError {
     BadFillSize,
     #[msg("bad slippage bps")]
     BadSlippage,
+    #[msg("missing ER validator")]
+    MissingValidator,
+    #[msg("validator is not Config.er_validator")]
+    BadValidator,
 }

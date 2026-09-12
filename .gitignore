@@ -15,6 +15,8 @@ test-ledger
 node_modules
 yarn-error.log
 package-lock.json
+mb-stack.log
+magicblock-test-storage
 
 **/*.rs.bk
 **/Xargo.toml

@@ -8,7 +8,7 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 |---|---|---|---|---|
 | S0 | Repo + toolchain | Workspace, pins, reference dumps, scripts stubs | closed | `anchor --version` is 1.0.2; `anchor build` of skeleton programs succeeds; `docs/reference/mb-docs.md` and `phoenix-docs.md` present |
 | S1 | Ledger + vault accounts | Anchor accounts and ixs from freeze, no cluster privacy yet | closed | `anchor test` inits Config, UserLedger, Book, FeeAccrual; seeds match freeze |
-| S2 | PER privacy (stage C ACL) | Delegate, EphemeralPermission, QFS tokens | open | User A token reads A; user B token cannot read A; adapter token reads both; traffic on `:6699` |
+| S2 | PER privacy (stage C ACL) | Delegate, EphemeralPermission, QFS tokens | closed | User A token reads A; user B token cannot read A; adapter token reads both; traffic on `:6699` |
 | S3 | Order machine without Phoenix | place / dummy ack / fail / nonce / halt bits | open | Fail-ack restores lots and free; double-nonce rejected; HALT_ENTRIES blocks place |
 | S4 | Adapter skeleton | Operator token, halt mirror, in-flight registry, I1/I2 checker (Phoenix mocked) | open | Mock fill path updates Book; mock I1 break sets INVARIANT_BROKEN on Book + Config |
 | S5 | Surfpool venue boot | Fork, register trader 128, delegate position_authority, Ember post/pull | open | Rise trader-state shows collateral after post; pull returns USDC to vault ATA |
@@ -115,7 +115,11 @@ Copy patterns from `magicblock-engine-examples/private-counter/anchor`. If CPI n
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- `#[ephemeral]` on `cinder_ledger`. Delegate + permission ixs live on the ledger program (it owns the PDAs). Freeze listed `delegate_user` under vault L1 because it is an L1 tx; CPI must come from the owner program.
+- Split vs freeze `init_user`: L1 `init_user` creates the ledger and pre-funds `ephemeral_accounts::rent(EphemeralPermission::size_of(n))`. ER `init_user_permission` / `init_book_permission` / `init_fees_permission` run `CreateEphemeralPermissionCpi` (PDA-signed, PDA pays). Same split as private-counter.
+- ACL hardcoded in the program, not client-supplied: UserLedger members = user (`TX_BALANCES|TX_LOGS|TX_MESSAGE|ACCOUNT_SIGNATURES`) + adapter (`AUTHORITY` + view). Book and FeeAccrual = adapter only. `is_private: true`. Validator must be `Config.er_validator` (`mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev` locally).
+- Stack: `@magicblock-labs/ephemeral-validator@0.14.10` `mb-stack --reset` → base `:8899`, ER `:7799`, QFS `:6699`. `./scripts/stack-c.sh` starts it; `./scripts/test-s2.sh` deploys and runs mocha. TS client `@magicblock-labs/ephemeral-rollups-sdk@0.14.3` + `getAuthToken` against `:6699`; `verifyTeeRpcIntegrity` skipped.
+- Tests (`tests/s2-privacy.ts`): A reads A on QFS; B cannot `getAccountInfo` A on QFS; same read succeeds on raw `:7799`; adapter token reads A and Book. 5 passing. S1 suite stays on `tests/s1-*.ts` + `--validator legacy` so it does not require QFS.
 
 ---
 

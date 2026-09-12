@@ -13,6 +13,11 @@ pub const MAX_BOOK_MARKETS: usize = 32;
 pub const MAX_OPEN_OIDS_PER_USER: usize = 8;
 pub const MAX_ALLOWLIST: usize = 32;
 
+/// UserLedger permission: user (view) + adapter (AUTHORITY + view).
+pub const MAX_USER_PERMISSION_MEMBERS: usize = 2;
+/// Book / FeeAccrual permission: adapter only.
+pub const MAX_POOL_PERMISSION_MEMBERS: usize = 1;
+
 pub const USER_IM_MULT_BPS: u16 = 12_500;
 pub const USER_MM_MULT_BPS: u16 = 12_500;
 pub const MAX_USER_LEVERAGE: u16 = 10;
