@@ -19,6 +19,8 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 
 S9 stays `open` until S8 is `closed`. Windowed residual (window > 0) is **not** a tracker stage. Do not implement it.
 
+**Follow-on (not S10):** Phoenix funding overlay — `docs/08-funding-allocation.md`. Two-phase health/cash, `Book.funding_epoch`, I2 with unsettled terms. Implement as a slice after S9.
+
 Suggested layout:
 
 ```
@@ -283,3 +285,15 @@ Replace stand-in authority with `vault_authority` PDA. Re-register if required. 
 - `retire_stand_in` writes `Config.vault_authority` to the `["vault-authority"]` PDA. `post_collateral` already PDA-signs the vault ATA; `pull_collateral_pda` PDA-signs the reverse. Stand-in `pull_collateral` fails after retire (`BadTransitOwner`).
 - `settle_user_withdraw` is the Magic Action pay path: `escrow_auth` must be the vault PDA; `escrow` must be `ephemeral_balance_pda_from_payer(escrow_auth, 255)`. Token move is `invoke_signed` with vault-authority seeds. Live MagicBlock injects `escrow` as a signer; local tests pass the derived address. `user_withdraw_l1` remains the adapter fallback. Ember/Phoenix CPI remaining accounts stay for a live fork; local tests use a PDA-owned token account as the posted bucket.
 - Tests in `tests/s1-ledger.ts` S9: retire, PDA post/pull, stand-in cannot pull, settle credits user ATA. Tracker complete through S9. Windowed netting is still not a stage.
+
+---
+
+## Funding overlay (after S9, not S10)
+
+Agreed plan: `docs/08-funding-allocation.md`. Two-phase health/cash.
+
+**Post-implementation comments**
+
+- `bump_funding_epoch` owns `Book.funding_epoch`. `init_user` copies it. `allocate_funding(epoch, fold, entries)`: accrue writes `unsettled_funding` only; fold drains into `free` then `reserved` and resyncs IM. Gaps/replays rejected. `INVARIANT_BROKEN` skips; entries/unsafe still accrue.
+- `request_withdraw` requires zero unsettled. Liquidate folds that asset’s unsettled into cash before flattening.
+- Tests: `tests/s1-ledger.ts` Funding allocation + adapter `i2_holds_unsettled`. Live Rise Δacc crank is adapter follow-up, not required to land this slice.

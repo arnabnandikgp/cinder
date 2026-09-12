@@ -181,6 +181,7 @@ describe("S7 two-user net + QFS isolation after trades", function () {
           user: user.publicKey,
           config: configPda,
           userLedger,
+          book: bookPda,
           systemProgram: SystemProgram.programId,
         })
         .signers([adapter, user])

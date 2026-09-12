@@ -172,6 +172,7 @@ describe("S2 PER / QFS isolation", function () {
         user: userA.publicKey,
         config: configPda,
         userLedger: ledgerA,
+        book: bookPda,
         systemProgram: SystemProgram.programId,
       })
       .signers([adapter, userA])

@@ -26,6 +26,7 @@ pub mod cinder_ledger {
         book.last_ack_slot_er = 0;
         book.invariant_ok = 1;
         book.halt = 0;
+        book.funding_epoch = 0;
         book.bump = ctx.bumps.book;
 
         let fees = &mut ctx.accounts.fee_accrual;
@@ -59,7 +60,7 @@ pub mod cinder_ledger {
         ledger.withdrawable = 0;
         ledger.pending_oid_count = 0;
         ledger.nonce = 0;
-        ledger.last_funding_epoch = 0;
+        ledger.last_funding_epoch = ctx.accounts.book.funding_epoch;
         ledger.positions_len = 0;
         ledger.positions = [Position::default(); cc::MAX_USER_POSITIONS];
         ledger.open_oids = [OpenOid::default(); cc::MAX_OPEN_OIDS_PER_USER];
@@ -256,6 +257,7 @@ pub mod cinder_ledger {
         require_keys_eq!(ledger.user, ctx.accounts.user.key(), LedgerError::Unauthorized);
         require!(ledger.pending_oid_count == 0, LedgerError::NotFlat);
         require!(is_flat(ledger), LedgerError::NotFlat);
+        require!(unsettled_funding_zero(ledger), LedgerError::UnsettledFunding);
         require!(ledger.free >= amount, LedgerError::InsufficientFree);
 
         ledger.free -= amount;
@@ -287,6 +289,70 @@ pub mod cinder_ledger {
         Ok(())
     }
 
+    pub fn bump_funding_epoch(ctx: Context<AdapterBook>, epoch: u64) -> Result<()> {
+        let cfg = load_vault_config(&ctx.accounts.config)?;
+        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require!(
+            (ctx.accounts.book.halt & cc::INVARIANT_BROKEN) == 0
+                && (cfg.paused & cc::INVARIANT_BROKEN) == 0,
+            LedgerError::Halted
+        );
+        require!(
+            epoch == ctx.accounts.book.funding_epoch.checked_add(1).ok_or(LedgerError::Overflow)?,
+            LedgerError::BadFundingEpoch
+        );
+        ctx.accounts.book.funding_epoch = epoch;
+        Ok(())
+    }
+
+    pub fn allocate_funding(
+        ctx: Context<AllocateFunding>,
+        epoch: u64,
+        fold: bool,
+        entries: Vec<FundingEntry>,
+    ) -> Result<()> {
+        let cfg = load_vault_config(&ctx.accounts.config)?;
+        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require!(
+            (ctx.accounts.book.halt & cc::INVARIANT_BROKEN) == 0
+                && (cfg.paused & cc::INVARIANT_BROKEN) == 0,
+            LedgerError::Halted
+        );
+        require!(entries.len() <= cc::MAX_USER_POSITIONS, LedgerError::PositionCap);
+
+        let book_epoch = ctx.accounts.book.funding_epoch;
+        let ledger = &mut ctx.accounts.user_ledger;
+
+        if fold {
+            if ledger.last_funding_epoch.checked_add(1).ok_or(LedgerError::Overflow)? == epoch
+                && epoch == book_epoch
+            {
+                apply_funding_entries(ledger, &entries)?;
+                ledger.last_funding_epoch = epoch;
+            } else {
+                require!(
+                    epoch == book_epoch && epoch == ledger.last_funding_epoch,
+                    LedgerError::BadFundingEpoch
+                );
+            }
+            fold_unsettled(ledger)?;
+            return Ok(());
+        }
+
+        require!(epoch == book_epoch, LedgerError::BadFundingEpoch);
+        require!(
+            epoch
+                == ledger
+                    .last_funding_epoch
+                    .checked_add(1)
+                    .ok_or(LedgerError::Overflow)?,
+            LedgerError::BadFundingEpoch
+        );
+        apply_funding_entries(ledger, &entries)?;
+        ledger.last_funding_epoch = epoch;
+        Ok(())
+    }
+
     pub fn update_book_collateral(ctx: Context<AdapterBook>, phoenix_collateral: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
@@ -302,6 +368,11 @@ pub mod cinder_ledger {
 
         let ledger = &mut ctx.accounts.user_ledger;
         revert_pending_on_asset(ledger, asset_id)?;
+        if let Some(idx) = find_position_index(ledger, asset_id) {
+            let delta = ledger.positions[idx].unsettled_funding;
+            let leftover = apply_signed_cash(ledger, delta)?;
+            ledger.positions[idx].unsettled_funding = leftover;
+        }
 
         let lots = position_lots(ledger, asset_id);
         if lots != 0 {
@@ -391,6 +462,8 @@ pub struct InitUser<'info> {
         bump
     )]
     pub user_ledger: Box<Account<'info, UserLedger>>,
+    #[account(seeds = [cc::SEED_BOOK], bump = book.bump)]
+    pub book: Box<Account<'info, Book>>,
     pub system_program: Program<'info, System>,
 }
 
@@ -581,6 +654,7 @@ pub struct Book {
     pub last_ack_slot_er: u64,
     pub invariant_ok: u8,
     pub halt: u8,
+    pub funding_epoch: u64,
     pub bump: u8,
 }
 
@@ -613,6 +687,33 @@ pub struct OpenOid {
 pub struct Residual {
     pub asset_id: u16,
     pub lots: i64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+pub struct FundingEntry {
+    pub asset_id: u16,
+    pub delta_usdc: i64,
+}
+
+#[derive(Accounts)]
+pub struct AllocateFunding<'info> {
+    pub adapter: Signer<'info>,
+    /// CHECK: vault Config
+    #[account(
+        seeds = [cc::SEED_CONFIG],
+        bump,
+        seeds::program = VAULT_PROGRAM_ID,
+        owner = VAULT_PROGRAM_ID
+    )]
+    pub config: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [cc::SEED_USER, user_ledger.user.as_ref()],
+        bump = user_ledger.bump
+    )]
+    pub user_ledger: Box<Account<'info, UserLedger>>,
+    #[account(seeds = [cc::SEED_BOOK], bump = book.bump)]
+    pub book: Box<Account<'info, Book>>,
 }
 
 fn asset_allowlisted(cfg: &cinder_vault::Config, asset_id: u16) -> bool {
@@ -752,6 +853,98 @@ fn is_flat(ledger: &UserLedger) -> bool {
     ledger.positions[..ledger.positions_len as usize]
         .iter()
         .all(|p| p.lots == 0)
+}
+
+fn unsettled_funding_zero(ledger: &UserLedger) -> bool {
+    ledger.positions[..ledger.positions_len as usize]
+        .iter()
+        .all(|p| p.unsettled_funding == 0)
+}
+
+fn find_position_index(ledger: &UserLedger, asset_id: u16) -> Option<usize> {
+    ledger.positions[..ledger.positions_len as usize]
+        .iter()
+        .position(|p| p.asset_id == asset_id)
+}
+
+fn apply_funding_entries(ledger: &mut UserLedger, entries: &[FundingEntry]) -> Result<()> {
+    let mut seen = [false; 16];
+    for e in entries.iter() {
+        if e.delta_usdc == 0 {
+            continue;
+        }
+        let idx = find_position_index(ledger, e.asset_id).ok_or(LedgerError::FundingNoPosition)?;
+        require!(!seen[idx], LedgerError::DuplicateFundingAsset);
+        seen[idx] = true;
+        let pos = &mut ledger.positions[idx];
+        pos.unsettled_funding = pos
+            .unsettled_funding
+            .checked_add(e.delta_usdc)
+            .ok_or(LedgerError::Overflow)?;
+    }
+    Ok(())
+}
+
+fn apply_signed_cash(ledger: &mut UserLedger, delta: i64) -> Result<i64> {
+    if delta > 0 {
+        ledger.free = ledger
+            .free
+            .checked_add(delta as u64)
+            .ok_or(LedgerError::Overflow)?;
+        return Ok(0);
+    }
+    if delta == 0 {
+        return Ok(0);
+    }
+    let mut owe = delta.unsigned_abs();
+    let take_free = owe.min(ledger.free);
+    ledger.free -= take_free;
+    owe -= take_free;
+    if owe > 0 {
+        let take_res = owe.min(ledger.reserved);
+        ledger.reserved -= take_res;
+        owe -= take_res;
+    }
+    if owe == 0 {
+        Ok(0)
+    } else {
+        Ok(-(owe as i64))
+    }
+}
+
+fn fold_unsettled(ledger: &mut UserLedger) -> Result<()> {
+    let n = ledger.positions_len as usize;
+    for i in 0..n {
+        let delta = ledger.positions[i].unsettled_funding;
+        let leftover = apply_signed_cash(ledger, delta)?;
+        ledger.positions[i].unsettled_funding = leftover;
+    }
+    resync_im(ledger)
+}
+
+fn resync_im(ledger: &mut UserLedger) -> Result<()> {
+    let n = ledger.positions_len as usize;
+    let mut need = 0u64;
+    for i in 0..n {
+        let im = if ledger.positions[i].lots == 0 {
+            0
+        } else {
+            stub_im(ledger.positions[i].lots)?
+        };
+        ledger.positions[i].reserved_im = im;
+        need = need.checked_add(im).ok_or(LedgerError::Overflow)?;
+    }
+    if ledger.reserved < need {
+        let d = need - ledger.reserved;
+        require!(ledger.free >= d, LedgerError::InsufficientFree);
+        ledger.free -= d;
+        ledger.reserved = need;
+    } else if ledger.reserved > need {
+        let d = ledger.reserved - need;
+        ledger.reserved = need;
+        ledger.free = ledger.free.checked_add(d).ok_or(LedgerError::Overflow)?;
+    }
+    Ok(())
 }
 
 fn oid_slot_free(oid: &OpenOid) -> bool {
@@ -900,4 +1093,12 @@ pub enum LedgerError {
     MissingValidator,
     #[msg("validator is not Config.er_validator")]
     BadValidator,
+    #[msg("funding epoch mismatch")]
+    BadFundingEpoch,
+    #[msg("no position for funding asset")]
+    FundingNoPosition,
+    #[msg("duplicate funding asset")]
+    DuplicateFundingAsset,
+    #[msg("unsettled funding must be folded first")]
+    UnsettledFunding,
 }

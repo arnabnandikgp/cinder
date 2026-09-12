@@ -155,6 +155,7 @@ describe("S1 accounts and order machine", () => {
         user: user.publicKey,
         config: configPda,
         userLedger: userLedgerPda,
+        book: bookPda,
         systemProgram: SystemProgram.programId,
       })
       .signers([adapter, user])
@@ -457,6 +458,7 @@ describe("S1 accounts and order machine", () => {
           user: withdrawUser.publicKey,
           config: configPda,
           userLedger: withdrawLedger,
+          book: bookPda,
           systemProgram: SystemProgram.programId,
         })
         .signers([adapter, withdrawUser])
@@ -725,6 +727,164 @@ describe("S1 accounts and order machine", () => {
       expect(Number((await getAccount(connection, settleAta)).amount)).to.equal(
         SETTLE
       );
+    });
+  });
+
+  describe("Funding allocation", () => {
+    const fundUser = Keypair.generate();
+    let fundLedger: PublicKey;
+    const DELTA = -1_000_000;
+
+    before(async () => {
+      await airdrop(fundUser.publicKey);
+      fundLedger = pda(ledger.programId, [
+        Buffer.from("user"),
+        fundUser.publicKey.toBuffer(),
+      ]);
+      await ledger.methods
+        .initUser()
+        .accounts({
+          adapter: adapter.publicKey,
+          user: fundUser.publicKey,
+          config: configPda,
+          userLedger: fundLedger,
+          book: bookPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([adapter, fundUser])
+        .rpc();
+      await ledger.methods
+        .creditDeposit(new BN(CREDIT))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: fundLedger,
+        })
+        .signers([adapter])
+        .rpc();
+      await ledger.methods
+        .placeOrder(ASSET_SOL, new BN(LOTS), oid(80), 50, false, new BN(0))
+        .accounts({
+          user: fundUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: fundLedger,
+        })
+        .signers([fundUser])
+        .rpc();
+      await ledger.methods
+        .ackPhoenixFill(oid(80), new BN(LOTS), new BN(0), new BN(0))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: fundLedger,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .signers([adapter])
+        .rpc();
+    });
+
+    it("accrue writes unsettled only; fold moves cash; epoch gates", async () => {
+      const before = await ledger.account.userLedger.fetch(fundLedger);
+      const freeBefore = before.free.toNumber();
+
+      await ledger.methods
+        .bumpFundingEpoch(new BN(1))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      await ledger.methods
+        .allocateFunding(new BN(1), false, [
+          { assetId: ASSET_SOL, deltaUsdc: new BN(DELTA) },
+        ])
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: fundLedger,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const accrued = await ledger.account.userLedger.fetch(fundLedger);
+      expect(accrued.free.toNumber()).to.equal(freeBefore);
+      expect(accrued.positions[0].unsettledFunding.toNumber()).to.equal(DELTA);
+      expect(accrued.lastFundingEpoch.toNumber()).to.equal(1);
+
+      try {
+        await ledger.methods
+          .allocateFunding(new BN(1), false, [])
+          .accounts({
+            adapter: adapter.publicKey,
+            config: configPda,
+            userLedger: fundLedger,
+            book: bookPda,
+          })
+          .signers([adapter])
+          .rpc();
+        expect.fail("replay epoch should fail");
+      } catch (e: any) {
+        expect((e.error?.errorCode?.code ?? e.toString()).toString()).to.match(
+          /BadFundingEpoch/
+        );
+      }
+
+      try {
+        await ledger.methods
+          .allocateFunding(new BN(3), false, [])
+          .accounts({
+            adapter: adapter.publicKey,
+            config: configPda,
+            userLedger: fundLedger,
+            book: bookPda,
+          })
+          .signers([adapter])
+          .rpc();
+        expect.fail("gap epoch should fail");
+      } catch (e: any) {
+        expect((e.error?.errorCode?.code ?? e.toString()).toString()).to.match(
+          /BadFundingEpoch/
+        );
+      }
+
+      try {
+        await ledger.methods
+          .requestWithdraw(new BN(1))
+          .accounts({
+            user: fundUser.publicKey,
+            config: configPda,
+            book: bookPda,
+            userLedger: fundLedger,
+          })
+          .signers([fundUser])
+          .rpc();
+        expect.fail("open position should fail first");
+      } catch (e: any) {
+        const code = (e.error?.errorCode?.code ?? e.toString()).toString();
+        expect(code).to.match(/NotFlat|UnsettledFunding/);
+      }
+
+      await ledger.methods
+        .allocateFunding(new BN(1), true, [])
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: fundLedger,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const folded = await ledger.account.userLedger.fetch(fundLedger);
+      expect(folded.free.toNumber()).to.equal(freeBefore + DELTA);
+      expect(folded.positions[0].unsettledFunding.toNumber()).to.equal(0);
     });
   });
 });

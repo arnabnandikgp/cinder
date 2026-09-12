@@ -161,6 +161,7 @@ Book {                                  // seeds ["book"]
   last_ack_slot_er:     u64,
   invariant_ok:         u8,             // 1 or 0
   halt:                 u8,
+  funding_epoch:        u64,            // adapter bump_funding_epoch; users clone on init
   bump:                 u8,
 }
 
@@ -203,14 +204,15 @@ Stand-in era: adapter key **is** Phoenix authority. S9: same ixs, `invoke_signed
 
 | Ix | Signed by | State |
 |---|---|---|
-| `init_user` | adapter + user | zero ledger; create EphemeralPermission |
+| `init_user` | adapter + user | zero ledger; `last_funding_epoch = Book.funding_epoch`; create EphemeralPermission |
 | `credit_deposit` | adapter | `free += amount` unless HALT_DEPOSIT |
 | `place_order` | user | tentative lots + reserved IM + pending oid; **Book does not move** |
 | `ack_phoenix_fill` | adapter | Book += filled; fee/slippage; oid acked |
 | `ack_phoenix_fail` | adapter | revert tentative; oid failed |
-| `allocate_funding` | adapter | funding onto position + free/reserved |
+| `bump_funding_epoch` | adapter | `Book.funding_epoch += 1` (must equal arg) |
+| `allocate_funding` | adapter | accrue `unsettled_funding` or fold into free/reserved; see args |
 | `liquidate_user` | adapter | flatten asset; Book -= user lots |
-| `request_withdraw` | user | first win must be flat; free → withdrawable |
+| `request_withdraw` | user | flat, no pending, all `unsettled_funding == 0`; free → withdrawable |
 | `complete_withdraw` | adapter | after L1 pay; withdrawable -= |
 | `update_book_collateral` | adapter | `phoenix_collateral = x` |
 | `set_book_halt` | adapter | Book.halt |
@@ -230,13 +232,30 @@ Adapter pre-trade: `intended[asset] = Book.residuals[asset] + sum(pending.lots_d
 
 If `filled_lots != requested`, position and reserved IM use filled size.
 
+### `bump_funding_epoch` args
+
+`epoch: u64` — must equal `Book.funding_epoch + 1`.
+
+### `allocate_funding` args
+
+`epoch: u64`, `fold: bool`, `entries: Vec<{ asset_id: u16, delta_usdc: i64 }>` (max 16).
+
+- `epoch == user.last_funding_epoch + 1` and `epoch == Book.funding_epoch`.
+- `fold = false`: `unsettled_funding += delta` only (health). Empty entries = bump-only (flat user).
+- `fold = true`: fold each position’s `unsettled_funding` into `free` then `reserved`; recompute Cinder IM. `delta` may be 0 if already accrued.
+- Skip if `INVARIANT_BROKEN`. Still run under `HALT_ENTRIES` / `UNSAFE_POOL`.
+- Acked lots only; adapter converts Phoenix quote lots → native USDC i64.
+
+See `docs/08-funding-allocation.md`.
+
 ---
 
 ## Invariants
 
 - I1 after ack: `Book.residuals[a] == Phoenix.base_lots[a]`
 - I1 live: `Book[a] + pending[a] == Phoenix[a]`
-- I2: `sum(free+reserved+withdrawable) == vault_ata + phoenix_collateral ± in_flight`
+- I2 (cash, after funding fold): `sum(free+reserved+withdrawable) == vault_ata + phoenix_collateral ± in_flight`
+- I2 (between funding settles): `sum(free+reserved+withdrawable+unsettled_funding) == vault_ata + phoenix_collateral + pool_unsettled_funding ± in_flight`
 - I3: pending oid < OID_TTL or fail-ack
 - I4: user `reserved` ≥ Cinder IM after ack
 
