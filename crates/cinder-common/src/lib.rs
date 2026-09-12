@@ -30,6 +30,9 @@ pub const IN_FLIGHT_TTL_MS: u64 = 30_000;
 pub const COMMIT_EVERY_FILLS: u64 = 20;
 pub const COMMIT_EVERY_MS: u64 = 30_000;
 pub const CINDER_FEE_BPS: u16 = 0;
+/// |sum(user funding deltas) − pool delta| above this logs; do not halt.
+pub const FUNDING_DUST_CAP: u64 = 1_000;
+pub const USDC_DECIMALS: u32 = 6;
 
 /// Local ER validator identity. Never delegate local PDAs to mainnet/devnet TEE ids.
 pub const LOCAL_ER_VALIDATOR_STR: &str = "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev";

@@ -36,6 +36,7 @@ pub struct Adapter<P, L> {
     pub pool_health: PoolHealth,
     pub fills_since_root: u64,
     pub last_root_ms: u64,
+    pub last_phoenix_collateral: Option<u64>,
 }
 
 impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
@@ -50,6 +51,7 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             pool_health: PoolHealth::Safe,
             fills_since_root: 0,
             last_root_ms: 0,
+            last_phoenix_collateral: None,
         }
     }
 

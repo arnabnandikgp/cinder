@@ -17,7 +17,7 @@ pub trait LedgerPort {
 
 #[derive(Clone, Debug, Default)]
 pub struct MemoryLedger {
-    book: std::collections::BTreeMap<u16, i64>,
+    pub book: std::collections::BTreeMap<u16, i64>,
     config_halt: u8,
     book_halt: u8,
     invariant_ok: u8,
@@ -30,6 +30,12 @@ pub struct MemoryLedger {
     pub phoenix_collateral: u64,
     pub reserve_roots: Vec<u64>,
     pub fail_next_root: bool,
+    pub book_funding_epoch: u64,
+    pub user_epoch: std::collections::BTreeMap<PubkeyBytes, u64>,
+    pub user_free: std::collections::BTreeMap<PubkeyBytes, u64>,
+    pub user_reserved: std::collections::BTreeMap<PubkeyBytes, u64>,
+    pub user_unsettled: std::collections::BTreeMap<PubkeyBytes, std::collections::BTreeMap<u16, i64>>,
+    pub liquidations: Vec<(PubkeyBytes, u16)>,
 }
 
 impl MemoryLedger {
@@ -67,6 +73,58 @@ impl MemoryLedger {
             in_flight_usdc,
         )
     }
+
+    pub fn sum_unsettled(&self) -> i64 {
+        self.user_unsettled
+            .values()
+            .flat_map(|m| m.values())
+            .copied()
+            .sum()
+    }
+
+    pub fn i2_ok_unsettled(&self, pool_unsettled: i64, in_flight_usdc: i64) -> bool {
+        crate::residual::i2_holds_unsettled(
+            self.sum_user_cash(),
+            self.sum_unsettled(),
+            self.vault_ata,
+            self.phoenix_collateral,
+            pool_unsettled,
+            in_flight_usdc,
+        )
+    }
+
+    pub fn ensure_user(&mut self, user: PubkeyBytes, free: u64) {
+        self.user_free.entry(user).or_insert(free);
+        self.user_reserved.entry(user).or_insert(0);
+        self.user_epoch.entry(user).or_insert(self.book_funding_epoch);
+        self.user_unsettled.entry(user).or_default();
+        self.user_lots.entry(user).or_default();
+        self.user_cash.insert(
+            user,
+            self.user_free.get(&user).copied().unwrap_or(0)
+                + self.user_reserved.get(&user).copied().unwrap_or(0),
+        );
+    }
+}
+
+/// Ledger writes the funding crank needs. [`MemoryLedger`] implements this.
+pub trait FundingPort {
+    fn book_funding_epoch(&self) -> u64;
+    fn bump_funding_epoch(&mut self, epoch: u64) -> Result<(), AdapterError>;
+    fn user_ids(&self) -> Vec<PubkeyBytes>;
+    fn lots_of(&self, user: &PubkeyBytes, asset_id: u16) -> i64;
+    fn last_funding_epoch(&self, user: &PubkeyBytes) -> u64;
+    fn allocate_funding(
+        &mut self,
+        user: &PubkeyBytes,
+        epoch: u64,
+        fold: bool,
+        entries: &[(u16, i64)],
+    ) -> Result<(), AdapterError>;
+    fn user_equity(&self, user: &PubkeyBytes) -> i128;
+    fn liquidate_user(&mut self, user: &PubkeyBytes, asset_id: u16) -> Result<(), AdapterError>;
+    fn phoenix_collateral(&self) -> u64;
+    fn set_phoenix_collateral(&mut self, v: u64);
 }
 
 impl LedgerPort for MemoryLedger {
@@ -128,4 +186,155 @@ impl LedgerPort for MemoryLedger {
         self.reserve_roots.push(now_ms);
         Ok(())
     }
+}
+
+impl FundingPort for MemoryLedger {
+    fn book_funding_epoch(&self) -> u64 {
+        self.book_funding_epoch
+    }
+
+    fn bump_funding_epoch(&mut self, epoch: u64) -> Result<(), AdapterError> {
+        if epoch != self.book_funding_epoch.saturating_add(1) {
+            return Err(AdapterError::Ledger("bad funding epoch".into()));
+        }
+        self.book_funding_epoch = epoch;
+        Ok(())
+    }
+
+    fn user_ids(&self) -> Vec<PubkeyBytes> {
+        let mut ids: Vec<_> = self.user_lots.keys().copied().collect();
+        for k in self.user_free.keys() {
+            if !ids.contains(k) {
+                ids.push(*k);
+            }
+        }
+        ids.sort();
+        ids
+    }
+
+    fn lots_of(&self, user: &PubkeyBytes, asset_id: u16) -> i64 {
+        MemoryLedger::lots_of(self, user, asset_id)
+    }
+
+    fn last_funding_epoch(&self, user: &PubkeyBytes) -> u64 {
+        self.user_epoch.get(user).copied().unwrap_or(0)
+    }
+
+    fn allocate_funding(
+        &mut self,
+        user: &PubkeyBytes,
+        epoch: u64,
+        fold: bool,
+        entries: &[(u16, i64)],
+    ) -> Result<(), AdapterError> {
+        if !fold {
+            if epoch != self.book_funding_epoch
+                || epoch != self.last_funding_epoch(user).saturating_add(1)
+            {
+                return Err(AdapterError::Ledger("bad funding epoch".into()));
+            }
+        }
+        for (asset, delta) in entries {
+            *self
+                .user_unsettled
+                .entry(*user)
+                .or_default()
+                .entry(*asset)
+                .or_insert(0) += *delta;
+        }
+        if !fold {
+            self.user_epoch.insert(*user, epoch);
+            return Ok(());
+        }
+        if epoch == self.book_funding_epoch
+            && epoch == self.last_funding_epoch(user).saturating_add(1)
+        {
+            self.user_epoch.insert(*user, epoch);
+        }
+        let mut leftover_map = std::collections::BTreeMap::new();
+        if let Some(m) = self.user_unsettled.remove(user) {
+            for (asset, delta) in m {
+                let rest = apply_signed_cash(self, user, delta)?;
+                leftover_map.insert(asset, rest);
+            }
+        }
+        leftover_map.retain(|_, v| *v != 0);
+        self.user_unsettled.insert(*user, leftover_map);
+        let cash = self.user_free.get(user).copied().unwrap_or(0)
+            + self.user_reserved.get(user).copied().unwrap_or(0);
+        self.user_cash.insert(*user, cash);
+        Ok(())
+    }
+
+    fn user_equity(&self, user: &PubkeyBytes) -> i128 {
+        let free = self.user_free.get(user).copied().unwrap_or(0) as i128;
+        let reserved = self.user_reserved.get(user).copied().unwrap_or(0) as i128;
+        let unsettled: i128 = self
+            .user_unsettled
+            .get(user)
+            .map(|m| m.values().copied().sum::<i64>() as i128)
+            .unwrap_or(0);
+        free + reserved + unsettled
+    }
+
+    fn liquidate_user(&mut self, user: &PubkeyBytes, asset_id: u16) -> Result<(), AdapterError> {
+        let delta = self
+            .user_unsettled
+            .get(user)
+            .and_then(|m| m.get(&asset_id).copied());
+        if let Some(delta) = delta {
+            let rest = apply_signed_cash(self, user, delta)?;
+            if let Some(m) = self.user_unsettled.get_mut(user) {
+                if rest == 0 {
+                    m.remove(&asset_id);
+                } else {
+                    m.insert(asset_id, rest);
+                }
+            }
+        }
+        if let Some(lots) = self.user_lots.get_mut(user) {
+            lots.remove(&asset_id);
+        }
+        self.liquidations.push((*user, asset_id));
+        let cash = self.user_free.get(user).copied().unwrap_or(0)
+            + self.user_reserved.get(user).copied().unwrap_or(0);
+        self.user_cash.insert(*user, cash);
+        Ok(())
+    }
+
+    fn phoenix_collateral(&self) -> u64 {
+        self.phoenix_collateral
+    }
+
+    fn set_phoenix_collateral(&mut self, v: u64) {
+        self.phoenix_collateral = v;
+    }
+}
+
+fn apply_signed_cash(
+    ledger: &mut MemoryLedger,
+    user: &PubkeyBytes,
+    delta: i64,
+) -> Result<i64, AdapterError> {
+    let free = ledger.user_free.entry(*user).or_insert(0);
+    let reserved = ledger.user_reserved.entry(*user).or_insert(0);
+    if delta > 0 {
+        *free = free
+            .checked_add(delta as u64)
+            .ok_or_else(|| AdapterError::Ledger("overflow".into()))?;
+        return Ok(0);
+    }
+    if delta == 0 {
+        return Ok(0);
+    }
+    let mut owe = delta.unsigned_abs();
+    let take_free = owe.min(*free);
+    *free -= take_free;
+    owe -= take_free;
+    if owe > 0 {
+        let take_res = owe.min(*reserved);
+        *reserved -= take_res;
+        owe -= take_res;
+    }
+    Ok(if owe == 0 { 0 } else { -(owe as i64) })
 }

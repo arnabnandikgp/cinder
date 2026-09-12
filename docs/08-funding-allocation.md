@@ -186,8 +186,8 @@ Cadence: at least once per Phoenix interval (~1h), and again when a hedge makes 
 
 1. Patch `03` (Book.funding_epoch, I2, allocate/bump args, withdraw gate, init_user). Note in `06` as a follow-on slice, **not S10**.
 2. Program: `bump_funding_epoch`, `allocate_funding` accrue+fold, tests on local validator.
-3. Adapter: Δacc from Rise/Hawkeye, unit conversion, crank, I2 recon.
-4. Optional fork smoke (`CINDER_FUNDING=1`).
+3. Adapter: `crank_funding` + `quote_lots_to_usdc` + I2 recon (canned Δacc in unit tests; Rise fills `FundingInterval` at the process edge).
+4. Optional fork smoke (`CINDER_FUNDING=1`) — not in this slice.
 
 ---
 
