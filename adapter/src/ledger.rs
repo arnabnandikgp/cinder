@@ -125,6 +125,7 @@ pub trait FundingPort {
     fn liquidate_user(&mut self, user: &PubkeyBytes, asset_id: u16) -> Result<(), AdapterError>;
     fn phoenix_collateral(&self) -> u64;
     fn set_phoenix_collateral(&mut self, v: u64);
+    fn i2_ok_unsettled(&self, pool_unsettled: i64, in_flight_usdc: i64) -> bool;
 }
 
 impl LedgerPort for MemoryLedger {
@@ -194,7 +195,10 @@ impl FundingPort for MemoryLedger {
     }
 
     fn bump_funding_epoch(&mut self, epoch: u64) -> Result<(), AdapterError> {
-        if epoch != self.book_funding_epoch.saturating_add(1) {
+        if self.book_funding_epoch == u64::MAX {
+            return Err(AdapterError::Ledger("funding epoch overflow".into()));
+        }
+        if epoch != self.book_funding_epoch + 1 {
             return Err(AdapterError::Ledger("bad funding epoch".into()));
         }
         self.book_funding_epoch = epoch;
@@ -227,33 +231,52 @@ impl FundingPort for MemoryLedger {
         fold: bool,
         entries: &[(u16, i64)],
     ) -> Result<(), AdapterError> {
+        let last = self.last_funding_epoch(user);
         if !fold {
-            if epoch != self.book_funding_epoch
-                || epoch != self.last_funding_epoch(user).saturating_add(1)
-            {
+            if epoch != self.book_funding_epoch || epoch != last.saturating_add(1) {
                 return Err(AdapterError::Ledger("bad funding epoch".into()));
             }
-        }
-        for (asset, delta) in entries {
-            *self
-                .user_unsettled
-                .entry(*user)
-                .or_default()
-                .entry(*asset)
-                .or_insert(0) += *delta;
-        }
-        if !fold {
+            for (asset, delta) in entries {
+                *self
+                    .user_unsettled
+                    .entry(*user)
+                    .or_default()
+                    .entry(*asset)
+                    .or_insert(0) += *delta;
+            }
             self.user_epoch.insert(*user, epoch);
             return Ok(());
         }
-        if epoch == self.book_funding_epoch
-            && epoch == self.last_funding_epoch(user).saturating_add(1)
-        {
+        let catch_up = epoch == self.book_funding_epoch && epoch == last.saturating_add(1);
+        let replay = epoch == self.book_funding_epoch && epoch == last;
+        if !catch_up && !replay {
+            return Err(AdapterError::Ledger("bad funding epoch".into()));
+        }
+        if catch_up {
+            for (asset, delta) in entries {
+                *self
+                    .user_unsettled
+                    .entry(*user)
+                    .or_default()
+                    .entry(*asset)
+                    .or_insert(0) += *delta;
+            }
             self.user_epoch.insert(*user, epoch);
+        } else if !entries.is_empty() {
+            return Err(AdapterError::Ledger("fold replay rejects entries".into()));
         }
         let mut leftover_map = std::collections::BTreeMap::new();
         if let Some(m) = self.user_unsettled.remove(user) {
+            let mut credits = Vec::new();
+            let mut debits = Vec::new();
             for (asset, delta) in m {
+                if delta >= 0 {
+                    credits.push((asset, delta));
+                } else {
+                    debits.push((asset, delta));
+                }
+            }
+            for (asset, delta) in credits.into_iter().chain(debits) {
                 let rest = apply_signed_cash(self, user, delta)?;
                 leftover_map.insert(asset, rest);
             }
@@ -309,6 +332,10 @@ impl FundingPort for MemoryLedger {
     fn set_phoenix_collateral(&mut self, v: u64) {
         self.phoenix_collateral = v;
     }
+
+    fn i2_ok_unsettled(&self, pool_unsettled: i64, in_flight_usdc: i64) -> bool {
+        MemoryLedger::i2_ok_unsettled(self, pool_unsettled, in_flight_usdc)
+    }
 }
 
 fn apply_signed_cash(
@@ -326,6 +353,9 @@ fn apply_signed_cash(
     }
     if delta == 0 {
         return Ok(0);
+    }
+    if delta == i64::MIN {
+        return Err(AdapterError::Ledger("funding delta overflow".into()));
     }
     let mut owe = delta.unsigned_abs();
     let take_free = owe.min(*free);

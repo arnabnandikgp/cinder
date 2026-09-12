@@ -93,6 +93,12 @@ export async function loadFundingInterval(opts: {
     ? toBigInt(market.statsSnapshot.cumulativeFundingRate)
     : 0n;
   for (const e of trader.positions.entries) {
+    const entryAsset = Number(
+      (e.value as { assetId?: number }).assetId ?? e.key
+    );
+    if (entryAsset !== Number(market.assetId) && String(e.key) !== symbol) {
+      continue;
+    }
     const lots = toBigInt(e.value.baseLotPosition);
     residualLots += lots;
     const snap = toBigInt(e.value.cumulativeFundingSnapshot);

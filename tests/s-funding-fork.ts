@@ -1,4 +1,4 @@
-import { Connection } from "@solana/web3.js";
+import { Connection, Keypair } from "@solana/web3.js";
 import { expect } from "chai";
 import { bootVenue } from "../scripts/venue-boot";
 import {
@@ -26,13 +26,13 @@ describe("Funding Rise wiring (Surfpool fork)", function () {
 
   it("loads FundingInterval from Rise on a funded fork trader", async function () {
     const connection = new Connection(FORK, "confirmed");
-    try {
-      await connection.getVersion();
-    } catch {
-      this.skip();
-    }
+    await connection.getVersion();
 
-    const boot = await bootVenue({ connection, skipWithdraw: true });
+    const boot = await bootVenue({
+      connection,
+      adapter: Keypair.generate(),
+      skipWithdraw: true,
+    });
     const info = await connection.getAccountInfo(boot.traderPda);
     expect(info).to.not.equal(null);
 

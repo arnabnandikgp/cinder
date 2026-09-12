@@ -5,7 +5,7 @@ Freeze patched in `03-phase4-freeze.md`. Tracker slice in `06` (not S10).
 
 Phoenix is the venue clock. Cinder does not invent a funding rate. Cinder **attributes** Phoenix’s accumulator across private user books so longs and shorts pay each other on **gross** size, while Phoenix only ever funds Cinder’s **residual**.
 
-`allocate_funding` is named in the freeze. Ledger fields exist (`unsettled_funding`, `last_funding_epoch`). The instruction is **not built**.
+`allocate_funding` and `bump_funding_epoch` are implemented. Adapter `crank_funding` accrues every Phoenix interval and folds when venue collateral actually moves.
 
 ---
 

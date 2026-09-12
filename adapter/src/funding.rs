@@ -64,13 +64,28 @@ impl<P: PhoenixVenue, L: crate::ledger::LedgerPort + FundingPort> Adapter<P, L> 
             return Ok(report);
         }
 
-        let epoch = self.ledger.book_funding_epoch().saturating_add(1);
-        self.ledger.bump_funding_epoch(epoch)?;
+        let book = self.ledger.book_funding_epoch();
+        if book == u64::MAX {
+            return Err(AdapterError::Ledger("funding epoch overflow".into()));
+        }
+        let users = self.ledger.user_ids();
+        let behind = users
+            .iter()
+            .any(|u| self.ledger.last_funding_epoch(u) < book);
+        let epoch = if behind && book > 0 {
+            book
+        } else {
+            let next = book + 1;
+            self.ledger.bump_funding_epoch(next)?;
+            next
+        };
         report.epoch = epoch;
 
-        let users = self.ledger.user_ids();
         let mut sum_delta: i128 = 0;
         for user in &users {
+            if self.ledger.last_funding_epoch(user) == epoch {
+                continue;
+            }
             let lots = self.ledger.lots_of(user, interval.asset_id);
             let delta = if lots == 0 {
                 0
@@ -101,8 +116,10 @@ impl<P: PhoenixVenue, L: crate::ledger::LedgerPort + FundingPort> Adapter<P, L> 
         report.dust_abs = dust;
         report.dust_over_cap = dust > cc::FUNDING_DUST_CAP;
 
-        let prev = self.last_phoenix_collateral;
-        let moved = prev.is_some() && prev != Some(interval.phoenix_collateral);
+        let prev = self
+            .last_phoenix_collateral
+            .unwrap_or_else(|| self.ledger.phoenix_collateral());
+        let moved = prev != interval.phoenix_collateral;
         if moved {
             for user in &users {
                 self.ledger
@@ -113,7 +130,14 @@ impl<P: PhoenixVenue, L: crate::ledger::LedgerPort + FundingPort> Adapter<P, L> 
             report.folded = true;
         }
         self.last_phoenix_collateral = Some(interval.phoenix_collateral);
-        let _ = interval.pool_unsettled_usdc;
+        if (self.ledger.phoenix_collateral() != 0)
+            && !self
+                .ledger
+                .i2_ok_unsettled(interval.pool_unsettled_usdc, 0)
+        {
+            let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
+            self.ledger.write_halt(flags)?;
+        }
         Ok(report)
     }
 }

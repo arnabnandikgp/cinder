@@ -240,9 +240,8 @@ If `filled_lots != requested`, position and reserved IM use filled size.
 
 `epoch: u64`, `fold: bool`, `entries: Vec<{ asset_id: u16, delta_usdc: i64 }>` (max 16).
 
-- `epoch == user.last_funding_epoch + 1` and `epoch == Book.funding_epoch`.
-- `fold = false`: `unsettled_funding += delta` only (health). Empty entries = bump-only (flat user).
-- `fold = true`: fold each position’s `unsettled_funding` into `free` then `reserved`; recompute Cinder IM. `delta` may be 0 if already accrued.
+- `fold = false` (accrue): `epoch == Book.funding_epoch` and `epoch == user.last_funding_epoch + 1`. Then `unsettled_funding += delta` only (health). Empty entries = bump-only (flat user).
+- `fold = true`: `epoch == Book.funding_epoch` and either catch-up (`epoch == user.last_funding_epoch + 1`, entries applied then last advanced) or replay (`epoch == user.last_funding_epoch`, entries must be empty). Then fold each position’s `unsettled_funding` into `free` then `reserved` (credits before debits); recompute Cinder IM.
 - Skip if `INVARIANT_BROKEN`. Still run under `HALT_ENTRIES` / `UNSAFE_POOL`.
 - Acked lots only; adapter converts Phoenix quote lots → native USDC i64.
 

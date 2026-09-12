@@ -787,7 +787,6 @@ fn set_position_lots(
         pos.reserved_im = reserved_im;
         if lots == 0 {
             pos.entry_quote_lots = 0;
-            pos.unsettled_funding = 0;
             pos.reserved_im = 0;
             compact_positions(ledger);
         }
@@ -836,7 +835,7 @@ fn compact_positions(ledger: &mut UserLedger) {
     let mut w = 0usize;
     let n = ledger.positions_len as usize;
     for r in 0..n {
-        if ledger.positions[r].lots != 0 {
+        if ledger.positions[r].lots != 0 || ledger.positions[r].unsettled_funding != 0 {
             if w != r {
                 ledger.positions[w] = ledger.positions[r];
             }
@@ -896,6 +895,7 @@ fn apply_signed_cash(ledger: &mut UserLedger, delta: i64) -> Result<i64> {
     if delta == 0 {
         return Ok(0);
     }
+    require!(delta != i64::MIN, LedgerError::Overflow);
     let mut owe = delta.unsigned_abs();
     let take_free = owe.min(ledger.free);
     ledger.free -= take_free;
@@ -914,7 +914,9 @@ fn apply_signed_cash(ledger: &mut UserLedger, delta: i64) -> Result<i64> {
 
 fn fold_unsettled(ledger: &mut UserLedger) -> Result<()> {
     let n = ledger.positions_len as usize;
-    for i in 0..n {
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by_key(|&i| ledger.positions[i].unsettled_funding < 0);
+    for i in order {
         let delta = ledger.positions[i].unsettled_funding;
         let leftover = apply_signed_cash(ledger, delta)?;
         ledger.positions[i].unsettled_funding = leftover;
