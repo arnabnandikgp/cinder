@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use cinder_common as cc;
 
 declare_id!("9zhBFVgk13gnYT6iVuKPGfQiAvVfr6cYQq2bY2QUzXmg");
@@ -70,6 +70,76 @@ pub mod cinder_vault {
     pub fn escape_withdraw(_ctx: Context<EscapeWithdraw>) -> Result<()> {
         err!(VaultError::Unsupported)
     }
+
+    /// Stand-in era: move USDC vault ATA → stand-in ATA. Adapter then Rise-deposits.
+    pub fn post_collateral(ctx: Context<PostCollateral>, amount: u64) -> Result<()> {
+        require!(amount > 0, VaultError::ZeroAmount);
+        require_keys_eq!(
+            ctx.accounts.config.adapter,
+            ctx.accounts.adapter.key(),
+            VaultError::Unauthorized
+        );
+        require_keys_eq!(
+            ctx.accounts.dest_usdc_ata.owner,
+            ctx.accounts.config.vault_authority,
+            VaultError::BadTransitOwner
+        );
+        require_keys_eq!(
+            ctx.accounts.dest_usdc_ata.mint,
+            ctx.accounts.config.usdc_mint,
+            VaultError::BadMint
+        );
+        let seeds: &[&[u8]] = &[
+            cc::SEED_VAULT_AUTHORITY,
+            &[ctx.accounts.config.bump_vault_authority],
+        ];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                Transfer {
+                    from: ctx.accounts.vault_usdc_ata.to_account_info(),
+                    to: ctx.accounts.dest_usdc_ata.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount,
+        )?;
+        Ok(())
+    }
+
+    /// Stand-in era: after Rise withdraw, move USDC stand-in ATA → vault ATA.
+    /// Stand-in (`vault_authority` keypair) must sign; adapter authorizes the ix.
+    pub fn pull_collateral(ctx: Context<PullCollateral>, amount: u64) -> Result<()> {
+        require!(amount > 0, VaultError::ZeroAmount);
+        require_keys_eq!(
+            ctx.accounts.config.adapter,
+            ctx.accounts.adapter.key(),
+            VaultError::Unauthorized
+        );
+        require_keys_eq!(
+            ctx.accounts.source_usdc_ata.owner,
+            ctx.accounts.config.vault_authority,
+            VaultError::BadTransitOwner
+        );
+        require_keys_eq!(
+            ctx.accounts.stand_in.key(),
+            ctx.accounts.config.vault_authority,
+            VaultError::Unauthorized
+        );
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.key(),
+                Transfer {
+                    from: ctx.accounts.source_usdc_ata.to_account_info(),
+                    to: ctx.accounts.vault_usdc_ata.to_account_info(),
+                    authority: ctx.accounts.stand_in.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -126,6 +196,50 @@ pub struct EscapeWithdraw<'info> {
     pub user: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct PostCollateral<'info> {
+    pub adapter: Signer<'info>,
+    #[account(
+        seeds = [cc::SEED_CONFIG],
+        bump = config.bump_config
+    )]
+    pub config: Account<'info, Config>,
+    /// CHECK: PDA signer for the vault ATA.
+    #[account(
+        seeds = [cc::SEED_VAULT_AUTHORITY],
+        bump = config.bump_vault_authority
+    )]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        address = config.vault_usdc_ata
+    )]
+    pub vault_usdc_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub dest_usdc_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct PullCollateral<'info> {
+    pub adapter: Signer<'info>,
+    /// Stand-in Phoenix authority (keypair era). Token owner of `source_usdc_ata`.
+    pub stand_in: Signer<'info>,
+    #[account(
+        seeds = [cc::SEED_CONFIG],
+        bump = config.bump_config
+    )]
+    pub config: Account<'info, Config>,
+    #[account(
+        mut,
+        address = config.vault_usdc_ata
+    )]
+    pub vault_usdc_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub source_usdc_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Config {
@@ -168,4 +282,10 @@ pub enum VaultError {
     Unauthorized,
     #[msg("allowlist too long")]
     AllowlistTooLong,
+    #[msg("zero amount")]
+    ZeroAmount,
+    #[msg("bad mint")]
+    BadMint,
+    #[msg("transit ATA owner is not vault_authority")]
+    BadTransitOwner,
 }

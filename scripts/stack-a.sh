@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
-# Stage A local stack: Surfpool mainnet fork + local ER + QFS (S5).
+# Stage A: Surfpool mainnet fork on :8899. ER/QFS still pointed at localhost.
 set -euo pipefail
 
-if command -v surfpool >/dev/null 2>&1; then
-  echo "stack-a: starting Surfpool fork (RPC :8899). Point ER/QFS at localhost."
-  echo "  ephemeral-validator --lifecycle ephemeral --remotes http://127.0.0.1:8899 ..."
-  echo "  query-filtering-service --listen-addr 127.0.0.1:6699 --ephemeral-url http://127.0.0.1:7799"
-  exec surfpool start --rpc-url https://api.mainnet-beta.solana.com
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+if ! command -v surfpool >/dev/null 2>&1; then
+  echo "stack-a: installing surfpool..."
+  curl -sL https://run.surfpool.run/ | bash
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
 
-echo "stack-a: surfpool is not installed (S5)."
-echo "  curl -sL https://run.surfpool.run/ | bash"
-echo "  surfpool start --rpc-url https://api.mainnet-beta.solana.com"
-exit 1
+if ! command -v surfpool >/dev/null 2>&1; then
+  echo "error: surfpool not on PATH after install" >&2
+  echo "  curl -sL https://run.surfpool.run/ | bash" >&2
+  exit 1
+fi
+
+echo "stack-a: surfpool start --rpc-url ${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}"
+echo "  RPC :8899  (point local ER/QFS remotes here)"
+echo "  Do not send-register-ixs to Phoenix mainnet; send built ixs to this fork."
+exec surfpool start --rpc-url "${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}"
