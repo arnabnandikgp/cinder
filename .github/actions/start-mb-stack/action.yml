@@ -7,7 +7,6 @@ runs:
       with:
         path: |
           ~/.npm
-          ${{ github.workspace }}/.mb-npm
         key: mb-stack-0.14.10-${{ runner.os }}-x64
     - name: Install mb-stack + Linux binaries
       shell: bash
@@ -17,12 +16,6 @@ runs:
           @magicblock-labs/ephemeral-validator-linux-x64@0.14.10 \
           @magicblock-labs/query-filtering-service-linux-x64@0.1.3
         echo "$(npm prefix -g)/bin" >> "$GITHUB_PATH"
-    - name: Raise watcher / fd limits
-      shell: bash
-      run: |
-        sudo prlimit --pid $$ --nofile=1048576:1048576 || true
-        sudo sysctl fs.inotify.max_user_instances=1280 || true
-        sudo sysctl fs.inotify.max_user_watches=655360 || true
     - name: Check validator wrappers
       shell: bash
       run: |
@@ -35,13 +28,20 @@ runs:
       env:
         RUST_LOG: info
       run: |
-        # Headless: ER is built with a TUI and exits if stdio is not a TTY
-        # unless --no-tui is passed (mb-stack already does). Keep logs in the
-        # step output *and* a file. Detach so later steps keep the stack.
-        # Allocate a PTY. The ER binary is TUI-built; even --no-tui has failed
-        # under fully redirected stdio on GitHub runners.
-        script -q -c "mb-stack --reset" mb-stack.log &
+        # ER calls setrlimit(NOFILE) and exits if it cannot raise the limit.
+        # GHA default soft limit is 1024; this must happen in *this* shell so
+        # mb-stack and the validator inherit it.
+        sudo prlimit --pid $$ --nofile=1048576:1048576 || true
+        ulimit -n 1048576 || ulimit -n 65536 || true
+        sudo sysctl fs.inotify.max_user_instances=1280 || true
+        sudo sysctl fs.inotify.max_user_watches=655360 || true
+        echo "nofile soft=$(ulimit -Sn) hard=$(ulimit -Hn)"
+
+        mb-stack --reset > mb-stack.log 2>&1 &
         echo $! > mb-stack.pid
+        # Also raise the already-spawned tree if prlimit on $$ did not stick.
+        sudo prlimit --pid "$(cat mb-stack.pid)" --nofile=1048576:1048576 || true
+
         ./scripts/wait-rpc.sh http://127.0.0.1:8899 180
         ./scripts/wait-rpc.sh http://127.0.0.1:7799 240
         ./scripts/wait-rpc.sh http://127.0.0.1:6699 120
@@ -54,4 +54,4 @@ runs:
         echo "===== mb-stack.log ====="
         cat mb-stack.log || true
         echo "===== ps ====="
-        ps aux | rg -i "validator|mb-stack|qfs|query-filter" || true
+        ps aux | grep -E "validator|mb-stack|query-filter" | grep -v grep || true
