@@ -134,6 +134,7 @@ export async function bootVenue(opts: {
   connection?: Connection;
   authority?: Keypair;
   postAmount?: bigint;
+  skipWithdraw?: boolean;
 }): Promise<{
   traderPda: PublicKey;
   quoteLotCollateralBefore: bigint;
@@ -269,45 +270,47 @@ export async function bootVenue(opts: {
   let withdrawSig: string | null = null;
   let withdrawQueued = false;
   let quoteLotCollateralAfterPull: bigint | null = null;
-  const withdraw = await client.ixs.buildWithdrawIxs({
-    authority: authority as never,
-    amount: postAmount,
-    traderPdaIndex: 0,
-    traderSubaccountIndex: 0,
-  });
-  try {
-    withdrawSig = await sendToFork(
-      connection,
-      wallet,
-      [],
-      withdraw.instructions as unknown as KitIx[]
-    );
-    const traderAfterPull = await rise.fetchTrader({
-      client: client.rpc.accounts,
-      address: traderPdaStr,
-      skipCache: true,
+  if (!opts.skipWithdraw) {
+    const withdraw = await client.ixs.buildWithdrawIxs({
+      authority: authority as never,
+      amount: postAmount,
+      traderPdaIndex: 0,
+      traderSubaccountIndex: 0,
     });
-    quoteLotCollateralAfterPull = BigInt(
-      traderAfterPull.state.quoteLotCollateral.toString()
-    );
-    withdrawQueued = traderAfterPull.withdrawQueueNode !== null;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!/queue/i.test(msg)) {
-      throw err;
+    try {
+      withdrawSig = await sendToFork(
+        connection,
+        wallet,
+        [],
+        withdraw.instructions as unknown as KitIx[]
+      );
+      const traderAfterPull = await rise.fetchTrader({
+        client: client.rpc.accounts,
+        address: traderPdaStr,
+        skipCache: true,
+      });
+      quoteLotCollateralAfterPull = BigInt(
+        traderAfterPull.state.quoteLotCollateral.toString()
+      );
+      withdrawQueued = traderAfterPull.withdrawQueueNode !== null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/queue/i.test(msg)) {
+        throw err;
+      }
+      const queuedTrader = await rise.fetchTrader({
+        client: client.rpc.accounts,
+        address: traderPdaStr,
+        skipCache: true,
+      });
+      if (queuedTrader.withdrawQueueNode == null) {
+        throw err instanceof Error ? err : new Error(msg);
+      }
+      withdrawQueued = true;
+      quoteLotCollateralAfterPull = BigInt(
+        queuedTrader.state.quoteLotCollateral.toString()
+      );
     }
-    const queuedTrader = await rise.fetchTrader({
-      client: client.rpc.accounts,
-      address: traderPdaStr,
-      skipCache: true,
-    });
-    if (queuedTrader.withdrawQueueNode == null) {
-      throw err instanceof Error ? err : new Error(msg);
-    }
-    withdrawQueued = true;
-    quoteLotCollateralAfterPull = BigInt(
-      queuedTrader.state.quoteLotCollateral.toString()
-    );
   }
 
   client.dispose();

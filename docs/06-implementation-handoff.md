@@ -297,4 +297,5 @@ Agreed plan: `docs/08-funding-allocation.md`. Two-phase health/cash.
 - `bump_funding_epoch` owns `Book.funding_epoch`. `init_user` copies it. `allocate_funding(epoch, fold, entries)`: accrue writes `unsettled_funding` only; fold drains into `free` then `reserved` and resyncs IM. Gaps/replays rejected. `INVARIANT_BROKEN` skips; entries/unsafe still accrue.
 - `request_withdraw` requires zero unsettled. Liquidate folds that asset’s unsettled into cash before flattening.
 - Tests: `tests/s1-ledger.ts` Funding allocation + adapter `i2_holds_unsettled`.
-- Adapter `crank_funding`: quote-lots → USDC, `bump_funding_epoch`, per-user accrue (flat = bump-only), dust cap 1000 without halt, MM liquidate, fold when `phoenix_collateral` moves. Fill `FundingInterval` from Rise/Hawkeye at the process edge; crate tests use canned Δacc. Fork smoke (`CINDER_FUNDING=1`) still optional.
+- Adapter `crank_funding`: quote-lots → USDC, `bump_funding_epoch`, per-user accrue (flat = bump-only), dust cap 1000 without halt, MM liquidate, fold when `phoenix_collateral` moves.
+- Rise edge: `scripts/rise-funding.ts` `loadFundingInterval` (on-chain trader + public market metadata). Fork smoke: `CINDER_FUNDING=1 ./scripts/test-funding.sh`.
