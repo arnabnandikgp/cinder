@@ -12,15 +12,8 @@ export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 ./scripts/check-toolchain.sh
 export ANCHOR_WALLET="${ANCHOR_WALLET:-$HOME/.config/solana/id.json}"
 
-# Isolated from S1 (same Config PDA). Override the mocha glob for this run only.
-orig="$(mktemp)"
-cp Anchor.toml "$orig"
-cleanup() { cp "$orig" Anchor.toml; rm -f "$orig"; }
-trap cleanup EXIT
-perl -i -pe 's#tests/s1-\*\.ts#tests/s5-collateral.ts#' Anchor.toml
-NO_DNA=1 anchor test --validator legacy
-cleanup
-trap - EXIT
+# Isolated from S1 (same Config PDA). Mocha glob via CINDER_MOCHA.
+NO_DNA=1 CINDER_MOCHA=s5-collateral.ts anchor test --validator legacy
 
 if [[ "${CINDER_S5:-}" == "1" ]]; then
   yarn ts-node scripts/venue-boot.ts

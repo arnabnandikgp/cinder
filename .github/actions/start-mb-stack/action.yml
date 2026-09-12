@@ -1,0 +1,20 @@
+name: start-mb-stack
+description: Install pinned mb-stack and wait for base, ER, and QFS
+runs:
+  using: composite
+  steps:
+    - name: Install mb-stack
+      shell: bash
+      run: |
+        npm i -g @magicblock-labs/ephemeral-validator@0.14.10
+        echo "$(npm prefix -g)/bin" >> "$GITHUB_PATH"
+    - name: Start mb-stack
+      shell: bash
+      run: |
+        mb-stack --reset > mb-stack.log 2>&1 &
+        echo $! > mb-stack.pid
+        ./scripts/wait-rpc.sh http://127.0.0.1:8899 180
+        ./scripts/wait-rpc.sh http://127.0.0.1:7799 180
+        ./scripts/wait-rpc.sh http://127.0.0.1:6699 180
+        solana config set --url http://127.0.0.1:8899
+        solana airdrop 100 "$(solana-keygen pubkey "$HOME/.config/solana/id.json")" || true
