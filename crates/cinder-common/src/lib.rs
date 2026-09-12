@@ -116,3 +116,86 @@ pub fn upnl_usdc(lots: i64, mark_usdc_per_lot: i64, entry_quote: i64) -> i128 {
         (lots as i128) * (mark_usdc_per_lot as i128) - (entry_quote as i128)
     }
 }
+
+/// Result of applying a fill to basis. `fill_quote == 0` never invents PnL.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RealizeFill {
+    pub realized_usdc: i64,
+    pub new_entry_quote: i64,
+}
+
+/// Open: add fill quote to entry. Reduce (opposite sign): take proportional
+/// basis, `realized = -(entry_closed + fill_quote)`. Fail-ack must not call this.
+pub fn realize_on_fill(
+    lots_before: i64,
+    filled: i64,
+    entry_quote: i64,
+    fill_quote: i64,
+) -> Option<RealizeFill> {
+    if filled == 0 {
+        return None;
+    }
+    if lots_before == 0 || lots_before.signum() == filled.signum() {
+        let new_entry = entry_quote.checked_add(fill_quote)?;
+        return Some(RealizeFill {
+            realized_usdc: 0,
+            new_entry_quote: new_entry,
+        });
+    }
+    if fill_quote == 0 {
+        return Some(RealizeFill {
+            realized_usdc: 0,
+            new_entry_quote: entry_quote,
+        });
+    }
+    let closed = lots_before.unsigned_abs().min(filled.unsigned_abs());
+    let denom = lots_before.unsigned_abs() as i128;
+    if denom == 0 {
+        return None;
+    }
+    let entry_closed = (entry_quote as i128).checked_mul(closed as i128)? / denom;
+    let realized = (-(entry_closed.checked_add(fill_quote as i128)?))
+        .try_into()
+        .ok()?;
+    let new_entry = (entry_quote as i128)
+        .checked_sub(entry_closed)?
+        .try_into()
+        .ok()?;
+    Some(RealizeFill {
+        realized_usdc: realized,
+        new_entry_quote: new_entry,
+    })
+}
+
+#[cfg(test)]
+mod realize_tests {
+    use super::*;
+
+    #[test]
+    fn open_adds_basis_no_pnl() {
+        let r = realize_on_fill(0, 10, 0, 10_000_000).unwrap();
+        assert_eq!(r.realized_usdc, 0);
+        assert_eq!(r.new_entry_quote, 10_000_000);
+    }
+
+    #[test]
+    fn long_close_above_entry_is_profit() {
+        let r = realize_on_fill(10, -4, 10_000_000, -4_400_000).unwrap();
+        assert_eq!(r.realized_usdc, 400_000);
+        assert_eq!(r.new_entry_quote, 6_000_000);
+    }
+
+    #[test]
+    fn short_cover_above_entry_is_loss() {
+        let r = realize_on_fill(-10, 4, -10_000_000, 4_400_000).unwrap();
+        assert_eq!(r.realized_usdc, -400_000);
+        assert_eq!(r.new_entry_quote, -6_000_000);
+    }
+
+    #[test]
+    fn zero_vwap_does_not_invent_pnl() {
+        let r = realize_on_fill(10, -4, 10_000_000, 0).unwrap();
+        assert_eq!(r.realized_usdc, 0);
+        assert_eq!(r.new_entry_quote, 10_000_000);
+    }
+}

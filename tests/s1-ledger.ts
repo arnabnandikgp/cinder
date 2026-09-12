@@ -476,6 +476,127 @@ describe("S1 accounts and order machine", () => {
     });
   });
 
+  describe("G-PNL reducing ack", () => {
+    const pnlUser = Keypair.generate();
+    let pnlLedger: PublicKey;
+    const OPEN_VWAP = 10_000_000; // 10 lots * 1 USDC
+    const CLOSE_VWAP = -11_000_000; // sell 10 at 1.1 USDC
+    const PROFIT = 1_000_000;
+
+    before(async () => {
+      await airdrop(pnlUser.publicKey);
+      pnlLedger = pda(ledger.programId, [
+        Buffer.from("user"),
+        pnlUser.publicKey.toBuffer(),
+      ]);
+      await ledger.methods
+        .initUser()
+        .accounts({
+          adapter: adapter.publicKey,
+          user: pnlUser.publicKey,
+          config: configPda,
+          userLedger: pnlLedger,
+          book: bookPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([adapter, pnlUser])
+        .rpc();
+      await ledger.methods
+        .creditDeposit(new BN(CREDIT))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: pnlLedger,
+        })
+        .signers([adapter])
+        .rpc();
+    });
+
+    it("open then full close credits realized into free; fail-ack does not", async () => {
+      await ledger.methods
+        .placeOrder(ASSET_SOL, new BN(LOTS), oid(70), 50, false, new BN(0))
+        .accounts({
+          user: pnlUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: pnlLedger,
+        })
+        .signers([pnlUser])
+        .rpc();
+      await ledger.methods
+        .ackPhoenixFill(oid(70), new BN(LOTS), new BN(0), new BN(OPEN_VWAP))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: pnlLedger,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const opened = await ledger.account.userLedger.fetch(pnlLedger);
+      expect(opened.positions[0].entryQuoteLots.toNumber()).to.equal(OPEN_VWAP);
+      expect(opened.free.toNumber()).to.equal(CREDIT - IM_TEN_LOTS);
+
+      await ledger.methods
+        .placeOrder(ASSET_SOL, new BN(-LOTS), oid(71), 50, true, new BN(1))
+        .accounts({
+          user: pnlUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: pnlLedger,
+        })
+        .signers([pnlUser])
+        .rpc();
+      const mid = await ledger.account.userLedger.fetch(pnlLedger);
+      const freeWhilePending = mid.free.toNumber();
+
+      await ledger.methods
+        .ackPhoenixFail(oid(71))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: pnlLedger,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+      const afterFail = await ledger.account.userLedger.fetch(pnlLedger);
+      expect(afterFail.positions[0].lots.toNumber()).to.equal(LOTS);
+      expect(afterFail.free.toNumber()).to.equal(CREDIT - IM_TEN_LOTS);
+      expect(afterFail.free.toNumber()).to.not.equal(freeWhilePending + PROFIT);
+
+      await ledger.methods
+        .placeOrder(ASSET_SOL, new BN(-LOTS), oid(72), 50, true, new BN(2))
+        .accounts({
+          user: pnlUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: pnlLedger,
+        })
+        .signers([pnlUser])
+        .rpc();
+      await ledger.methods
+        .ackPhoenixFill(oid(72), new BN(-LOTS), new BN(0), new BN(CLOSE_VWAP))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: pnlLedger,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const closed = await ledger.account.userLedger.fetch(pnlLedger);
+      expect(closed.positionsLen).to.equal(0);
+      expect(closed.reserved.toNumber()).to.equal(0);
+      expect(closed.free.toNumber()).to.equal(CREDIT + PROFIT);
+    });
+  });
+
   describe("S8 withdraw and reserve root", () => {
     const withdrawUser = Keypair.generate();
     let withdrawLedger: PublicKey;

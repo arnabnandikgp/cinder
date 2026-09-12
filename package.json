@@ -5,7 +5,8 @@
   "license": "MIT",
   "scripts": {
     "build": "anchor keys sync && anchor build",
-    "test": "anchor test --validator legacy"
+    "test": "anchor test --validator legacy",
+    "demo": "ts-node --transpile-only scripts/cinder-demo.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",

@@ -199,6 +199,13 @@ impl LedgerPort for MemoryLedger {
                 .entry(fill.asset_id)
                 .or_insert(0) += fill.filled_lots;
         }
+        if fill.fee_usdc > 0 {
+            let free = self.user_free.entry(*user).or_insert(0);
+            if *free < fill.fee_usdc {
+                return Err(AdapterError::Ledger("insufficient free for fee".into()));
+            }
+            *free -= fill.fee_usdc;
+        }
         let lots = self.book_lots(fill.asset_id);
         let im = cc::stub_cinder_im(lots.unsigned_abs())
             .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;

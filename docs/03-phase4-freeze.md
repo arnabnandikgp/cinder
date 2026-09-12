@@ -213,7 +213,7 @@ Stand-in era: adapter key **is** Phoenix authority. S9: same ixs, `invoke_signed
 | `init_user` | adapter + user | zero ledger; `last_funding_epoch = Book.funding_epoch`; create EphemeralPermission |
 | `credit_deposit` | adapter | `free += amount` unless HALT_DEPOSIT |
 | `place_order` | user | tentative lots + reserved IM + pending oid; **Book does not move** |
-| `ack_phoenix_fill` | adapter | Book += filled; fee/slippage; oid acked |
+| `ack_phoenix_fill` | adapter | Book += filled; fee; reducing fill realizes `-(entry_closed + vwap)` into free/reserved; oid acked |
 | `ack_phoenix_fail` | adapter | revert tentative; oid failed |
 | `bump_funding_epoch` | adapter | `Book.funding_epoch += 1` (must equal arg) |
 | `allocate_funding` | adapter | accrue `unsettled_funding` or fold into free/reserved; see args |
