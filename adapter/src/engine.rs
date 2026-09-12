@@ -53,18 +53,28 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
         }
     }
 
-    /// Commit crank: write_reserve_root every 20 fills or 30s.
+    /// Record a fill toward the reserve-root cadence. Does **not** write or
+    /// clear counters; [`Self::crank_reserve_root`] does that after success.
     pub fn note_fill_for_root(&mut self, now_ms: u64) -> bool {
         self.fills_since_root = self.fills_since_root.saturating_add(1);
-        let due_fills = self.fills_since_root >= cc::COMMIT_EVERY_FILLS;
-        let due_time = now_ms.saturating_sub(self.last_root_ms) >= cc::COMMIT_EVERY_MS;
-        if due_fills || due_time {
-            self.fills_since_root = 0;
-            self.last_root_ms = now_ms;
-            true
-        } else {
-            false
+        self.reserve_root_due(now_ms)
+    }
+
+    pub fn reserve_root_due(&self, now_ms: u64) -> bool {
+        self.fills_since_root >= cc::COMMIT_EVERY_FILLS
+            || now_ms.saturating_sub(self.last_root_ms) >= cc::COMMIT_EVERY_MS
+    }
+
+    /// Submit `write_reserve_root` when 20 fills or 30s have elapsed.
+    /// Counters reset only after the write succeeds. Safe to call with no fills.
+    pub fn crank_reserve_root(&mut self, now_ms: u64) -> Result<bool, AdapterError> {
+        if !self.reserve_root_due(now_ms) {
+            return Ok(false);
         }
+        self.ledger.write_reserve_root(now_ms)?;
+        self.fills_since_root = 0;
+        self.last_root_ms = now_ms;
+        Ok(true)
     }
 
     /// Window=0 hedge of one pending oid. Book is not moved here; `ack_*` does.
@@ -173,7 +183,8 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                         asset_id: fill.asset_id,
                     });
                 }
-                let _ = self.note_fill_for_root(now_ms);
+                self.note_fill_for_root(now_ms);
+                let _ = self.crank_reserve_root(now_ms);
                 Ok(HedgeOutcome::Filled(fill))
             }
         }
@@ -485,13 +496,44 @@ mod tests {
     #[test]
     fn s8_root_crank_every_20_fills_or_30s() {
         let mut ad = adapter_with(MockPhoenix::new());
-        ad.last_root_ms = 0;
+        ad.last_root_ms = 1_000;
         for _ in 0..19 {
             assert!(!ad.note_fill_for_root(1_000));
         }
         assert!(ad.note_fill_for_root(1_000));
+        assert_eq!(ad.fills_since_root, 20);
+        assert!(ad.ledger.reserve_roots.is_empty());
+        assert!(ad.crank_reserve_root(1_000).unwrap());
         assert_eq!(ad.fills_since_root, 0);
+        assert_eq!(ad.ledger.reserve_roots, vec![1_000]);
         assert!(!ad.note_fill_for_root(1_000));
-        assert!(ad.note_fill_for_root(1_000 + cc::COMMIT_EVERY_MS));
+        assert!(ad.crank_reserve_root(1_000 + cc::COMMIT_EVERY_MS).unwrap());
+        assert_eq!(ad.ledger.reserve_roots, vec![1_000, 1_000 + cc::COMMIT_EVERY_MS]);
+    }
+
+    #[test]
+    fn reserve_root_time_crank_without_fills() {
+        let mut ad = adapter_with(MockPhoenix::new());
+        ad.last_root_ms = 0;
+        assert!(ad.reserve_root_due(cc::COMMIT_EVERY_MS));
+        assert!(ad.crank_reserve_root(cc::COMMIT_EVERY_MS).unwrap());
+        assert_eq!(ad.ledger.reserve_roots, vec![cc::COMMIT_EVERY_MS]);
+        assert!(!ad.crank_reserve_root(cc::COMMIT_EVERY_MS).unwrap());
+    }
+
+    #[test]
+    fn reserve_root_stays_due_if_write_fails() {
+        let mut ad = adapter_with(MockPhoenix::new());
+        ad.last_root_ms = 1_000;
+        for _ in 0..20 {
+            ad.note_fill_for_root(1_000);
+        }
+        ad.ledger.fail_next_root = true;
+        assert!(ad.crank_reserve_root(1_000).is_err());
+        assert_eq!(ad.fills_since_root, 20);
+        assert!(ad.ledger.reserve_roots.is_empty());
+        assert!(ad.crank_reserve_root(1_000).unwrap());
+        assert_eq!(ad.fills_since_root, 0);
+        assert_eq!(ad.ledger.reserve_roots.len(), 1);
     }
 }

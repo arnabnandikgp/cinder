@@ -12,6 +12,7 @@ pub trait LedgerPort {
     fn config_halt(&self) -> u8;
     fn book_halt(&self) -> u8;
     fn invariant_ok(&self) -> bool;
+    fn write_reserve_root(&mut self, now_ms: u64) -> Result<(), AdapterError>;
 }
 
 #[derive(Clone, Debug, Default)]
@@ -27,6 +28,8 @@ pub struct MemoryLedger {
     pub user_cash: std::collections::BTreeMap<PubkeyBytes, u64>,
     pub vault_ata: u64,
     pub phoenix_collateral: u64,
+    pub reserve_roots: Vec<u64>,
+    pub fail_next_root: bool,
 }
 
 impl MemoryLedger {
@@ -115,5 +118,14 @@ impl LedgerPort for MemoryLedger {
 
     fn invariant_ok(&self) -> bool {
         self.invariant_ok == 1
+    }
+
+    fn write_reserve_root(&mut self, now_ms: u64) -> Result<(), AdapterError> {
+        if self.fail_next_root {
+            self.fail_next_root = false;
+            return Err(AdapterError::Ledger("reserve root write failed".into()));
+        }
+        self.reserve_roots.push(now_ms);
+        Ok(())
     }
 }
