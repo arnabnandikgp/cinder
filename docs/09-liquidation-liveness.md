@@ -261,7 +261,7 @@ Do not use MagicBlock scheduled cranks as the mark source. They cannot see Phoen
 **Execute (fast clock):**
 
 4. For each queued user, submit `liquidate_user` (after §6.3: the tentative flatten ix) on the **ER / QFS** endpoint. Fee 0. ~10 ms slot. Do **not** wait for Phoenix between users except for Book lock: Book is shared, so **serialize** ER flatten txs (or batch in one 64 KB tx if CU fits).
-5. After the ER batch, send **one** Phoenix reducing IOC for the **net** Book delta that will exist once acks land (window=0: the pending-liq sum). Ack fill/fail on ER. I1 live holds: `Book + pending_liq == Phoenix`.
+5. **v0: one Phoenix IOC per pending liq oid**, `lots = that oid’s lots_delta` (already signed: long flatten is negative). Do not aggregate fills across users — a partial IOC maps to one oid (leftover lots restore on that user only). Ack fill/fail on ER. I1 live: `Book + filled_not_yet_acked == Phoenix`.
 6. If Phoenix rejects / 0-fills: fail-ack restores user size (same as place fail). Then `UNSAFE_POOL` and retry; do not zero Book while Phoenix still has the risk.
 
 **Why this uses PER instead of fighting it:**
@@ -309,7 +309,7 @@ liquidate_user(asset)                    # adapter, ER, fee 0
   user lots tentatively 0, release IM
   # Book unchanged
 
-hedge: Phoenix IOC with sign of −sum(pending_liq)   # L1, not Magic Action
+hedge: Phoenix IOC with lots = pending_liq.lots_delta for that oid  # L1; v0 one IOC per oid
 
 ack_phoenix_fill(liq_oid, filled, vwap, fee)
   Book += filled   # filled is reducing, so Book moves toward 0 on that user size

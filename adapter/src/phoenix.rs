@@ -29,9 +29,7 @@ pub enum PlaceResult {
 pub trait PhoenixVenue {
     fn place_market(&mut self, order: &MarketOrder) -> Result<PlaceResult, AdapterError>;
     fn base_lots(&self, asset_id: u16) -> i64;
-    fn pool_health(&self) -> PoolHealth {
-        PoolHealth::Safe
-    }
+    fn pool_health(&self) -> PoolHealth;
 }
 
 /// Pre-trade pool health. New hedges only when Safe.

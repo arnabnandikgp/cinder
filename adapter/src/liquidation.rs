@@ -7,7 +7,7 @@ use crate::engine::{Adapter, HedgeOutcome, LiqQueueItem, PendingOid};
 use crate::inflight::InFlight;
 use crate::ledger::{FundingPort, LedgerPort};
 use crate::phoenix::{MarketOrder, PhoenixVenue, PlaceResult};
-use crate::residual::i1_holds;
+use crate::residual::{i1_holds, i1_live};
 use crate::{AdapterError, PubkeyBytes};
 
 #[derive(Clone, Debug, Default)]
@@ -37,6 +37,9 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
             if now_ms.saturating_sub(prev) > cc::SCAN_DEAD_MS {
                 let flags = self.ledger.config_halt() | cc::OPERATOR_DOWN | cc::HALT_ENTRIES;
                 self.ledger.write_halt(flags)?;
+            } else if now_ms.saturating_sub(prev) < cc::SCAN_INTERVAL_MS {
+                report.halt = self.ledger.config_halt();
+                return Ok(report);
             }
         }
         self.last_in_process_scan_ms = Some(now_ms);
@@ -78,9 +81,7 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
             }
         }
 
-        let unsafe_pool = self.phoenix.pool_health().is_unsafe()
-            || self.pool_health.is_unsafe();
-        if unsafe_pool && self.phoenix.pool_health().is_unsafe() {
+        if self.phoenix.pool_health().is_unsafe() {
             let mut im_items: Vec<LiqQueueItem> = self
                 .queued
                 .iter()
@@ -101,7 +102,7 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
             }
         }
 
-        if unsafe_pool {
+        if self.phoenix.pool_health().is_unsafe() {
             let flags = self.ledger.config_halt() | cc::UNSAFE_POOL;
             self.ledger.write_halt(flags)?;
         }
@@ -142,14 +143,14 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
         let oid = self.next_liq_oid();
         self.ledger
             .liquidate_user(&item.user, item.asset_id, oid)?;
+        let Some(lots_delta) = self.ledger.pending_liq_lots(&oid) else {
+            return Ok(None);
+        };
         let pending = PendingOid {
             user: item.user,
             client_oid: oid,
             asset_id: item.asset_id,
-            lots_delta: item
-                .lots
-                .checked_neg()
-                .ok_or_else(|| AdapterError::Ledger("liq delta overflow".into()))?,
+            lots_delta,
             created_at_ms: now_ms,
         };
         let out = self.hedge_liq(now_ms, &pending)?;
@@ -192,12 +193,39 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
                 })
             }
             PlaceResult::Fill(fill) => {
+                if fill.client_oid != oid.client_oid || fill.asset_id != oid.asset_id {
+                    let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
+                    self.ledger.write_halt(flags)?;
+                    return Ok(HedgeOutcome::InvariantBroken {
+                        asset_id: oid.asset_id,
+                    });
+                }
                 if fill.filled_lots == 0 {
                     self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
                     self.inflight.remove(&oid.client_oid);
                     return Ok(HedgeOutcome::Failed {
                         oid: oid.client_oid,
                         reason: "0-fill".into(),
+                    });
+                }
+                if fill.filled_lots.signum() != oid.lots_delta.signum()
+                    || fill.filled_lots.unsigned_abs() > oid.lots_delta.unsigned_abs()
+                {
+                    let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
+                    self.ledger.write_halt(flags)?;
+                    return Ok(HedgeOutcome::InvariantBroken {
+                        asset_id: oid.asset_id,
+                    });
+                }
+                if !i1_live(
+                    self.ledger.book_lots(fill.asset_id),
+                    fill.filled_lots,
+                    self.phoenix.base_lots(fill.asset_id),
+                ) {
+                    let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
+                    self.ledger.write_halt(flags)?;
+                    return Ok(HedgeOutcome::InvariantBroken {
+                        asset_id: fill.asset_id,
                     });
                 }
                 self.inflight.mark_venue_filled(&oid.client_oid);
@@ -414,5 +442,60 @@ mod tests {
     fn live_i1_helper() {
         assert!(i1_live(10, -10, 0));
         assert!(!i1_live(10, -10, 10));
+    }
+
+    #[test]
+    fn partial_liq_fill_restores_leftover_lots() {
+        let mut ad = adapter();
+        ad.phoenix.auto_fill = false;
+        let a = user(1);
+        seed_long(&mut ad, a, 10, 100_000);
+        let oid = ad.next_liq_oid();
+        ad.ledger.liquidate_user(&a, 1, oid).unwrap();
+        ad.phoenix.fill_next(crate::phoenix::Fill {
+            client_oid: oid,
+            asset_id: 1,
+            filled_lots: -4,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+        });
+        let pending = PendingOid {
+            user: a,
+            client_oid: oid,
+            asset_id: 1,
+            lots_delta: -10,
+            created_at_ms: 1_000,
+        };
+        let out = ad.hedge_liq(1_000, &pending).unwrap();
+        assert!(matches!(out, HedgeOutcome::Filled(ref f) if f.filled_lots == -4));
+        assert_eq!(ad.ledger.lots_of(&a, 1), 6);
+        assert_eq!(ad.ledger.book_lots(1), 6);
+        assert_eq!(ad.phoenix.base_lots(1), 6);
+    }
+
+    #[test]
+    fn stale_drain_sizes_hedge_from_ledger_not_snapshot() {
+        let mut ad = adapter();
+        let a = user(1);
+        seed_long(&mut ad, a, 10, 100_000);
+        ad.queued = vec![LiqQueueItem {
+            user: a,
+            asset_id: 1,
+            equity: 0,
+            mm: 1,
+            im: 1,
+            lots: 10,
+        }];
+        ad.ledger.user_lots.insert(a, [(1, 6)].into_iter().collect());
+        ad.ledger.book.insert(1, 6);
+        ad.phoenix.set_lots(1, 6);
+        ad.mark_observed_at_ms = Some(0);
+        let r = ad
+            .scan_liquidations(cc::MARK_STALE_MS + 1, 1)
+            .unwrap();
+        assert_eq!(r.classified, 0);
+        assert_eq!(r.liquidated, vec![(a, 1)]);
+        assert_eq!(ad.ledger.lots_of(&a, 1), 0);
+        assert_eq!(ad.ledger.book_lots(1), 0);
     }
 }

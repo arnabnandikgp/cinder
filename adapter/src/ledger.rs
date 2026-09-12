@@ -144,6 +144,7 @@ pub trait FundingPort {
     fn last_scan_ms(&self) -> u64;
     fn write_last_scan_ms(&mut self, ms: u64);
     fn pending_liq_delta(&self, asset_id: u16) -> i64;
+    fn pending_liq_lots(&self, oid: &ClientOid) -> Option<i64>;
     fn phoenix_collateral(&self) -> u64;
     fn set_phoenix_collateral(&mut self, v: u64);
     fn i2_ok_unsettled(&self, pool_unsettled: i64, in_flight_usdc: i64) -> bool;
@@ -170,11 +171,25 @@ impl LedgerPort for MemoryLedger {
                 if let Some(m) = self.user_lots.get_mut(user) {
                     m.remove(&fill.asset_id);
                 }
+                if let Some(m) = self.user_entry.get_mut(user) {
+                    m.remove(&fill.asset_id);
+                }
             } else {
                 self.user_lots
                     .entry(*user)
                     .or_default()
                     .insert(fill.asset_id, final_lots);
+                if let Some(orig) = liq.lots_delta.checked_neg() {
+                    if orig != 0 {
+                        if let Some(e) = self
+                            .user_entry
+                            .get_mut(user)
+                            .and_then(|m| m.get_mut(&fill.asset_id))
+                        {
+                            *e = ((*e as i128) * (final_lots as i128) / (orig as i128)) as i64;
+                        }
+                    }
+                }
             }
         } else {
             *self
@@ -429,6 +444,10 @@ impl FundingPort for MemoryLedger {
             .filter(|p| p.asset_id == asset_id)
             .map(|p| p.lots_delta)
             .sum()
+    }
+
+    fn pending_liq_lots(&self, oid: &ClientOid) -> Option<i64> {
+        self.pending_liq.get(oid).map(|p| p.lots_delta)
     }
 
     fn phoenix_collateral(&self) -> u64 {

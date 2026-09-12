@@ -4,7 +4,7 @@ use crate::inflight::{InFlight, InFlightTable};
 use crate::ledger::LedgerPort;
 use crate::operator::OperatorAuth;
 use crate::phoenix::{Fill, MarketOrder, PhoenixVenue, PlaceResult, PoolHealth};
-use crate::residual::i1_holds;
+use crate::residual::{i1_holds, i1_live};
 use crate::{AdapterError, ClientOid, PubkeyBytes};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -201,6 +201,17 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                         asset_id: oid.asset_id,
                     });
                 }
+                if !i1_live(
+                    self.ledger.book_lots(fill.asset_id),
+                    fill.filled_lots,
+                    self.phoenix.base_lots(fill.asset_id),
+                ) {
+                    let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
+                    self.ledger.write_halt(flags)?;
+                    return Ok(HedgeOutcome::InvariantBroken {
+                        asset_id: fill.asset_id,
+                    });
+                }
                 self.inflight.mark_venue_filled(&oid.client_oid);
                 self.ledger.ack_fill(&oid.user, &fill)?;
                 self.inflight.remove(&oid.client_oid);
@@ -326,7 +337,7 @@ mod tests {
         let mut ad = adapter_with(phoenix);
         let out = ad.hedge_pending(1_000, &pending(3, 10, 1_000)).unwrap();
         assert!(matches!(out, HedgeOutcome::InvariantBroken { asset_id: 1 }));
-        assert_eq!(ad.ledger.book_lots(1), 10);
+        assert_eq!(ad.ledger.book_lots(1), 0);
         assert_eq!(ad.phoenix.base_lots(1), 99);
         assert_eq!(ad.ledger.config_halt() & cc::INVARIANT_BROKEN, cc::INVARIANT_BROKEN);
         assert_eq!(ad.ledger.book_halt() & cc::INVARIANT_BROKEN, cc::INVARIANT_BROKEN);
