@@ -598,6 +598,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "cinder-common",
+ "cinder-vault",
  "ephemeral-rollups-sdk",
 ]
 
