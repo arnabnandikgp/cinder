@@ -1,11 +1,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: en-US
 tone_instructions: >
-  Be concise and evidence-backed. Prefer freeze/spec bugs over style.
-  Cinder is a private perp prime broker for Phoenix: attribution privacy only,
-  one cross trader PDA, Book moves on ack_phoenix_fill not place, window=0.
-  Do not suggest windowed netting, session keys, isolated Phoenix accounts,
-  storing user QFS tokens, or a working escape_withdraw.
+  Be concise and evidence-backed. Prefer freeze/spec bugs over style nits.
 
 reviews:
   profile: assertive
