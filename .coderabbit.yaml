@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+tone_instructions: >
+  Be concise and evidence-backed. Prefer freeze/spec bugs over style nits.
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  path_filters:
+    - "!**/Cargo.lock"
+    - "!**/yarn.lock"
+    - "!**/.agents/**"
+    - "!docs/reference/**"
+    - "!keys/**"
+  path_instructions:
+    - path: programs/**/*.rs
+      instructions: |
+        Source of truth is docs/03-phase4-freeze.md. Do not invent PDAs or extra account fields.
+        place_order is tentative; Book residual changes only on ack_phoenix_fill.
+        Flag: auth (adapter vs user), halt bits, nonce, oid cap, leverage across the whole book,
+        IM reservation, liquidation slot reuse, PDA signer seeds.
+        Skip docstring-coverage nags and drive-by refactors.
+    - path: adapter/**/*.rs
+      instructions: |
+        Phoenix is a trait; S4/S5 must not persist per-user TEE/QFS tokens.
+        Fills must match the pending oid. Confirmed venue fills must not be fail-acked on TTL.
+        I1 miss must set INVARIANT_BROKEN on both Book and Config halt bytes.
+    - path: tests/**/*.ts
+      instructions: |
+        S1/S3 run on a legacy validator. S2 privacy tests must use QFS :6699, not raw ER :7799.
+        Do not require Surfpool in default mocha.
+    - path: docs/**
+      instructions: |
+        Policy is docs/01-decisions.md and docs/03-phase4-freeze.md. Vendor API shape may follow
+        docs/reference dumps. Do not reopen D1–D8.
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - WIP
+      - "DO NOT MERGE"
+    ignore_usernames:
+      - dependabot[bot]
+      - renovate[bot]
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+  pre_merge_checks:
+    docstrings:
+      mode: off
+    title:
+      mode: warning
+      requirements: "Short title that names the stage or surface (S0–S9, vault, ledger, adapter, CI)."
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+    custom_checks:
+      - name: Freeze non-negotiables
+        mode: warning
+        instructions: |
+          Fail the check (as a warning) if the diff introduces windowed netting, isolated Phoenix
+          child accounts, a working escape_withdraw, session keys, Cinder fee take, or a server-side
+          map of user QFS tokens.
+
+knowledge_base:
+  opt_out: false
+
+chat:
+  auto_reply: true
