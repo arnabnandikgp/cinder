@@ -190,15 +190,52 @@ pub mod cinder_ledger {
             .lots_delta
             .checked_sub(filled_lots)
             .ok_or(LedgerError::Overflow)?;
-        // Tentative lots already include lots_delta. Walk back the unfilled remainder.
+        // Tentative lots include every pending oid on this asset. Confirmed lots
+        // subtract all of them so out-of-order acks use the right basis.
         let tentative = position_lots(ledger, oid.asset_id);
+        let lots_before = tentative
+            .checked_sub(pending_delta_for_asset(ledger, oid.asset_id)?)
+            .ok_or(LedgerError::Overflow)?;
         let final_lots = tentative
             .checked_sub(unfilled)
             .ok_or(LedgerError::Overflow)?;
+        let entry_before = position_entry(ledger, oid.asset_id);
+        let realized = cc::realize_on_fill(
+            lots_before,
+            filled_lots,
+            entry_before,
+            vwap_quote_lots,
+        )
+        .ok_or(LedgerError::Overflow)?;
         let old_im = stub_im(tentative)?;
         let new_im = stub_im(final_lots)?;
         apply_im_delta(ledger, old_im, new_im)?;
-        add_entry_quote(ledger, oid.asset_id, final_lots, new_im, vwap_quote_lots)?;
+        set_position_lots(ledger, oid.asset_id, final_lots, new_im)?;
+        {
+            let n = ledger.positions_len as usize;
+            if let Some(pos) = ledger.positions[..n]
+                .iter_mut()
+                .find(|p| p.asset_id == oid.asset_id)
+            {
+                pos.entry_quote_lots = realized.new_entry_quote;
+            }
+        }
+        if realized.realized_usdc != 0 {
+            let leftover = apply_signed_cash(ledger, realized.realized_usdc)?;
+            require!(leftover == 0, LedgerError::InsufficientFree);
+        }
+        if final_lots == 0 {
+            {
+                let n = ledger.positions_len as usize;
+                if let Some(pos) = ledger.positions[..n]
+                    .iter_mut()
+                    .find(|p| p.asset_id == oid.asset_id)
+                {
+                    pos.entry_quote_lots = 0;
+                }
+            }
+            compact_positions(ledger);
+        }
 
         if fee_usdc > 0 {
             require!(ledger.free >= fee_usdc, LedgerError::InsufficientFree);
@@ -809,6 +846,27 @@ fn position_lots(ledger: &UserLedger, asset_id: u16) -> i64 {
         .unwrap_or(0)
 }
 
+fn pending_delta_for_asset(ledger: &UserLedger, asset_id: u16) -> Result<i64> {
+    let mut s = 0i64;
+    for o in ledger.open_oids.iter() {
+        if o.asset_id == asset_id
+            && o.lots_delta != 0
+            && (o.state == cc::OID_PENDING || o.state == cc::OID_LIQUIDATING)
+        {
+            s = s.checked_add(o.lots_delta).ok_or(LedgerError::Overflow)?;
+        }
+    }
+    Ok(s)
+}
+
+fn position_entry(ledger: &UserLedger, asset_id: u16) -> i64 {
+    ledger.positions[..ledger.positions_len as usize]
+        .iter()
+        .find(|p| p.asset_id == asset_id)
+        .map(|p| p.entry_quote_lots)
+        .unwrap_or(0)
+}
+
 fn set_position_lots(
     ledger: &mut UserLedger,
     asset_id: u16,
@@ -822,9 +880,11 @@ fn set_position_lots(
         pos.lots = lots;
         pos.reserved_im = reserved_im;
         if lots == 0 {
-            pos.entry_quote_lots = 0;
             pos.reserved_im = 0;
-            compact_positions(ledger);
+            // Keep a 0-lot row while entry remains so a reducing ack can realize.
+            if pos.entry_quote_lots == 0 && pos.unsettled_funding == 0 {
+                compact_positions(ledger);
+            }
         }
         return Ok(());
     }
@@ -847,31 +907,14 @@ fn set_position_lots(
     Ok(())
 }
 
-fn add_entry_quote(
-    ledger: &mut UserLedger,
-    asset_id: u16,
-    lots: i64,
-    reserved_im: u64,
-    vwap_quote_lots: i64,
-) -> Result<()> {
-    set_position_lots(ledger, asset_id, lots, reserved_im)?;
-    if let Some(pos) = ledger.positions[..ledger.positions_len as usize]
-        .iter_mut()
-        .find(|p| p.asset_id == asset_id)
-    {
-        pos.entry_quote_lots = pos
-            .entry_quote_lots
-            .checked_add(vwap_quote_lots)
-            .ok_or(LedgerError::Overflow)?;
-    }
-    Ok(())
-}
-
 fn compact_positions(ledger: &mut UserLedger) {
     let mut w = 0usize;
     let n = ledger.positions_len as usize;
     for r in 0..n {
-        if ledger.positions[r].lots != 0 || ledger.positions[r].unsettled_funding != 0 {
+        if ledger.positions[r].lots != 0
+            || ledger.positions[r].entry_quote_lots != 0
+            || ledger.positions[r].unsettled_funding != 0
+        {
             if w != r {
                 ledger.positions[w] = ledger.positions[r];
             }
