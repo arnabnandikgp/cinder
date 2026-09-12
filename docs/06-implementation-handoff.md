@@ -21,6 +21,8 @@ S9 stays `open` until S8 is `closed`. Windowed residual (window > 0) is **not** 
 
 **Follow-on (not S10):** Phoenix funding overlay — `docs/08-funding-allocation.md`. Two-phase health/cash, `Book.funding_epoch`, I2 with unsettled terms. Implement as a slice after S9.
 
+Further backlog (PnL realization, adapter runtime, Rise MM, …): `docs/10-open-gaps.md`. Note only; do not treat as a tracker stage.
+
 Suggested layout:
 
 ```

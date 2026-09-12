@@ -11,7 +11,8 @@ You are implementing **Cinder**, a private perp prime broker for **Phoenix** on 
 5. PER / QFS / local cluster: `docs/05-per-local-dev.md`
 6. What to build next: `docs/06-implementation-handoff.md` (tracker + stage specs)
 7. Why those choices exist: `docs/07-context-for-builders.md`
-8. Raw vendor dumps when an API is ambiguous:
+8. What is still missing (backlog, not freeze): `docs/10-open-gaps.md`
+9. Raw vendor dumps when an API is ambiguous:
    - `docs/reference/mb-docs.md` (MagicBlock)
    - `docs/reference/phoenix-docs.md` (Phoenix / Rise)
    - optional: `docs/reference/hl-complete.md` (HyperLink reference only)
