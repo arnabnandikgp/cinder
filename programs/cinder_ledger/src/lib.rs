@@ -190,10 +190,11 @@ pub mod cinder_ledger {
             .lots_delta
             .checked_sub(filled_lots)
             .ok_or(LedgerError::Overflow)?;
-        // Tentative lots already include lots_delta. Walk back the unfilled remainder.
+        // Tentative lots include every pending oid on this asset. Confirmed lots
+        // subtract all of them so out-of-order acks use the right basis.
         let tentative = position_lots(ledger, oid.asset_id);
         let lots_before = tentative
-            .checked_sub(oid.lots_delta)
+            .checked_sub(pending_delta_for_asset(ledger, oid.asset_id)?)
             .ok_or(LedgerError::Overflow)?;
         let final_lots = tentative
             .checked_sub(unfilled)
@@ -845,6 +846,19 @@ fn position_lots(ledger: &UserLedger, asset_id: u16) -> i64 {
         .unwrap_or(0)
 }
 
+fn pending_delta_for_asset(ledger: &UserLedger, asset_id: u16) -> Result<i64> {
+    let mut s = 0i64;
+    for o in ledger.open_oids.iter() {
+        if o.asset_id == asset_id
+            && o.lots_delta != 0
+            && (o.state == cc::OID_PENDING || o.state == cc::OID_LIQUIDATING)
+        {
+            s = s.checked_add(o.lots_delta).ok_or(LedgerError::Overflow)?;
+        }
+    }
+    Ok(s)
+}
+
 fn position_entry(ledger: &UserLedger, asset_id: u16) -> i64 {
     ledger.positions[..ledger.positions_len as usize]
         .iter()
@@ -897,7 +911,10 @@ fn compact_positions(ledger: &mut UserLedger) {
     let mut w = 0usize;
     let n = ledger.positions_len as usize;
     for r in 0..n {
-        if ledger.positions[r].lots != 0 || ledger.positions[r].unsettled_funding != 0 {
+        if ledger.positions[r].lots != 0
+            || ledger.positions[r].entry_quote_lots != 0
+            || ledger.positions[r].unsettled_funding != 0
+        {
             if w != r {
                 ledger.positions[w] = ledger.positions[r];
             }

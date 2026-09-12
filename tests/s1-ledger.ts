@@ -595,6 +595,69 @@ describe("S1 accounts and order machine", () => {
       expect(closed.reserved.toNumber()).to.equal(0);
       expect(closed.free.toNumber()).to.equal(CREDIT + PROFIT);
     });
+
+    it("out-of-order ack uses confirmed lots not tentative", async () => {
+      await ledger.methods
+        .placeOrder(ASSET_SOL, new BN(LOTS), oid(80), 50, false, new BN(3))
+        .accounts({
+          user: pnlUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: pnlLedger,
+        })
+        .signers([pnlUser])
+        .rpc();
+      await ledger.methods
+        .ackPhoenixFill(oid(80), new BN(LOTS), new BN(0), new BN(OPEN_VWAP))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: pnlLedger,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .signers([adapter])
+        .rpc();
+      await ledger.methods
+        .placeOrder(ASSET_SOL, new BN(5), oid(81), 50, false, new BN(4))
+        .accounts({
+          user: pnlUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: pnlLedger,
+        })
+        .signers([pnlUser])
+        .rpc();
+      await ledger.methods
+        .placeOrder(ASSET_SOL, new BN(-4), oid(82), 50, false, new BN(5))
+        .accounts({
+          user: pnlUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: pnlLedger,
+        })
+        .signers([pnlUser])
+        .rpc();
+      const freeBefore = (
+        await ledger.account.userLedger.fetch(pnlLedger)
+      ).free.toNumber();
+      await ledger.methods
+        .ackPhoenixFill(oid(82), new BN(-4), new BN(0), new BN(-4_400_000))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: pnlLedger,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .signers([adapter])
+        .rpc();
+      const after = await ledger.account.userLedger.fetch(pnlLedger);
+      // Confirmed was +10; closing 4 @ 1.1 vs 1.0 → +0.4 USDC. Tentative leftover +5 still pending.
+      expect(after.positions[0].lots.toNumber()).to.equal(11);
+      expect(after.positions[0].entryQuoteLots.toNumber()).to.equal(6_000_000);
+      expect(after.free.toNumber()).to.equal(freeBefore + 400_000);
+    });
   });
 
   describe("S8 withdraw and reserve root", () => {

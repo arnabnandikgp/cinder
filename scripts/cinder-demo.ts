@@ -74,7 +74,28 @@ async function airdrop(connection: Connection, pk: PublicKey) {
   await connection.confirmTransaction(sig, "confirmed");
 }
 
+function assertLocalOrTls(url: string, kind: "http" | "ws") {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`invalid ${kind} endpoint ${url}`);
+  }
+  const host = parsed.hostname;
+  const loopback = host === "127.0.0.1" || host === "localhost";
+  const ok = loopback
+    ? parsed.protocol === `${kind}:`
+    : parsed.protocol === `${kind}s:`;
+  if (!ok) {
+    throw new Error(
+      `${kind} endpoint must be loopback ${kind}:// or remote ${kind}s:// (got ${url})`
+    );
+  }
+}
+
 function qfsConnection(token: string) {
+  assertLocalOrTls(QFS, "http");
+  assertLocalOrTls(QFS_WS, "ws");
   return new Connection(`${QFS}?token=${token}`, {
     wsEndpoint: `${QFS_WS}?token=${token}`,
     commitment: "confirmed",

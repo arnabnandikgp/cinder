@@ -152,13 +152,19 @@ pub trait FundingPort {
 
 impl LedgerPort for MemoryLedger {
     fn ack_fill(&mut self, user: &PubkeyBytes, fill: &Fill) -> Result<(), AdapterError> {
-        let e = self.book.entry(fill.asset_id).or_insert(0);
-        *e += fill.filled_lots;
-        if *e == 0 {
-            self.book.remove(&fill.asset_id);
+        if self
+            .fills
+            .iter()
+            .any(|(_, f)| f.client_oid == fill.client_oid)
+        {
+            return Err(AdapterError::Ledger("duplicate fill oid".into()));
         }
-        self.fills.push((*user, fill.clone()));
-        if let Some(liq) = self.pending_liq.remove(&fill.client_oid) {
+        let free = self.user_free.get(user).copied().unwrap_or(0);
+        if fill.fee_usdc > 0 && free < fill.fee_usdc {
+            return Err(AdapterError::Ledger("insufficient free for fee".into()));
+        }
+        let liq = self.pending_liq.get(&fill.client_oid).cloned();
+        let (next_user_lots, next_entry) = if let Some(ref liq) = liq {
             let cur = self.lots_of(user, fill.asset_id);
             let unfilled = liq
                 .lots_delta
@@ -167,48 +173,66 @@ impl LedgerPort for MemoryLedger {
             let final_lots = cur
                 .checked_sub(unfilled)
                 .ok_or_else(|| AdapterError::Ledger("liq restore overflow".into()))?;
-            if final_lots == 0 {
-                if let Some(m) = self.user_lots.get_mut(user) {
-                    m.remove(&fill.asset_id);
-                }
-                if let Some(m) = self.user_entry.get_mut(user) {
-                    m.remove(&fill.asset_id);
+            let entry = if final_lots == 0 {
+                None
+            } else if let Some(orig) = liq.lots_delta.checked_neg() {
+                if orig != 0 {
+                    self.user_entry
+                        .get(user)
+                        .and_then(|m| m.get(&fill.asset_id))
+                        .map(|e| {
+                            ((*e as i128) * (final_lots as i128) / (orig as i128)) as i64
+                        })
+                } else {
+                    None
                 }
             } else {
-                self.user_lots
-                    .entry(*user)
-                    .or_default()
-                    .insert(fill.asset_id, final_lots);
-                if let Some(orig) = liq.lots_delta.checked_neg() {
-                    if orig != 0 {
-                        if let Some(e) = self
-                            .user_entry
-                            .get_mut(user)
-                            .and_then(|m| m.get_mut(&fill.asset_id))
-                        {
-                            *e = ((*e as i128) * (final_lots as i128) / (orig as i128)) as i64;
-                        }
-                    }
-                }
+                return Err(AdapterError::Ledger("liq orig overflow".into()));
+            };
+            (final_lots, entry)
+        } else {
+            let next = self
+                .lots_of(user, fill.asset_id)
+                .checked_add(fill.filled_lots)
+                .ok_or_else(|| AdapterError::Ledger("lots overflow".into()))?;
+            (next, None)
+        };
+        let next_book = self
+            .book_lots(fill.asset_id)
+            .checked_add(fill.filled_lots)
+            .ok_or_else(|| AdapterError::Ledger("book overflow".into()))?;
+        let im = cc::stub_cinder_im(next_book.unsigned_abs())
+            .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;
+
+        if next_book == 0 {
+            self.book.remove(&fill.asset_id);
+        } else {
+            self.book.insert(fill.asset_id, next_book);
+        }
+        self.fills.push((*user, fill.clone()));
+        self.pending_liq.remove(&fill.client_oid);
+        if next_user_lots == 0 {
+            if let Some(m) = self.user_lots.get_mut(user) {
+                m.remove(&fill.asset_id);
+            }
+            if let Some(m) = self.user_entry.get_mut(user) {
+                m.remove(&fill.asset_id);
             }
         } else {
-            *self
-                .user_lots
+            self.user_lots
                 .entry(*user)
                 .or_default()
-                .entry(fill.asset_id)
-                .or_insert(0) += fill.filled_lots;
+                .insert(fill.asset_id, next_user_lots);
+            if let Some(e) = next_entry {
+                self.user_entry
+                    .entry(*user)
+                    .or_default()
+                    .insert(fill.asset_id, e);
+            }
         }
         if fill.fee_usdc > 0 {
-            let free = self.user_free.entry(*user).or_insert(0);
-            if *free < fill.fee_usdc {
-                return Err(AdapterError::Ledger("insufficient free for fee".into()));
-            }
-            *free -= fill.fee_usdc;
+            *self.user_free.entry(*user).or_insert(0) -= fill.fee_usdc;
         }
-        let lots = self.book_lots(fill.asset_id);
-        let im = cc::stub_cinder_im(lots.unsigned_abs())
-            .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;
         self.reserved.insert(fill.asset_id, im);
         Ok(())
     }

@@ -149,18 +149,29 @@ pub fn realize_on_fill(
         });
     }
     let closed = lots_before.unsigned_abs().min(filled.unsigned_abs());
+    let filled_abs = filled.unsigned_abs();
     let denom = lots_before.unsigned_abs() as i128;
-    if denom == 0 {
+    if denom == 0 || filled_abs == 0 {
         return None;
     }
     let entry_closed = (entry_quote as i128).checked_mul(closed as i128)? / denom;
-    let realized = (-(entry_closed.checked_add(fill_quote as i128)?))
+    let closed_quote = if filled_abs > closed {
+        (fill_quote as i128).checked_mul(closed as i128)? / (filled_abs as i128)
+    } else {
+        fill_quote as i128
+    };
+    let residual_quote = (fill_quote as i128).checked_sub(closed_quote)?;
+    let realized = (-(entry_closed.checked_add(closed_quote)?))
         .try_into()
         .ok()?;
-    let new_entry = (entry_quote as i128)
-        .checked_sub(entry_closed)?
-        .try_into()
-        .ok()?;
+    let new_entry = if filled_abs > closed {
+        residual_quote.try_into().ok()?
+    } else {
+        (entry_quote as i128)
+            .checked_sub(entry_closed)?
+            .try_into()
+            .ok()?
+    };
     Some(RealizeFill {
         realized_usdc: realized,
         new_entry_quote: new_entry,
@@ -197,5 +208,13 @@ mod realize_tests {
         let r = realize_on_fill(10, -4, 10_000_000, 0).unwrap();
         assert_eq!(r.realized_usdc, 0);
         assert_eq!(r.new_entry_quote, 10_000_000);
+    }
+
+    #[test]
+    fn flip_through_zero_splits_quote() {
+        // Long 10 @ 1.0; sell 15 @ 1.1. Close 10, open short 5.
+        let r = realize_on_fill(10, -15, 10_000_000, -16_500_000).unwrap();
+        assert_eq!(r.realized_usdc, 1_000_000);
+        assert_eq!(r.new_entry_quote, -5_500_000);
     }
 }
