@@ -609,6 +609,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "cinder-common",
+ "ephemeral-rollups-sdk",
 ]
 
 [[package]]

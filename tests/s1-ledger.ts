@@ -2,14 +2,23 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, Program } from "@coral-xyz/anchor";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  ACCOUNT_SIZE,
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccount,
+  createInitializeAccountInstruction,
   createMint,
   getAccount,
   getAssociatedTokenAddressSync,
+  getMinimumBalanceForRentExemptAccount,
   mintTo,
 } from "@solana/spl-token";
-import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
+import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { expect } from "chai";
 import { CinderVault } from "../target/types/cinder_vault";
 import { CinderLedger } from "../target/types/cinder_ledger";
@@ -583,6 +592,138 @@ describe("S1 accounts and order machine", () => {
       expect(after.epoch.toNumber()).to.equal(mid.epoch.toNumber() + 1);
       expect(Buffer.from(after.root).toString("hex")).to.not.equal(
         Buffer.from(mid.root).toString("hex")
+      );
+    });
+  });
+
+  describe("S9 vault PDA and settle action", () => {
+    const standIn = Keypair.generate();
+    const phoenixSide = Keypair.generate();
+    const SETTLE = 5_000_000;
+
+    before(async () => {
+      await airdrop(standIn.publicKey);
+      const rent = await getMinimumBalanceForRentExemptAccount(connection);
+      const tx = new Transaction().add(
+        SystemProgram.createAccount({
+          fromPubkey: payer.publicKey,
+          newAccountPubkey: phoenixSide.publicKey,
+          space: ACCOUNT_SIZE,
+          lamports: rent,
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeAccountInstruction(
+          phoenixSide.publicKey,
+          usdcMint,
+          vaultAuth
+        )
+      );
+      await provider.sendAndConfirm(tx, [phoenixSide]);
+      await mintTo(connection, payer, usdcMint, vaultAta, payer, SETTLE * 2);
+    });
+
+    it("retire_stand_in sets Config.vault_authority to the PDA", async () => {
+      await vault.methods
+        .retireStandIn()
+        .accounts({
+          admin: payer.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+        })
+        .rpc();
+      const cfg = await vault.account.config.fetch(configPda);
+      expect(cfg.vaultAuthority.toBase58()).to.equal(vaultAuth.toBase58());
+    });
+
+    it("PDA-signed post/pull move USDC without the stand-in key", async () => {
+      await vault.methods
+        .postCollateral(new BN(SETTLE))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          vaultUsdcAta: vaultAta,
+          destUsdcAta: phoenixSide.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([adapter])
+        .rpc();
+      expect(Number((await getAccount(connection, phoenixSide.publicKey)).amount)).to.equal(
+        SETTLE
+      );
+
+      await vault.methods
+        .pullCollateralPda(new BN(SETTLE))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          vaultUsdcAta: vaultAta,
+          sourceUsdcAta: phoenixSide.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([adapter])
+        .rpc();
+      expect(Number((await getAccount(connection, phoenixSide.publicKey)).amount)).to.equal(
+        0
+      );
+    });
+
+    it("stand-in key cannot pull after retire", async () => {
+      const standInAta = await createAssociatedTokenAccount(
+        connection,
+        payer,
+        usdcMint,
+        standIn.publicKey
+      );
+      try {
+        await vault.methods
+          .pullCollateral(new BN(1))
+          .accounts({
+            adapter: adapter.publicKey,
+            standIn: standIn.publicKey,
+            config: configPda,
+            vaultUsdcAta: vaultAta,
+            sourceUsdcAta: standInAta,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([adapter, standIn])
+          .rpc();
+        expect.fail("stand-in must not pull after retire");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/BadTransitOwner|Unauthorized/);
+      }
+    });
+
+    it("settle_user_withdraw pays via PDA with escrow_auth bound to the PDA", async () => {
+      const settleAta = await createAssociatedTokenAccount(
+        connection,
+        payer,
+        usdcMint,
+        user.publicKey
+      );
+      const escrow = PublicKey.findProgramAddressSync(
+        [Buffer.from("balance"), vaultAuth.toBuffer(), Buffer.from([255])],
+        DELEGATION_PROGRAM_ID
+      )[0];
+      await vault.methods
+        .settleUserWithdraw(new BN(SETTLE))
+        .accounts({
+          adapter: adapter.publicKey,
+          user: user.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          escrowAuth: vaultAuth,
+          escrow,
+          vaultUsdcAta: vaultAta,
+          userUsdcAta: settleAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([adapter])
+        .rpc();
+      expect(Number((await getAccount(connection, settleAta)).amount)).to.equal(
+        SETTLE
       );
     });
   });

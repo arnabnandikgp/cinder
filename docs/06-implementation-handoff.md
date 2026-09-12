@@ -15,7 +15,7 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 | S6 | One-user residual hedge | Window=0 market/IOC on one allowlisted asset | closed | After ack, Book lots == Phoenix lots; user reserved ≥ Cinder IM |
 | S7 | Two-user net demo | Offsetting users, QFS isolation still holds | closed | User A +x, user B −x; Phoenix net equals A+B; neither user reads the other |
 | S8 | Cash out + reserve root | request/complete withdraw; write_reserve_root crank | closed | Flat user withdraws USDC; ReserveRoot epoch increments; escape ix still errors unsupported |
-| S9 | Vault PDA + Magic Action withdraw | PDA is Phoenix authority; settle via action | open | Deposit/withdraw CPI signed by vault seeds; action pay path works; stand-in key retired |
+| S9 | Vault PDA + Magic Action withdraw | PDA is Phoenix authority; settle via action | closed | Deposit/withdraw CPI signed by vault seeds; action pay path works; stand-in key retired |
 
 S9 stays `open` until S8 is `closed`. Windowed residual (window > 0) is **not** a tracker stage. Do not implement it.
 
@@ -280,4 +280,6 @@ Replace stand-in authority with `vault_authority` PDA. Re-register if required. 
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- `retire_stand_in` writes `Config.vault_authority` to the `["vault-authority"]` PDA. `post_collateral` already PDA-signs the vault ATA; `pull_collateral_pda` PDA-signs the reverse. Stand-in `pull_collateral` fails after retire (`BadTransitOwner`).
+- `settle_user_withdraw` is the Magic Action pay path: `escrow_auth` must be the vault PDA; `escrow` must be `ephemeral_balance_pda_from_payer(escrow_auth, 255)`. Token move is `invoke_signed` with vault-authority seeds. Live MagicBlock injects `escrow` as a signer; local tests pass the derived address. `user_withdraw_l1` remains the adapter fallback. Ember/Phoenix CPI remaining accounts stay for a live fork; local tests use a PDA-owned token account as the posted bucket.
+- Tests in `tests/s1-ledger.ts` S9: retire, PDA post/pull, stand-in cannot pull, settle credits user ATA. Tracker complete through S9. Windowed netting is still not a stage.

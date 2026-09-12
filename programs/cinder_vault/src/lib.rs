@@ -2,6 +2,10 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use cinder_common as cc;
+use ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer;
+
+/// Magic Action default escrow index (`ActionArgs::new`).
+const ACTION_ESCROW_INDEX: u8 = 255;
 
 declare_id!("9zhBFVgk13gnYT6iVuKPGfQiAvVfr6cYQq2bY2QUzXmg");
 
@@ -201,6 +205,102 @@ pub mod cinder_vault {
         rr.committed_at_base_slot = Clock::get()?.slot;
         Ok(())
     }
+
+    /// S9: Config.vault_authority becomes the vault-authority PDA. Stand-in key retired.
+    pub fn retire_stand_in(ctx: Context<RetireStandIn>) -> Result<()> {
+        ctx.accounts.config.vault_authority = ctx.accounts.vault_authority.key();
+        Ok(())
+    }
+
+    /// S9 PDA-signed pull: source ATA/account owned by the vault-authority PDA.
+    pub fn pull_collateral_pda(ctx: Context<PullCollateralPda>, amount: u64) -> Result<()> {
+        require!(amount > 0, VaultError::ZeroAmount);
+        require_keys_eq!(
+            ctx.accounts.config.adapter,
+            ctx.accounts.adapter.key(),
+            VaultError::Unauthorized
+        );
+        require_keys_eq!(
+            ctx.accounts.config.vault_authority,
+            ctx.accounts.vault_authority.key(),
+            VaultError::StandInNotRetired
+        );
+        require_keys_eq!(
+            ctx.accounts.source_usdc_ata.owner,
+            ctx.accounts.vault_authority.key(),
+            VaultError::BadTransitOwner
+        );
+        require_keys_eq!(
+            ctx.accounts.source_usdc_ata.mint,
+            ctx.accounts.config.usdc_mint,
+            VaultError::BadMint
+        );
+        let seeds: &[&[u8]] = &[
+            cc::SEED_VAULT_AUTHORITY,
+            &[ctx.accounts.config.bump_vault_authority],
+        ];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                Transfer {
+                    from: ctx.accounts.source_usdc_ata.to_account_info(),
+                    to: ctx.accounts.vault_usdc_ata.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount,
+        )?;
+        Ok(())
+    }
+
+    /// Magic Action settle. `escrow_auth` bound to vault-authority PDA;
+    /// `escrow` is `ephemeral_balance_pda_from_payer(escrow_auth, 255)`.
+    pub fn settle_user_withdraw(ctx: Context<SettleUserWithdraw>, amount: u64) -> Result<()> {
+        require!(amount > 0, VaultError::ZeroAmount);
+        require_keys_eq!(
+            ctx.accounts.config.vault_authority,
+            ctx.accounts.vault_authority.key(),
+            VaultError::StandInNotRetired
+        );
+        require_keys_eq!(
+            ctx.accounts.escrow_auth.key(),
+            ctx.accounts.vault_authority.key(),
+            VaultError::BadEscrowAuth
+        );
+        let expected = ephemeral_balance_pda_from_payer(
+            &ctx.accounts.escrow_auth.key(),
+            ACTION_ESCROW_INDEX,
+        );
+        require_keys_eq!(ctx.accounts.escrow.key(), expected, VaultError::BadEscrow);
+        require_keys_eq!(
+            ctx.accounts.user_usdc_ata.mint,
+            ctx.accounts.config.usdc_mint,
+            VaultError::BadMint
+        );
+        require_keys_eq!(
+            ctx.accounts.user_usdc_ata.owner,
+            ctx.accounts.user.key(),
+            VaultError::BadDestOwner
+        );
+        let seeds: &[&[u8]] = &[
+            cc::SEED_VAULT_AUTHORITY,
+            &[ctx.accounts.config.bump_vault_authority],
+        ];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                Transfer {
+                    from: ctx.accounts.vault_usdc_ata.to_account_info(),
+                    to: ctx.accounts.user_usdc_ata.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount,
+        )?;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -343,6 +443,79 @@ pub struct WriteReserveRoot<'info> {
     pub reserve_root: Account<'info, ReserveRoot>,
 }
 
+#[derive(Accounts)]
+pub struct RetireStandIn<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [cc::SEED_CONFIG],
+        bump = config.bump_config,
+        has_one = admin @ VaultError::Unauthorized
+    )]
+    pub config: Account<'info, Config>,
+    /// CHECK: vault-authority PDA; becomes Config.vault_authority.
+    #[account(
+        seeds = [cc::SEED_VAULT_AUTHORITY],
+        bump = config.bump_vault_authority
+    )]
+    pub vault_authority: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct PullCollateralPda<'info> {
+    pub adapter: Signer<'info>,
+    #[account(
+        seeds = [cc::SEED_CONFIG],
+        bump = config.bump_config
+    )]
+    pub config: Account<'info, Config>,
+    /// CHECK: vault-authority PDA signer.
+    #[account(
+        seeds = [cc::SEED_VAULT_AUTHORITY],
+        bump = config.bump_vault_authority
+    )]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        address = config.vault_usdc_ata
+    )]
+    pub vault_usdc_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub source_usdc_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct SettleUserWithdraw<'info> {
+    pub adapter: Signer<'info>,
+    /// CHECK: recipient; must own `user_usdc_ata`.
+    pub user: UncheckedAccount<'info>,
+    #[account(
+        seeds = [cc::SEED_CONFIG],
+        bump = config.bump_config
+    )]
+    pub config: Account<'info, Config>,
+    /// CHECK: vault-authority PDA; escrow_auth must match.
+    #[account(
+        seeds = [cc::SEED_VAULT_AUTHORITY],
+        bump = config.bump_vault_authority
+    )]
+    pub vault_authority: UncheckedAccount<'info>,
+    /// CHECK: bound to vault-authority PDA (Magic Action escrow_auth).
+    pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: `ephemeral_balance_pda_from_payer(escrow_auth, 255)`.
+    pub escrow: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        address = config.vault_usdc_ata
+    )]
+    pub vault_usdc_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_usdc_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Config {
@@ -395,4 +568,10 @@ pub enum VaultError {
     BadDestOwner,
     #[msg("overflow")]
     Overflow,
+    #[msg("stand-in authority is not retired")]
+    StandInNotRetired,
+    #[msg("escrow_auth must be the vault-authority PDA")]
+    BadEscrowAuth,
+    #[msg("escrow PDA mismatch")]
+    BadEscrow,
 }
