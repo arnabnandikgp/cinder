@@ -12,7 +12,9 @@ pub use engine::{Adapter, HedgeOutcome, PendingOid};
 pub use inflight::{InFlight, InFlightTable};
 pub use ledger::{LedgerPort, MemoryLedger};
 pub use operator::{MockTeeAuth, OperatorAuth, TeeAuth};
-pub use phoenix::{Fill, MarketOrder, MockPhoenix, PhoenixVenue, PlaceResult};
+pub use phoenix::{
+    Fill, MarketOrder, MockPhoenix, PhoenixVenue, PlaceResult, PoolHealth, ASSET_SOL,
+};
 pub use residual::{i1_holds, i2_holds, intended_residual};
 
 pub type PubkeyBytes = [u8; 32];

@@ -22,6 +22,7 @@ pub struct MemoryLedger {
     invariant_ok: u8,
     pub fills: Vec<(PubkeyBytes, Fill)>,
     pub fails: Vec<(PubkeyBytes, ClientOid)>,
+    pub reserved: std::collections::BTreeMap<u16, u64>,
 }
 
 impl MemoryLedger {
@@ -41,6 +42,11 @@ impl LedgerPort for MemoryLedger {
             self.book.remove(&fill.asset_id);
         }
         self.fills.push((*user, fill.clone()));
+        let lots = self.book_lots(fill.asset_id);
+        self.reserved.insert(
+            fill.asset_id,
+            cc::stub_cinder_im(lots.unsigned_abs()).unwrap_or(0),
+        );
         Ok(())
     }
 

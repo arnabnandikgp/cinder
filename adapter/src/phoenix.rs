@@ -1,5 +1,8 @@
 use crate::{AdapterError, ClientOid};
 
+/// Phoenix SOL on the Cinder allowlist (S1 tests used 1). Skip isolatedOnly markets.
+pub const ASSET_SOL: u16 = 1;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MarketOrder {
     pub asset_id: u16,
@@ -26,6 +29,20 @@ pub enum PlaceResult {
 pub trait PhoenixVenue {
     fn place_market(&mut self, order: &MarketOrder) -> Result<PlaceResult, AdapterError>;
     fn base_lots(&self, asset_id: u16) -> i64;
+}
+
+/// Pre-trade pool health. New hedges only when Safe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PoolHealth {
+    Safe,
+    Cancellable,
+    Other,
+}
+
+impl PoolHealth {
+    pub fn allows_new_hedge(self) -> bool {
+        matches!(self, Self::Safe)
+    }
 }
 
 #[derive(Clone, Debug, Default)]

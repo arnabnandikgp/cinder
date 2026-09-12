@@ -3,7 +3,7 @@ use cinder_common as cc;
 use crate::inflight::{InFlight, InFlightTable};
 use crate::ledger::LedgerPort;
 use crate::operator::OperatorAuth;
-use crate::phoenix::{Fill, MarketOrder, PhoenixVenue, PlaceResult};
+use crate::phoenix::{Fill, MarketOrder, PhoenixVenue, PlaceResult, PoolHealth};
 use crate::residual::i1_holds;
 use crate::{AdapterError, ClientOid, PubkeyBytes};
 
@@ -28,6 +28,9 @@ pub struct Adapter<P, L> {
     pub ledger: L,
     pub inflight: InFlightTable,
     pub operator: OperatorAuth,
+    /// Last mark observation. None or older than MARK_STALE_MS rejects the hedge.
+    pub mark_observed_at_ms: Option<u64>,
+    pub pool_health: PoolHealth,
 }
 
 impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
@@ -37,6 +40,8 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             ledger,
             inflight: InFlightTable::default(),
             operator,
+            mark_observed_at_ms: None,
+            pool_health: PoolHealth::Safe,
         }
     }
 
@@ -51,6 +56,26 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             return Ok(HedgeOutcome::Failed {
                 oid: oid.client_oid,
                 reason: "oid ttl".into(),
+            });
+        }
+
+        let mark_age = self
+            .mark_observed_at_ms
+            .map(|t| now_ms.saturating_sub(t))
+            .unwrap_or(u64::MAX);
+        if mark_age > cc::MARK_STALE_MS {
+            let flags = self.ledger.config_halt() | cc::HALT_ENTRIES;
+            self.ledger.write_halt(flags)?;
+            return Ok(HedgeOutcome::Failed {
+                oid: oid.client_oid,
+                reason: "stale mark".into(),
+            });
+        }
+
+        if !self.pool_health.allows_new_hedge() {
+            return Ok(HedgeOutcome::Failed {
+                oid: oid.client_oid,
+                reason: "pool not safe".into(),
             });
         }
 
@@ -86,6 +111,14 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                         asset_id: oid.asset_id,
                     });
                 }
+                if fill.filled_lots == 0 {
+                    self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+                    self.inflight.remove(&oid.client_oid);
+                    return Ok(HedgeOutcome::Failed {
+                        oid: oid.client_oid,
+                        reason: "0-fill".into(),
+                    });
+                }
                 self.inflight.mark_venue_filled(&oid.client_oid);
                 self.ledger.ack_fill(&oid.user, &fill)?;
                 self.inflight.remove(&oid.client_oid);
@@ -119,7 +152,7 @@ mod tests {
     use super::*;
     use crate::ledger::MemoryLedger;
     use crate::operator::MockTeeAuth;
-    use crate::phoenix::MockPhoenix;
+    use crate::phoenix::{MockPhoenix, PoolHealth};
 
     fn oid(n: u8) -> ClientOid {
         let mut o = [0u8; 16];
@@ -146,7 +179,10 @@ mod tests {
         operator
             .authenticate(&MockTeeAuth { token: "op".into() }, &user(), &|_| [0u8; 64])
             .unwrap();
-        Adapter::new(phoenix, MemoryLedger::new(), operator)
+        let mut ad = Adapter::new(phoenix, MemoryLedger::new(), operator);
+        ad.mark_observed_at_ms = Some(1_000);
+        ad.pool_health = PoolHealth::Safe;
+        ad
     }
 
     #[test]
@@ -268,5 +304,73 @@ mod tests {
         assert!(expired.is_empty());
         assert!(ad.ledger.fails.is_empty());
         assert_eq!(ad.inflight.len(), 1);
+    }
+
+    #[test]
+    fn s6_i1_and_reserved_im_after_full_fill() {
+        let mut phoenix = MockPhoenix::new();
+        phoenix.fill_next(Fill {
+            client_oid: oid(10),
+            asset_id: 1,
+            filled_lots: 10,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+        });
+        let mut ad = adapter_with(phoenix);
+        let out = ad.hedge_pending(1_000, &pending(10, 10, 1_000)).unwrap();
+        assert!(matches!(out, HedgeOutcome::Filled(_)));
+        assert_eq!(ad.ledger.book_lots(1), ad.phoenix.base_lots(1));
+        let want = cc::stub_cinder_im(10).unwrap();
+        assert!(ad.ledger.reserved.get(&1).copied().unwrap() >= want);
+    }
+
+    #[test]
+    fn s6_zero_fill_restores_user_book_unchanged() {
+        let mut phoenix = MockPhoenix::new();
+        phoenix.fill_next(Fill {
+            client_oid: oid(11),
+            asset_id: 1,
+            filled_lots: 0,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+        });
+        let mut ad = adapter_with(phoenix);
+        let out = ad.hedge_pending(1_000, &pending(11, 10, 1_000)).unwrap();
+        assert!(matches!(out, HedgeOutcome::Failed { reason, .. } if reason == "0-fill"));
+        assert_eq!(ad.ledger.book_lots(1), 0);
+        assert_eq!(ad.phoenix.base_lots(1), 0);
+        assert_eq!(ad.ledger.fails.len(), 1);
+        assert!(ad.ledger.fills.is_empty());
+    }
+
+    #[test]
+    fn s6_partial_ioc_uses_filled_lots_only() {
+        let mut phoenix = MockPhoenix::new();
+        phoenix.fill_next(Fill {
+            client_oid: oid(12),
+            asset_id: 1,
+            filled_lots: 4,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+        });
+        let mut ad = adapter_with(phoenix);
+        let out = ad.hedge_pending(1_000, &pending(12, 10, 1_000)).unwrap();
+        assert!(matches!(out, HedgeOutcome::Filled(ref f) if f.filled_lots == 4));
+        assert_eq!(ad.ledger.book_lots(1), 4);
+        assert_eq!(ad.phoenix.base_lots(1), 4);
+    }
+
+    #[test]
+    fn s6_stale_mark_sets_halt_entries() {
+        let mut ad = adapter_with(MockPhoenix::new());
+        ad.mark_observed_at_ms = Some(0);
+        let out = ad
+            .hedge_pending(cc::MARK_STALE_MS + 1, &pending(13, 10, cc::MARK_STALE_MS + 1))
+            .unwrap();
+        assert!(matches!(out, HedgeOutcome::Failed { reason, .. } if reason == "stale mark"));
+        assert_eq!(ad.ledger.config_halt() & cc::HALT_ENTRIES, cc::HALT_ENTRIES);
+        assert_eq!(ad.ledger.book_halt() & cc::HALT_ENTRIES, cc::HALT_ENTRIES);
+        assert_eq!(ad.ledger.book_lots(1), 0);
+        assert!(ad.ledger.fails.is_empty());
     }
 }
