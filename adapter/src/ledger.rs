@@ -43,10 +43,9 @@ impl LedgerPort for MemoryLedger {
         }
         self.fills.push((*user, fill.clone()));
         let lots = self.book_lots(fill.asset_id);
-        self.reserved.insert(
-            fill.asset_id,
-            cc::stub_cinder_im(lots.unsigned_abs()).unwrap_or(0),
-        );
+        let im = cc::stub_cinder_im(lots.unsigned_abs())
+            .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;
+        self.reserved.insert(fill.asset_id, im);
         Ok(())
     }
 

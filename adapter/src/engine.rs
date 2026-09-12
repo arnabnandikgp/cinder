@@ -30,6 +30,9 @@ pub struct Adapter<P, L> {
     pub operator: OperatorAuth,
     /// Last mark observation. None or older than MARK_STALE_MS rejects the hedge.
     pub mark_observed_at_ms: Option<u64>,
+    /// Last Phoenix trader-state observation. None or older than
+    /// TRADER_STATE_STALE_MS rejects a new hedge.
+    pub trader_observed_at_ms: Option<u64>,
     pub pool_health: PoolHealth,
 }
 
@@ -41,6 +44,7 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             inflight: InFlightTable::default(),
             operator,
             mark_observed_at_ms: None,
+            trader_observed_at_ms: None,
             pool_health: PoolHealth::Safe,
         }
     }
@@ -69,6 +73,19 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             return Ok(HedgeOutcome::Failed {
                 oid: oid.client_oid,
                 reason: "stale mark".into(),
+            });
+        }
+
+        let trader_age = self
+            .trader_observed_at_ms
+            .map(|t| now_ms.saturating_sub(t))
+            .unwrap_or(u64::MAX);
+        if trader_age > cc::TRADER_STATE_STALE_MS {
+            let flags = self.ledger.config_halt() | cc::HALT_ENTRIES;
+            self.ledger.write_halt(flags)?;
+            return Ok(HedgeOutcome::Failed {
+                oid: oid.client_oid,
+                reason: "stale trader state".into(),
             });
         }
 
@@ -117,6 +134,15 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                     return Ok(HedgeOutcome::Failed {
                         oid: oid.client_oid,
                         reason: "0-fill".into(),
+                    });
+                }
+                if fill.filled_lots.signum() != oid.lots_delta.signum()
+                    || fill.filled_lots.unsigned_abs() > oid.lots_delta.unsigned_abs()
+                {
+                    let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
+                    self.ledger.write_halt(flags)?;
+                    return Ok(HedgeOutcome::InvariantBroken {
+                        asset_id: oid.asset_id,
                     });
                 }
                 self.inflight.mark_venue_filled(&oid.client_oid);
@@ -181,6 +207,7 @@ mod tests {
             .unwrap();
         let mut ad = Adapter::new(phoenix, MemoryLedger::new(), operator);
         ad.mark_observed_at_ms = Some(1_000);
+        ad.trader_observed_at_ms = Some(1_000);
         ad.pool_health = PoolHealth::Safe;
         ad
     }
