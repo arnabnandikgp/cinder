@@ -17,6 +17,7 @@ yarn-error.log
 package-lock.json
 mb-stack.log
 magicblock-test-storage
+.cinder-adapter.json
 
 **/*.rs.bk
 **/Xargo.toml

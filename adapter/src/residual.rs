@@ -28,15 +28,35 @@ pub fn i1_holds<P: PhoenixVenue, L: LedgerPort>(
     ledger.book_lots(asset_id) == phoenix.base_lots(asset_id)
 }
 
-/// I2: sum(user cash) == vault ATA + phoenix collateral ± in-flight USDC.
+/// I1 live after a venue fill, before ack: Book + filled (not yet acked) == Phoenix.
+pub fn i1_live(book: i64, pending: i64, phoenix: i64) -> bool {
+    book.saturating_add(pending) == phoenix
+}
+
+/// I2 cash form (after funding fold).
 pub fn i2_holds(
     user_cash_sum: u64,
     vault_ata: u64,
     phoenix_collateral: u64,
     in_flight_usdc: i64,
 ) -> bool {
-    let lhs = user_cash_sum as i128;
-    let rhs = vault_ata as i128 + phoenix_collateral as i128 + in_flight_usdc as i128;
+    i2_holds_unsettled(user_cash_sum, 0, vault_ata, phoenix_collateral, 0, in_flight_usdc)
+}
+
+/// I2 between funding settles: include unsettled on both sides.
+pub fn i2_holds_unsettled(
+    user_cash_sum: u64,
+    user_unsettled: i64,
+    vault_ata: u64,
+    phoenix_collateral: u64,
+    pool_unsettled: i64,
+    in_flight_usdc: i64,
+) -> bool {
+    let lhs = user_cash_sum as i128 + user_unsettled as i128;
+    let rhs = vault_ata as i128
+        + phoenix_collateral as i128
+        + pool_unsettled as i128
+        + in_flight_usdc as i128;
     lhs == rhs
 }
 
@@ -55,5 +75,17 @@ mod tests {
     fn i2_allows_in_flight_delta() {
         assert!(i2_holds(100, 40, 50, 10));
         assert!(!i2_holds(100, 40, 50, 0));
+    }
+
+    #[test]
+    fn i2_unsettled_balances_until_fold() {
+        assert!(i2_holds_unsettled(200, -6, 150, 50, -6, 0));
+        assert!(!i2_holds(194, 150, 50, 0));
+    }
+
+    #[test]
+    fn i1_live_adds_pending() {
+        assert!(i1_live(10, -10, 0));
+        assert!(!i1_live(10, 0, 0));
     }
 }

@@ -2,11 +2,23 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, Program } from "@coral-xyz/anchor";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  ACCOUNT_SIZE,
   TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccount,
+  createInitializeAccountInstruction,
   createMint,
+  getAccount,
   getAssociatedTokenAddressSync,
+  getMinimumBalanceForRentExemptAccount,
+  mintTo,
 } from "@solana/spl-token";
-import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
+import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { expect } from "chai";
 import { CinderVault } from "../target/types/cinder_vault";
 import { CinderLedger } from "../target/types/cinder_ledger";
@@ -143,6 +155,7 @@ describe("S1 accounts and order machine", () => {
         user: user.publicKey,
         config: configPda,
         userLedger: userLedgerPda,
+        book: bookPda,
         systemProgram: SystemProgram.programId,
       })
       .signers([adapter, user])
@@ -344,10 +357,11 @@ describe("S1 accounts and order machine", () => {
       }
     });
 
-    it("liquidate_user is adapter-signed and flattens one asset", async () => {
+    it("liquidate_user is adapter-signed, tentative, Book moves on ack", async () => {
+      const liqOid = oid(90);
       try {
         await ledger.methods
-          .liquidateUser(ASSET_SOL)
+          .liquidateUser(ASSET_SOL, liqOid)
           .accounts({
             adapter: user.publicKey,
             config: configPda,
@@ -363,7 +377,7 @@ describe("S1 accounts and order machine", () => {
       }
 
       await ledger.methods
-        .liquidateUser(ASSET_SOL)
+        .liquidateUser(ASSET_SOL, liqOid)
         .accounts({
           adapter: adapter.publicKey,
           config: configPda,
@@ -373,14 +387,51 @@ describe("S1 accounts and order machine", () => {
         .signers([adapter])
         .rpc();
 
-      const ul = await ledger.account.userLedger.fetch(userLedgerPda);
+      let ul = await ledger.account.userLedger.fetch(userLedgerPda);
       expect(ul.positionsLen).to.equal(0);
       expect(ul.reserved.toNumber()).to.equal(0);
       expect(ul.free.toNumber()).to.equal(CREDIT);
-      expect(ul.pendingOidCount).to.equal(0);
+      expect(ul.pendingOidCount).to.equal(1);
+      const liqRow = ul.openOids.find((o: { state: number }) => o.state === 3);
+      expect(liqRow).to.exist;
+      expect(liqRow.lotsDelta.toNumber()).to.equal(-LOTS);
 
-      const book = await ledger.account.book.fetch(bookPda);
+      let book = await ledger.account.book.fetch(bookPda);
+      expect(book.residualLen).to.equal(1);
+      expect(book.residuals[0].lots.toNumber()).to.equal(LOTS);
+
+      await ledger.methods
+        .ackPhoenixFill(liqOid, new BN(-LOTS), new BN(0), new BN(0))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: userLedgerPda,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      ul = await ledger.account.userLedger.fetch(userLedgerPda);
+      expect(ul.pendingOidCount).to.equal(0);
+      expect(ul.positionsLen).to.equal(0);
+
+      book = await ledger.account.book.fetch(bookPda);
       expect(book.residualLen).to.equal(0);
+    });
+
+    it("heartbeat_scan writes last_scan_ms", async () => {
+      await ledger.methods
+        .heartbeatScan(new BN(1_500))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+      const book = await ledger.account.book.fetch(bookPda);
+      expect(book.lastScanMs.toNumber()).to.equal(1_500);
     });
 
     it("ninth concurrent oid fails", async () => {
@@ -422,6 +473,456 @@ describe("S1 accounts and order machine", () => {
         const code = e.error?.errorCode?.code ?? e.toString();
         expect(code).to.match(/OidCap/);
       }
+    });
+  });
+
+  describe("S8 withdraw and reserve root", () => {
+    const withdrawUser = Keypair.generate();
+    let withdrawLedger: PublicKey;
+    let userAta: PublicKey;
+    const WITHDRAW = 10_000_000;
+
+    before(async () => {
+      await airdrop(withdrawUser.publicKey);
+      withdrawLedger = pda(ledger.programId, [
+        Buffer.from("user"),
+        withdrawUser.publicKey.toBuffer(),
+      ]);
+      userAta = getAssociatedTokenAddressSync(usdcMint, withdrawUser.publicKey);
+      await ledger.methods
+        .initUser()
+        .accounts({
+          adapter: adapter.publicKey,
+          user: withdrawUser.publicKey,
+          config: configPda,
+          userLedger: withdrawLedger,
+          book: bookPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([adapter, withdrawUser])
+        .rpc();
+      await ledger.methods
+        .creditDeposit(new BN(CREDIT))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: withdrawLedger,
+        })
+        .signers([adapter])
+        .rpc();
+      await createAssociatedTokenAccount(
+        connection,
+        payer,
+        usdcMint,
+        withdrawUser.publicKey
+      );
+      await mintTo(connection, payer, usdcMint, vaultAta, payer, CREDIT);
+    });
+
+    it("open position withdraw is rejected", async () => {
+      try {
+        await ledger.methods
+          .requestWithdraw(new BN(1))
+          .accounts({
+            user: user.publicKey,
+            config: configPda,
+            book: bookPda,
+            userLedger: userLedgerPda,
+          })
+          .signers([user])
+          .rpc();
+        expect.fail("pending oids should block withdraw");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/NotFlat/);
+      }
+    });
+
+    it("flat withdraw credits user ATA and zeros withdrawable", async () => {
+      await ledger.methods
+        .requestWithdraw(new BN(WITHDRAW))
+        .accounts({
+          user: withdrawUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: withdrawLedger,
+        })
+        .signers([withdrawUser])
+        .rpc();
+
+      await vault.methods
+        .userWithdrawL1(new BN(WITHDRAW))
+        .accounts({
+          adapter: adapter.publicKey,
+          user: withdrawUser.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          vaultUsdcAta: vaultAta,
+          userUsdcAta: userAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([adapter])
+        .rpc();
+
+      await ledger.methods
+        .completeWithdraw(new BN(WITHDRAW))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: withdrawLedger,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const ul = await ledger.account.userLedger.fetch(withdrawLedger);
+      expect(ul.withdrawable.toNumber()).to.equal(0);
+      expect(ul.free.toNumber()).to.equal(CREDIT - WITHDRAW);
+      const ata = await getAccount(connection, userAta);
+      expect(Number(ata.amount)).to.equal(WITHDRAW);
+    });
+
+    it("root epoch bumps and hash changes after a credit", async () => {
+      const before = await vault.account.reserveRoot.fetch(reservePda);
+      await vault.methods
+        .writeReserveRoot(
+          Array.from({ length: 32 }, (_, i) => i),
+          1,
+          new BN(CREDIT),
+          new BN(0),
+          Array.from({ length: 32 }, () => 1)
+        )
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          reserveRoot: reservePda,
+        })
+        .signers([adapter])
+        .rpc();
+      const mid = await vault.account.reserveRoot.fetch(reservePda);
+      expect(mid.epoch.toNumber()).to.equal(before.epoch.toNumber() + 1);
+
+      await ledger.methods
+        .creditDeposit(new BN(1_000_000))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: withdrawLedger,
+        })
+        .signers([adapter])
+        .rpc();
+
+      await vault.methods
+        .writeReserveRoot(
+          Array.from({ length: 32 }, (_, i) => 32 - i),
+          1,
+          new BN(CREDIT + 1_000_000 - WITHDRAW),
+          new BN(0),
+          Array.from({ length: 32 }, () => 2)
+        )
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          reserveRoot: reservePda,
+        })
+        .signers([adapter])
+        .rpc();
+      const after = await vault.account.reserveRoot.fetch(reservePda);
+      expect(after.epoch.toNumber()).to.equal(mid.epoch.toNumber() + 1);
+      expect(Buffer.from(after.root).toString("hex")).to.not.equal(
+        Buffer.from(mid.root).toString("hex")
+      );
+    });
+  });
+
+  describe("S9 vault PDA and settle action", () => {
+    const standIn = Keypair.generate();
+    const phoenixSide = Keypair.generate();
+    const SETTLE = 5_000_000;
+
+    before(async () => {
+      await airdrop(standIn.publicKey);
+      const rent = await getMinimumBalanceForRentExemptAccount(connection);
+      const tx = new Transaction().add(
+        SystemProgram.createAccount({
+          fromPubkey: payer.publicKey,
+          newAccountPubkey: phoenixSide.publicKey,
+          space: ACCOUNT_SIZE,
+          lamports: rent,
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeAccountInstruction(
+          phoenixSide.publicKey,
+          usdcMint,
+          vaultAuth
+        )
+      );
+      await provider.sendAndConfirm(tx, [phoenixSide]);
+      await mintTo(connection, payer, usdcMint, vaultAta, payer, SETTLE * 2);
+    });
+
+    it("retire_stand_in sets Config.vault_authority to the PDA", async () => {
+      await vault.methods
+        .retireStandIn()
+        .accounts({
+          admin: payer.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+        })
+        .rpc();
+      const cfg = await vault.account.config.fetch(configPda);
+      expect(cfg.vaultAuthority.toBase58()).to.equal(vaultAuth.toBase58());
+    });
+
+    it("PDA-signed post/pull move USDC without the stand-in key", async () => {
+      await vault.methods
+        .postCollateral(new BN(SETTLE))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          vaultUsdcAta: vaultAta,
+          destUsdcAta: phoenixSide.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([adapter])
+        .rpc();
+      expect(Number((await getAccount(connection, phoenixSide.publicKey)).amount)).to.equal(
+        SETTLE
+      );
+
+      await vault.methods
+        .pullCollateralPda(new BN(SETTLE))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          vaultUsdcAta: vaultAta,
+          sourceUsdcAta: phoenixSide.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([adapter])
+        .rpc();
+      expect(Number((await getAccount(connection, phoenixSide.publicKey)).amount)).to.equal(
+        0
+      );
+    });
+
+    it("stand-in key cannot pull after retire", async () => {
+      const standInAta = await createAssociatedTokenAccount(
+        connection,
+        payer,
+        usdcMint,
+        standIn.publicKey
+      );
+      try {
+        await vault.methods
+          .pullCollateral(new BN(1))
+          .accounts({
+            adapter: adapter.publicKey,
+            standIn: standIn.publicKey,
+            config: configPda,
+            vaultUsdcAta: vaultAta,
+            sourceUsdcAta: standInAta,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([adapter, standIn])
+          .rpc();
+        expect.fail("stand-in must not pull after retire");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/BadTransitOwner|Unauthorized/);
+      }
+    });
+
+    it("settle_user_withdraw pays via PDA with escrow_auth bound to the PDA", async () => {
+      const settleAta = await createAssociatedTokenAccount(
+        connection,
+        payer,
+        usdcMint,
+        user.publicKey
+      );
+      const escrow = PublicKey.findProgramAddressSync(
+        [Buffer.from("balance"), vaultAuth.toBuffer(), Buffer.from([255])],
+        DELEGATION_PROGRAM_ID
+      )[0];
+      await vault.methods
+        .settleUserWithdraw(new BN(SETTLE))
+        .accounts({
+          adapter: adapter.publicKey,
+          user: user.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          escrowAuth: vaultAuth,
+          escrow,
+          vaultUsdcAta: vaultAta,
+          userUsdcAta: settleAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([adapter])
+        .rpc();
+      expect(Number((await getAccount(connection, settleAta)).amount)).to.equal(
+        SETTLE
+      );
+    });
+  });
+
+  describe("Funding allocation", () => {
+    const fundUser = Keypair.generate();
+    let fundLedger: PublicKey;
+    const DELTA = -1_000_000;
+
+    before(async () => {
+      await airdrop(fundUser.publicKey);
+      fundLedger = pda(ledger.programId, [
+        Buffer.from("user"),
+        fundUser.publicKey.toBuffer(),
+      ]);
+      await ledger.methods
+        .initUser()
+        .accounts({
+          adapter: adapter.publicKey,
+          user: fundUser.publicKey,
+          config: configPda,
+          userLedger: fundLedger,
+          book: bookPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([adapter, fundUser])
+        .rpc();
+      await ledger.methods
+        .creditDeposit(new BN(CREDIT))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: fundLedger,
+        })
+        .signers([adapter])
+        .rpc();
+      await ledger.methods
+        .placeOrder(ASSET_SOL, new BN(LOTS), oid(80), 50, false, new BN(0))
+        .accounts({
+          user: fundUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: fundLedger,
+        })
+        .signers([fundUser])
+        .rpc();
+      await ledger.methods
+        .ackPhoenixFill(oid(80), new BN(LOTS), new BN(0), new BN(0))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: fundLedger,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .signers([adapter])
+        .rpc();
+    });
+
+    it("accrue writes unsettled only; fold moves cash; epoch gates", async () => {
+      const before = await ledger.account.userLedger.fetch(fundLedger);
+      const freeBefore = before.free.toNumber();
+
+      await ledger.methods
+        .bumpFundingEpoch(new BN(1))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      await ledger.methods
+        .allocateFunding(new BN(1), false, [
+          { assetId: ASSET_SOL, deltaUsdc: new BN(DELTA) },
+        ])
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: fundLedger,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const accrued = await ledger.account.userLedger.fetch(fundLedger);
+      expect(accrued.free.toNumber()).to.equal(freeBefore);
+      expect(accrued.positions[0].unsettledFunding.toNumber()).to.equal(DELTA);
+      expect(accrued.lastFundingEpoch.toNumber()).to.equal(1);
+
+      try {
+        await ledger.methods
+          .allocateFunding(new BN(1), false, [])
+          .accounts({
+            adapter: adapter.publicKey,
+            config: configPda,
+            userLedger: fundLedger,
+            book: bookPda,
+          })
+          .signers([adapter])
+          .rpc();
+        expect.fail("replay epoch should fail");
+      } catch (e: any) {
+        expect((e.error?.errorCode?.code ?? e.toString()).toString()).to.match(
+          /BadFundingEpoch/
+        );
+      }
+
+      try {
+        await ledger.methods
+          .allocateFunding(new BN(3), false, [])
+          .accounts({
+            adapter: adapter.publicKey,
+            config: configPda,
+            userLedger: fundLedger,
+            book: bookPda,
+          })
+          .signers([adapter])
+          .rpc();
+        expect.fail("gap epoch should fail");
+      } catch (e: any) {
+        expect((e.error?.errorCode?.code ?? e.toString()).toString()).to.match(
+          /BadFundingEpoch/
+        );
+      }
+
+      try {
+        await ledger.methods
+          .requestWithdraw(new BN(1))
+          .accounts({
+            user: fundUser.publicKey,
+            config: configPda,
+            book: bookPda,
+            userLedger: fundLedger,
+          })
+          .signers([fundUser])
+          .rpc();
+        expect.fail("open position should fail first");
+      } catch (e: any) {
+        const code = (e.error?.errorCode?.code ?? e.toString()).toString();
+        expect(code).to.match(/NotFlat|UnsettledFunding/);
+      }
+
+      await ledger.methods
+        .allocateFunding(new BN(1), true, [])
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: fundLedger,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const folded = await ledger.account.userLedger.fetch(fundLedger);
+      expect(folded.free.toNumber()).to.equal(freeBefore + DELTA);
+      expect(folded.positions[0].unsettledFunding.toNumber()).to.equal(0);
     });
   });
 });

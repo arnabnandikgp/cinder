@@ -11,13 +11,17 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 | S2 | PER privacy (stage C ACL) | Delegate, EphemeralPermission, QFS tokens | closed | User A token reads A; user B token cannot read A; adapter token reads both; traffic on `:6699` |
 | S3 | Order machine without Phoenix | place / dummy ack / fail / nonce / halt bits | closed | Fail-ack restores lots and free; double-nonce rejected; HALT_ENTRIES blocks place |
 | S4 | Adapter skeleton | Operator token, halt mirror, in-flight registry, I1/I2 checker (Phoenix mocked) | closed | Mock fill path updates Book; mock I1 break sets INVARIANT_BROKEN on Book + Config |
-| S5 | Surfpool venue boot | Fork, register trader 128, delegate position_authority, Ember post/pull | in_progress | Rise trader-state shows collateral after post; pull returns USDC to vault ATA |
-| S6 | One-user residual hedge | Window=0 market/IOC on one allowlisted asset | open | After ack, Book lots == Phoenix lots; user reserved ≥ Cinder IM |
-| S7 | Two-user net demo | Offsetting users, QFS isolation still holds | open | User A +x, user B −x; Phoenix net equals A+B; neither user reads the other |
-| S8 | Cash out + reserve root | request/complete withdraw; write_reserve_root crank | open | Flat user withdraws USDC; ReserveRoot epoch increments; escape ix still errors unsupported |
-| S9 | Vault PDA + Magic Action withdraw | PDA is Phoenix authority; settle via action | open | Deposit/withdraw CPI signed by vault seeds; action pay path works; stand-in key retired |
+| S5 | Surfpool venue boot | Fork, register trader 128, delegate position_authority, Ember post/pull | closed | Rise trader-state shows collateral after post; pull returns USDC to vault ATA |
+| S6 | One-user residual hedge | Window=0 market/IOC on one allowlisted asset | closed | After ack, Book lots == Phoenix lots; user reserved ≥ Cinder IM |
+| S7 | Two-user net demo | Offsetting users, QFS isolation still holds | closed | User A +x, user B −x; Phoenix net equals A+B; neither user reads the other |
+| S8 | Cash out + reserve root | request/complete withdraw; write_reserve_root crank | closed | Flat user withdraws USDC; ReserveRoot epoch increments; escape ix still errors unsupported |
+| S9 | Vault PDA + Magic Action withdraw | PDA is Phoenix authority; settle via action | closed | Deposit/withdraw CPI signed by vault seeds; action pay path works; stand-in key retired |
 
 S9 stays `open` until S8 is `closed`. Windowed residual (window > 0) is **not** a tracker stage. Do not implement it.
+
+**Follow-on (not S10):** Phoenix funding overlay — `docs/08-funding-allocation.md`. Two-phase health/cash, `Book.funding_epoch`, I2 with unsettled terms. Implement as a slice after S9.
+
+Further backlog (PnL realization, adapter runtime, Rise MM, …): `docs/10-open-gaps.md`. Note only; do not treat as a tracker stage.
 
 Suggested layout:
 
@@ -194,7 +198,10 @@ Register via no-referral `build-register-ixs` / `send-register-ixs`, `maxPositio
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Stand-in vault path (`tests/s5-collateral.ts`): `post_collateral` / `pull_collateral` move USDC vault ATA ↔ stand-in ATA. 3 passing on a legacy validator.
+- Fork path (`scripts/venue-boot.ts`, `CINDER_S5=1`): Rise `buildRegisterTrader` (cross, 0/0, max 128), `buildDelegateTrader` to the adapter key, `surfnet_setTokenAccount` for wallet USDC, `buildDepositIxs` / `buildWithdrawIxs`. Verified on Surfpool 1.5.0: trader PDA exists; on-chain `quoteLotCollateral` 0 → 25_000_000 → 0 after pull.
+- Do **not** use `send-register-ixs` (broadcasts to Phoenix mainnet). Local fork uses `--skip-signature-verification` so the Phoenix onboarder can be dummy-signed. That flag is fork-only (stack-a starts Surfpool locally).
+- `OnboardTraderDelegated` is best-effort; a second run may skip it if already onboarded. Pull that hits the global queue is treated as explicit queued (no silent debit).
 
 ---
 
@@ -217,7 +224,9 @@ Cinder IM = 1.25× Phoenix IM on the **user** size. Cap leverage at 10x unless t
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Adapter `hedge_pending` now gates on mark age (`MARK_STALE_MS` → `HALT_ENTRIES`) and pool `Safe` (Cancellable+ is not a new hedge). Market/IOC only; SOL asset id `1`.
+- 0-fill (`filled_lots == 0`) fail-acks; Book and Phoenix lots stay 0. Partial IOC acks filled lots only; I1 is Book == Phoenix after ack. Reserved IM on the memory ledger is `stub_cinder_im(|lots|)`.
+- Tests: `cargo test -p cinder-adapter` S6 cases (I1+IM, 0-fill, partial, stale mark). Live Rise `placeMarketOrder` on a fork is S7-adjacent; S6 does not require QFS.
 
 ---
 
@@ -237,7 +246,9 @@ This is the local win.
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Window=0 still sends both hedges. Offsetting +10 / −10 users leave Phoenix lots == lots_A + lots_B == 0 and Book residual 0. I2: sum(user cash) == vault ATA + phoenix_collateral ± in-flight (`MemoryLedger.i2_ok`).
+- Adapter test `s7_offsetting_users_phoenix_equals_sum_and_i2` always runs. QFS isolation after trades is `tests/s7-net.ts` (skips unless QFS `:6699` + ER `:7799` are up), same ACL as S2: A reads A, B cannot read A, and the reverse.
+- Two user QFS tokens; adapter still holds one operator token. No user tokens stored on the server.
 
 ---
 
@@ -259,7 +270,9 @@ Commit crank: `write_reserve_root` every 20 fills or 30s. Delegated fee payer + 
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Flow: `request_withdraw` (flat only) → `user_withdraw_l1` (adapter, PDA pays user ATA) → `complete_withdraw`. Open/pending users get `NotFlat`. `escape_withdraw` stays `Unsupported`.
+- `write_reserve_root` is adapter-signed; epoch increments; root/book_hash update; `committed_at_base_slot` from `Clock`. Adapter `note_fill_for_root` is due every 20 fills or 30s (`COMMIT_EVERY_*`). Magic Action / `magic_fee_vault` before the 10th commit is S9.
+- Tests nested in `tests/s1-ledger.ts` (S8) plus adapter crank unit test. Pull-from-Phoenix-if-vault-short stays the S5 stand-in pull when ATA is insufficient.
 
 ---
 
@@ -271,4 +284,45 @@ Replace stand-in authority with `vault_authority` PDA. Re-register if required. 
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- `retire_stand_in` writes `Config.vault_authority` to the `["vault-authority"]` PDA. `post_collateral` already PDA-signs the vault ATA; `pull_collateral_pda` PDA-signs the reverse. Stand-in `pull_collateral` fails after retire (`BadTransitOwner`).
+- `settle_user_withdraw` is the Magic Action pay path: `escrow_auth` must be the vault PDA; `escrow` must be `ephemeral_balance_pda_from_payer(escrow_auth, 255)`. Token move is `invoke_signed` with vault-authority seeds. Live MagicBlock injects `escrow` as a signer; local tests pass the derived address. `user_withdraw_l1` remains the adapter fallback. Ember/Phoenix CPI remaining accounts stay for a live fork; local tests use a PDA-owned token account as the posted bucket.
+- Tests in `tests/s1-ledger.ts` S9: retire, PDA post/pull, stand-in cannot pull, settle credits user ATA. Tracker complete through S9. Windowed netting is still not a stage.
+
+---
+
+## Funding overlay (after S9, not S10)
+
+Agreed plan: `docs/08-funding-allocation.md`. Two-phase health/cash.
+
+**Post-implementation comments**
+
+- `bump_funding_epoch` owns `Book.funding_epoch`. `init_user` copies it. `allocate_funding(epoch, fold, entries)`: accrue writes `unsettled_funding` only; fold drains into `free` then `reserved` and resyncs IM. Gaps/replays rejected. `INVARIANT_BROKEN` skips; entries/unsafe still accrue.
+- `request_withdraw` requires zero unsettled. Liquidate folds that asset’s unsettled into cash before flattening.
+- Tests: `tests/s1-ledger.ts` Funding allocation + adapter `i2_holds_unsettled`.
+- Adapter `crank_funding`: quote-lots → USDC, `bump_funding_epoch`, per-user accrue (flat = bump-only), dust cap 1000 without halt, MM liquidate, fold when `phoenix_collateral` moves.
+- Rise edge: `scripts/rise-funding.ts` `loadFundingInterval` (on-chain trader + public market metadata). Fork smoke: `CINDER_FUNDING=1 ./scripts/test-funding.sh`.
+
+---
+
+## Liquidation liveness (after funding overlay, not S10)
+
+Agreed plan: `docs/09-liquidation-liveness.md`. I1-safe pending-liq, mark-driven scan, P-L7 stale-mark drain.
+
+**Do**
+
+- L0 freeze: `last_scan_ms`, `liquidate_user(asset, oid)` tentative, `heartbeat_scan`, scan knobs, halt table.
+- L1 one health helper: 08 equity + gain haircut + stub/Rise Cinder MM on **user** size.
+- L2 I1-safe ix + ack of `OID_LIQUIDATING`. L2 before L3.
+- L3 adapter `scan_liquidations`: fresh classify, drain queue on stale, heartbeat ~1s, `OPERATOR_DOWN` on missed scan. Serial flatten+hedge per user (v0).
+- L4 `crank_funding` calls the same helper (Cinder MM, not stub IM).
+- L5 adapter unit tests 1–8 + S1 tentative/ack/heartbeat. Fork mark-crash smoke later (`CINDER_LIQ`).
+
+**Success markers:** Quiet book + mark loss liquidates; Book unchanged until ack; fail-ack restores; stale mark does not skip queued flattens and does not newly classify; `UNSAFE_POOL` is MM then IM until Safe.
+
+**Post-implementation comments**
+
+- P-L4: `liquidate_user(asset_id, client_oid)` reverts pending, folds unsettled, parks `OID_LIQUIDATING`, does **not** move Book. `ack_phoenix_fill` / `ack_phoenix_fail` accept liquidating oids. Fail-ack restores lots.
+- `heartbeat_scan(now_ms)` writes `Book.last_scan_ms`. Adapter writes on `HEARTBEAT_MS` (1s), not every 50 ms rank.
+- Health helper in `cinder-common`: `cinder_equity` / `haircut_upnl` / `stub_cinder_mm`. Scanner and `crank_funding` both use Cinder MM (stub MM = half stub IM locally).
+- Adapter `scan_liquidations`: classify on fresh mark; drain queue on stale; `OPERATOR_DOWN` on missed scan; `UNSAFE_POOL` MM then IM until mock/Rise `Safe`. Serial flatten+`hedge_liq` per user (reducing hedge allowed while halted).
+- Tests: adapter 35 unit (quiet book, uPnL, netted, I1 in-flight, fail-ack restore, stale drain, dead scan, unsafe MM-then-IM, heartbeat). S1: tentative liq + ack, heartbeat. Fork `CINDER_LIQ` smoke not in this slice.

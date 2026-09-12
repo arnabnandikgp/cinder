@@ -1,18 +1,11 @@
 /**
- * S5 venue boot against a Surfpool fork (or any RPC that has Phoenix programs).
+ * S5 venue boot against a Surfpool mainnet fork.
  *
- * Does not call send-register-ixs (that broadcasts to Phoenix mainnet RPC).
- * Builds no-referral register ixs, sends them to the local fork, then
- * DelegateTrader and Rise deposit/withdraw helpers.
- *
- * Skip unless CINDER_S5=1 and the fork is up.
- *
- * Phoenix `send-register-ixs` co-signs with the onboarder and broadcasts to
- * mainnet RPC — do not use it on a fork. This script sends built ixs to the
- * local fork; if an ix still requires the onboarder as a signer, Surfpool
- * cheatcodes / a cloned trader account are required (named S5 gap).
+ * Uses Rise on-chain builders (RegisterTrader, DelegateTrader, deposit/withdraw
+ * flows) and sends them to localhost. Does not call send-register-ixs.
  */
 import * as anchor from "@coral-xyz/anchor";
+import * as fs from "fs";
 import {
   Connection,
   Keypair,
@@ -23,23 +16,18 @@ import {
 
 const FORK = process.env.PROVIDER_ENDPOINT || "http://127.0.0.1:8899";
 const API = process.env.PHOENIX_API_URL || "https://perp-api.phoenix.trade";
-const MAX_POSITIONS = 128;
 const MAINNET_GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
-const ALLOWED_API_HOSTS = new Set(["perp-api.phoenix.trade"]);
+const WALLET_USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const DEFAULT_POST_USDC = BigInt("25000000");
 
-type RegisterIx = {
-  programId: string;
-  keys: { pubkey: string; isSigner: boolean; isWritable: boolean }[];
-  data: number[];
+type KitIx = {
+  programAddress: string;
+  accounts: readonly { address: string; role: number }[];
+  data: ArrayLike<number>;
 };
 
 function assertLocalRpc(url: string) {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`invalid PROVIDER_ENDPOINT: ${url}`);
-  }
+  const parsed = new URL(url);
   if (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "localhost") {
     throw new Error(
       `refusing non-local RPC ${url}; venue-boot only signs against a local fork`
@@ -47,146 +35,301 @@ function assertLocalRpc(url: string) {
   }
 }
 
-function assertPhoenixApi(url: string) {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`invalid PHOENIX_API_URL: ${url}`);
-  }
-  if (!ALLOWED_API_HOSTS.has(parsed.hostname)) {
-    throw new Error(
-      `refusing PHOENIX_API_URL host ${parsed.hostname}; expected perp-api.phoenix.trade`
-    );
-  }
-}
-
-function validateIx(ix: unknown, index: number): RegisterIx {
-  if (!ix || typeof ix !== "object") {
-    throw new Error(`register ix ${index} is not an object`);
-  }
-  const rec = ix as Record<string, unknown>;
-  if (typeof rec.programId !== "string") {
-    throw new Error(`register ix ${index} missing programId`);
-  }
-  new PublicKey(rec.programId);
-  if (!Array.isArray(rec.keys)) {
-    throw new Error(`register ix ${index} missing keys`);
-  }
-  const keys = rec.keys.map((k, j) => {
-    if (!k || typeof k !== "object") {
-      throw new Error(`register ix ${index} key ${j} is not an object`);
-    }
-    const kr = k as Record<string, unknown>;
-    if (typeof kr.pubkey !== "string") {
-      throw new Error(`register ix ${index} key ${j} missing pubkey`);
-    }
-    new PublicKey(kr.pubkey);
-    if (typeof kr.isSigner !== "boolean" || typeof kr.isWritable !== "boolean") {
-      throw new Error(`register ix ${index} key ${j} has invalid flags`);
-    }
-    return {
-      pubkey: kr.pubkey,
-      isSigner: kr.isSigner,
-      isWritable: kr.isWritable,
-    };
-  });
-  if (
-    !Array.isArray(rec.data) ||
-    !rec.data.every(
-      (n) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 255
-    )
-  ) {
-    throw new Error(`register ix ${index} has invalid data`);
-  }
-  return {
-    programId: rec.programId,
-    keys,
-    data: rec.data as number[],
-  };
-}
-
-function toWeb3Ix(ix: RegisterIx): TransactionInstruction {
+function kitToWeb3(ix: KitIx): TransactionInstruction {
   return new TransactionInstruction({
-    programId: new PublicKey(ix.programId),
-    keys: ix.keys.map((k) => ({
-      pubkey: new PublicKey(k.pubkey),
-      isSigner: k.isSigner,
-      isWritable: k.isWritable,
+    programId: new PublicKey(ix.programAddress),
+    keys: ix.accounts.map((a) => ({
+      pubkey: new PublicKey(a.address),
+      isSigner: a.role === 2 || a.role === 3,
+      isWritable: a.role === 1 || a.role === 3,
     })),
     data: Buffer.from(ix.data),
   });
-}
-
-export async function forkUp(url: string): Promise<boolean> {
-  try {
-    await new Connection(url, "confirmed").getVersion();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function buildRegisterIxs(args: {
-  traderAuthority: string;
-  txFeePayer: string;
-}): Promise<{ instructions: RegisterIx[]; traderPda?: string }> {
-  assertPhoenixApi(API);
-  const res = await fetch(`${API}/v1/exchange/build-register-ixs`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      traderAuthority: args.traderAuthority,
-      txFeePayer: args.txFeePayer,
-      maxPositions: MAX_POSITIONS,
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`build-register-ixs ${res.status}: ${await res.text()}`);
-  }
-  const body: unknown = await res.json();
-  if (!body || typeof body !== "object") {
-    throw new Error("build-register-ixs returned a non-object");
-  }
-  const rec = body as Record<string, unknown>;
-  if (!Array.isArray(rec.instructions) || rec.instructions.length === 0) {
-    throw new Error("build-register-ixs returned no instructions");
-  }
-  const instructions = rec.instructions.map(validateIx);
-  const traderPda =
-    typeof rec.traderPda === "string" ? rec.traderPda : undefined;
-  if (traderPda) new PublicKey(traderPda);
-  return { instructions, traderPda };
 }
 
 export async function sendToFork(
   connection: Connection,
   payer: Keypair,
   extraSigners: Keypair[],
-  ixs: RegisterIx[]
+  ixs: KitIx[]
 ): Promise<string> {
-  if (ixs.length === 0) {
-    throw new Error("no instructions to send");
-  }
+  if (ixs.length === 0) throw new Error("no instructions to send");
   const tx = new Transaction();
-  for (const ix of ixs) tx.add(toWeb3Ix(ix));
+  for (const ix of ixs) tx.add(kitToWeb3(ix));
   tx.feePayer = payer.publicKey;
   const latestBlockhash = await connection.getLatestBlockhash();
   tx.recentBlockhash = latestBlockhash.blockhash;
-  tx.sign(payer, ...extraSigners);
-  const sig = await connection.sendRawTransaction(tx.serialize(), {
-    skipPreflight: true,
-  });
+  // Local fork only: pad missing required signatures (Phoenix onboarder).
+  // Requires surfpool --skip-signature-verification.
+  tx.partialSign(payer, ...extraSigners);
+  const msg = tx.compileMessage();
+  const known = new Set(
+    [payer, ...extraSigners].map((k) => k.publicKey.toBase58())
+  );
+  for (let i = 0; i < msg.header.numRequiredSignatures; i++) {
+    const pk = msg.accountKeys[i];
+    if (!known.has(pk.toBase58()) && !tx.signatures[i].signature) {
+      tx.addSignature(pk, Buffer.alloc(64));
+    }
+  }
+  const sig = await connection.sendRawTransaction(
+    tx.serialize({ requireAllSignatures: true, verifySignatures: false }),
+    { skipPreflight: true }
+  );
   const confirmation = await connection.confirmTransaction(
     { signature: sig, ...latestBlockhash },
     "confirmed"
   );
   if (confirmation.value.err) {
     throw new Error(
-      `register transaction failed: ${JSON.stringify(confirmation.value.err)}`
+      `transaction failed: ${JSON.stringify(confirmation.value.err)}`
     );
   }
   return sig;
+}
+
+async function surfnetSetTokenAccount(
+  rpcUrl: string,
+  owner: PublicKey,
+  mint: PublicKey,
+  amount: bigint
+) {
+  const res = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "surfnet_setTokenAccount",
+      params: [owner.toBase58(), mint.toBase58(), { amount: Number(amount) }],
+    }),
+  });
+  const body = (await res.json()) as { error?: { message: string } };
+  if (body.error) {
+    throw new Error(`surfnet_setTokenAccount: ${body.error.message}`);
+  }
+}
+
+function loadOrCreateAdapter(): Keypair {
+  const path = process.env.CINDER_ADAPTER_KEYPAIR || ".cinder-adapter.json";
+  if (fs.existsSync(path)) {
+    const raw = JSON.parse(fs.readFileSync(path, "utf8")) as number[];
+    return Keypair.fromSecretKey(Uint8Array.from(raw));
+  }
+  const kp = Keypair.generate();
+  fs.writeFileSync(path, JSON.stringify(Array.from(kp.secretKey)));
+  return kp;
+}
+
+function positionAuthorityOf(trader: {
+  state?: { positionAuthority?: unknown };
+  positionAuthority?: unknown;
+}): string | null {
+  const v = trader.state?.positionAuthority ?? trader.positionAuthority;
+  return v == null ? null : String(v);
+}
+
+export async function bootVenue(opts: {
+  adapter: Keypair;
+  connection?: Connection;
+  authority?: Keypair;
+  postAmount?: bigint;
+  skipWithdraw?: boolean;
+}): Promise<{
+  traderPda: PublicKey;
+  quoteLotCollateralBefore: bigint;
+  quoteLotCollateralAfterPost: bigint;
+  quoteLotCollateralAfterPull: bigint | null;
+  withdrawQueued: boolean;
+  registerSig: string;
+  delegateSig: string;
+  depositSig: string;
+  withdrawSig: string | null;
+}> {
+  const connection = opts.connection ?? new Connection(FORK, "confirmed");
+  const rpcUrl = connection.rpcEndpoint;
+  assertLocalRpc(rpcUrl);
+  const genesis = await connection.getGenesisHash();
+  if (genesis !== MAINNET_GENESIS) {
+    throw new Error(
+      `RPC genesis ${genesis} is not mainnet; expected a Surfpool mainnet fork`
+    );
+  }
+
+  const rise = await import("@ellipsis-labs/rise");
+  const client = rise.createPhoenixClient({
+    apiUrl: API,
+    rpcUrl,
+    ws: false,
+    exchangeMetadata: { stream: false },
+  });
+  await client.exchange.ready();
+
+  const wallet = opts.authority ?? anchor.Wallet.local().payer;
+  const adapter = opts.adapter;
+  const authority = wallet.publicKey.toBase58();
+  const postAmount = opts.postAmount ?? DEFAULT_POST_USDC;
+
+  const traderPdaStr = await client.pda.getTraderAddress({
+    authority: authority as never,
+    traderPdaIndex: 0,
+    subaccountIndex: 0,
+  });
+  const traderPda = new PublicKey(traderPdaStr);
+
+  let registerSig = "already-registered";
+  const existing = await connection.getAccountInfo(traderPda);
+  if (!existing) {
+    const registerIx = await client.ixs.buildRegisterTrader({
+      authority: authority as never,
+      marginType: rise.MarginType.Cross,
+      traderPdaIndex: 0,
+      traderSubaccountIndex: 0,
+    });
+    console.log("sending RegisterTrader");
+    registerSig = await sendToFork(connection, wallet, [], [
+      registerIx as unknown as KitIx,
+    ]);
+  }
+
+  let delegateSig = "skipped";
+  try {
+    const delegateIx = await client.ixs.buildDelegateTrader({
+      traderWallet: authority as never,
+      traderPdaIndex: 0,
+      traderSubaccountIndex: 0,
+      newPositionAuthority: adapter.publicKey.toBase58() as never,
+    });
+    delegateSig = await sendToFork(connection, wallet, [], [
+      delegateIx as unknown as KitIx,
+    ]);
+  } catch (err) {
+    const trader = await rise.fetchTrader({
+      client: client.rpc.accounts,
+      address: traderPdaStr,
+      skipCache: true,
+    });
+    const stored = positionAuthorityOf(trader);
+    if (stored !== adapter.publicKey.toBase58()) {
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+    delegateSig = "already-delegated";
+  }
+
+  try {
+    const perm = await client.api.invite().getReferralActivationPermission();
+    const onboardIx = await client.ixs.buildOnboardTraderDelegated({
+      authority: perm.trader_onboarder as never,
+      traderAuthority: authority as never,
+      permissionAccount: perm.permission_account as never,
+      traderPdaIndex: 0,
+      traderSubaccountIndex: 0,
+    });
+    console.log("sending OnboardTraderDelegated");
+    await sendToFork(connection, wallet, [], [onboardIx as unknown as KitIx]);
+  } catch (err) {
+    console.warn(
+      "OnboardTraderDelegated failed (continuing):",
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  await surfnetSetTokenAccount(
+    rpcUrl,
+    wallet.publicKey,
+    new PublicKey(WALLET_USDC),
+    postAmount
+  );
+
+  const traderBefore = await rise.fetchTrader({
+    client: client.rpc.accounts,
+    address: traderPdaStr,
+    skipCache: true,
+  });
+
+  const deposit = await client.ixs.buildDepositIxs({
+    authority: authority as never,
+    amount: postAmount,
+    traderPdaIndex: 0,
+    traderSubaccountIndex: 0,
+  });
+  console.log("sending deposit flow");
+  const depositSig = await sendToFork(
+    connection,
+    wallet,
+    [],
+    deposit.instructions as unknown as KitIx[]
+  );
+
+  const traderAfterPost = await rise.fetchTrader({
+    client: client.rpc.accounts,
+    address: traderPdaStr,
+    skipCache: true,
+  });
+
+  let withdrawSig: string | null = null;
+  let withdrawQueued = false;
+  let quoteLotCollateralAfterPull: bigint | null = null;
+  if (!opts.skipWithdraw) {
+    const withdraw = await client.ixs.buildWithdrawIxs({
+      authority: authority as never,
+      amount: postAmount,
+      traderPdaIndex: 0,
+      traderSubaccountIndex: 0,
+    });
+    try {
+      withdrawSig = await sendToFork(
+        connection,
+        wallet,
+        [],
+        withdraw.instructions as unknown as KitIx[]
+      );
+      const traderAfterPull = await rise.fetchTrader({
+        client: client.rpc.accounts,
+        address: traderPdaStr,
+        skipCache: true,
+      });
+      quoteLotCollateralAfterPull = BigInt(
+        traderAfterPull.state.quoteLotCollateral.toString()
+      );
+      withdrawQueued = traderAfterPull.withdrawQueueNode !== null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/queue/i.test(msg)) {
+        throw err;
+      }
+      const queuedTrader = await rise.fetchTrader({
+        client: client.rpc.accounts,
+        address: traderPdaStr,
+        skipCache: true,
+      });
+      if (queuedTrader.withdrawQueueNode == null) {
+        throw err instanceof Error ? err : new Error(msg);
+      }
+      withdrawQueued = true;
+      quoteLotCollateralAfterPull = BigInt(
+        queuedTrader.state.quoteLotCollateral.toString()
+      );
+    }
+  }
+
+  client.dispose();
+
+  return {
+    traderPda,
+    quoteLotCollateralBefore: BigInt(
+      traderBefore.state.quoteLotCollateral.toString()
+    ),
+    quoteLotCollateralAfterPost: BigInt(
+      traderAfterPost.state.quoteLotCollateral.toString()
+    ),
+    quoteLotCollateralAfterPull,
+    withdrawQueued,
+    registerSig,
+    delegateSig,
+    depositSig,
+    withdrawSig,
+  };
 }
 
 async function main() {
@@ -194,32 +337,25 @@ async function main() {
     console.log("venue-boot: set CINDER_S5=1 to run against a Surfpool fork");
     return;
   }
-  assertLocalRpc(FORK);
-  if (!(await forkUp(FORK))) {
-    throw new Error(`fork RPC not up: ${FORK}`);
-  }
-  const connection = new Connection(FORK, "confirmed");
-  const genesis = await connection.getGenesisHash();
-  if (genesis !== MAINNET_GENESIS) {
-    throw new Error(
-      `RPC genesis ${genesis} is not mainnet (${MAINNET_GENESIS}); expected a Surfpool mainnet fork`
+  const out = await bootVenue({ adapter: loadOrCreateAdapter() });
+  console.log("trader PDA", out.traderPda.toBase58());
+  console.log("register", out.registerSig);
+  console.log("delegate", out.delegateSig);
+  console.log("deposit", out.depositSig);
+  console.log(
+    "collateral before/after post",
+    out.quoteLotCollateralBefore.toString(),
+    out.quoteLotCollateralAfterPost.toString()
+  );
+  if (out.withdrawQueued) {
+    console.log("withdraw queued (no silent debit)");
+  } else {
+    console.log("withdraw", out.withdrawSig);
+    console.log(
+      "collateral after pull",
+      out.quoteLotCollateralAfterPull?.toString()
     );
   }
-  const wallet = anchor.Wallet.local();
-  const standIn = wallet.payer;
-  const feePayer = standIn;
-  console.log("fee payer", feePayer.publicKey.toBase58());
-  console.log("trader authority (stand-in)", standIn.publicKey.toBase58());
-
-  const built = await buildRegisterIxs({
-    traderAuthority: standIn.publicKey.toBase58(),
-    txFeePayer: feePayer.publicKey.toBase58(),
-  });
-  console.log(`register ixs: ${built.instructions.length}`);
-  if (built.traderPda) console.log("trader PDA (api)", built.traderPda);
-
-  const sig = await sendToFork(connection, feePayer, [], built.instructions);
-  console.log("register tx", sig);
 }
 
 if (require.main === module) {

@@ -51,6 +51,11 @@ BUFFER_MIN_BPS        = 2000      # extra posted on Phoenix vs Phoenix IM of res
 BUFFER_FLOOR_USDC     = 50_000_000
 MARK_STALE_MS         = 2000
 TRADER_STATE_STALE_MS = 2000
+SCAN_INTERVAL_MS      = 50        # in-process min interval
+HEARTBEAT_MS          = 1000      # Book.last_scan_ms write
+SCAN_DEAD_MS          = 2000      # missed scan → OPERATOR_DOWN
+MARK_DEAD_MS          = 10000     # hard-stale mark → OPERATOR_DOWN
+UPNL_GAIN_HAIRCUT_BPS = 5000      # if Rise uPnL factor missing
 OID_TTL_MS            = 15000
 IN_FLIGHT_TTL_MS      = 30000
 COMMIT_EVERY_FILLS    = 20
@@ -161,6 +166,8 @@ Book {                                  // seeds ["book"]
   last_ack_slot_er:     u64,
   invariant_ok:         u8,             // 1 or 0
   halt:                 u8,
+  funding_epoch:        u64,            // adapter bump_funding_epoch; users clone on init
+  last_scan_ms:         u64,            // adapter heartbeat; 0 = never
   bump:                 u8,
 }
 
@@ -203,14 +210,16 @@ Stand-in era: adapter key **is** Phoenix authority. S9: same ixs, `invoke_signed
 
 | Ix | Signed by | State |
 |---|---|---|
-| `init_user` | adapter + user | zero ledger; create EphemeralPermission |
+| `init_user` | adapter + user | zero ledger; `last_funding_epoch = Book.funding_epoch`; create EphemeralPermission |
 | `credit_deposit` | adapter | `free += amount` unless HALT_DEPOSIT |
 | `place_order` | user | tentative lots + reserved IM + pending oid; **Book does not move** |
 | `ack_phoenix_fill` | adapter | Book += filled; fee/slippage; oid acked |
 | `ack_phoenix_fail` | adapter | revert tentative; oid failed |
-| `allocate_funding` | adapter | funding onto position + free/reserved |
-| `liquidate_user` | adapter | flatten asset; Book -= user lots |
-| `request_withdraw` | user | first win must be flat; free → withdrawable |
+| `bump_funding_epoch` | adapter | `Book.funding_epoch += 1` (must equal arg) |
+| `allocate_funding` | adapter | accrue `unsettled_funding` or fold into free/reserved; see args |
+| `liquidate_user` | adapter | tentative flatten; pending liq oid; **Book unchanged** |
+| `heartbeat_scan` | adapter | `Book.last_scan_ms = now_ms` |
+| `request_withdraw` | user | flat, no pending, all `unsettled_funding == 0`; free → withdrawable |
 | `complete_withdraw` | adapter | after L1 pay; withdrawable -= |
 | `update_book_collateral` | adapter | `phoenix_collateral = x` |
 | `set_book_halt` | adapter | Book.halt |
@@ -230,13 +239,41 @@ Adapter pre-trade: `intended[asset] = Book.residuals[asset] + sum(pending.lots_d
 
 If `filled_lots != requested`, position and reserved IM use filled size.
 
+Accepts `OID_PENDING` and `OID_LIQUIDATING`. Do not set `INVARIANT_BROKEN` because a liq oid is in flight.
+
+### `liquidate_user` args
+
+`asset_id: u16`, `client_oid: [u8; 16]`
+
+Revert user-originated pending oids on that asset, fold that asset’s unsettled into cash, tentatively apply `lots_delta = −lots` (user lots 0, IM released), park `OID_LIQUIDATING`. **Book does not move.** Reducing Phoenix IOC + `ack_phoenix_fill` moves Book (same as place). Fail-ack restores lots + IM.
+
+### `heartbeat_scan` args
+
+`now_ms: u64` — wall clock. Write cadence `HEARTBEAT_MS`, not every in-process scan.
+
+### `bump_funding_epoch` args
+
+`epoch: u64` — must equal `Book.funding_epoch + 1`.
+
+### `allocate_funding` args
+
+`epoch: u64`, `fold: bool`, `entries: Vec<{ asset_id: u16, delta_usdc: i64 }>` (max 16).
+
+- `fold = false` (accrue): `epoch == Book.funding_epoch` and `epoch == user.last_funding_epoch + 1`. Then `unsettled_funding += delta` only (health). Empty entries = bump-only (flat user).
+- `fold = true`: `epoch == Book.funding_epoch` and either catch-up (`epoch == user.last_funding_epoch + 1`, entries applied then last advanced) or replay (`epoch == user.last_funding_epoch`, entries must be empty). Then fold each position’s `unsettled_funding` into `free` then `reserved` (credits before debits); recompute Cinder IM.
+- Skip if `INVARIANT_BROKEN`. Still run under `HALT_ENTRIES` / `UNSAFE_POOL`.
+- Acked lots only; adapter converts Phoenix quote lots → native USDC i64.
+
+See `docs/08-funding-allocation.md`.
+
 ---
 
 ## Invariants
 
 - I1 after ack: `Book.residuals[a] == Phoenix.base_lots[a]`
-- I1 live: `Book[a] + pending[a] == Phoenix[a]`
-- I2: `sum(free+reserved+withdrawable) == vault_ata + phoenix_collateral ± in_flight`
+- I1 live: `Book[a] + pending_place[a] + pending_liq[a] == Phoenix[a]` (after the venue fill, before ack)
+- I2 (cash, after funding fold): `sum(free+reserved+withdrawable) == vault_ata + phoenix_collateral ± in_flight`
+- I2 (between funding settles): `sum(free+reserved+withdrawable+unsettled_funding) == vault_ata + phoenix_collateral + pool_unsettled_funding ± in_flight`
 - I3: pending oid < OID_TTL or fail-ack
 - I4: user `reserved` ≥ Cinder IM after ack
 
@@ -244,11 +281,14 @@ I1/I2 fail → `INVARIANT_BROKEN`. No silent repair.
 
 ## Halt machine
 
-- Stale mark or trader-state (>2s) → HALT_ENTRIES
+- Stale mark or trader-state (>2s) → HALT_ENTRIES. **Still drain** liq oids queued on the last fresh print. Do not newly classify off a stale tick.
+- Hard-stale mark (>10s) or missed scan (>2s) → `OPERATOR_DOWN | HALT_ENTRIES`. Still try the already-queued set.
 - Pre-trade pool would leave `Safe` → reject that order (not always global halt)
-- Phoenix `Cancellable`+ → UNSAFE_POOL, liquidate worst users first
-- Venue liquidates Cinder → freeze; flatten users at venue avg; socialize shortfall from those users’ free then reserved; Book residual 0 on that asset
+- Phoenix `Cancellable`+ → UNSAFE_POOL. Flatten `equity < Cinder MM` worst first; if still not `Safe`, flatten `equity < Cinder IM` worst first **only until** Rise says `Safe`.
+- Venue liquidates Cinder → freeze; flatten users at venue avg; socialize shortfall from those users’ free then reserved; Book residual 0 on that asset (failure of D3, not v0 scanner)
 - Admin OPERATOR_DOWN
+
+Cinder equity (adapter): `free + reserved + unsettled_funding + haircut(uPnL)`. Losses in full; gains × Rise uPnL factor or `UPNL_GAIN_HAIRCUT_BPS`. Scanner and `crank_funding` share one helper. See `docs/09-liquidation-liveness.md`.
 
 ## Commit
 
