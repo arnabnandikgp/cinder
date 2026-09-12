@@ -299,3 +299,28 @@ Agreed plan: `docs/08-funding-allocation.md`. Two-phase health/cash.
 - Tests: `tests/s1-ledger.ts` Funding allocation + adapter `i2_holds_unsettled`.
 - Adapter `crank_funding`: quote-lots → USDC, `bump_funding_epoch`, per-user accrue (flat = bump-only), dust cap 1000 without halt, MM liquidate, fold when `phoenix_collateral` moves.
 - Rise edge: `scripts/rise-funding.ts` `loadFundingInterval` (on-chain trader + public market metadata). Fork smoke: `CINDER_FUNDING=1 ./scripts/test-funding.sh`.
+
+---
+
+## Liquidation liveness (after funding overlay, not S10)
+
+Agreed plan: `docs/09-liquidation-liveness.md`. I1-safe pending-liq, mark-driven scan, P-L7 stale-mark drain.
+
+**Do**
+
+- L0 freeze: `last_scan_ms`, `liquidate_user(asset, oid)` tentative, `heartbeat_scan`, scan knobs, halt table.
+- L1 one health helper: 08 equity + gain haircut + stub/Rise Cinder MM on **user** size.
+- L2 I1-safe ix + ack of `OID_LIQUIDATING`. L2 before L3.
+- L3 adapter `scan_liquidations`: fresh classify, drain queue on stale, heartbeat ~1s, `OPERATOR_DOWN` on missed scan. Serial flatten+hedge per user (v0).
+- L4 `crank_funding` calls the same helper (Cinder MM, not stub IM).
+- L5 adapter unit tests 1–8 + S1 tentative/ack/heartbeat. Fork mark-crash smoke later (`CINDER_LIQ`).
+
+**Success markers:** Quiet book + mark loss liquidates; Book unchanged until ack; fail-ack restores; stale mark does not skip queued flattens and does not newly classify; `UNSAFE_POOL` is MM then IM until Safe.
+
+**Post-implementation comments**
+
+- P-L4: `liquidate_user(asset_id, client_oid)` reverts pending, folds unsettled, parks `OID_LIQUIDATING`, does **not** move Book. `ack_phoenix_fill` / `ack_phoenix_fail` accept liquidating oids. Fail-ack restores lots.
+- `heartbeat_scan(now_ms)` writes `Book.last_scan_ms`. Adapter writes on `HEARTBEAT_MS` (1s), not every 50 ms rank.
+- Health helper in `cinder-common`: `cinder_equity` / `haircut_upnl` / `stub_cinder_mm`. Scanner and `crank_funding` both use Cinder MM (stub MM = half stub IM locally).
+- Adapter `scan_liquidations`: classify on fresh mark; drain queue on stale; `OPERATOR_DOWN` on missed scan; `UNSAFE_POOL` MM then IM until mock/Rise `Safe`. Serial flatten+`hedge_liq` per user (reducing hedge allowed while halted).
+- Tests: adapter 35 unit (quiet book, uPnL, netted, I1 in-flight, fail-ack restore, stale drain, dead scan, unsafe MM-then-IM, heartbeat). S1: tentative liq + ack, heartbeat. Fork `CINDER_LIQ` smoke not in this slice.

@@ -5,12 +5,14 @@ mod engine;
 mod funding;
 mod inflight;
 mod ledger;
+mod liquidation;
 mod operator;
 mod phoenix;
 mod residual;
 
-pub use engine::{Adapter, HedgeOutcome, PendingOid};
+pub use engine::{Adapter, HedgeOutcome, LiqQueueItem, PendingOid};
 pub use funding::{quote_lots_to_usdc, FundingCrankReport, FundingInterval};
+pub use liquidation::ScanReport;
 pub use inflight::{InFlight, InFlightTable};
 pub use ledger::{FundingPort, LedgerPort, MemoryLedger};
 pub use operator::{MockTeeAuth, OperatorAuth, TeeAuth};

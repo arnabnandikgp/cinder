@@ -19,5 +19,6 @@ Vendor dumps are in `reference/` (`mb-docs.md`, `phoenix-docs.md`). Keep them at
 | `06-implementation-handoff.md` | Tracker + stage specs |
 | `07-context-for-builders.md` | Why the rules exist |
 | `08-funding-allocation.md` | Agreed funding overlay: two-phase health/cash, `Book.funding_epoch` |
+| `09-liquidation-liveness.md` | Draft: Cinder-book liq scanner gap, disaster cases, PER 10ms plan (review before freeze) |
 | `reference/mb-docs.md` | MagicBlock dump, API confusion only |
 | `reference/phoenix-docs.md` | Phoenix / Rise dump, API confusion only |

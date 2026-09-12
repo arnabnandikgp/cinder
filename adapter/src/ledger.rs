@@ -35,13 +35,26 @@ pub struct MemoryLedger {
     pub user_free: std::collections::BTreeMap<PubkeyBytes, u64>,
     pub user_reserved: std::collections::BTreeMap<PubkeyBytes, u64>,
     pub user_unsettled: std::collections::BTreeMap<PubkeyBytes, std::collections::BTreeMap<u16, i64>>,
+    pub user_entry: std::collections::BTreeMap<PubkeyBytes, std::collections::BTreeMap<u16, i64>>,
+    pub pending_liq: std::collections::BTreeMap<ClientOid, PendingLiq>,
     pub liquidations: Vec<(PubkeyBytes, u16)>,
+    pub last_scan_ms: u64,
+    pub mark_usdc_per_lot: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingLiq {
+    pub user: PubkeyBytes,
+    pub client_oid: ClientOid,
+    pub asset_id: u16,
+    pub lots_delta: i64,
 }
 
 impl MemoryLedger {
     pub fn new() -> Self {
         Self {
             invariant_ok: 1,
+            mark_usdc_per_lot: cc::STUB_NOTIONAL_PER_LOT as i64,
             ..Default::default()
         }
     }
@@ -122,7 +135,15 @@ pub trait FundingPort {
         entries: &[(u16, i64)],
     ) -> Result<(), AdapterError>;
     fn user_equity(&self, user: &PubkeyBytes) -> i128;
-    fn liquidate_user(&mut self, user: &PubkeyBytes, asset_id: u16) -> Result<(), AdapterError>;
+    fn liquidate_user(
+        &mut self,
+        user: &PubkeyBytes,
+        asset_id: u16,
+        client_oid: ClientOid,
+    ) -> Result<(), AdapterError>;
+    fn last_scan_ms(&self) -> u64;
+    fn write_last_scan_ms(&mut self, ms: u64);
+    fn pending_liq_delta(&self, asset_id: u16) -> i64;
     fn phoenix_collateral(&self) -> u64;
     fn set_phoenix_collateral(&mut self, v: u64);
     fn i2_ok_unsettled(&self, pool_unsettled: i64, in_flight_usdc: i64) -> bool;
@@ -136,12 +157,33 @@ impl LedgerPort for MemoryLedger {
             self.book.remove(&fill.asset_id);
         }
         self.fills.push((*user, fill.clone()));
-        *self
-            .user_lots
-            .entry(*user)
-            .or_default()
-            .entry(fill.asset_id)
-            .or_insert(0) += fill.filled_lots;
+        if let Some(liq) = self.pending_liq.remove(&fill.client_oid) {
+            let cur = self.lots_of(user, fill.asset_id);
+            let unfilled = liq
+                .lots_delta
+                .checked_sub(fill.filled_lots)
+                .ok_or_else(|| AdapterError::Ledger("liq unfilled overflow".into()))?;
+            let final_lots = cur
+                .checked_sub(unfilled)
+                .ok_or_else(|| AdapterError::Ledger("liq restore overflow".into()))?;
+            if final_lots == 0 {
+                if let Some(m) = self.user_lots.get_mut(user) {
+                    m.remove(&fill.asset_id);
+                }
+            } else {
+                self.user_lots
+                    .entry(*user)
+                    .or_default()
+                    .insert(fill.asset_id, final_lots);
+            }
+        } else {
+            *self
+                .user_lots
+                .entry(*user)
+                .or_default()
+                .entry(fill.asset_id)
+                .or_insert(0) += fill.filled_lots;
+        }
         let lots = self.book_lots(fill.asset_id);
         let im = cc::stub_cinder_im(lots.unsigned_abs())
             .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;
@@ -150,6 +192,22 @@ impl LedgerPort for MemoryLedger {
     }
 
     fn ack_fail(&mut self, user: &PubkeyBytes, oid: &ClientOid) -> Result<(), AdapterError> {
+        if let Some(liq) = self.pending_liq.remove(oid) {
+            let restored = liq
+                .lots_delta
+                .checked_neg()
+                .ok_or_else(|| AdapterError::Ledger("liq fail overflow".into()))?;
+            if restored == 0 {
+                if let Some(m) = self.user_lots.get_mut(user) {
+                    m.remove(&liq.asset_id);
+                }
+            } else {
+                self.user_lots
+                    .entry(*user)
+                    .or_default()
+                    .insert(liq.asset_id, restored);
+            }
+        }
         self.fails.push((*user, *oid));
         Ok(())
     }
@@ -290,17 +348,34 @@ impl FundingPort for MemoryLedger {
     }
 
     fn user_equity(&self, user: &PubkeyBytes) -> i128 {
-        let free = self.user_free.get(user).copied().unwrap_or(0) as i128;
-        let reserved = self.user_reserved.get(user).copied().unwrap_or(0) as i128;
-        let unsettled: i128 = self
+        let free = self.user_free.get(user).copied().unwrap_or(0);
+        let reserved = self.user_reserved.get(user).copied().unwrap_or(0);
+        let unsettled: i64 = self
             .user_unsettled
             .get(user)
-            .map(|m| m.values().copied().sum::<i64>() as i128)
+            .map(|m| m.values().copied().sum::<i64>())
             .unwrap_or(0);
-        free + reserved + unsettled
+        let mut upnl = 0i128;
+        if let Some(lots_m) = self.user_lots.get(user) {
+            for (asset, lots) in lots_m {
+                let entry = self
+                    .user_entry
+                    .get(user)
+                    .and_then(|m| m.get(asset))
+                    .copied()
+                    .unwrap_or(0);
+                upnl += cc::upnl_usdc(*lots, self.mark_usdc_per_lot, entry);
+            }
+        }
+        cc::cinder_equity(free, reserved, unsettled, upnl)
     }
 
-    fn liquidate_user(&mut self, user: &PubkeyBytes, asset_id: u16) -> Result<(), AdapterError> {
+    fn liquidate_user(
+        &mut self,
+        user: &PubkeyBytes,
+        asset_id: u16,
+        client_oid: ClientOid,
+    ) -> Result<(), AdapterError> {
         let delta = self
             .user_unsettled
             .get(user)
@@ -315,14 +390,45 @@ impl FundingPort for MemoryLedger {
                 }
             }
         }
-        if let Some(lots) = self.user_lots.get_mut(user) {
-            lots.remove(&asset_id);
+        let lots = self.lots_of(user, asset_id);
+        if lots != 0 {
+            let lots_delta = lots
+                .checked_neg()
+                .ok_or_else(|| AdapterError::Ledger("liq oid overflow".into()))?;
+            self.pending_liq.insert(
+                client_oid,
+                PendingLiq {
+                    user: *user,
+                    client_oid,
+                    asset_id,
+                    lots_delta,
+                },
+            );
+            if let Some(m) = self.user_lots.get_mut(user) {
+                m.remove(&asset_id);
+            }
         }
         self.liquidations.push((*user, asset_id));
         let cash = self.user_free.get(user).copied().unwrap_or(0)
             + self.user_reserved.get(user).copied().unwrap_or(0);
         self.user_cash.insert(*user, cash);
         Ok(())
+    }
+
+    fn last_scan_ms(&self) -> u64 {
+        self.last_scan_ms
+    }
+
+    fn write_last_scan_ms(&mut self, ms: u64) {
+        self.last_scan_ms = ms;
+    }
+
+    fn pending_liq_delta(&self, asset_id: u16) -> i64 {
+        self.pending_liq
+            .values()
+            .filter(|p| p.asset_id == asset_id)
+            .map(|p| p.lots_delta)
+            .sum()
     }
 
     fn phoenix_collateral(&self) -> u64 {

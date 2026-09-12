@@ -101,9 +101,11 @@ impl<P: PhoenixVenue, L: crate::ledger::LedgerPort + FundingPort> Adapter<P, L> 
             self.ledger
                 .allocate_funding(user, epoch, false, &owned)?;
 
-            let mm = cc::stub_cinder_im(lots.unsigned_abs()).unwrap_or(0) as i128;
+            let mm = cc::stub_cinder_mm(lots.unsigned_abs()).unwrap_or(0) as i128;
             if lots != 0 && self.ledger.user_equity(user) < mm {
-                self.ledger.liquidate_user(user, interval.asset_id)?;
+                let oid = self.next_liq_oid();
+                self.ledger
+                    .liquidate_user(user, interval.asset_id, oid)?;
                 report.liquidated.push((*user, interval.asset_id));
             }
         }

@@ -57,7 +57,7 @@ Phoenix taker fee 3.5 bp assigned to that user on ack. Maker 0.5 bp unused until
 | Partial IOC | ack filled size only |
 | Dropped tx | retry once if no fill; else fail-ack |
 | Queue on pull | user withdraw stays pending |
-| Pool Cancellable+ | UNSAFE_POOL, liquidate users |
+| Pool Cancellable+ | UNSAFE_POOL; MM first, then IM only until Safe |
 | Venue liq/ADL of Cinder | freeze and flatten internally |
 
 ## Not in adapter

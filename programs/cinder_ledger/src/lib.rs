@@ -27,6 +27,7 @@ pub mod cinder_ledger {
         book.invariant_ok = 1;
         book.halt = 0;
         book.funding_epoch = 0;
+        book.last_scan_ms = 0;
         book.bump = ctx.bumps.book;
 
         let fees = &mut ctx.accounts.fee_accrual;
@@ -360,9 +361,22 @@ pub mod cinder_ledger {
         Ok(())
     }
 
-    /// Flatten one asset. Adapter only. Reverts pending oids on that asset, then
-    /// zeros remaining lots and subtracts them from Book.
-    pub fn liquidate_user(ctx: Context<LiquidateUser>, asset_id: u16) -> Result<()> {
+    /// Adapter heartbeat. Writes `Book.last_scan_ms`. Does not flatten.
+    pub fn heartbeat_scan(ctx: Context<AdapterBook>, now_ms: u64) -> Result<()> {
+        let cfg = load_vault_config(&ctx.accounts.config)?;
+        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        ctx.accounts.book.last_scan_ms = now_ms;
+        Ok(())
+    }
+
+    /// Tentative flatten one asset (P-L4). Adapter only. Reverts user pending oids
+    /// on that asset, parks a liquidating oid, **does not** move Book. Ack of the
+    /// reducing hedge moves Book, same as `place_order`.
+    pub fn liquidate_user(
+        ctx: Context<LiquidateUser>,
+        asset_id: u16,
+        client_oid: [u8; 16],
+    ) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
 
@@ -375,13 +389,34 @@ pub mod cinder_ledger {
         }
 
         let lots = position_lots(ledger, asset_id);
-        if lots != 0 {
-            let old_im = stub_im(lots)?;
-            apply_im_delta(ledger, old_im, 0)?;
-            set_position_lots(ledger, asset_id, 0, 0)?;
-            add_book_lots(&mut ctx.accounts.book, asset_id, -lots)?;
+        if lots == 0 {
+            return Ok(());
         }
-        ctx.accounts.book.last_ack_slot_er = Clock::get()?.slot;
+
+        require!(
+            (ledger.pending_oid_count as usize) < cc::MAX_OPEN_OIDS_PER_USER,
+            LedgerError::OidCap
+        );
+        require!(!oid_duplicate(ledger, &client_oid), LedgerError::DuplicateOid);
+        let slot = find_free_oid_slot(ledger).ok_or(LedgerError::OidCap)?;
+
+        let lots_delta = lots
+            .checked_neg()
+            .ok_or(LedgerError::Overflow)?;
+        let old_im = stub_im(lots)?;
+        apply_im_delta(ledger, old_im, 0)?;
+        set_position_lots(ledger, asset_id, 0, 0)?;
+
+        ledger.open_oids[slot] = OpenOid {
+            client_oid,
+            asset_id,
+            lots_delta,
+            state: cc::OID_LIQUIDATING,
+        };
+        ledger.pending_oid_count = ledger
+            .pending_oid_count
+            .checked_add(1)
+            .ok_or(LedgerError::Overflow)?;
         Ok(())
     }
 
@@ -655,6 +690,7 @@ pub struct Book {
     pub invariant_ok: u8,
     pub halt: u8,
     pub funding_epoch: u64,
+    pub last_scan_ms: u64,
     pub bump: u8,
 }
 
@@ -1002,7 +1038,11 @@ fn take_pending_oid(ledger: &UserLedger, client_oid: &[u8; 16]) -> Result<(usize
     let idx = ledger
         .open_oids
         .iter()
-        .position(|o| o.client_oid == *client_oid && o.state == cc::OID_PENDING && o.lots_delta != 0)
+        .position(|o| {
+            o.client_oid == *client_oid
+                && o.lots_delta != 0
+                && (o.state == cc::OID_PENDING || o.state == cc::OID_LIQUIDATING)
+        })
         .ok_or(LedgerError::OidNotFound)?;
     Ok((idx, ledger.open_oids[idx]))
 }

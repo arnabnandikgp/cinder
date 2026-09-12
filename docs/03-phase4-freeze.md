@@ -51,6 +51,11 @@ BUFFER_MIN_BPS        = 2000      # extra posted on Phoenix vs Phoenix IM of res
 BUFFER_FLOOR_USDC     = 50_000_000
 MARK_STALE_MS         = 2000
 TRADER_STATE_STALE_MS = 2000
+SCAN_INTERVAL_MS      = 50        # in-process min interval
+HEARTBEAT_MS          = 1000      # Book.last_scan_ms write
+SCAN_DEAD_MS          = 2000      # missed scan → OPERATOR_DOWN
+MARK_DEAD_MS          = 10000     # hard-stale mark → OPERATOR_DOWN
+UPNL_GAIN_HAIRCUT_BPS = 5000      # if Rise uPnL factor missing
 OID_TTL_MS            = 15000
 IN_FLIGHT_TTL_MS      = 30000
 COMMIT_EVERY_FILLS    = 20
@@ -162,6 +167,7 @@ Book {                                  // seeds ["book"]
   invariant_ok:         u8,             // 1 or 0
   halt:                 u8,
   funding_epoch:        u64,            // adapter bump_funding_epoch; users clone on init
+  last_scan_ms:         u64,            // adapter heartbeat; 0 = never
   bump:                 u8,
 }
 
@@ -211,7 +217,8 @@ Stand-in era: adapter key **is** Phoenix authority. S9: same ixs, `invoke_signed
 | `ack_phoenix_fail` | adapter | revert tentative; oid failed |
 | `bump_funding_epoch` | adapter | `Book.funding_epoch += 1` (must equal arg) |
 | `allocate_funding` | adapter | accrue `unsettled_funding` or fold into free/reserved; see args |
-| `liquidate_user` | adapter | flatten asset; Book -= user lots |
+| `liquidate_user` | adapter | tentative flatten; pending liq oid; **Book unchanged** |
+| `heartbeat_scan` | adapter | `Book.last_scan_ms = now_ms` |
 | `request_withdraw` | user | flat, no pending, all `unsettled_funding == 0`; free → withdrawable |
 | `complete_withdraw` | adapter | after L1 pay; withdrawable -= |
 | `update_book_collateral` | adapter | `phoenix_collateral = x` |
@@ -231,6 +238,18 @@ Adapter pre-trade: `intended[asset] = Book.residuals[asset] + sum(pending.lots_d
 `client_oid: [u8; 16]`, `filled_lots: i64`, `fee_usdc: u64`, `vwap_quote_lots: i64`
 
 If `filled_lots != requested`, position and reserved IM use filled size.
+
+Accepts `OID_PENDING` and `OID_LIQUIDATING`. Do not set `INVARIANT_BROKEN` because a liq oid is in flight.
+
+### `liquidate_user` args
+
+`asset_id: u16`, `client_oid: [u8; 16]`
+
+Revert user-originated pending oids on that asset, fold that asset’s unsettled into cash, tentatively apply `lots_delta = −lots` (user lots 0, IM released), park `OID_LIQUIDATING`. **Book does not move.** Reducing Phoenix IOC + `ack_phoenix_fill` moves Book (same as place). Fail-ack restores lots + IM.
+
+### `heartbeat_scan` args
+
+`now_ms: u64` — wall clock. Write cadence `HEARTBEAT_MS`, not every in-process scan.
 
 ### `bump_funding_epoch` args
 
@@ -252,7 +271,7 @@ See `docs/08-funding-allocation.md`.
 ## Invariants
 
 - I1 after ack: `Book.residuals[a] == Phoenix.base_lots[a]`
-- I1 live: `Book[a] + pending[a] == Phoenix[a]`
+- I1 live: `Book[a] + pending_place[a] + pending_liq[a] == Phoenix[a]` (after the venue fill, before ack)
 - I2 (cash, after funding fold): `sum(free+reserved+withdrawable) == vault_ata + phoenix_collateral ± in_flight`
 - I2 (between funding settles): `sum(free+reserved+withdrawable+unsettled_funding) == vault_ata + phoenix_collateral + pool_unsettled_funding ± in_flight`
 - I3: pending oid < OID_TTL or fail-ack
@@ -262,11 +281,14 @@ I1/I2 fail → `INVARIANT_BROKEN`. No silent repair.
 
 ## Halt machine
 
-- Stale mark or trader-state (>2s) → HALT_ENTRIES
+- Stale mark or trader-state (>2s) → HALT_ENTRIES. **Still drain** liq oids queued on the last fresh print. Do not newly classify off a stale tick.
+- Hard-stale mark (>10s) or missed scan (>2s) → `OPERATOR_DOWN | HALT_ENTRIES`. Still try the already-queued set.
 - Pre-trade pool would leave `Safe` → reject that order (not always global halt)
-- Phoenix `Cancellable`+ → UNSAFE_POOL, liquidate worst users first
-- Venue liquidates Cinder → freeze; flatten users at venue avg; socialize shortfall from those users’ free then reserved; Book residual 0 on that asset
+- Phoenix `Cancellable`+ → UNSAFE_POOL. Flatten `equity < Cinder MM` worst first; if still not `Safe`, flatten `equity < Cinder IM` worst first **only until** Rise says `Safe`.
+- Venue liquidates Cinder → freeze; flatten users at venue avg; socialize shortfall from those users’ free then reserved; Book residual 0 on that asset (failure of D3, not v0 scanner)
 - Admin OPERATOR_DOWN
+
+Cinder equity (adapter): `free + reserved + unsettled_funding + haircut(uPnL)`. Losses in full; gains × Rise uPnL factor or `UPNL_GAIN_HAIRCUT_BPS`. Scanner and `crank_funding` share one helper. See `docs/09-liquidation-liveness.md`.
 
 ## Commit
 

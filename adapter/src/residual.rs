@@ -28,6 +28,12 @@ pub fn i1_holds<P: PhoenixVenue, L: LedgerPort>(
     ledger.book_lots(asset_id) == phoenix.base_lots(asset_id)
 }
 
+/// I1 live after a venue fill, before ack: Book + pending place/liq == Phoenix.
+#[allow(dead_code)]
+pub fn i1_live(book: i64, pending: i64, phoenix: i64) -> bool {
+    book.saturating_add(pending) == phoenix
+}
+
 /// I2 cash form (after funding fold).
 pub fn i2_holds(
     user_cash_sum: u64,
@@ -76,5 +82,11 @@ mod tests {
     fn i2_unsettled_balances_until_fold() {
         assert!(i2_holds_unsettled(200, -6, 150, 50, -6, 0));
         assert!(!i2_holds(194, 150, 50, 0));
+    }
+
+    #[test]
+    fn i1_live_adds_pending() {
+        assert!(i1_live(10, -10, 0));
+        assert!(!i1_live(10, 0, 0));
     }
 }

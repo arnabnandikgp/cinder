@@ -357,10 +357,11 @@ describe("S1 accounts and order machine", () => {
       }
     });
 
-    it("liquidate_user is adapter-signed and flattens one asset", async () => {
+    it("liquidate_user is adapter-signed, tentative, Book moves on ack", async () => {
+      const liqOid = oid(90);
       try {
         await ledger.methods
-          .liquidateUser(ASSET_SOL)
+          .liquidateUser(ASSET_SOL, liqOid)
           .accounts({
             adapter: user.publicKey,
             config: configPda,
@@ -376,7 +377,7 @@ describe("S1 accounts and order machine", () => {
       }
 
       await ledger.methods
-        .liquidateUser(ASSET_SOL)
+        .liquidateUser(ASSET_SOL, liqOid)
         .accounts({
           adapter: adapter.publicKey,
           config: configPda,
@@ -386,14 +387,51 @@ describe("S1 accounts and order machine", () => {
         .signers([adapter])
         .rpc();
 
-      const ul = await ledger.account.userLedger.fetch(userLedgerPda);
+      let ul = await ledger.account.userLedger.fetch(userLedgerPda);
       expect(ul.positionsLen).to.equal(0);
       expect(ul.reserved.toNumber()).to.equal(0);
       expect(ul.free.toNumber()).to.equal(CREDIT);
-      expect(ul.pendingOidCount).to.equal(0);
+      expect(ul.pendingOidCount).to.equal(1);
+      const liqRow = ul.openOids.find((o: { state: number }) => o.state === 3);
+      expect(liqRow).to.exist;
+      expect(liqRow.lotsDelta.toNumber()).to.equal(-LOTS);
 
-      const book = await ledger.account.book.fetch(bookPda);
+      let book = await ledger.account.book.fetch(bookPda);
+      expect(book.residualLen).to.equal(1);
+      expect(book.residuals[0].lots.toNumber()).to.equal(LOTS);
+
+      await ledger.methods
+        .ackPhoenixFill(liqOid, new BN(-LOTS), new BN(0), new BN(0))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: userLedgerPda,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      ul = await ledger.account.userLedger.fetch(userLedgerPda);
+      expect(ul.pendingOidCount).to.equal(0);
+      expect(ul.positionsLen).to.equal(0);
+
+      book = await ledger.account.book.fetch(bookPda);
       expect(book.residualLen).to.equal(0);
+    });
+
+    it("heartbeat_scan writes last_scan_ms", async () => {
+      await ledger.methods
+        .heartbeatScan(new BN(1_500))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+      const book = await ledger.account.book.fetch(bookPda);
+      expect(book.lastScanMs.toNumber()).to.equal(1_500);
     });
 
     it("ninth concurrent oid fails", async () => {

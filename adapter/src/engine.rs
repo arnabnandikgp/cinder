@@ -17,6 +17,16 @@ pub struct PendingOid {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LiqQueueItem {
+    pub user: PubkeyBytes,
+    pub asset_id: u16,
+    pub equity: i128,
+    pub mm: i128,
+    pub im: i128,
+    pub lots: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HedgeOutcome {
     Filled(Fill),
     Failed { oid: ClientOid, reason: String },
@@ -37,6 +47,10 @@ pub struct Adapter<P, L> {
     pub fills_since_root: u64,
     pub last_root_ms: u64,
     pub last_phoenix_collateral: Option<u64>,
+    pub liq_oid_seq: u64,
+    pub last_in_process_scan_ms: Option<u64>,
+    pub last_heartbeat_ms: u64,
+    pub queued: Vec<LiqQueueItem>,
 }
 
 impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
@@ -52,7 +66,19 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             fills_since_root: 0,
             last_root_ms: 0,
             last_phoenix_collateral: None,
+            liq_oid_seq: 0,
+            last_in_process_scan_ms: None,
+            last_heartbeat_ms: 0,
+            queued: Vec::new(),
         }
+    }
+
+    pub fn next_liq_oid(&mut self) -> ClientOid {
+        self.liq_oid_seq = self.liq_oid_seq.saturating_add(1);
+        let mut oid = [0u8; 16];
+        oid[0] = b'L';
+        oid[8..16].copy_from_slice(&self.liq_oid_seq.to_le_bytes());
+        oid
     }
 
     /// Record a fill toward the reserve-root cadence. Does **not** write or

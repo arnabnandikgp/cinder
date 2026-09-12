@@ -25,6 +25,16 @@ pub const BUFFER_MIN_BPS: u16 = 2_000;
 pub const BUFFER_FLOOR_USDC: u64 = 50_000_000;
 pub const MARK_STALE_MS: u64 = 2_000;
 pub const TRADER_STATE_STALE_MS: u64 = 2_000;
+/// In-process scan min interval (`docs/09`).
+pub const SCAN_INTERVAL_MS: u64 = 50;
+/// `Book.last_scan_ms` write cadence. Not an ER-fee rule.
+pub const HEARTBEAT_MS: u64 = 1_000;
+/// Missed in-process scan → OPERATOR_DOWN.
+pub const SCAN_DEAD_MS: u64 = 2_000;
+/// Hard-stale mark → OPERATOR_DOWN. Soft stale is MARK_STALE_MS.
+pub const MARK_DEAD_MS: u64 = 10_000;
+/// If Rise uPnL risk factor is missing, haircut gains at 50%.
+pub const UPNL_GAIN_HAIRCUT_BPS: u16 = 5_000;
 pub const OID_TTL_MS: u64 = 15_000;
 pub const IN_FLIGHT_TTL_MS: u64 = 30_000;
 pub const COMMIT_EVERY_FILLS: u64 = 20;
@@ -75,6 +85,34 @@ pub fn stub_cinder_im(abs_lots: u64) -> Option<u64> {
         .checked_div(MAX_USER_LEVERAGE as u64 * BPS_DENOM)
 }
 
+/// Stub Phoenix MM is half of stub Phoenix IM, then × 1.25. Local only; fork uses Rise.
+pub fn stub_cinder_mm(abs_lots: u64) -> Option<u64> {
+    stub_cinder_im(abs_lots)?.checked_div(2)
+}
+
 pub fn stub_notional(abs_lots: u64) -> Option<u64> {
     abs_lots.checked_mul(STUB_NOTIONAL_PER_LOT)
+}
+
+/// Losses in full; positive uPnL × `UPNL_GAIN_HAIRCUT_BPS`.
+pub fn haircut_upnl(upnl: i128) -> i128 {
+    if upnl >= 0 {
+        upnl.saturating_mul(UPNL_GAIN_HAIRCUT_BPS as i128) / BPS_DENOM as i128
+    } else {
+        upnl
+    }
+}
+
+/// `free + reserved + unsettled + haircut(uPnL)`.
+pub fn cinder_equity(free: u64, reserved: u64, unsettled: i64, upnl: i128) -> i128 {
+    free as i128 + reserved as i128 + unsettled as i128 + haircut_upnl(upnl)
+}
+
+/// Native USDC uPnL. `entry_quote == 0` means no basis → treat as 0 (do not invent profit).
+pub fn upnl_usdc(lots: i64, mark_usdc_per_lot: i64, entry_quote: i64) -> i128 {
+    if entry_quote == 0 {
+        0
+    } else {
+        (lots as i128) * (mark_usdc_per_lot as i128) - (entry_quote as i128)
+    }
 }
