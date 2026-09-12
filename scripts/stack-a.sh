@@ -65,4 +65,9 @@ fi
 echo "stack-a: surfpool start --rpc-url ${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}"
 echo "  RPC :8899  (point local ER/QFS remotes here)"
 echo "  Do not send-register-ixs to Phoenix mainnet; send built ixs to this fork."
-exec surfpool start --rpc-url "${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}"
+# Local fork only: skip-sig lets venue-boot pad the Phoenix onboarder signature.
+exec surfpool start \
+  --rpc-url "${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}" \
+  --skip-signature-verification \
+  --ci \
+  --no-deploy

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",
+    "@ellipsis-labs/rise": "0.4.67",
     "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
     "@solana/spl-token": "^0.4.13",
     "@solana/web3.js": "^1.98.2",

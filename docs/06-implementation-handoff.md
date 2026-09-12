@@ -11,7 +11,7 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 | S2 | PER privacy (stage C ACL) | Delegate, EphemeralPermission, QFS tokens | closed | User A token reads A; user B token cannot read A; adapter token reads both; traffic on `:6699` |
 | S3 | Order machine without Phoenix | place / dummy ack / fail / nonce / halt bits | closed | Fail-ack restores lots and free; double-nonce rejected; HALT_ENTRIES blocks place |
 | S4 | Adapter skeleton | Operator token, halt mirror, in-flight registry, I1/I2 checker (Phoenix mocked) | closed | Mock fill path updates Book; mock I1 break sets INVARIANT_BROKEN on Book + Config |
-| S5 | Surfpool venue boot | Fork, register trader 128, delegate position_authority, Ember post/pull | in_progress | Rise trader-state shows collateral after post; pull returns USDC to vault ATA |
+| S5 | Surfpool venue boot | Fork, register trader 128, delegate position_authority, Ember post/pull | closed | Rise trader-state shows collateral after post; pull returns USDC to vault ATA |
 | S6 | One-user residual hedge | Window=0 market/IOC on one allowlisted asset | open | After ack, Book lots == Phoenix lots; user reserved ≥ Cinder IM |
 | S7 | Two-user net demo | Offsetting users, QFS isolation still holds | open | User A +x, user B −x; Phoenix net equals A+B; neither user reads the other |
 | S8 | Cash out + reserve root | request/complete withdraw; write_reserve_root crank | open | Flat user withdraws USDC; ReserveRoot epoch increments; escape ix still errors unsupported |
@@ -194,7 +194,10 @@ Register via no-referral `build-register-ixs` / `send-register-ixs`, `maxPositio
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Stand-in vault path (`tests/s5-collateral.ts`): `post_collateral` / `pull_collateral` move USDC vault ATA ↔ stand-in ATA. 3 passing on a legacy validator.
+- Fork path (`scripts/venue-boot.ts`, `CINDER_S5=1`): Rise `buildRegisterTrader` (cross, 0/0, max 128), `buildDelegateTrader` to the adapter key, `surfnet_setTokenAccount` for wallet USDC, `buildDepositIxs` / `buildWithdrawIxs`. Verified on Surfpool 1.5.0: trader PDA exists; on-chain `quoteLotCollateral` 0 → 25_000_000 → 0 after pull.
+- Do **not** use `send-register-ixs` (broadcasts to Phoenix mainnet). Local fork uses `--skip-signature-verification` so the Phoenix onboarder can be dummy-signed. That flag is fork-only (stack-a starts Surfpool locally).
+- `OnboardTraderDelegated` is best-effort; a second run may skip it if already onboarded. Pull that hits the global queue is treated as explicit queued (no silent debit).
 
 ---
 

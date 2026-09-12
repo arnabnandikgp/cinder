@@ -24,4 +24,5 @@ trap - EXIT
 
 if [[ "${CINDER_S5:-}" == "1" ]]; then
   yarn ts-node scripts/venue-boot.ts
+  yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s5-venue.ts
 fi
