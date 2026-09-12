@@ -1,4 +1,4 @@
-import { Connection } from "@solana/web3.js";
+import { Connection, Keypair } from "@solana/web3.js";
 import { expect } from "chai";
 import { bootVenue } from "../scripts/venue-boot";
 
@@ -15,28 +15,25 @@ describe("S5 Rise venue boot (Surfpool fork)", function () {
 
   it("registers trader 0/0, posts collateral, and pulls or queues", async function () {
     const connection = new Connection(FORK, "confirmed");
-    try {
-      await connection.getVersion();
-    } catch {
-      this.skip();
-    }
+    await connection.getVersion();
 
-    const out = await bootVenue({ connection });
+    const out = await bootVenue({
+      connection,
+      adapter: Keypair.generate(),
+    });
     const info = await connection.getAccountInfo(out.traderPda);
     expect(info, "trader PDA must exist after RegisterTrader").to.not.equal(
       null
     );
-    expect(out.quoteLotCollateralAfterPost > out.quoteLotCollateralBefore).to.equal(
-      true
-    );
+    expect(out.quoteLotCollateralBefore).to.equal(0n);
+    expect(out.quoteLotCollateralAfterPost).to.equal(25_000_000n);
 
     if (out.withdrawQueued) {
-      expect(out.withdrawQueued).to.equal(true);
+      expect(out.quoteLotCollateralAfterPull).to.equal(
+        out.quoteLotCollateralAfterPost
+      );
     } else {
-      expect(out.quoteLotCollateralAfterPull).to.not.equal(null);
-      expect(
-        out.quoteLotCollateralAfterPull! < out.quoteLotCollateralAfterPost
-      ).to.equal(true);
+      expect(out.quoteLotCollateralAfterPull).to.equal(0n);
     }
   });
 });

@@ -5,6 +5,7 @@
  * flows) and sends them to localhost. Does not call send-register-ixs.
  */
 import * as anchor from "@coral-xyz/anchor";
+import * as fs from "fs";
 import {
   Connection,
   Keypair,
@@ -109,10 +110,29 @@ async function surfnetSetTokenAccount(
   }
 }
 
-export async function bootVenue(opts?: {
+function loadOrCreateAdapter(): Keypair {
+  const path = process.env.CINDER_ADAPTER_KEYPAIR || ".cinder-adapter.json";
+  if (fs.existsSync(path)) {
+    const raw = JSON.parse(fs.readFileSync(path, "utf8")) as number[];
+    return Keypair.fromSecretKey(Uint8Array.from(raw));
+  }
+  const kp = Keypair.generate();
+  fs.writeFileSync(path, JSON.stringify(Array.from(kp.secretKey)));
+  return kp;
+}
+
+function positionAuthorityOf(trader: {
+  state?: { positionAuthority?: unknown };
+  positionAuthority?: unknown;
+}): string | null {
+  const v = trader.state?.positionAuthority ?? trader.positionAuthority;
+  return v == null ? null : String(v);
+}
+
+export async function bootVenue(opts: {
+  adapter: Keypair;
   connection?: Connection;
   authority?: Keypair;
-  adapter?: Keypair;
   postAmount?: bigint;
 }): Promise<{
   traderPda: PublicKey;
@@ -125,8 +145,9 @@ export async function bootVenue(opts?: {
   depositSig: string;
   withdrawSig: string | null;
 }> {
-  assertLocalRpc(FORK);
-  const connection = opts?.connection ?? new Connection(FORK, "confirmed");
+  const connection = opts.connection ?? new Connection(FORK, "confirmed");
+  const rpcUrl = connection.rpcEndpoint;
+  assertLocalRpc(rpcUrl);
   const genesis = await connection.getGenesisHash();
   if (genesis !== MAINNET_GENESIS) {
     throw new Error(
@@ -137,16 +158,16 @@ export async function bootVenue(opts?: {
   const rise = await import("@ellipsis-labs/rise");
   const client = rise.createPhoenixClient({
     apiUrl: API,
-    rpcUrl: FORK,
+    rpcUrl,
     ws: false,
     exchangeMetadata: { stream: false },
   });
   await client.exchange.ready();
 
-  const wallet = opts?.authority ?? anchor.Wallet.local().payer;
-  const adapter = opts?.adapter ?? Keypair.generate();
+  const wallet = opts.authority ?? anchor.Wallet.local().payer;
+  const adapter = opts.adapter;
   const authority = wallet.publicKey.toBase58();
-  const postAmount = opts?.postAmount ?? DEFAULT_POST_USDC;
+  const postAmount = opts.postAmount ?? DEFAULT_POST_USDC;
 
   const traderPdaStr = await client.pda.getTraderAddress({
     authority: authority as never,
@@ -182,10 +203,16 @@ export async function bootVenue(opts?: {
       delegateIx as unknown as KitIx,
     ]);
   } catch (err) {
-    console.warn(
-      "DelegateTrader failed (continuing):",
-      err instanceof Error ? err.message : err
-    );
+    const trader = await rise.fetchTrader({
+      client: client.rpc.accounts,
+      address: traderPdaStr,
+      skipCache: true,
+    });
+    const stored = positionAuthorityOf(trader);
+    if (stored !== adapter.publicKey.toBase58()) {
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+    delegateSig = "already-delegated";
   }
 
   try {
@@ -207,7 +234,7 @@ export async function bootVenue(opts?: {
   }
 
   await surfnetSetTokenAccount(
-    FORK,
+    rpcUrl,
     wallet.publicKey,
     new PublicKey(WALLET_USDC),
     postAmount
@@ -242,13 +269,13 @@ export async function bootVenue(opts?: {
   let withdrawSig: string | null = null;
   let withdrawQueued = false;
   let quoteLotCollateralAfterPull: bigint | null = null;
+  const withdraw = await client.ixs.buildWithdrawIxs({
+    authority: authority as never,
+    amount: postAmount,
+    traderPdaIndex: 0,
+    traderSubaccountIndex: 0,
+  });
   try {
-    const withdraw = await client.ixs.buildWithdrawIxs({
-      authority: authority as never,
-      amount: postAmount,
-      traderPdaIndex: 0,
-      traderSubaccountIndex: 0,
-    });
     withdrawSig = await sendToFork(
       connection,
       wallet,
@@ -266,11 +293,21 @@ export async function bootVenue(opts?: {
     withdrawQueued = traderAfterPull.withdrawQueueNode !== null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (/queue/i.test(msg)) {
-      withdrawQueued = true;
-    } else {
+    if (!/queue/i.test(msg)) {
       throw err;
     }
+    const queuedTrader = await rise.fetchTrader({
+      client: client.rpc.accounts,
+      address: traderPdaStr,
+      skipCache: true,
+    });
+    if (queuedTrader.withdrawQueueNode == null) {
+      throw err instanceof Error ? err : new Error(msg);
+    }
+    withdrawQueued = true;
+    quoteLotCollateralAfterPull = BigInt(
+      queuedTrader.state.quoteLotCollateral.toString()
+    );
   }
 
   client.dispose();
@@ -297,7 +334,7 @@ async function main() {
     console.log("venue-boot: set CINDER_S5=1 to run against a Surfpool fork");
     return;
   }
-  const out = await bootVenue();
+  const out = await bootVenue({ adapter: loadOrCreateAdapter() });
   console.log("trader PDA", out.traderPda.toBase58());
   console.log("register", out.registerSig);
   console.log("delegate", out.delegateSig);
