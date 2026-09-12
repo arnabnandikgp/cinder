@@ -1,0 +1,57 @@
+name: start-mb-stack
+description: Install pinned mb-stack (with Linux native bins) and wait for base, ER, and QFS
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+        key: mb-stack-0.14.10-${{ runner.os }}-x64
+    - name: Install mb-stack + Linux binaries
+      shell: bash
+      run: |
+        npm i -g \
+          @magicblock-labs/ephemeral-validator@0.14.10 \
+          @magicblock-labs/ephemeral-validator-linux-x64@0.14.10 \
+          @magicblock-labs/query-filtering-service-linux-x64@0.1.3
+        echo "$(npm prefix -g)/bin" >> "$GITHUB_PATH"
+    - name: Check validator wrappers
+      shell: bash
+      run: |
+        ephemeral-validator --version
+        mb-test-validator --version
+        command -v query-filtering-service
+        command -v mb-stack
+    - name: Start mb-stack
+      shell: bash
+      env:
+        RUST_LOG: info
+      run: |
+        # ER calls setrlimit(NOFILE) and exits if it cannot raise the limit.
+        # GHA default soft limit is 1024; this must happen in *this* shell so
+        # mb-stack and the validator inherit it.
+        sudo prlimit --pid $$ --nofile=1048576:1048576 || true
+        ulimit -n 1048576 || ulimit -n 65536 || true
+        sudo sysctl fs.inotify.max_user_instances=1280 || true
+        sudo sysctl fs.inotify.max_user_watches=655360 || true
+        echo "nofile soft=$(ulimit -Sn) hard=$(ulimit -Hn)"
+
+        mb-stack --reset > mb-stack.log 2>&1 &
+        echo $! > mb-stack.pid
+        # Also raise the already-spawned tree if prlimit on $$ did not stick.
+        sudo prlimit --pid "$(cat mb-stack.pid)" --nofile=1048576:1048576 || true
+
+        ./scripts/wait-rpc.sh http://127.0.0.1:8899 180
+        ./scripts/wait-rpc.sh http://127.0.0.1:7799 240
+        ./scripts/wait-rpc.sh http://127.0.0.1:6699 120
+        solana config set --url http://127.0.0.1:8899
+        solana airdrop 100 "$(solana-keygen pubkey "$HOME/.config/solana/id.json")" || true
+    - name: Dump mb-stack log if ER never came up
+      if: failure()
+      shell: bash
+      run: |
+        echo "===== mb-stack.log ====="
+        cat mb-stack.log || true
+        echo "===== ps ====="
+        ps aux | grep -E "validator|mb-stack|query-filter" | grep -v grep || true

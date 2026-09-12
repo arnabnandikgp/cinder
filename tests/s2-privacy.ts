@@ -114,6 +114,11 @@ describe("S2 PER / QFS isolation", function () {
 
   before(async function () {
     if (!(await rpcUp(QFS)) || !(await rpcUp(ER)) || !(await rpcUp(BASE))) {
+      if (process.env.CINDER_REQUIRE_STACK === "1") {
+        throw new Error(
+          `required mb-stack not up (QFS ${QFS}, ER ${ER}, base ${BASE})`
+        );
+      }
       skip = true;
       this.skip();
     }

@@ -1,0 +1,60 @@
+name: setup-solana-anchor
+description: Pin Rust/Node/Solana/Anchor, install yarn deps, copy program keys, make a local wallet
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.89.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "24"
+        cache: yarn
+        cache-dependency-path: yarn.lock
+    - uses: actions/cache@v4
+      id: cache-solana
+      with:
+        path: ~/.local/share/solana/install
+        key: solana-3.1.10-${{ runner.os }}-x64
+    - uses: actions/cache@v4
+      id: cache-anchor
+      with:
+        path: ~/.cargo/bin/anchor
+        key: anchor-cli-1.0.2-${{ runner.os }}-x64
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: .
+        shared-key: cinder-ci
+        cache-targets: true
+        cache-all-crates: true
+    - name: Install Solana 3.1.10
+      if: steps.cache-solana.outputs.cache-hit != 'true'
+      shell: bash
+      run: sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.10/install)"
+    - name: Solana PATH
+      shell: bash
+      run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+    - name: Install Anchor CLI 1.0.2
+      if: steps.cache-anchor.outputs.cache-hit != 'true'
+      shell: bash
+      run: cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.2 anchor-cli --locked --force
+    - name: Cargo bin PATH
+      shell: bash
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Yarn
+      shell: bash
+      run: yarn install --frozen-lockfile
+    - name: Toolchain pin
+      shell: bash
+      run: ./scripts/check-toolchain.sh
+    - name: Program keypairs
+      shell: bash
+      run: |
+        mkdir -p target/deploy
+        cp keys/*-keypair.json target/deploy/
+    - name: Local wallet
+      shell: bash
+      run: |
+        mkdir -p "$HOME/.config/solana"
+        solana-keygen new --no-bip39-passphrase --silent -o "$HOME/.config/solana/id.json"
+        echo "ANCHOR_WALLET=$HOME/.config/solana/id.json" >> "$GITHUB_ENV"

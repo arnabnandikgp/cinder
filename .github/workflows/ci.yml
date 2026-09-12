@@ -1,5 +1,6 @@
-# Focused CI: adapter unit tests always; program tests on a local validator.
-# Not in CI: mb-stack / QFS (S2), Surfpool / Phoenix (S5). Those need a local stack.
+# Adapter units always. Local validator: S1 + S5 collateral.
+# mb-stack: S2 privacy and S7 net (separate VMs; both need Config PDA).
+# Surfpool fork: S5 venue + funding smoke (Phoenix HTTP API is the remaining externality).
 name: ci
 
 on:
@@ -17,6 +18,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   NO_DNA: "1"
+  CINDER_REQUIRE_STACK: "1"
 
 jobs:
   adapter:
@@ -31,8 +33,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-      - name: Adapter unit tests
-        run: cargo test -p cinder-adapter
+          shared-key: cinder-ci
+          cache-targets: true
+      - name: Adapter + common unit tests
+        run: cargo test -p cinder-adapter -p cinder-common
 
   programs:
     name: programs
@@ -40,36 +44,128 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.89.0
+      - uses: ./.github/actions/setup-solana-anchor
+      - name: S1/S3/S8/S9/funding (legacy validator)
+        run: anchor test --validator legacy
+      - name: S5 vault post/pull (no Phoenix)
+        run: CINDER_MOCHA=s5-collateral.ts anchor test --validator legacy --skip-build
+
+  privacy-s2:
+    name: privacy-s2
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-solana-anchor
+      - uses: ./.github/actions/start-mb-stack
+      - name: Deploy + S2 QFS isolation
+        env:
+          PROVIDER_ENDPOINT: http://127.0.0.1:8899
+          WS_ENDPOINT: ws://127.0.0.1:8900
+          EPHEMERAL_PROVIDER_ENDPOINT: http://127.0.0.1:7799
+          EPHEMERAL_WS_ENDPOINT: ws://127.0.0.1:7800
+          TEE_PROVIDER_ENDPOINT: http://127.0.0.1:6699
+          TEE_WS_ENDPOINT: ws://127.0.0.1:6700
+          ANCHOR_PROVIDER_URL: http://127.0.0.1:8899
+          VALIDATOR: mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+        run: |
+          anchor build
+          anchor deploy --provider.cluster localnet
+          yarn run ts-mocha -p ./tsconfig.json -t 120000 tests/s2-privacy.ts
+      - name: mb-stack log on failure
+        if: failure()
+        run: tail -n 200 mb-stack.log || true
+
+  privacy-s7:
+    name: privacy-s7
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-solana-anchor
+      - uses: ./.github/actions/start-mb-stack
+      - name: Deploy + S7 two-user net
+        env:
+          PROVIDER_ENDPOINT: http://127.0.0.1:8899
+          WS_ENDPOINT: ws://127.0.0.1:8900
+          EPHEMERAL_PROVIDER_ENDPOINT: http://127.0.0.1:7799
+          EPHEMERAL_WS_ENDPOINT: ws://127.0.0.1:7800
+          TEE_PROVIDER_ENDPOINT: http://127.0.0.1:6699
+          TEE_WS_ENDPOINT: ws://127.0.0.1:6700
+          ANCHOR_PROVIDER_URL: http://127.0.0.1:8899
+          VALIDATOR: mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev
+        run: |
+          anchor build
+          anchor deploy --provider.cluster localnet
+          yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s7-net.ts
+      - name: mb-stack log on failure
+        if: failure()
+        run: tail -n 200 mb-stack.log || true
+
+  fork:
+    name: fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: yarn
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
-          cache-targets: false
-      - name: Install Solana 3.1.10
-        run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.10/install)"
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
-      - name: Install Anchor CLI 1.0.2
-        run: |
-          cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.2 anchor-cli --locked --force
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          cache-dependency-path: yarn.lock
       - name: Yarn
         run: yarn install --frozen-lockfile
-      - name: Toolchain pin
-        run: ./scripts/check-toolchain.sh
-      - name: Program keypairs
+      - uses: actions/cache@v4
+        id: cache-surfpool
+        with:
+          path: ~/.local/bin/surfpool
+          key: surfpool-1.5.0-${{ runner.os }}-x64
+      - name: Install Surfpool 1.5.0
+        if: steps.cache-surfpool.outputs.cache-hit != 'true'
         run: |
-          mkdir -p target/deploy
-          cp keys/*-keypair.json target/deploy/
+          tar="surfpool-linux-x64.tar.gz"
+          sha="5b20a3b46e60c4f819af7b4da5c3ea211f76041710617841cc23247d15887ddc"
+          url="https://github.com/solana-foundation/surfpool/releases/download/v1.5.0/${tar}"
+          curl -fsSL -o "/tmp/${tar}" "$url"
+          echo "${sha}  /tmp/${tar}" | sha256sum -c -
+          tar -xzf "/tmp/${tar}" -C /tmp
+          mkdir -p "$HOME/.local/bin"
+          install -m 0755 /tmp/surfpool "$HOME/.local/bin/surfpool"
+      - name: Surfpool PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Local wallet
         run: |
           mkdir -p "$HOME/.config/solana"
-          solana-keygen new --no-bip39-passphrase --silent -o "$HOME/.config/solana/id.json"
-      - name: S1/S3 local validator tests
-        run: anchor test --validator legacy
+          node -e '
+            const {Keypair} = require("@solana/web3.js");
+            const fs = require("fs");
+            const k = Keypair.generate();
+            fs.writeFileSync(
+              process.env.HOME + "/.config/solana/id.json",
+              JSON.stringify(Array.from(k.secretKey))
+            );
+          '
+          echo "ANCHOR_WALLET=$HOME/.config/solana/id.json" >> "$GITHUB_ENV"
+      - name: Start Surfpool mainnet fork
+        run: |
+          surfpool start \
+            --rpc-url "${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}" \
+            --skip-signature-verification \
+            --ci \
+            --no-deploy \
+            > surfpool.log 2>&1 &
+          echo $! > surfpool.pid
+          ./scripts/wait-rpc.sh http://127.0.0.1:8899 300
+      - name: S5 venue boot
+        env:
+          CINDER_S5: "1"
+          PROVIDER_ENDPOINT: http://127.0.0.1:8899
+        run: yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s5-venue.ts
+      - name: Funding Rise smoke
+        env:
+          CINDER_FUNDING: "1"
+          PROVIDER_ENDPOINT: http://127.0.0.1:8899
+        run: yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s-funding-fork.ts
+      - name: Surfpool log on failure
+        if: failure()
+        run: tail -n 200 surfpool.log || true
