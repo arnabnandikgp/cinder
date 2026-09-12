@@ -23,6 +23,10 @@ pub struct MemoryLedger {
     pub fills: Vec<(PubkeyBytes, Fill)>,
     pub fails: Vec<(PubkeyBytes, ClientOid)>,
     pub reserved: std::collections::BTreeMap<u16, u64>,
+    pub user_lots: std::collections::BTreeMap<PubkeyBytes, std::collections::BTreeMap<u16, i64>>,
+    pub user_cash: std::collections::BTreeMap<PubkeyBytes, u64>,
+    pub vault_ata: u64,
+    pub phoenix_collateral: u64,
 }
 
 impl MemoryLedger {
@@ -31,6 +35,34 @@ impl MemoryLedger {
             invariant_ok: 1,
             ..Default::default()
         }
+    }
+
+    pub fn lots_of(&self, user: &PubkeyBytes, asset_id: u16) -> i64 {
+        self.user_lots
+            .get(user)
+            .and_then(|m| m.get(&asset_id))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    pub fn sum_user_lots(&self, asset_id: u16) -> i64 {
+        self.user_lots
+            .values()
+            .map(|m| m.get(&asset_id).copied().unwrap_or(0))
+            .sum()
+    }
+
+    pub fn sum_user_cash(&self) -> u64 {
+        self.user_cash.values().copied().sum()
+    }
+
+    pub fn i2_ok(&self, in_flight_usdc: i64) -> bool {
+        crate::residual::i2_holds(
+            self.sum_user_cash(),
+            self.vault_ata,
+            self.phoenix_collateral,
+            in_flight_usdc,
+        )
     }
 }
 
@@ -42,6 +74,12 @@ impl LedgerPort for MemoryLedger {
             self.book.remove(&fill.asset_id);
         }
         self.fills.push((*user, fill.clone()));
+        *self
+            .user_lots
+            .entry(*user)
+            .or_default()
+            .entry(fill.asset_id)
+            .or_insert(0) += fill.filled_lots;
         let lots = self.book_lots(fill.asset_id);
         let im = cc::stub_cinder_im(lots.unsigned_abs())
             .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;

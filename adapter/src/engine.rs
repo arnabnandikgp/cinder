@@ -400,4 +400,66 @@ mod tests {
         assert_eq!(ad.ledger.book_lots(1), 0);
         assert!(ad.ledger.fails.is_empty());
     }
+
+    #[test]
+    fn s7_offsetting_users_phoenix_equals_sum_and_i2() {
+        let a = [1u8; 32];
+        let b = [2u8; 32];
+        let mut phoenix = MockPhoenix::new();
+        phoenix.fill_next(Fill {
+            client_oid: oid(20),
+            asset_id: 1,
+            filled_lots: 10,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+        });
+        let mut ad = adapter_with(phoenix);
+        ad.hedge_pending(
+            1_000,
+            &PendingOid {
+                user: a,
+                client_oid: oid(20),
+                asset_id: 1,
+                lots_delta: 10,
+                created_at_ms: 1_000,
+            },
+        )
+        .unwrap();
+        ad.phoenix.fill_next(Fill {
+            client_oid: oid(21),
+            asset_id: 1,
+            filled_lots: -10,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+        });
+        ad.hedge_pending(
+            1_000,
+            &PendingOid {
+                user: b,
+                client_oid: oid(21),
+                asset_id: 1,
+                lots_delta: -10,
+                created_at_ms: 1_000,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(ad.ledger.lots_of(&a, 1), 10);
+        assert_eq!(ad.ledger.lots_of(&b, 1), -10);
+        assert_eq!(
+            ad.phoenix.base_lots(1),
+            ad.ledger.lots_of(&a, 1) + ad.ledger.lots_of(&b, 1)
+        );
+        assert_eq!(ad.phoenix.base_lots(1), ad.ledger.book_lots(1));
+        assert_eq!(ad.phoenix.base_lots(1), 0);
+
+        ad.ledger.user_cash.insert(a, 100);
+        ad.ledger.user_cash.insert(b, 100);
+        ad.ledger.vault_ata = 150;
+        ad.ledger.phoenix_collateral = 50;
+        assert!(ad.ledger.i2_ok(0));
+        ad.ledger.vault_ata = 140;
+        assert!(ad.ledger.i2_ok(10));
+        assert!(!ad.ledger.i2_ok(0));
+    }
 }
