@@ -6,8 +6,8 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 
 | ID | Stage | Deliverables | Status | Success markers |
 |---|---|---|---|---|
-| S0 | Repo + toolchain | Workspace, pins, reference dumps, scripts stubs | open | `anchor --version` is 1.0.2; `anchor build` of skeleton programs succeeds; `docs/reference/mb-docs.md` and `phoenix-docs.md` present |
-| S1 | Ledger + vault accounts | Anchor accounts and ixs from freeze, no cluster privacy yet | open | `anchor test` inits Config, UserLedger, Book, FeeAccrual; seeds match freeze |
+| S0 | Repo + toolchain | Workspace, pins, reference dumps, scripts stubs | closed | `anchor --version` is 1.0.2; `anchor build` of skeleton programs succeeds; `docs/reference/mb-docs.md` and `phoenix-docs.md` present |
+| S1 | Ledger + vault accounts | Anchor accounts and ixs from freeze, no cluster privacy yet | closed | `anchor test` inits Config, UserLedger, Book, FeeAccrual; seeds match freeze |
 | S2 | PER privacy (stage C ACL) | Delegate, EphemeralPermission, QFS tokens | open | User A token reads A; user B token cannot read A; adapter token reads both; traffic on `:6699` |
 | S3 | Order machine without Phoenix | place / dummy ack / fail / nonce / halt bits | open | Fail-ack restores lots and free; double-nonce rejected; HALT_ENTRIES blocks place |
 | S4 | Adapter skeleton | Operator token, halt mirror, in-flight registry, I1/I2 checker (Phoenix mocked) | open | Mock fill path updates Book; mock I1 break sets INVARIANT_BROKEN on Book + Config |
@@ -57,7 +57,12 @@ Toolchain: Anchor **1.0.2**, `ephemeral-rollups-sdk` **0.16.2** (`anchor`, `acce
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Workspace: `programs/cinder_vault`, `programs/cinder_ledger`, `crates/cinder-common`, `adapter/` stub, `tests/`, `scripts/{check-toolchain,stack-c,stack-a,test}.sh`. Spec pack and `docs/reference/{mb,phoenix}-docs.md` were already in the repo.
+- Pins: `Anchor.toml` `anchor_version = "1.0.2"`; `anchor-lang` / `anchor-spl` **`=1.0.2`** (bare `1.0.2` is `^1.0.2` and resolved to 1.2.0); `ephemeral-rollups-sdk =0.16.2` with `anchor` + `access-control` on the ledger; `rust-toolchain.toml` channel `1.89.0`.
+- Verified: `./scripts/check-toolchain.sh` → `anchor-cli 1.0.2`, `rustc 1.89.0`. Host Solana CLI is **3.1.10** (spec 3.1.9). Did not downgrade; patch-level, `anchor build` succeeded.
+- Program ids (committed under `keys/`, copied to `target/deploy/` by check-toolchain): vault `9zhBFVgk13gnYT6iVuKPGfQiAvVfr6cYQq2bY2QUzXmg`, ledger `h3Bw2xjj69JssRkaxr8Jxh6TtamvrjSxASXbfLeWyPg`.
+- `anchor test` on this CLI defaults to Surfpool. S0/S1 use `anchor test --validator legacy` (see `scripts/test.sh`). Do not install Surfpool until S5.
+- TS client is `@coral-xyz/anchor` 0.32.1 (MagicBlock private-counter pattern), not `@anchor-lang/core`.
 
 ---
 
@@ -79,7 +84,13 @@ Leave Delegation / EphemeralPermission CPIs to S2.
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Layouts match freeze: Config / ReserveRoot (`cinder_vault`); UserLedger / Book / FeeAccrual + Position / OpenOid / Residual (`cinder_ledger`). Seeds: `config`, `vault-authority`, `reserve`, `user`+pubkey, `book`, `fees`.
+- Extra vs freeze ix table: `cinder_ledger::initialize` creates Book + FeeAccrual (needed; freeze has no other creator). Adapter-signed ixs authenticate by reading vault `Config` (owner = vault program, discriminator `account:Config`).
+- Ixs live: vault `initialize`, `set_adapter`, `set_halt`, `set_allowlist`, `escape_withdraw` → `Unsupported`. Ledger `init_user` (no permission CPI), `credit_deposit`, `place_order`, `ack_phoenix_fill`, `ack_phoenix_fail`, `request_withdraw`, `complete_withdraw`, `set_book_halt`, `update_book_collateral`. Delegation / EphemeralPermission left to S2.
+- `place_order` is tentative; Book moves only on `ack_phoenix_fill`. Fail-ack restores lots + free. HALT_ENTRIES (and UNSAFE_POOL / INVARIANT_BROKEN / OPERATOR_DOWN) blocks place.
+- IM until S6: stub notional = 1 lot → 1 USDC, Cinder IM = 1.25 × notional / 10 (`STUB_NOTIONAL_PER_LOT` in `cinder-common`). 10 lots ⇒ 1_250_000 native reserved. Replace with Phoenix mark in S6; do not invent a mark PDA.
+- BPF stack: `UserLedger` / `Book` are `Box<Account<...>>` so `try_accounts` stays under 4096.
+- Tests (`scripts/test.sh` → `anchor test --validator legacy`): init PDAs; credit 100 USDC; place +10 → fail-ack restores; place → fill-ack updates position, reserved IM, Book residual; HALT_ENTRIES blocks place; `escape_withdraw` unsupported. 5 passing.
 
 ---
 
