@@ -10,7 +10,7 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 | S1 | Ledger + vault accounts | Anchor accounts and ixs from freeze, no cluster privacy yet | closed | `anchor test` inits Config, UserLedger, Book, FeeAccrual; seeds match freeze |
 | S2 | PER privacy (stage C ACL) | Delegate, EphemeralPermission, QFS tokens | closed | User A token reads A; user B token cannot read A; adapter token reads both; traffic on `:6699` |
 | S3 | Order machine without Phoenix | place / dummy ack / fail / nonce / halt bits | closed | Fail-ack restores lots and free; double-nonce rejected; HALT_ENTRIES blocks place |
-| S4 | Adapter skeleton | Operator token, halt mirror, in-flight registry, I1/I2 checker (Phoenix mocked) | open | Mock fill path updates Book; mock I1 break sets INVARIANT_BROKEN on Book + Config |
+| S4 | Adapter skeleton | Operator token, halt mirror, in-flight registry, I1/I2 checker (Phoenix mocked) | closed | Mock fill path updates Book; mock I1 break sets INVARIANT_BROKEN on Book + Config |
 | S5 | Surfpool venue boot | Fork, register trader 128, delegate position_authority, Ember post/pull | open | Rise trader-state shows collateral after post; pull returns USDC to vault ATA |
 | S6 | One-user residual hedge | Window=0 market/IOC on one allowlisted asset | open | After ack, Book lots == Phoenix lots; user reserved ≥ Cinder IM |
 | S7 | Two-user net demo | Offsetting users, QFS isolation still holds | open | User A +x, user B −x; Phoenix net equals A+B; neither user reads the other |
@@ -168,7 +168,9 @@ Do not store user tokens.
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Crate `adapter/` (`cinder-adapter`): `PhoenixVenue` trait + `MockPhoenix`; `LedgerPort` + `MemoryLedger`; `OperatorAuth` holds one QFS token (`TeeAuth` / `MockTeeAuth`); no user-token map. Intended residual = Book + pending. In-flight table TTL `IN_FLIGHT_TTL_MS` (30s). Halt writer mirrors flags onto Config and Book.
+- Hedge path (window=0): stale oid (> `OID_TTL_MS` 15s) → `ack_fail` without a venue call; mock reject → `ack_fail`; mock fill → `ack_fill` then I1 (`Book == Phoenix lots`). I1 miss → `INVARIANT_BROKEN` on both halt bytes and `invariant_ok = 0`. I2 helper: user cash vs vault ATA + phoenix collateral ± in-flight.
+- Tests: `cargo test -p cinder-adapter` — 8 passing (fill updates Book, reject fail-acks, I1 break, oid TTL, halt mirror, operator token, intended residual, I2). Real Rise / Surfpool is S5. Live `getAuthToken` against QFS stays on the TS side until the adapter grows an HTTP client.
 
 ---
 
