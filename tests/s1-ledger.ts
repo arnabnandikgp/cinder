@@ -3,8 +3,11 @@ import { BN, Program } from "@coral-xyz/anchor";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccount,
   createMint,
+  getAccount,
   getAssociatedTokenAddressSync,
+  mintTo,
 } from "@solana/spl-token";
 import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { expect } from "chai";
@@ -422,6 +425,165 @@ describe("S1 accounts and order machine", () => {
         const code = e.error?.errorCode?.code ?? e.toString();
         expect(code).to.match(/OidCap/);
       }
+    });
+  });
+
+  describe("S8 withdraw and reserve root", () => {
+    const withdrawUser = Keypair.generate();
+    let withdrawLedger: PublicKey;
+    let userAta: PublicKey;
+    const WITHDRAW = 10_000_000;
+
+    before(async () => {
+      await airdrop(withdrawUser.publicKey);
+      withdrawLedger = pda(ledger.programId, [
+        Buffer.from("user"),
+        withdrawUser.publicKey.toBuffer(),
+      ]);
+      userAta = getAssociatedTokenAddressSync(usdcMint, withdrawUser.publicKey);
+      await ledger.methods
+        .initUser()
+        .accounts({
+          adapter: adapter.publicKey,
+          user: withdrawUser.publicKey,
+          config: configPda,
+          userLedger: withdrawLedger,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([adapter, withdrawUser])
+        .rpc();
+      await ledger.methods
+        .creditDeposit(new BN(CREDIT))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: withdrawLedger,
+        })
+        .signers([adapter])
+        .rpc();
+      await createAssociatedTokenAccount(
+        connection,
+        payer,
+        usdcMint,
+        withdrawUser.publicKey
+      );
+      await mintTo(connection, payer, usdcMint, vaultAta, payer, CREDIT);
+    });
+
+    it("open position withdraw is rejected", async () => {
+      try {
+        await ledger.methods
+          .requestWithdraw(new BN(1))
+          .accounts({
+            user: user.publicKey,
+            config: configPda,
+            book: bookPda,
+            userLedger: userLedgerPda,
+          })
+          .signers([user])
+          .rpc();
+        expect.fail("pending oids should block withdraw");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/NotFlat/);
+      }
+    });
+
+    it("flat withdraw credits user ATA and zeros withdrawable", async () => {
+      await ledger.methods
+        .requestWithdraw(new BN(WITHDRAW))
+        .accounts({
+          user: withdrawUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: withdrawLedger,
+        })
+        .signers([withdrawUser])
+        .rpc();
+
+      await vault.methods
+        .userWithdrawL1(new BN(WITHDRAW))
+        .accounts({
+          adapter: adapter.publicKey,
+          user: withdrawUser.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          vaultUsdcAta: vaultAta,
+          userUsdcAta: userAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([adapter])
+        .rpc();
+
+      await ledger.methods
+        .completeWithdraw(new BN(WITHDRAW))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: withdrawLedger,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const ul = await ledger.account.userLedger.fetch(withdrawLedger);
+      expect(ul.withdrawable.toNumber()).to.equal(0);
+      expect(ul.free.toNumber()).to.equal(CREDIT - WITHDRAW);
+      const ata = await getAccount(connection, userAta);
+      expect(Number(ata.amount)).to.equal(WITHDRAW);
+    });
+
+    it("root epoch bumps and hash changes after a credit", async () => {
+      const before = await vault.account.reserveRoot.fetch(reservePda);
+      await vault.methods
+        .writeReserveRoot(
+          Array.from({ length: 32 }, (_, i) => i),
+          1,
+          new BN(CREDIT),
+          new BN(0),
+          Array.from({ length: 32 }, () => 1)
+        )
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          reserveRoot: reservePda,
+        })
+        .signers([adapter])
+        .rpc();
+      const mid = await vault.account.reserveRoot.fetch(reservePda);
+      expect(mid.epoch.toNumber()).to.equal(before.epoch.toNumber() + 1);
+
+      await ledger.methods
+        .creditDeposit(new BN(1_000_000))
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: withdrawLedger,
+        })
+        .signers([adapter])
+        .rpc();
+
+      await vault.methods
+        .writeReserveRoot(
+          Array.from({ length: 32 }, (_, i) => 32 - i),
+          1,
+          new BN(CREDIT + 1_000_000 - WITHDRAW),
+          new BN(0),
+          Array.from({ length: 32 }, () => 2)
+        )
+        .accounts({
+          adapter: adapter.publicKey,
+          config: configPda,
+          reserveRoot: reservePda,
+        })
+        .signers([adapter])
+        .rpc();
+      const after = await vault.account.reserveRoot.fetch(reservePda);
+      expect(after.epoch.toNumber()).to.equal(mid.epoch.toNumber() + 1);
+      expect(Buffer.from(after.root).toString("hex")).to.not.equal(
+        Buffer.from(mid.root).toString("hex")
+      );
     });
   });
 });

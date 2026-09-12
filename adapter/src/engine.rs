@@ -34,6 +34,8 @@ pub struct Adapter<P, L> {
     /// TRADER_STATE_STALE_MS rejects a new hedge.
     pub trader_observed_at_ms: Option<u64>,
     pub pool_health: PoolHealth,
+    pub fills_since_root: u64,
+    pub last_root_ms: u64,
 }
 
 impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
@@ -46,6 +48,22 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             mark_observed_at_ms: None,
             trader_observed_at_ms: None,
             pool_health: PoolHealth::Safe,
+            fills_since_root: 0,
+            last_root_ms: 0,
+        }
+    }
+
+    /// Commit crank: write_reserve_root every 20 fills or 30s.
+    pub fn note_fill_for_root(&mut self, now_ms: u64) -> bool {
+        self.fills_since_root = self.fills_since_root.saturating_add(1);
+        let due_fills = self.fills_since_root >= cc::COMMIT_EVERY_FILLS;
+        let due_time = now_ms.saturating_sub(self.last_root_ms) >= cc::COMMIT_EVERY_MS;
+        if due_fills || due_time {
+            self.fills_since_root = 0;
+            self.last_root_ms = now_ms;
+            true
+        } else {
+            false
         }
     }
 
@@ -155,6 +173,7 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                         asset_id: fill.asset_id,
                     });
                 }
+                let _ = self.note_fill_for_root(now_ms);
                 Ok(HedgeOutcome::Filled(fill))
             }
         }
@@ -461,5 +480,18 @@ mod tests {
         ad.ledger.vault_ata = 140;
         assert!(ad.ledger.i2_ok(10));
         assert!(!ad.ledger.i2_ok(0));
+    }
+
+    #[test]
+    fn s8_root_crank_every_20_fills_or_30s() {
+        let mut ad = adapter_with(MockPhoenix::new());
+        ad.last_root_ms = 0;
+        for _ in 0..19 {
+            assert!(!ad.note_fill_for_root(1_000));
+        }
+        assert!(ad.note_fill_for_root(1_000));
+        assert_eq!(ad.fills_since_root, 0);
+        assert!(!ad.note_fill_for_root(1_000));
+        assert!(ad.note_fill_for_root(1_000 + cc::COMMIT_EVERY_MS));
     }
 }

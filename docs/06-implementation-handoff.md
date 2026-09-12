@@ -14,7 +14,7 @@ Update this table when you start or finish a stage. After `closed`, fill that st
 | S5 | Surfpool venue boot | Fork, register trader 128, delegate position_authority, Ember post/pull | closed | Rise trader-state shows collateral after post; pull returns USDC to vault ATA |
 | S6 | One-user residual hedge | Window=0 market/IOC on one allowlisted asset | closed | After ack, Book lots == Phoenix lots; user reserved ≥ Cinder IM |
 | S7 | Two-user net demo | Offsetting users, QFS isolation still holds | closed | User A +x, user B −x; Phoenix net equals A+B; neither user reads the other |
-| S8 | Cash out + reserve root | request/complete withdraw; write_reserve_root crank | open | Flat user withdraws USDC; ReserveRoot epoch increments; escape ix still errors unsupported |
+| S8 | Cash out + reserve root | request/complete withdraw; write_reserve_root crank | closed | Flat user withdraws USDC; ReserveRoot epoch increments; escape ix still errors unsupported |
 | S9 | Vault PDA + Magic Action withdraw | PDA is Phoenix authority; settle via action | open | Deposit/withdraw CPI signed by vault seeds; action pay path works; stand-in key retired |
 
 S9 stays `open` until S8 is `closed`. Windowed residual (window > 0) is **not** a tracker stage. Do not implement it.
@@ -266,7 +266,9 @@ Commit crank: `write_reserve_root` every 20 fills or 30s. Delegated fee payer + 
 
 **Post-implementation comments**
 
-_(fill when closed)_
+- Flow: `request_withdraw` (flat only) → `user_withdraw_l1` (adapter, PDA pays user ATA) → `complete_withdraw`. Open/pending users get `NotFlat`. `escape_withdraw` stays `Unsupported`.
+- `write_reserve_root` is adapter-signed; epoch increments; root/book_hash update; `committed_at_base_slot` from `Clock`. Adapter `note_fill_for_root` is due every 20 fills or 30s (`COMMIT_EVERY_*`). Magic Action / `magic_fee_vault` before the 10th commit is S9.
+- Tests nested in `tests/s1-ledger.ts` (S8) plus adapter crank unit test. Pull-from-Phoenix-if-vault-short stays the S5 stand-in pull when ATA is insufficient.
 
 ---
 

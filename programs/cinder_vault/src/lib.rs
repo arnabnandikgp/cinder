@@ -140,6 +140,67 @@ pub mod cinder_vault {
         )?;
         Ok(())
     }
+
+    /// Stand-in era: adapter pays the user ATA after ER `request_withdraw`.
+    pub fn user_withdraw_l1(ctx: Context<UserWithdrawL1>, amount: u64) -> Result<()> {
+        require!(amount > 0, VaultError::ZeroAmount);
+        require_keys_eq!(
+            ctx.accounts.config.adapter,
+            ctx.accounts.adapter.key(),
+            VaultError::Unauthorized
+        );
+        require_keys_eq!(
+            ctx.accounts.user_usdc_ata.mint,
+            ctx.accounts.config.usdc_mint,
+            VaultError::BadMint
+        );
+        require_keys_eq!(
+            ctx.accounts.user_usdc_ata.owner,
+            ctx.accounts.user.key(),
+            VaultError::BadDestOwner
+        );
+        let seeds: &[&[u8]] = &[
+            cc::SEED_VAULT_AUTHORITY,
+            &[ctx.accounts.config.bump_vault_authority],
+        ];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                Transfer {
+                    from: ctx.accounts.vault_usdc_ata.to_account_info(),
+                    to: ctx.accounts.user_usdc_ata.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount,
+        )?;
+        Ok(())
+    }
+
+    pub fn write_reserve_root(
+        ctx: Context<WriteReserveRoot>,
+        root: [u8; 32],
+        user_count: u32,
+        total_free: u64,
+        total_reserved: u64,
+        book_hash: [u8; 32],
+    ) -> Result<()> {
+        require_keys_eq!(
+            ctx.accounts.config.adapter,
+            ctx.accounts.adapter.key(),
+            VaultError::Unauthorized
+        );
+        let rr = &mut ctx.accounts.reserve_root;
+        rr.epoch = rr.epoch.checked_add(1).ok_or(VaultError::Overflow)?;
+        rr.root = root;
+        rr.user_count = user_count;
+        rr.total_free = total_free;
+        rr.total_reserved = total_reserved;
+        rr.book_hash = book_hash;
+        rr.committed_at_base_slot = Clock::get()?.slot;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -240,6 +301,48 @@ pub struct PullCollateral<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+#[derive(Accounts)]
+pub struct UserWithdrawL1<'info> {
+    pub adapter: Signer<'info>,
+    /// CHECK: recipient; must own `user_usdc_ata`.
+    pub user: UncheckedAccount<'info>,
+    #[account(
+        seeds = [cc::SEED_CONFIG],
+        bump = config.bump_config
+    )]
+    pub config: Account<'info, Config>,
+    /// CHECK: PDA signer for the vault ATA.
+    #[account(
+        seeds = [cc::SEED_VAULT_AUTHORITY],
+        bump = config.bump_vault_authority
+    )]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        address = config.vault_usdc_ata
+    )]
+    pub vault_usdc_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_usdc_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct WriteReserveRoot<'info> {
+    pub adapter: Signer<'info>,
+    #[account(
+        seeds = [cc::SEED_CONFIG],
+        bump = config.bump_config
+    )]
+    pub config: Account<'info, Config>,
+    #[account(
+        mut,
+        seeds = [cc::SEED_RESERVE],
+        bump
+    )]
+    pub reserve_root: Account<'info, ReserveRoot>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Config {
@@ -288,4 +391,8 @@ pub enum VaultError {
     BadMint,
     #[msg("transit ATA owner is not vault_authority")]
     BadTransitOwner,
+    #[msg("user ATA owner mismatch")]
+    BadDestOwner,
+    #[msg("overflow")]
+    Overflow,
 }
