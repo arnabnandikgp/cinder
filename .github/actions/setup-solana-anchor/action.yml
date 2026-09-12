@@ -11,20 +11,36 @@ runs:
         node-version: "24"
         cache: yarn
         cache-dependency-path: yarn.lock
+    - uses: actions/cache@v4
+      id: cache-solana
+      with:
+        path: ~/.local/share/solana/install
+        key: solana-3.1.10-${{ runner.os }}-x64
+    - uses: actions/cache@v4
+      id: cache-anchor
+      with:
+        path: ~/.cargo/bin/anchor
+        key: anchor-cli-1.0.2-${{ runner.os }}-x64
     - uses: Swatinem/rust-cache@v2
       with:
         workspaces: .
-        cache-targets: false
+        shared-key: cinder-ci
+        cache-targets: true
+        cache-all-crates: true
     - name: Install Solana 3.1.10
+      if: steps.cache-solana.outputs.cache-hit != 'true'
       shell: bash
-      run: |
-        sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.10/install)"
-        echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      run: sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.10/install)"
+    - name: Solana PATH
+      shell: bash
+      run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
     - name: Install Anchor CLI 1.0.2
+      if: steps.cache-anchor.outputs.cache-hit != 'true'
       shell: bash
-      run: |
-        cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.2 anchor-cli --locked --force
-        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      run: cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.2 anchor-cli --locked --force
+    - name: Cargo bin PATH
+      shell: bash
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Yarn
       shell: bash
       run: yarn install --frozen-lockfile

@@ -33,6 +33,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
+          shared-key: cinder-ci
+          cache-targets: true
       - name: Adapter + common unit tests
         run: cargo test -p cinder-adapter -p cinder-common
 
@@ -113,7 +115,13 @@ jobs:
           cache-dependency-path: yarn.lock
       - name: Yarn
         run: yarn install --frozen-lockfile
+      - uses: actions/cache@v4
+        id: cache-surfpool
+        with:
+          path: ~/.local/bin/surfpool
+          key: surfpool-1.5.0-${{ runner.os }}-x64
       - name: Install Surfpool 1.5.0
+        if: steps.cache-surfpool.outputs.cache-hit != 'true'
         run: |
           tar="surfpool-linux-x64.tar.gz"
           sha="5b20a3b46e60c4f819af7b4da5c3ea211f76041710617841cc23247d15887ddc"
@@ -121,7 +129,10 @@ jobs:
           curl -fsSL -o "/tmp/${tar}" "$url"
           echo "${sha}  /tmp/${tar}" | sha256sum -c -
           tar -xzf "/tmp/${tar}" -C /tmp
-          sudo install -m 0755 /tmp/surfpool /usr/local/bin/surfpool
+          mkdir -p "$HOME/.local/bin"
+          install -m 0755 /tmp/surfpool "$HOME/.local/bin/surfpool"
+      - name: Surfpool PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Local wallet
         run: |
           mkdir -p "$HOME/.config/solana"

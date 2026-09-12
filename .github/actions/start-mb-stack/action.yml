@@ -1,20 +1,57 @@
 name: start-mb-stack
-description: Install pinned mb-stack and wait for base, ER, and QFS
+description: Install pinned mb-stack (with Linux native bins) and wait for base, ER, and QFS
 runs:
   using: composite
   steps:
-    - name: Install mb-stack
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          ${{ github.workspace }}/.mb-npm
+        key: mb-stack-0.14.10-${{ runner.os }}-x64
+    - name: Install mb-stack + Linux binaries
       shell: bash
       run: |
-        npm i -g @magicblock-labs/ephemeral-validator@0.14.10
+        npm i -g \
+          @magicblock-labs/ephemeral-validator@0.14.10 \
+          @magicblock-labs/ephemeral-validator-linux-x64@0.14.10 \
+          @magicblock-labs/query-filtering-service-linux-x64@0.1.3
         echo "$(npm prefix -g)/bin" >> "$GITHUB_PATH"
+    - name: Raise watcher / fd limits
+      shell: bash
+      run: |
+        sudo prlimit --pid $$ --nofile=1048576:1048576 || true
+        sudo sysctl fs.inotify.max_user_instances=1280 || true
+        sudo sysctl fs.inotify.max_user_watches=655360 || true
+    - name: Check validator wrappers
+      shell: bash
+      run: |
+        ephemeral-validator --version
+        mb-test-validator --version
+        command -v query-filtering-service
+        command -v mb-stack
     - name: Start mb-stack
       shell: bash
+      env:
+        RUST_LOG: info
       run: |
-        mb-stack --reset > mb-stack.log 2>&1 &
+        # Headless: ER is built with a TUI and exits if stdio is not a TTY
+        # unless --no-tui is passed (mb-stack already does). Keep logs in the
+        # step output *and* a file. Detach so later steps keep the stack.
+        # Allocate a PTY. The ER binary is TUI-built; even --no-tui has failed
+        # under fully redirected stdio on GitHub runners.
+        script -q -c "mb-stack --reset" mb-stack.log &
         echo $! > mb-stack.pid
         ./scripts/wait-rpc.sh http://127.0.0.1:8899 180
-        ./scripts/wait-rpc.sh http://127.0.0.1:7799 180
-        ./scripts/wait-rpc.sh http://127.0.0.1:6699 180
+        ./scripts/wait-rpc.sh http://127.0.0.1:7799 240
+        ./scripts/wait-rpc.sh http://127.0.0.1:6699 120
         solana config set --url http://127.0.0.1:8899
         solana airdrop 100 "$(solana-keygen pubkey "$HOME/.config/solana/id.json")" || true
+    - name: Dump mb-stack log if ER never came up
+      if: failure()
+      shell: bash
+      run: |
+        echo "===== mb-stack.log ====="
+        cat mb-stack.log || true
+        echo "===== ps ====="
+        ps aux | rg -i "validator|mb-stack|qfs|query-filter" || true
