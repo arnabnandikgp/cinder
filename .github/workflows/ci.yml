@@ -1,0 +1,75 @@
+# Focused CI: adapter unit tests always; program tests on a local validator.
+# Not in CI: mb-stack / QFS (S2), Surfpool / Phoenix (S5). Those need a local stack.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NO_DNA: "1"
+
+jobs:
+  adapter:
+    name: adapter
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.89.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Adapter unit tests
+        run: cargo test -p cinder-adapter
+
+  programs:
+    name: programs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.89.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: yarn
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+          cache-targets: false
+      - name: Install Solana 3.1.10
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.10/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - name: Install Anchor CLI 1.0.2
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.2 anchor-cli --locked --force
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Yarn
+        run: yarn install --frozen-lockfile
+      - name: Toolchain pin
+        run: ./scripts/check-toolchain.sh
+      - name: Program keypairs
+        run: |
+          mkdir -p target/deploy
+          cp keys/*-keypair.json target/deploy/
+      - name: Local wallet
+        run: |
+          mkdir -p "$HOME/.config/solana"
+          solana-keygen new --no-bip39-passphrase --silent -o "$HOME/.config/solana/id.json"
+      - name: S1/S3 local validator tests
+        run: anchor test --validator legacy
