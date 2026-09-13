@@ -41,7 +41,7 @@ function oid(tag: number): number[] {
   return Array.from({ length: 16 }, (_, i) => (i + tag) % 256);
 }
 
-describe("S1 accounts and order machine", () => {
+describe("ledger accounts and order machine", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
@@ -86,7 +86,7 @@ describe("S1 accounts and order machine", () => {
     vaultAta = getAssociatedTokenAddressSync(usdcMint, vaultAuth, true);
   });
 
-  it("inits Config, UserLedger, Book, FeeAccrual; seeds match freeze", async () => {
+  it("initializes Config, UserLedger, Book, and FeeAccrual with stable seeds", async () => {
     await vault.methods
       .initialize(adapter.publicKey, vaultAuth, phoenixTrader, ER_VALIDATOR)
       .accountsPartial({
@@ -321,7 +321,7 @@ describe("S1 accounts and order machine", () => {
     }
   });
 
-  describe("S3 order machine", () => {
+  describe("order machine", () => {
     const placeAccounts = () => ({
       user: user.publicKey,
       config: configPda,
@@ -659,7 +659,7 @@ describe("S1 accounts and order machine", () => {
     });
   });
 
-  describe("S8 withdraw and reserve root", () => {
+  describe("withdrawals and reserve root", () => {
     const withdrawUser = Keypair.generate();
     let withdrawLedger: PublicKey;
     let userAta: PublicKey;
@@ -819,7 +819,7 @@ describe("S1 accounts and order machine", () => {
     });
   });
 
-  describe("S9 vault PDA and settle action", () => {
+  describe("vault PDA and settlement action", () => {
     const standIn = Keypair.generate();
     const phoenixSide = Keypair.generate();
     const SETTLE = 5_000_000;

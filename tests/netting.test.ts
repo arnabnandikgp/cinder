@@ -1,5 +1,5 @@
 import * as anchor from "@anchor-lang/core";
-import { Program } from "@anchor-lang/core";
+import { BN, Program } from "@anchor-lang/core";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -27,14 +27,20 @@ import { CinderLedger } from "../target/types/cinder_ledger";
 const ER_VALIDATOR = new PublicKey(
   "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
 );
-const EPHEMERAL_VAULT = EPHEMERAL_VAULT_ID;
 const BASE = process.env.PROVIDER_ENDPOINT || "http://127.0.0.1:8899";
 const ER = process.env.EPHEMERAL_PROVIDER_ENDPOINT || "http://127.0.0.1:7799";
 const QFS = process.env.TEE_PROVIDER_ENDPOINT || "http://127.0.0.1:6699";
 const QFS_WS = process.env.TEE_WS_ENDPOINT || "ws://127.0.0.1:6700";
+const ASSET_SOL = 1;
+const CREDIT = 100_000_000;
+const LOTS = 10;
 
 function pda(programId: PublicKey, seeds: (Buffer | Uint8Array)[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, programId)[0];
+}
+
+function oid(tag: number): number[] {
+  return Array.from({ length: 16 }, (_, i) => (i + tag) % 256);
 }
 
 function sleep(ms: number) {
@@ -85,13 +91,12 @@ async function waitErOwner(
   throw new Error(`${label} did not appear on ER owned by ${owner.toBase58()}`);
 }
 
-describe("S2 PER / QFS isolation", function () {
-  this.timeout(120_000);
+describe("two-user netting and QFS isolation after trades", function () {
+  this.timeout(180_000);
 
   let skip = false;
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-
   const vault = (anchor.workspace as any).cinderVault as Program<CinderVault>;
   const ledger = (anchor.workspace as any).cinderLedger as Program<CinderLedger>;
   const payer = (provider.wallet as anchor.Wallet).payer;
@@ -103,14 +108,12 @@ describe("S2 PER / QFS isolation", function () {
   const userB = Keypair.generate();
   const phoenixTrader = Keypair.generate().publicKey;
 
-  let usdcMint: PublicKey;
   let configPda: PublicKey;
-  let vaultAuth: PublicKey;
-  let reservePda: PublicKey;
-  let vaultAta: PublicKey;
   let bookPda: PublicKey;
   let feesPda: PublicKey;
   let ledgerA: PublicKey;
+  let ledgerB: PublicKey;
+  let erProgram: Program<CinderLedger>;
 
   before(async function () {
     if (!(await rpcUp(QFS)) || !(await rpcUp(ER)) || !(await rpcUp(BASE))) {
@@ -122,26 +125,25 @@ describe("S2 PER / QFS isolation", function () {
       skip = true;
       this.skip();
     }
-
     await airdrop(base, adapter.publicKey);
     await airdrop(base, userA.publicKey);
     await airdrop(base, userB.publicKey);
 
-    usdcMint = await createMint(base, payer, payer.publicKey, null, 6);
+    const usdcMint = await createMint(base, payer, payer.publicKey, null, 6);
     configPda = pda(vault.programId, [Buffer.from("config")]);
-    vaultAuth = pda(vault.programId, [Buffer.from("vault-authority")]);
-    reservePda = pda(vault.programId, [Buffer.from("reserve")]);
+    const vaultAuth = pda(vault.programId, [Buffer.from("vault-authority")]);
+    const reservePda = pda(vault.programId, [Buffer.from("reserve")]);
     bookPda = pda(ledger.programId, [Buffer.from("book")]);
     feesPda = pda(ledger.programId, [Buffer.from("fees")]);
     ledgerA = pda(ledger.programId, [
       Buffer.from("user"),
       userA.publicKey.toBuffer(),
     ]);
-    vaultAta = getAssociatedTokenAddressSync(usdcMint, vaultAuth, true);
-  });
-
-  it("inits, delegates, and sets ER permissions", async function () {
-    if (skip) this.skip();
+    ledgerB = pda(ledger.programId, [
+      Buffer.from("user"),
+      userB.publicKey.toBuffer(),
+    ]);
+    const vaultAta = getAssociatedTokenAddressSync(usdcMint, vaultAuth, true);
 
     await vault.methods
       .initialize(adapter.publicKey, vaultAuth, phoenixTrader, ER_VALIDATOR)
@@ -157,7 +159,10 @@ describe("S2 PER / QFS isolation", function () {
         systemProgram: SystemProgram.programId,
       })
       .rpc();
-
+    await vault.methods
+      .setAllowlist([ASSET_SOL])
+      .accountsPartial({ admin: payer.publicKey, config: configPda })
+      .rpc();
     await ledger.methods
       .initialize()
       .accountsPartial({
@@ -170,18 +175,23 @@ describe("S2 PER / QFS isolation", function () {
       .signers([adapter])
       .rpc();
 
-    await ledger.methods
-      .initUser()
-      .accountsPartial({
-        adapter: adapter.publicKey,
-        user: userA.publicKey,
-        config: configPda,
-        userLedger: ledgerA,
-        book: bookPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([adapter, userA])
-      .rpc();
+    for (const [user, userLedger] of [
+      [userA, ledgerA],
+      [userB, ledgerB],
+    ] as const) {
+      await ledger.methods
+        .initUser()
+        .accountsPartial({
+          adapter: adapter.publicKey,
+          user: user.publicKey,
+          config: configPda,
+          userLedger,
+          book: bookPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([adapter, user])
+        .rpc();
+    }
 
     const sendBase = async (builder: any, signers: Keypair[]) => {
       const tx = await builder.transaction();
@@ -190,7 +200,6 @@ describe("S2 PER / QFS isolation", function () {
         commitment: "confirmed",
       });
     };
-
     await sendBase(
       ledger.methods.delegateBook().accountsPartial({
         adapter: adapter.publicKey,
@@ -219,97 +228,166 @@ describe("S2 PER / QFS isolation", function () {
       }),
       [adapter, userA]
     );
+    await sendBase(
+      ledger.methods.delegateUser().accountsPartial({
+        adapter: adapter.publicKey,
+        user: userB.publicKey,
+        config: configPda,
+        userLedger: ledgerB,
+        validator: ER_VALIDATOR,
+      }),
+      [adapter, userB]
+    );
 
     await waitErOwner(erConn, bookPda, ledger.programId, "book");
-    await waitErOwner(erConn, feesPda, ledger.programId, "fees");
-    await waitErOwner(erConn, ledgerA, ledger.programId, "user A ledger");
+    await waitErOwner(erConn, ledgerA, ledger.programId, "user A");
+    await waitErOwner(erConn, ledgerB, ledger.programId, "user B");
 
     const adapterWallet = new anchor.Wallet(adapter);
-    const adapterToken = await authToken(adapter);
-    const qfsAdapter = qfsConnection(adapterToken.token);
-    const qfsProvider = new anchor.AnchorProvider(qfsAdapter, adapterWallet, {
+    const erProvider = new anchor.AnchorProvider(erConn, adapterWallet, {
       commitment: "confirmed",
     });
-    const erProgram = new Program(
+    erProgram = new Program(
       ledger.idl as CinderLedger,
-      qfsProvider
+      erProvider
     ) as Program<CinderLedger>;
-
-    const sendEr = async (builder: any) => {
+    const sendEr = async (builder: any, extra?: Keypair[]) => {
       let tx = await builder.transaction();
       tx.feePayer = adapter.publicKey;
-      tx.recentBlockhash = (await qfsAdapter.getLatestBlockhash()).blockhash;
+      tx.recentBlockhash = (await erConn.getLatestBlockhash()).blockhash;
       tx = await adapterWallet.signTransaction(tx);
-      return qfsProvider.sendAndConfirm(tx, [], { skipPreflight: true });
+      if (extra) for (const s of extra) tx.partialSign(s);
+      return erProvider.sendAndConfirm(tx, extra ?? [], { skipPreflight: true });
     };
-
-    const permAccounts = (account: PublicKey) => ({
+    const perm = (account: PublicKey) => ({
       adapter: adapter.publicKey,
       config: configPda,
       permission: permissionPdaFromAccount(account),
       magicProgram: MAGIC_PROGRAM_ID,
       permissionProgram: PERMISSION_PROGRAM_ID,
-      ephemeralVault: EPHEMERAL_VAULT,
+      ephemeralVault: EPHEMERAL_VAULT_ID,
     });
-
     await sendEr(
       erProgram.methods.initBookPermission().accountsPartial({
-        ...permAccounts(bookPda),
+        ...perm(bookPda),
         book: bookPda,
       })
     );
     await sendEr(
       erProgram.methods.initFeesPermission().accountsPartial({
-        ...permAccounts(feesPda),
+        ...perm(feesPda),
         feeAccrual: feesPda,
       })
     );
     await sendEr(
       erProgram.methods.initUserPermission().accountsPartial({
-        ...permAccounts(ledgerA),
+        ...perm(ledgerA),
         userLedger: ledgerA,
+      })
+    );
+    await sendEr(
+      erProgram.methods.initUserPermission().accountsPartial({
+        ...perm(ledgerB),
+        userLedger: ledgerB,
+      })
+    );
+
+    await sendEr(
+      erProgram.methods.creditDeposit(new BN(CREDIT)).accountsPartial({
+        adapter: adapter.publicKey,
+        config: configPda,
+        book: bookPda,
+        userLedger: ledgerA,
+      })
+    );
+    await sendEr(
+      erProgram.methods.creditDeposit(new BN(CREDIT)).accountsPartial({
+        adapter: adapter.publicKey,
+        config: configPda,
+        book: bookPda,
+        userLedger: ledgerB,
       })
     );
   });
 
-  it("A token reads A on QFS :6699", async function () {
+  it("offsetting fills net Book to 0; QFS isolation still holds", async function () {
     if (skip) this.skip();
-    const tok = await authToken(userA);
-    const conn = qfsConnection(tok.token);
-    const info = await conn.getAccountInfo(ledgerA);
-    expect(info, "A should read A's ledger on QFS").to.not.equal(null);
-    expect(info!.data.length).to.be.greaterThan(0);
-  });
 
-  it("B token cannot getAccountInfo A's ledger on QFS", async function () {
-    if (skip) this.skip();
-    const tok = await authToken(userB);
-    const conn = qfsConnection(tok.token);
-    let denied = false;
+    const place = async (user: Keypair, userLedger: PublicKey, lots: number, tag: number) => {
+      const adapterWallet = new anchor.Wallet(user);
+      const erUser = new Program(
+        ledger.idl as CinderLedger,
+        new anchor.AnchorProvider(erConn, adapterWallet, { commitment: "confirmed" })
+      ) as Program<CinderLedger>;
+      let tx = await erUser.methods
+        .placeOrder(ASSET_SOL, new BN(lots), oid(tag), 50, false, new BN(0))
+        .accountsPartial({
+          user: user.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger,
+        })
+        .transaction();
+      tx.feePayer = user.publicKey;
+      tx.recentBlockhash = (await erConn.getLatestBlockhash()).blockhash;
+      tx = await adapterWallet.signTransaction(tx);
+      await erConn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+    };
+
+    await place(userA, ledgerA, LOTS, 1);
+    await place(userB, ledgerB, -LOTS, 2);
+
+    const adapterWallet = new anchor.Wallet(adapter);
+    const sendAck = async (userLedger: PublicKey, tag: number, lots: number) => {
+      let tx = await erProgram.methods
+        .ackPhoenixFill(oid(tag), new BN(lots), new BN(0), new BN(0))
+        .accountsPartial({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger,
+          book: bookPda,
+          feeAccrual: feesPda,
+        })
+        .transaction();
+      tx.feePayer = adapter.publicKey;
+      tx.recentBlockhash = (await erConn.getLatestBlockhash()).blockhash;
+      tx = await adapterWallet.signTransaction(tx);
+      const sig = await erConn.sendRawTransaction(tx.serialize(), {
+        skipPreflight: true,
+      });
+      await erConn.confirmTransaction(sig, "confirmed");
+    };
+    await sendAck(ledgerA, 1, LOTS);
+    await sendAck(ledgerB, 2, -LOTS);
+
+    const book = await erProgram.account.book.fetch(bookPda);
+    expect(book.residualLen).to.equal(0);
+
+    const ulA = await erProgram.account.userLedger.fetch(ledgerA);
+    const ulB = await erProgram.account.userLedger.fetch(ledgerB);
+    const lotsA = ulA.positions[0].lots.toNumber();
+    const lotsB = ulB.positions[0].lots.toNumber();
+    expect(lotsA + lotsB).to.equal(0);
+
+    const tokA = await authToken(userA);
+    const tokB = await authToken(userB);
+    const connA = qfsConnection(tokA.token);
+    const connB = qfsConnection(tokB.token);
+    expect(await connA.getAccountInfo(ledgerA)).to.not.equal(null);
+    expect(await connB.getAccountInfo(ledgerB)).to.not.equal(null);
+    let bDenied = false;
     try {
-      const info = await conn.getAccountInfo(ledgerA);
-      denied = info === null;
+      bDenied = (await connB.getAccountInfo(ledgerA)) === null;
     } catch {
-      denied = true;
+      bDenied = true;
     }
-    expect(denied, "B must not read A's ledger on QFS").to.equal(true);
-  });
-
-  it("raw ER :7799 serves A's ledger without a QFS token", async function () {
-    if (skip) this.skip();
-    const info = await erConn.getAccountInfo(ledgerA);
-    expect(info, "raw ER must still expose the account (filter is QFS)").to.not
-      .equal(null);
-    expect(info!.owner.equals(ledger.programId)).to.equal(true);
-  });
-
-  it("adapter token reads A and Book on QFS", async function () {
-    if (skip) this.skip();
-    const tok = await authToken(adapter);
-    const conn = qfsConnection(tok.token);
-    const a = await conn.getAccountInfo(ledgerA);
-    const book = await conn.getAccountInfo(bookPda);
-    expect(a, "adapter should read A's ledger").to.not.equal(null);
-    expect(book, "adapter should read Book").to.not.equal(null);
+    let aDenied = false;
+    try {
+      aDenied = (await connA.getAccountInfo(ledgerB)) === null;
+    } catch {
+      aDenied = true;
+    }
+    expect(bDenied, "B must not read A after trades").to.equal(true);
+    expect(aDenied, "A must not read B after trades").to.equal(true);
   });
 });

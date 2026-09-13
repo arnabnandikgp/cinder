@@ -1,7 +1,7 @@
 /**
  * Filmable walkthrough on mb-stack + mocked Phoenix residual (dummy ack).
  *
- *   ./scripts/stack-c.sh          # other terminal
+ *   ./scripts/stack-local.sh          # other terminal
  *   ./scripts/cinder-demo.sh
  *
  * Prints QFS isolation, then Alice / Bob / Book before and after a close with PnL.
@@ -238,7 +238,7 @@ async function main() {
     !(await rpcUp(BASE))
   ) {
     console.error(
-      "mb-stack not up. In another terminal: ./scripts/stack-c.sh"
+      "mb-stack not up. In another terminal: ./scripts/stack-local.sh"
     );
     console.error("Then: ./scripts/cinder-demo.sh");
     process.exit(1);
@@ -322,7 +322,7 @@ async function main() {
     );
   } else {
     throw new Error(
-      "Cinder state already exists. Restart with ./scripts/stack-c.sh before running the demo."
+      "Cinder state already exists. Restart with ./scripts/stack-local.sh before running the demo."
     );
   }
 

@@ -1,6 +1,6 @@
 use crate::{AdapterError, ClientOid};
 
-/// Phoenix SOL on the Cinder allowlist (S1 tests used 1). Skip isolatedOnly markets.
+/// Phoenix SOL on the Cinder allowlist. Skip isolated-only markets.
 pub const ASSET_SOL: u16 = 1;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,7 +25,7 @@ pub enum PlaceResult {
     Reject { reason: String },
 }
 
-/// Venue client. S5+ uses Rise; S4 ships a mock.
+/// Venue client. Production integration uses Rise; tests use a mock.
 pub trait PhoenixVenue {
     fn place_market(&mut self, order: &MarketOrder) -> Result<PlaceResult, AdapterError>;
     fn base_lots(&self, asset_id: u16) -> i64;

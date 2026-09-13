@@ -1,6 +1,6 @@
-# Adapter units always. Local validator: S1 + S5 collateral.
-# mb-stack: S2 privacy and S7 net (separate VMs; both need Config PDA).
-# Surfpool fork: S5 venue + funding smoke (Phoenix HTTP API is the remaining externality).
+# Rust units always. Local validator checks ledger and collateral behavior.
+# The privacy stack checks QFS access control and two-user netting in separate
+# environments. The fork job covers Phoenix venue and funding integration.
 name: ci
 
 on:
@@ -21,8 +21,8 @@ env:
   CINDER_REQUIRE_STACK: "1"
 
 jobs:
-  adapter:
-    name: adapter
+  operator-unit:
+    name: operator unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -38,27 +38,27 @@ jobs:
       - name: Adapter + common unit tests
         run: cargo test -p cinder-adapter -p cinder-common
 
-  programs:
-    name: programs
+  onchain:
+    name: on-chain programs
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-solana-anchor
-      - name: S1/S3/S8/S9/funding (legacy validator)
+      - name: Ledger and withdrawal tests (legacy validator)
         run: anchor test --validator legacy
-      - name: S5 vault post/pull (no Phoenix)
-        run: CINDER_MOCHA=s5-collateral.ts anchor test --validator legacy --skip-build
+      - name: Collateral tests (no Phoenix)
+        run: CINDER_MOCHA=collateral.test.ts anchor test --validator legacy --skip-build
 
-  privacy-s2:
-    name: privacy-s2
+  privacy:
+    name: QFS privacy
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-solana-anchor
-      - uses: ./.github/actions/start-mb-stack
-      - name: Deploy + S2 QFS isolation
+      - uses: ./.github/actions/start-privacy-stack
+      - name: Deploy and verify QFS isolation
         env:
           PROVIDER_ENDPOINT: http://127.0.0.1:8899
           WS_ENDPOINT: ws://127.0.0.1:8900
@@ -71,20 +71,20 @@ jobs:
         run: |
           anchor build
           anchor deploy --provider.cluster localnet
-          yarn run ts-mocha -p ./tsconfig.json -t 120000 tests/s2-privacy.ts
-      - name: mb-stack log on failure
+          yarn run ts-mocha -p ./tsconfig.json -t 120000 tests/privacy.test.ts
+      - name: Privacy stack log on failure
         if: failure()
         run: tail -n 200 mb-stack.log || true
 
-  privacy-s7:
-    name: privacy-s7
+  netting-privacy:
+    name: netting and privacy
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-solana-anchor
-      - uses: ./.github/actions/start-mb-stack
-      - name: Deploy + S7 two-user net
+      - uses: ./.github/actions/start-privacy-stack
+      - name: Deploy and verify two-user netting
         env:
           PROVIDER_ENDPOINT: http://127.0.0.1:8899
           WS_ENDPOINT: ws://127.0.0.1:8900
@@ -97,13 +97,13 @@ jobs:
         run: |
           anchor build
           anchor deploy --provider.cluster localnet
-          yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s7-net.ts
-      - name: mb-stack log on failure
+          yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/netting.test.ts
+      - name: Privacy stack log on failure
         if: failure()
         run: tail -n 200 mb-stack.log || true
 
-  fork:
-    name: fork
+  phoenix-integration:
+    name: Phoenix integration
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -156,16 +156,16 @@ jobs:
             > surfpool.log 2>&1 &
           echo $! > surfpool.pid
           ./scripts/wait-rpc.sh http://127.0.0.1:8899 300
-      - name: S5 venue boot
+      - name: Phoenix venue boot
         env:
-          CINDER_S5: "1"
+          CINDER_VENUE: "1"
           PROVIDER_ENDPOINT: http://127.0.0.1:8899
-        run: yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s5-venue.ts
+        run: yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/venue.test.ts
       - name: Funding Rise smoke
         env:
           CINDER_FUNDING: "1"
           PROVIDER_ENDPOINT: http://127.0.0.1:8899
-        run: yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s-funding-fork.ts
+        run: yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/funding-fork.test.ts
       - name: Surfpool log on failure
         if: failure()
         run: tail -n 200 surfpool.log || true

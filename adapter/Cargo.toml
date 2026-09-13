@@ -1,8 +1,0 @@
-[package]
-name = "cinder-adapter"
-version = "0.1.0"
-description = "Cinder operator: residual hedge, halt, I1/I2. Phoenix is a trait (mocked in S4)."
-edition = "2021"
-
-[dependencies]
-cinder-common = { path = "../crates/cinder-common" }

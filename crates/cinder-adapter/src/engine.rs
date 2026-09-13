@@ -403,7 +403,7 @@ mod tests {
     }
 
     #[test]
-    fn s6_i1_and_reserved_im_after_full_fill() {
+    fn full_fill_updates_reserved_margin_and_reconciliation() {
         let mut phoenix = MockPhoenix::new();
         phoenix.fill_next(Fill {
             client_oid: oid(10),
@@ -421,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn s6_zero_fill_restores_user_book_unchanged() {
+    fn zero_fill_restores_user_and_book_state() {
         let mut phoenix = MockPhoenix::new();
         phoenix.fill_next(Fill {
             client_oid: oid(11),
@@ -440,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    fn s6_partial_ioc_uses_filled_lots_only() {
+    fn partial_ioc_uses_filled_lots_only() {
         let mut phoenix = MockPhoenix::new();
         phoenix.fill_next(Fill {
             client_oid: oid(12),
@@ -457,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn s6_stale_mark_sets_halt_entries() {
+    fn stale_mark_halts_new_entries() {
         let mut ad = adapter_with(MockPhoenix::new());
         ad.mark_observed_at_ms = Some(0);
         let out = ad
@@ -471,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn s7_offsetting_users_phoenix_equals_sum_and_i2() {
+    fn offsetting_users_match_phoenix_and_collateral_invariant() {
         let a = [1u8; 32];
         let b = [2u8; 32];
         let mut phoenix = MockPhoenix::new();
@@ -533,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn s8_root_crank_every_20_fills_or_30s() {
+    fn reserve_root_crank_runs_by_fill_count_or_time() {
         let mut ad = adapter_with(MockPhoenix::new());
         ad.last_root_ms = 1_000;
         for _ in 0..19 {

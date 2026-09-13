@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# S5 collateral path on a fresh local validator (no Phoenix programs required).
-# Venue boot (Surfpool + Rise) is opt-in: CINDER_S5=1 ./scripts/test-s5.sh
+# Collateral tests use a fresh local validator and do not require Phoenix.
+# Set CINDER_VENUE=1 to also run the Surfpool/Rise integration test.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${root}"
@@ -12,10 +12,10 @@ export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 ./scripts/check-toolchain.sh
 export ANCHOR_WALLET="${ANCHOR_WALLET:-$HOME/.config/solana/id.json}"
 
-# Isolated from S1 (same Config PDA). Mocha glob via CINDER_MOCHA.
-NO_DNA=1 CINDER_MOCHA=s5-collateral.ts anchor test --validator legacy
+# Isolated from the ledger suite because both create the same Config PDA.
+NO_DNA=1 CINDER_MOCHA=collateral.test.ts anchor test --validator legacy
 
-if [[ "${CINDER_S5:-}" == "1" ]]; then
+if [[ "${CINDER_VENUE:-}" == "1" ]]; then
   yarn ts-node scripts/venue-boot.ts
-  yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s5-venue.ts
+  yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/venue.test.ts
 fi

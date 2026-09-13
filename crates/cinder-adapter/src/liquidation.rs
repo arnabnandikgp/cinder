@@ -1,4 +1,4 @@
-//! Mark-driven Cinder MM scanner (`docs/09-liquidation-liveness.md`).
+//! Mark-driven maintenance-margin scanner.
 //! Independent of `hedge_pending` and `crank_funding`. I1-safe: Book moves on ack.
 
 use cinder_common as cc;

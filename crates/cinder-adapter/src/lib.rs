@@ -1,4 +1,4 @@
-//! Adapter skeleton (S4). Phoenix is a trait; tests use a mock.
+//! Operator logic. Phoenix is abstracted behind a trait for testability.
 //! Holds **one** operator QFS token. Never a per-user token table.
 
 mod engine;

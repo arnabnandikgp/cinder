@@ -18,6 +18,7 @@ package-lock.json
 mb-stack.log
 magicblock-test-storage
 .cinder-adapter.json
+work/
 
 **/*.rs.bk
 **/Xargo.toml

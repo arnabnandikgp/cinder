@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Record cluster: mb-stack (base :8899, ER :7799, QFS :6699) + mocked Phoenix residual.
+# Local privacy stack (base :8899, ER :7799, QFS :6699) with a mocked Phoenix
+# residual.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${root}"
@@ -19,7 +20,7 @@ export ANCHOR_PROVIDER_URL="$PROVIDER_ENDPOINT"
 export ANCHOR_WALLET="${ANCHOR_WALLET:-$HOME/.config/solana/id.json}"
 
 if ! ./scripts/wait-rpc.sh "${TEE_PROVIDER_ENDPOINT}" 5; then
-  echo "error: QFS not up. Other terminal: ./scripts/stack-c.sh" >&2
+  echo "error: QFS not up. Other terminal: ./scripts/stack-local.sh" >&2
   exit 1
 fi
 

@@ -4,11 +4,11 @@ import { bootVenue } from "../scripts/venue-boot";
 
 const FORK = process.env.PROVIDER_ENDPOINT || "http://127.0.0.1:8899";
 
-describe("S5 Rise venue boot (Surfpool fork)", function () {
+describe("Phoenix venue boot (Surfpool fork)", function () {
   this.timeout(180_000);
 
   before(function () {
-    if (process.env.CINDER_S5 !== "1") {
+    if (process.env.CINDER_VENUE !== "1") {
       this.skip();
     }
   });

@@ -206,13 +206,13 @@ pub mod cinder_vault {
         Ok(())
     }
 
-    /// S9: Config.vault_authority becomes the vault-authority PDA. Stand-in key retired.
+    /// Config.vault_authority is the vault-authority PDA.
     pub fn retire_stand_in(ctx: Context<RetireStandIn>) -> Result<()> {
         ctx.accounts.config.vault_authority = ctx.accounts.vault_authority.key();
         Ok(())
     }
 
-    /// S9 PDA-signed pull: source ATA/account owned by the vault-authority PDA.
+    /// PDA-signed pull from an account owned by the vault-authority PDA.
     pub fn pull_collateral_pda(ctx: Context<PullCollateralPda>, amount: u64) -> Result<()> {
         require!(amount > 0, VaultError::ZeroAmount);
         require_keys_eq!(
@@ -315,7 +315,7 @@ pub struct Initialize<'info> {
         bump
     )]
     pub config: Account<'info, Config>,
-    /// CHECK: PDA signer for S9; no data account. ATA authority now.
+    /// CHECK: PDA signer; this account has no data and acts as ATA authority.
     #[account(seeds = [cc::SEED_VAULT_AUTHORITY], bump)]
     pub vault_authority: UncheckedAccount<'info>,
     #[account(

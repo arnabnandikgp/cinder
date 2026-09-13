@@ -1,4 +1,4 @@
-//! Phoenix funding crank (`docs/08-funding-allocation.md` §7).
+//! Phoenix funding reconciliation.
 //! Accrue unsettled (health) each interval; fold cash when venue collateral moves.
 
 use cinder_common as cc;

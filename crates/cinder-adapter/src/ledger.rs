@@ -3,7 +3,7 @@ use cinder_common as cc;
 use crate::phoenix::Fill;
 use crate::{AdapterError, ClientOid, PubkeyBytes};
 
-/// On-chain / ER writes the adapter needs. S4 tests use [`MemoryLedger`].
+/// On-chain / ER writes the adapter needs. Tests use [`MemoryLedger`].
 pub trait LedgerPort {
     fn ack_fill(&mut self, user: &PubkeyBytes, fill: &Fill) -> Result<(), AdapterError>;
     fn ack_fail(&mut self, user: &PubkeyBytes, oid: &ClientOid) -> Result<(), AdapterError>;

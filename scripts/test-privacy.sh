@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# S2 PER/QFS tests. Requires mb-stack (base :8899, ER :7799, QFS :6699).
-# Does not start a second validator — deploy onto the stack, then mocha s2.
+# QFS privacy tests. Requires the local base validator, ER, and QFS stack.
+# This script deploys onto the running stack rather than starting another one.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${root}"
@@ -20,7 +20,7 @@ qfs_up() {
 
 if ! qfs_up; then
   echo "error: QFS :6699 is not up. Start the stack first:" >&2
-  echo "  ./scripts/stack-c.sh" >&2
+  echo "  ./scripts/stack-local.sh" >&2
   exit 1
 fi
 
@@ -36,4 +36,4 @@ export VALIDATOR="${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}"
 
 anchor build
 anchor deploy --provider.cluster localnet
-yarn run ts-mocha -p ./tsconfig.json -t 120000 tests/s2-privacy.ts
+yarn run ts-mocha -p ./tsconfig.json -t 120000 tests/privacy.test.ts

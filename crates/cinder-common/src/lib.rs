@@ -1,4 +1,4 @@
-//! Shared constants from `docs/03-phase4-freeze.md`.
+//! Shared protocol constants and pure accounting helpers.
 //! Account layouts live in the owning programs so Anchor discriminators stay correct.
 
 pub const SEED_CONFIG: &[u8] = b"config";
@@ -25,7 +25,7 @@ pub const BUFFER_MIN_BPS: u16 = 2_000;
 pub const BUFFER_FLOOR_USDC: u64 = 50_000_000;
 pub const MARK_STALE_MS: u64 = 2_000;
 pub const TRADER_STATE_STALE_MS: u64 = 2_000;
-/// In-process scan min interval (`docs/09`).
+/// Minimum in-process liquidation scan interval.
 pub const SCAN_INTERVAL_MS: u64 = 50;
 /// `Book.last_scan_ms` write cadence. Not an ER-fee rule.
 pub const HEARTBEAT_MS: u64 = 1_000;
@@ -47,7 +47,7 @@ pub const USDC_DECIMALS: u32 = 6;
 /// Local ER validator identity. Never delegate local PDAs to mainnet/devnet TEE ids.
 pub const LOCAL_ER_VALIDATOR_STR: &str = "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev";
 
-/// S1–S3 stand-in: 1 Phoenix lot = 1 USDC notional until S6 wires a real mark.
+/// Local-test pricing model: one Phoenix lot equals one USDC of notional.
 pub const STUB_NOTIONAL_PER_LOT: u64 = 1_000_000;
 
 pub const BPS_DENOM: u64 = 10_000;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stage C local stack: base :8899, ER :7799, QFS :6699.
+# Local privacy stack: base :8899, ER :7799, QFS :6699.
 # Privacy tests must hit QFS :6699, never raw ER :7799.
 set -euo pipefail
 
@@ -23,7 +23,7 @@ for bin in mb-test-validator ephemeral-validator query-filtering-service; do
   if command -v "$bin" >/dev/null 2>&1; then
     continue
   fi
-  echo "stack-c: installing @magicblock-labs/ephemeral-validator..."
+  echo "stack-local: installing @magicblock-labs/ephemeral-validator..."
   npm i -g @magicblock-labs/ephemeral-validator@0.14.10
   break
 done
@@ -43,7 +43,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "stack-c: resetting base and ER ledgers"
+echo "stack-local: resetting base and ER ledgers"
 echo "  base :8899  ER :7799  QFS :6699"
 echo "  local ER identity: mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
 echo "  local storage: ${stack_storage}"
@@ -69,7 +69,7 @@ query-filtering-service \
 qfs_pid=$!
 ./scripts/wait-rpc.sh http://127.0.0.1:6699
 
-echo "stack-c: ready (Ctrl-C stops all nodes)"
+echo "stack-local: ready (Ctrl-C stops all nodes)"
 
 monitor_stack() {
   while :; do
@@ -78,7 +78,7 @@ monitor_stack() {
       pid="${service#*:}"
       state="$(ps -o stat= -p "$pid" 2>/dev/null || true)"
       if [[ -z "$state" || "$state" == *Z* ]]; then
-        echo "stack-c: ${name} exited; stopping remaining services" >&2
+        echo "stack-local: ${name} exited; stopping remaining services" >&2
         return 1
       fi
     done

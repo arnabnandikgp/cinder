@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# S7 two-user net + QFS isolation. Requires mb-stack (same as test-s2.sh).
+# Two-user netting and QFS isolation. Requires the local stack.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${root}"
@@ -13,7 +13,7 @@ export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
 if ! ./scripts/wait-rpc.sh http://127.0.0.1:6699 5; then
   echo "error: QFS :6699 is not up. Start the stack first:" >&2
-  echo "  ./scripts/stack-c.sh" >&2
+  echo "  ./scripts/stack-local.sh" >&2
   exit 1
 fi
 
@@ -29,4 +29,4 @@ export VALIDATOR="${VALIDATOR:-mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev}"
 
 anchor build
 anchor deploy --provider.cluster localnet
-yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s7-net.ts
+yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/netting.test.ts

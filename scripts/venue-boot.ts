@@ -1,5 +1,5 @@
 /**
- * S5 venue boot against a Surfpool mainnet fork.
+ * Phoenix venue boot against a Surfpool mainnet fork.
  *
  * Uses Rise on-chain builders (RegisterTrader, DelegateTrader, deposit/withdraw
  * flows) and sends them to localhost. Does not call send-register-ixs.
@@ -121,11 +121,11 @@ function loadOrCreateAdapter(): Keypair {
   return kp;
 }
 
-function positionAuthorityOf(trader: {
-  state?: { positionAuthority?: unknown };
-  positionAuthority?: unknown;
-}): string | null {
-  const v = trader.state?.positionAuthority ?? trader.positionAuthority;
+function positionAuthorityOf(trader: unknown): string | null {
+  if (trader === null || typeof trader !== "object") return null;
+  const record = trader as Record<string, unknown>;
+  const state = record.state as Record<string, unknown> | undefined;
+  const v = state?.positionAuthority ?? record.positionAuthority;
   return v == null ? null : String(v);
 }
 
@@ -333,8 +333,8 @@ export async function bootVenue(opts: {
 }
 
 async function main() {
-  if (process.env.CINDER_S5 !== "1") {
-    console.log("venue-boot: set CINDER_S5=1 to run against a Surfpool fork");
+  if (process.env.CINDER_VENUE !== "1") {
+    console.log("venue-boot: set CINDER_VENUE=1 to run against a Surfpool fork");
     return;
   }
   const out = await bootVenue({ adapter: loadOrCreateAdapter() });

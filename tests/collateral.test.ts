@@ -23,7 +23,7 @@ function pda(programId: PublicKey, seeds: (Buffer | Uint8Array)[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, programId)[0];
 }
 
-describe("S5 vault post/pull (stand-in, no Phoenix CPI)", () => {
+describe("vault collateral post/pull (local adapter path)", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
   const vault = (anchor.workspace as any).cinderVault as Program<CinderVault>;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stage A: Surfpool mainnet fork on :8899. ER/QFS still pointed at localhost.
+# Surfpool mainnet fork on :8899. ER/QFS remain pointed at localhost.
 set -euo pipefail
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
@@ -32,7 +32,7 @@ install_surfpool() {
   url="https://github.com/solana-foundation/surfpool/releases/download/v${SURFPOOL_VERSION}/${tar}"
   tmp="$(mktemp -d)"
   trap 'rm -rf "${tmp}"' RETURN
-  echo "stack-a: downloading ${url}"
+  echo "stack-fork: downloading ${url}"
   curl -fsSL -o "${tmp}/${tar}" "${url}"
   if command -v sha256sum >/dev/null 2>&1; then
     echo "${sha}  ${tmp}/${tar}" | sha256sum -c -
@@ -52,7 +52,7 @@ install_surfpool() {
 }
 
 if ! command -v surfpool >/dev/null 2>&1; then
-  echo "stack-a: installing surfpool ${SURFPOOL_VERSION} from GitHub releases..."
+  echo "stack-fork: installing surfpool ${SURFPOOL_VERSION} from GitHub releases..."
   install_surfpool
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
@@ -62,7 +62,7 @@ if ! command -v surfpool >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "stack-a: surfpool start --rpc-url ${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}"
+echo "stack-fork: surfpool start --rpc-url ${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}"
 echo "  RPC :8899  (point local ER/QFS remotes here)"
 echo "  Do not send-register-ixs to Phoenix mainnet; send built ixs to this fork."
 # Local fork only: skip-sig lets venue-boot pad the Phoenix onboarder signature.
