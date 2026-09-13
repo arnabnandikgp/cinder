@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fork smoke for Rise funding wiring. Requires Surfpool (stack-a) and CINDER_FUNDING=1.
+# Fork smoke for Rise funding wiring. Requires Surfpool (`stack-fork.sh`) and
+# CINDER_FUNDING=1.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${root}"
@@ -12,4 +13,4 @@ export CINDER_FUNDING="${CINDER_FUNDING:-1}"
 export PROVIDER_ENDPOINT="${PROVIDER_ENDPOINT:-http://127.0.0.1:8899}"
 export ANCHOR_WALLET="${ANCHOR_WALLET:-$HOME/.config/solana/id.json}"
 
-yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/s-funding-fork.ts
+yarn run ts-mocha -p ./tsconfig.json -t 180000 tests/funding-fork.test.ts

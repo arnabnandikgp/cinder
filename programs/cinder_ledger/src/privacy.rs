@@ -1,4 +1,4 @@
-//! S2 PER: L1 delegate + ER EphemeralPermission. Permissions are ER-local.
+//! L1 delegation and ER EphemeralPermission setup. Permissions are ER-local.
 //! `delegate_user` lives here (ledger-owned PDAs), not on `cinder_vault`.
 
 use super::*;

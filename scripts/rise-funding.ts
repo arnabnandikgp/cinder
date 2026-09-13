@@ -1,5 +1,5 @@
 /**
- * Process-edge Rise/Hawkeye wiring for FundingInterval (`docs/08` §7).
+ * Process-edge Rise/Hawkeye wiring for funding intervals.
  * Reads on-chain trader state from a local fork; market metadata from the public API.
  */
 import { Connection, PublicKey } from "@solana/web3.js";
