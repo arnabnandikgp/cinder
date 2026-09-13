@@ -6,7 +6,9 @@
   "scripts": {
     "build": "anchor keys sync && anchor build",
     "test": "anchor test --validator legacy",
-    "demo": "ts-node --transpile-only scripts/cinder-demo.ts"
+    "demo": "ts-node --transpile-only scripts/cinder-demo.ts",
+    "web:dev": "yarn --cwd web dev",
+    "web:build": "yarn --cwd web build"
   },
   "dependencies": {
     "@anchor-lang/core": "1.0.2",

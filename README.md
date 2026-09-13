@@ -55,6 +55,20 @@ yarn demo
 The demo deploys the Cinder programs to an empty local stack, verifies QFS
 isolation, applies offsetting fills, and closes a position with PnL.
 
+## Website demo
+
+The repository also includes a product site and terminal walkthrough. It uses
+live, read-only Phoenix market data alongside deterministic Cinder execution
+scenarios; it deliberately does not connect a wallet or route live orders.
+
+```bash
+yarn --cwd web install
+yarn web:dev
+```
+
+The landing page is available at `/`; the interactive terminal is at
+`/terminal`. Build it with `yarn web:build`.
+
 ## Repository map
 
 | Path | Purpose |
@@ -63,6 +77,7 @@ isolation, applies offsetting fills, and closes a position with PnL.
 | `programs/cinder_ledger` | ER user ledgers, order state, permissions, and net book |
 | `crates/cinder-adapter` | Operator logic and Phoenix integration boundary |
 | `crates/cinder-common` | Shared protocol constants and pure accounting helpers |
+| `web` | Product site and deterministic terminal walkthrough |
 | `tests` | Ledger, privacy, netting, collateral, and venue integration tests |
 | `docs` | Public protocol, security, and development documentation |
 
