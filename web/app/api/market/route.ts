@@ -10,6 +10,22 @@ const cacheHeaders = {
   "Vercel-CDN-Cache-Control": "s-maxage=2, stale-while-revalidate=8",
 };
 
+function normalizeLevels(
+  levels: readonly [number, number][],
+  side: "ask" | "bid",
+): [number, number][] {
+  const byPrice = new Map<number, number>();
+
+  for (const [price, size] of levels) {
+    if (!Number.isFinite(price) || !Number.isFinite(size) || price <= 0 || size <= 0) continue;
+    byPrice.set(price, size);
+  }
+
+  return [...byPrice.entries()].sort(([left], [right]) =>
+    side === "ask" ? left - right : right - left,
+  );
+}
+
 export async function GET() {
   const client = new PhoenixHttpClient({ apiUrl, timeout: 8_000 });
 
@@ -20,10 +36,18 @@ export async function GET() {
       client.markets().getLatestMarketStats("SOL"),
     ]);
 
+    const asks = normalizeLevels(orderbook.asks, "ask");
+    const bids = normalizeLevels(orderbook.bids, "bid");
+
     return Response.json(
       {
         candles,
-        orderbook: { asks: orderbook.asks, bids: orderbook.bids, mid: orderbook.mid ?? null, symbol: orderbook.symbol },
+        orderbook: {
+          asks,
+          bids,
+          mid: orderbook.mid ?? ((asks[0]?.[0] + bids[0]?.[0]) / 2 || null),
+          symbol: orderbook.symbol,
+        },
         stats: {
           annualizedFundingRate: stats.annualized_funding_rate,
           dayVolumeUsd: stats.day_volume_usd,
