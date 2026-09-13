@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { BN, Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { BN, Program } from "@anchor-lang/core";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -147,7 +147,7 @@ describe("S7 two-user net + QFS isolation after trades", function () {
 
     await vault.methods
       .initialize(adapter.publicKey, vaultAuth, phoenixTrader, ER_VALIDATOR)
-      .accounts({
+      .accountsPartial({
         admin: payer.publicKey,
         config: configPda,
         vaultAuthority: vaultAuth,
@@ -161,11 +161,11 @@ describe("S7 two-user net + QFS isolation after trades", function () {
       .rpc();
     await vault.methods
       .setAllowlist([ASSET_SOL])
-      .accounts({ admin: payer.publicKey, config: configPda })
+      .accountsPartial({ admin: payer.publicKey, config: configPda })
       .rpc();
     await ledger.methods
       .initialize()
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -181,7 +181,7 @@ describe("S7 two-user net + QFS isolation after trades", function () {
     ] as const) {
       await ledger.methods
         .initUser()
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           user: user.publicKey,
           config: configPda,
@@ -293,7 +293,7 @@ describe("S7 two-user net + QFS isolation after trades", function () {
     );
 
     await sendEr(
-      erProgram.methods.creditDeposit(new BN(CREDIT)).accounts({
+      erProgram.methods.creditDeposit(new BN(CREDIT)).accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -301,7 +301,7 @@ describe("S7 two-user net + QFS isolation after trades", function () {
       })
     );
     await sendEr(
-      erProgram.methods.creditDeposit(new BN(CREDIT)).accounts({
+      erProgram.methods.creditDeposit(new BN(CREDIT)).accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -321,7 +321,7 @@ describe("S7 two-user net + QFS isolation after trades", function () {
       ) as Program<CinderLedger>;
       let tx = await erUser.methods
         .placeOrder(ASSET_SOL, new BN(lots), oid(tag), 50, false, new BN(0))
-        .accounts({
+        .accountsPartial({
           user: user.publicKey,
           config: configPda,
           book: bookPda,
@@ -341,7 +341,7 @@ describe("S7 two-user net + QFS isolation after trades", function () {
     const sendAck = async (userLedger: PublicKey, tag: number, lots: number) => {
       let tx = await erProgram.methods
         .ackPhoenixFill(oid(tag), new BN(lots), new BN(0), new BN(0))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger,

@@ -4,7 +4,7 @@
  * Uses Rise on-chain builders (RegisterTrader, DelegateTrader, deposit/withdraw
  * flows) and sends them to localhost. Does not call send-register-ixs.
  */
-import * as anchor from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
 import * as fs from "fs";
 import {
   Connection,

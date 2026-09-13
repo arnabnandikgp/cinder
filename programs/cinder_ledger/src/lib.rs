@@ -497,7 +497,7 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = adapter,
-        space = 8 + Book::INIT_SPACE,
+        space = Book::ACCOUNT_SPACE,
         seeds = [cc::SEED_BOOK],
         bump
     )]
@@ -729,6 +729,21 @@ pub struct Book {
     pub funding_epoch: u64,
     pub last_scan_ms: u64,
     pub bump: u8,
+}
+
+impl Book {
+    /// Discriminator plus the complete fixed-width Book layout.
+    /// `Book::INIT_SPACE` predates `funding_epoch` and `last_scan_ms`.
+    pub const ACCOUNT_SPACE: usize = 8
+        + 1
+        + (cc::MAX_BOOK_MARKETS * Residual::INIT_SPACE)
+        + 8
+        + 8
+        + 1
+        + 1
+        + 8
+        + 8
+        + 1;
 }
 
 #[account]

@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { BN, Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { BN, Program } from "@anchor-lang/core";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   ACCOUNT_SIZE,
@@ -89,7 +89,7 @@ describe("S1 accounts and order machine", () => {
   it("inits Config, UserLedger, Book, FeeAccrual; seeds match freeze", async () => {
     await vault.methods
       .initialize(adapter.publicKey, vaultAuth, phoenixTrader, ER_VALIDATOR)
-      .accounts({
+      .accountsPartial({
         admin: payer.publicKey,
         config: configPda,
         vaultAuthority: vaultAuth,
@@ -123,7 +123,7 @@ describe("S1 accounts and order machine", () => {
 
     await ledger.methods
       .initialize()
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -145,12 +145,12 @@ describe("S1 accounts and order machine", () => {
 
     await vault.methods
       .setAllowlist([ASSET_SOL])
-      .accounts({ admin: payer.publicKey, config: configPda })
+      .accountsPartial({ admin: payer.publicKey, config: configPda })
       .rpc();
 
     await ledger.methods
       .initUser()
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         user: user.publicKey,
         config: configPda,
@@ -171,7 +171,7 @@ describe("S1 accounts and order machine", () => {
 
     await ledger.methods
       .creditDeposit(new BN(CREDIT))
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -187,7 +187,7 @@ describe("S1 accounts and order machine", () => {
   it("place +10 lots then fail-ack restores free and lots", async () => {
     await ledger.methods
       .placeOrder(ASSET_SOL, new BN(LOTS), oid(1), 50, false, new BN(0))
-      .accounts({
+      .accountsPartial({
         user: user.publicKey,
         config: configPda,
         book: bookPda,
@@ -210,7 +210,7 @@ describe("S1 accounts and order machine", () => {
 
     await ledger.methods
       .ackPhoenixFail(oid(1))
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         userLedger: userLedgerPda,
@@ -231,7 +231,7 @@ describe("S1 accounts and order machine", () => {
   it("place then fill-ack updates position, reserved IM, and Book", async () => {
     await ledger.methods
       .placeOrder(ASSET_SOL, new BN(LOTS), oid(2), 50, false, new BN(1))
-      .accounts({
+      .accountsPartial({
         user: user.publicKey,
         config: configPda,
         book: bookPda,
@@ -242,7 +242,7 @@ describe("S1 accounts and order machine", () => {
 
     await ledger.methods
       .ackPhoenixFill(oid(2), new BN(LOTS), new BN(0), new BN(0))
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         userLedger: userLedgerPda,
@@ -271,7 +271,7 @@ describe("S1 accounts and order machine", () => {
   it("HALT_ENTRIES blocks place_order", async () => {
     await ledger.methods
       .setBookHalt(HALT_ENTRIES)
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -282,7 +282,7 @@ describe("S1 accounts and order machine", () => {
     try {
       await ledger.methods
         .placeOrder(ASSET_SOL, new BN(LOTS), oid(3), 50, false, new BN(2))
-        .accounts({
+        .accountsPartial({
           user: user.publicKey,
           config: configPda,
           book: bookPda,
@@ -298,7 +298,7 @@ describe("S1 accounts and order machine", () => {
 
     await ledger.methods
       .setBookHalt(0)
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -311,7 +311,7 @@ describe("S1 accounts and order machine", () => {
     try {
       await vault.methods
         .escapeWithdraw()
-        .accounts({ user: user.publicKey })
+        .accountsPartial({ user: user.publicKey })
         .signers([user])
         .rpc();
       expect.fail("escape_withdraw should be unsupported");
@@ -333,7 +333,7 @@ describe("S1 accounts and order machine", () => {
       try {
         await ledger.methods
           .placeOrder(ASSET_SOL, new BN(1), oid(4), 50, false, new BN(0))
-          .accounts(placeAccounts())
+          .accountsPartial(placeAccounts())
           .signers([user])
           .rpc();
         expect.fail("replayed nonce should fail");
@@ -347,7 +347,7 @@ describe("S1 accounts and order machine", () => {
       try {
         await ledger.methods
           .placeOrder(ASSET_SOL, new BN(1), oid(5), 50, true, new BN(2))
-          .accounts(placeAccounts())
+          .accountsPartial(placeAccounts())
           .signers([user])
           .rpc();
         expect.fail("reduce-only increase should fail");
@@ -362,7 +362,7 @@ describe("S1 accounts and order machine", () => {
       try {
         await ledger.methods
           .liquidateUser(ASSET_SOL, liqOid)
-          .accounts({
+          .accountsPartial({
             adapter: user.publicKey,
             config: configPda,
             userLedger: userLedgerPda,
@@ -378,7 +378,7 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .liquidateUser(ASSET_SOL, liqOid)
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: userLedgerPda,
@@ -402,7 +402,7 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .ackPhoenixFill(liqOid, new BN(-LOTS), new BN(0), new BN(0))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: userLedgerPda,
@@ -423,7 +423,7 @@ describe("S1 accounts and order machine", () => {
     it("heartbeat_scan writes last_scan_ms", async () => {
       await ledger.methods
         .heartbeatScan(new BN(1_500))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
@@ -448,7 +448,7 @@ describe("S1 accounts and order machine", () => {
             false,
             new BN(startNonce + i)
           )
-          .accounts(placeAccounts())
+          .accountsPartial(placeAccounts())
           .signers([user])
           .rpc();
       }
@@ -465,7 +465,7 @@ describe("S1 accounts and order machine", () => {
             false,
             new BN(startNonce + 8)
           )
-          .accounts(placeAccounts())
+          .accountsPartial(placeAccounts())
           .signers([user])
           .rpc();
         expect.fail("ninth concurrent oid should fail");
@@ -491,7 +491,7 @@ describe("S1 accounts and order machine", () => {
       ]);
       await ledger.methods
         .initUser()
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           user: pnlUser.publicKey,
           config: configPda,
@@ -503,7 +503,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .creditDeposit(new BN(CREDIT))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
@@ -516,7 +516,7 @@ describe("S1 accounts and order machine", () => {
     it("open then full close credits realized into free; fail-ack does not", async () => {
       await ledger.methods
         .placeOrder(ASSET_SOL, new BN(LOTS), oid(70), 50, false, new BN(0))
-        .accounts({
+        .accountsPartial({
           user: pnlUser.publicKey,
           config: configPda,
           book: bookPda,
@@ -526,7 +526,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .ackPhoenixFill(oid(70), new BN(LOTS), new BN(0), new BN(OPEN_VWAP))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: pnlLedger,
@@ -542,7 +542,7 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .placeOrder(ASSET_SOL, new BN(-LOTS), oid(71), 50, true, new BN(1))
-        .accounts({
+        .accountsPartial({
           user: pnlUser.publicKey,
           config: configPda,
           book: bookPda,
@@ -555,11 +555,10 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .ackPhoenixFail(oid(71))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: pnlLedger,
-          book: bookPda,
         })
         .signers([adapter])
         .rpc();
@@ -570,7 +569,7 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .placeOrder(ASSET_SOL, new BN(-LOTS), oid(72), 50, true, new BN(2))
-        .accounts({
+        .accountsPartial({
           user: pnlUser.publicKey,
           config: configPda,
           book: bookPda,
@@ -580,7 +579,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .ackPhoenixFill(oid(72), new BN(-LOTS), new BN(0), new BN(CLOSE_VWAP))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: pnlLedger,
@@ -599,7 +598,7 @@ describe("S1 accounts and order machine", () => {
     it("out-of-order ack uses confirmed lots not tentative", async () => {
       await ledger.methods
         .placeOrder(ASSET_SOL, new BN(LOTS), oid(80), 50, false, new BN(3))
-        .accounts({
+        .accountsPartial({
           user: pnlUser.publicKey,
           config: configPda,
           book: bookPda,
@@ -609,7 +608,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .ackPhoenixFill(oid(80), new BN(LOTS), new BN(0), new BN(OPEN_VWAP))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: pnlLedger,
@@ -620,7 +619,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .placeOrder(ASSET_SOL, new BN(5), oid(81), 50, false, new BN(4))
-        .accounts({
+        .accountsPartial({
           user: pnlUser.publicKey,
           config: configPda,
           book: bookPda,
@@ -630,7 +629,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .placeOrder(ASSET_SOL, new BN(-4), oid(82), 50, false, new BN(5))
-        .accounts({
+        .accountsPartial({
           user: pnlUser.publicKey,
           config: configPda,
           book: bookPda,
@@ -643,7 +642,7 @@ describe("S1 accounts and order machine", () => {
       ).free.toNumber();
       await ledger.methods
         .ackPhoenixFill(oid(82), new BN(-4), new BN(0), new BN(-4_400_000))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: pnlLedger,
@@ -675,7 +674,7 @@ describe("S1 accounts and order machine", () => {
       userAta = getAssociatedTokenAddressSync(usdcMint, withdrawUser.publicKey);
       await ledger.methods
         .initUser()
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           user: withdrawUser.publicKey,
           config: configPda,
@@ -687,7 +686,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .creditDeposit(new BN(CREDIT))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
@@ -708,7 +707,7 @@ describe("S1 accounts and order machine", () => {
       try {
         await ledger.methods
           .requestWithdraw(new BN(1))
-          .accounts({
+          .accountsPartial({
             user: user.publicKey,
             config: configPda,
             book: bookPda,
@@ -726,7 +725,7 @@ describe("S1 accounts and order machine", () => {
     it("flat withdraw credits user ATA and zeros withdrawable", async () => {
       await ledger.methods
         .requestWithdraw(new BN(WITHDRAW))
-        .accounts({
+        .accountsPartial({
           user: withdrawUser.publicKey,
           config: configPda,
           book: bookPda,
@@ -737,7 +736,7 @@ describe("S1 accounts and order machine", () => {
 
       await vault.methods
         .userWithdrawL1(new BN(WITHDRAW))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           user: withdrawUser.publicKey,
           config: configPda,
@@ -751,7 +750,7 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .completeWithdraw(new BN(WITHDRAW))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: withdrawLedger,
@@ -776,7 +775,7 @@ describe("S1 accounts and order machine", () => {
           new BN(0),
           Array.from({ length: 32 }, () => 1)
         )
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           reserveRoot: reservePda,
@@ -788,7 +787,7 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .creditDeposit(new BN(1_000_000))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
@@ -805,7 +804,7 @@ describe("S1 accounts and order machine", () => {
           new BN(0),
           Array.from({ length: 32 }, () => 2)
         )
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           reserveRoot: reservePda,
@@ -849,7 +848,7 @@ describe("S1 accounts and order machine", () => {
     it("retire_stand_in sets Config.vault_authority to the PDA", async () => {
       await vault.methods
         .retireStandIn()
-        .accounts({
+        .accountsPartial({
           admin: payer.publicKey,
           config: configPda,
           vaultAuthority: vaultAuth,
@@ -862,7 +861,7 @@ describe("S1 accounts and order machine", () => {
     it("PDA-signed post/pull move USDC without the stand-in key", async () => {
       await vault.methods
         .postCollateral(new BN(SETTLE))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           vaultAuthority: vaultAuth,
@@ -878,7 +877,7 @@ describe("S1 accounts and order machine", () => {
 
       await vault.methods
         .pullCollateralPda(new BN(SETTLE))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           vaultAuthority: vaultAuth,
@@ -903,7 +902,7 @@ describe("S1 accounts and order machine", () => {
       try {
         await vault.methods
           .pullCollateral(new BN(1))
-          .accounts({
+          .accountsPartial({
             adapter: adapter.publicKey,
             standIn: standIn.publicKey,
             config: configPda,
@@ -933,7 +932,7 @@ describe("S1 accounts and order machine", () => {
       )[0];
       await vault.methods
         .settleUserWithdraw(new BN(SETTLE))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           user: user.publicKey,
           config: configPda,
@@ -965,7 +964,7 @@ describe("S1 accounts and order machine", () => {
       ]);
       await ledger.methods
         .initUser()
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           user: fundUser.publicKey,
           config: configPda,
@@ -977,7 +976,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .creditDeposit(new BN(CREDIT))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
@@ -987,7 +986,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .placeOrder(ASSET_SOL, new BN(LOTS), oid(80), 50, false, new BN(0))
-        .accounts({
+        .accountsPartial({
           user: fundUser.publicKey,
           config: configPda,
           book: bookPda,
@@ -997,7 +996,7 @@ describe("S1 accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .ackPhoenixFill(oid(80), new BN(LOTS), new BN(0), new BN(0))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: fundLedger,
@@ -1014,7 +1013,7 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .bumpFundingEpoch(new BN(1))
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
@@ -1026,7 +1025,7 @@ describe("S1 accounts and order machine", () => {
         .allocateFunding(new BN(1), false, [
           { assetId: ASSET_SOL, deltaUsdc: new BN(DELTA) },
         ])
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: fundLedger,
@@ -1043,7 +1042,7 @@ describe("S1 accounts and order machine", () => {
       try {
         await ledger.methods
           .allocateFunding(new BN(1), false, [])
-          .accounts({
+          .accountsPartial({
             adapter: adapter.publicKey,
             config: configPda,
             userLedger: fundLedger,
@@ -1061,7 +1060,7 @@ describe("S1 accounts and order machine", () => {
       try {
         await ledger.methods
           .allocateFunding(new BN(3), false, [])
-          .accounts({
+          .accountsPartial({
             adapter: adapter.publicKey,
             config: configPda,
             userLedger: fundLedger,
@@ -1079,7 +1078,7 @@ describe("S1 accounts and order machine", () => {
       try {
         await ledger.methods
           .requestWithdraw(new BN(1))
-          .accounts({
+          .accountsPartial({
             user: fundUser.publicKey,
             config: configPda,
             book: bookPda,
@@ -1095,7 +1094,7 @@ describe("S1 accounts and order machine", () => {
 
       await ledger.methods
         .allocateFunding(new BN(1), true, [])
-        .accounts({
+        .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           userLedger: fundLedger,
