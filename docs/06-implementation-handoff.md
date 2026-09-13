@@ -66,7 +66,7 @@ Toolchain: Anchor **1.0.2**, `ephemeral-rollups-sdk` **0.16.2** (`anchor`, `acce
 - Verified: `./scripts/check-toolchain.sh` → `anchor-cli 1.0.2`, `rustc 1.89.0`. Host Solana CLI is **3.1.10** (spec 3.1.9). Did not downgrade; patch-level, `anchor build` succeeded.
 - Program ids (committed under `keys/`, copied to `target/deploy/` by check-toolchain): vault `9zhBFVgk13gnYT6iVuKPGfQiAvVfr6cYQq2bY2QUzXmg`, ledger `h3Bw2xjj69JssRkaxr8Jxh6TtamvrjSxASXbfLeWyPg`.
 - `anchor test` on this CLI defaults to Surfpool. S0/S1 use `anchor test --validator legacy` (see `scripts/test.sh`). Do not install Surfpool until S5.
-- TS client is `@coral-xyz/anchor` 0.32.1 (MagicBlock private-counter pattern), not `@anchor-lang/core`.
+- TS client is `@anchor-lang/core` 1.0.2, matching the Anchor 1.0.2 CLI and Rust crates.
 
 ---
 

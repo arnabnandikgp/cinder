@@ -2,23 +2,21 @@
 # yarn lockfile v1
 
 
-"@babel/runtime@^7.29.7":
-  version "7.29.7"
-  resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.29.7.tgz#12022450c45a4da6d8d8287b18a4ff2ddb23f768"
-  integrity sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==
-
-"@coral-xyz/anchor-errors@^0.31.1":
-  version "0.31.1"
-  resolved "https://registry.yarnpkg.com/@coral-xyz/anchor-errors/-/anchor-errors-0.31.1.tgz#d635cbac2533973ae6bfb5d3ba1de89ce5aece2d"
-  integrity sha512-NhNEku4F3zzUSBtrYz84FzYWm48+9OvmT1Hhnwr6GnPQry2dsEqH/ti/7ASjjpoFTWRnPXrjAIT1qM6Isop+LQ==
-
-"@coral-xyz/anchor@0.32.1":
-  version "0.32.1"
-  resolved "https://registry.yarnpkg.com/@coral-xyz/anchor/-/anchor-0.32.1.tgz#a07440d9d267840f4f99f1493bd8ce7d7f128e57"
-  integrity sha512-zAyxFtfeje2FbMA1wzgcdVs7Hng/MijPKpRijoySPCicnvcTQs/+dnPZ/cR+LcXM9v9UYSyW81uRNYZtN5G4yg==
+"@anchor-lang/borsh@^1.0.2":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@anchor-lang/borsh/-/borsh-1.2.0.tgz#1632e25528a3525eb110451d9c1db793d63d898d"
+  integrity sha512-qUC90JezAXyetwCqhLxkxh/r9ofRCd2D0fkEoEex7Vurw3pGDtf1r779v0cM4fsvOEIskK9nja/GkZOnlvJqYw==
   dependencies:
-    "@coral-xyz/anchor-errors" "^0.31.1"
-    "@coral-xyz/borsh" "^0.31.1"
+    bn.js "^5.2.3"
+    buffer-layout "^1.2.0"
+
+"@anchor-lang/core@1.0.2":
+  version "1.0.2"
+  resolved "https://registry.yarnpkg.com/@anchor-lang/core/-/core-1.0.2.tgz#37b46c2b2bb79a8f8650b0169204e15bf75f230e"
+  integrity sha512-XZy430qI7s3iJsT46GAcbqyJdxk2MmUo7m0fJUDYmDZSIngI5cbtNo/MAEQ3WC9YqXxesAw7KFKlOkiqNW3e9w==
+  dependencies:
+    "@anchor-lang/borsh" "^1.0.2"
+    "@anchor-lang/errors" "^1.0.2"
     "@noble/hashes" "^1.3.1"
     "@solana/web3.js" "^1.69.0"
     bn.js "^5.1.2"
@@ -31,13 +29,15 @@
     superstruct "^0.15.4"
     toml "^3.0.0"
 
-"@coral-xyz/borsh@^0.31.1":
-  version "0.31.1"
-  resolved "https://registry.yarnpkg.com/@coral-xyz/borsh/-/borsh-0.31.1.tgz#5328e1e0921b75d7f4a62dd3f61885a938bc7241"
-  integrity sha512-9N8AU9F0ubriKfNE3g1WF0/4dtlGXoBN/hd1PvbNBamBNwRgHxH4P+o3Zt7rSEloW1HUs6LfZEchlx9fW7POYw==
-  dependencies:
-    bn.js "^5.1.2"
-    buffer-layout "^1.2.0"
+"@anchor-lang/errors@^1.0.2":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@anchor-lang/errors/-/errors-1.2.0.tgz#6c5b6ed19e023764b2dca6ceba40e1f546d447bd"
+  integrity sha512-muEmHFs2UDrcmGUuj+IWiYW2/AazI3tMv6f6OT5KNwOuSLG4j9g4zv8Pqvo+Cj9F6deP4P2c6DWhSUBHdYL4+g==
+
+"@babel/runtime@^7.29.7":
+  version "7.29.7"
+  resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.29.7.tgz#12022450c45a4da6d8d8287b18a4ff2ddb23f768"
+  integrity sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==
 
 "@cspotcode/source-map-support@^0.8.0":
   version "0.8.1"
@@ -906,7 +906,7 @@ bn.js@^4.0.0, bn.js@^4.11.9:
   resolved "https://registry.yarnpkg.com/bn.js/-/bn.js-4.12.5.tgz#74f119ffecd823168d188eae06d97ea40835c489"
   integrity sha512-3aRg6/JxfffFD+OlOjOFR3Vo79l39ooBTFucxx+MT3dhCtzn3EmiUPQo+6/OZuI2jbXi3YKgmiTFBgChQMwIRQ==
 
-bn.js@^5.1.2, bn.js@^5.2.0, bn.js@^5.2.2, bn.js@^5.2.5:
+bn.js@^5.1.2, bn.js@^5.2.0, bn.js@^5.2.2, bn.js@^5.2.3, bn.js@^5.2.5:
   version "5.2.5"
   resolved "https://registry.yarnpkg.com/bn.js/-/bn.js-5.2.5.tgz#e81ce41cf25e6f0cd1e05f20a9db8c18405e375f"
   integrity sha512-Vq886eXykuP5E6HcKSSStP3bJgrE6In5WKxVUvJ8XGpWWYs2xZHWqUwzCtGgEtBcxyd57KBFDPFoUfNzdaHCNg==

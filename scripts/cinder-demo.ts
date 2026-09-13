@@ -6,8 +6,12 @@
  *
  * Prints QFS isolation, then Alice / Bob / Book before and after a close with PnL.
  */
-import * as anchor from "@coral-xyz/anchor";
-import { BN, Program } from "@coral-xyz/anchor";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { spawnSync } from "child_process";
+import * as anchor from "@anchor-lang/core";
+import { BN, Program } from "@anchor-lang/core";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -19,6 +23,7 @@ import {
   Keypair,
   PublicKey,
   SystemProgram,
+  Transaction,
 } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import {
@@ -35,15 +40,121 @@ const ER_VALIDATOR = new PublicKey(
   "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
 );
 const BASE = process.env.PROVIDER_ENDPOINT || "http://127.0.0.1:8899";
+const BASE_WS = process.env.WS_ENDPOINT || "ws://127.0.0.1:8900";
 const ER = process.env.EPHEMERAL_PROVIDER_ENDPOINT || "http://127.0.0.1:7799";
+const ER_WS = process.env.EPHEMERAL_WS_ENDPOINT || "ws://127.0.0.1:7800";
 const QFS = process.env.TEE_PROVIDER_ENDPOINT || "http://127.0.0.1:6699";
 const QFS_WS = process.env.TEE_WS_ENDPOINT || "ws://127.0.0.1:6700";
+const RPC_OPTS = { skipPreflight: true, commitment: "confirmed" as const };
 const ASSET_SOL = 1;
 const CREDIT = 100_000_000;
 const LOTS = 10;
 const OPEN_VWAP = 10_000_000;
 const CLOSE_VWAP = -11_000_000;
 const STUB_MM = 625_000; // stub_cinder_mm(10)
+
+async function ensurePrograms(
+  conn: Connection,
+  programs: [string, PublicKey][]
+) {
+  const missing = [];
+  for (const [label, id] of programs) {
+    const info = await conn.getAccountInfo(id);
+    if (!info) missing.push(`${label} ${id.toBase58()}`);
+  }
+  const ours = missing.filter(
+    (m) => m.startsWith("cinder_vault") || m.startsWith("cinder_ledger")
+  );
+  if (ours.length) {
+    console.log("Cinder programs not on :8899 (stack was reset?). Deploying...");
+    const r = spawnSync(
+      "anchor",
+      ["deploy", "--provider.cluster", "localnet"],
+      { stdio: "inherit", env: process.env }
+    );
+    if (r.status !== 0) {
+      throw new Error(
+        "anchor deploy failed. From repo root: ./scripts/cinder-demo.sh"
+      );
+    }
+    await sleep(2000);
+    for (const [label, id] of programs) {
+      if (!label.startsWith("cinder_")) continue;
+      if (!(await conn.getAccountInfo(id))) {
+        throw new Error(`${label} still missing after deploy: ${id.toBase58()}`);
+      }
+    }
+  }
+  const still = [];
+  for (const [label, id] of programs) {
+    if (!(await conn.getAccountInfo(id))) {
+      still.push(`${label} ${id.toBase58()}`);
+    }
+  }
+  if (still.length) {
+    throw new Error(
+      "ProgramAccountNotFound — missing on " +
+        BASE +
+        ":\n  " +
+        still.join("\n  ") +
+        "\nRestart mb-stack and run ./scripts/cinder-demo.sh"
+    );
+  }
+}
+
+function loadProgram<T extends anchor.Idl>(
+  name: string,
+  provider: anchor.AnchorProvider
+): Program<T> {
+  const idl = JSON.parse(
+    fs.readFileSync(`target/idl/${name}.json`, "utf8")
+  ) as T;
+  return new Program(idl, provider);
+}
+
+async function sendTx(
+  connection: Connection,
+  payer: Keypair,
+  tx: Transaction,
+  extraSigners: Keypair[] = []
+) {
+  const latest = await connection.getLatestBlockhash("confirmed");
+  tx.feePayer = payer.publicKey;
+  tx.recentBlockhash = latest.blockhash;
+  tx.sign(payer, ...extraSigners);
+  const sig = await connection.sendRawTransaction(tx.serialize(), {
+    skipPreflight: true,
+  });
+  const conf = await connection.confirmTransaction(
+    {
+      signature: sig,
+      blockhash: latest.blockhash,
+      lastValidBlockHeight: latest.lastValidBlockHeight,
+    },
+    "confirmed"
+  );
+  if (conf.value.err) {
+    const got = await connection.getTransaction(sig, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    const logs = got?.meta?.logMessages?.join("\n") ?? "(no logs available)";
+    throw new Error(
+      `transaction ${sig} failed: ${JSON.stringify(conf.value.err)}\n${logs}`
+    );
+  }
+  return sig;
+}
+
+async function sendIx(
+  connection: Connection,
+  payer: Keypair,
+  builder: { instruction: () => Promise<anchor.web3.TransactionInstruction> },
+  extraSigners: Keypair[] = []
+) {
+  const ix = await builder.instruction();
+  return sendTx(connection, payer, new Transaction().add(ix), extraSigners);
+}
 
 function pda(programId: PublicKey, seeds: (Buffer | Uint8Array)[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, programId)[0];
@@ -133,16 +244,30 @@ async function main() {
     process.exit(1);
   }
 
-  const base = new Connection(BASE, "confirmed");
-  const erConn = new Connection(ER, "confirmed");
-  const wallet = anchor.Wallet.local();
-  const provider = new anchor.AnchorProvider(base, wallet, {
+  const base = new Connection(BASE, {
     commitment: "confirmed",
+    wsEndpoint: BASE_WS,
   });
+  const erConn = new Connection(ER, {
+    commitment: "confirmed",
+    wsEndpoint: ER_WS,
+  });
+  process.env.ANCHOR_WALLET =
+    process.env.ANCHOR_WALLET ||
+    path.join(os.homedir(), ".config", "solana", "id.json");
+  const wallet = anchor.Wallet.local();
+  const provider = new anchor.AnchorProvider(base, wallet, RPC_OPTS);
   anchor.setProvider(provider);
-  const vault = (anchor.workspace as any).cinderVault as Program<CinderVault>;
-  const ledger = (anchor.workspace as any).cinderLedger as Program<CinderLedger>;
+  const vault = loadProgram<CinderVault>("cinder_vault", provider);
+  const ledger = loadProgram<CinderLedger>("cinder_ledger", provider);
   const payer = wallet.payer;
+
+  await ensurePrograms(base, [
+    ["cinder_vault", vault.programId],
+    ["cinder_ledger", ledger.programId],
+    ["spl-token", TOKEN_PROGRAM_ID],
+    ["spl-associated-token", ASSOCIATED_TOKEN_PROGRAM_ID],
+  ]);
 
   const adapter = Keypair.generate();
   const alice = Keypair.generate();
@@ -153,7 +278,6 @@ async function main() {
   await airdrop(base, alice.publicKey);
   await airdrop(base, bob.publicKey);
 
-  const usdcMint = await createMint(base, payer, payer.publicKey, null, 6);
   const configPda = pda(vault.programId, [Buffer.from("config")]);
   const vaultAuth = pda(vault.programId, [Buffer.from("vault-authority")]);
   const reservePda = pda(vault.programId, [Buffer.from("reserve")]);
@@ -167,69 +291,76 @@ async function main() {
     Buffer.from("user"),
     bob.publicKey.toBuffer(),
   ]);
+  const usdcMint = await createMint(base, payer, payer.publicKey, null, 6);
   const vaultAta = getAssociatedTokenAddressSync(usdcMint, vaultAuth, true);
 
   if (!(await base.getAccountInfo(configPda))) {
-    await vault.methods
-      .initialize(adapter.publicKey, vaultAuth, phoenixTrader, ER_VALIDATOR)
-      .accounts({
-        admin: payer.publicKey,
-        config: configPda,
-        vaultAuthority: vaultAuth,
-        reserveRoot: reservePda,
-        usdcMint,
-        vaultUsdcAta: vaultAta,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-    await vault.methods
-      .setAllowlist([ASSET_SOL])
-      .accounts({ admin: payer.publicKey, config: configPda })
-      .rpc();
-    await ledger.methods
-      .initialize()
-      .accounts({
-        adapter: adapter.publicKey,
-        config: configPda,
-        book: bookPda,
-        feeAccrual: feesPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([adapter])
-      .rpc();
-  } else {
-    console.error(
-      "Config already exists on this validator. Restart: ./scripts/stack-c.sh"
+    console.log("initialize vault...");
+    await sendIx(
+      base,
+      payer,
+      vault.methods
+        .initialize(adapter.publicKey, vaultAuth, phoenixTrader, ER_VALIDATOR)
+        .accountsPartial({
+          admin: payer.publicKey,
+          config: configPda,
+          vaultAuthority: vaultAuth,
+          reserveRoot: reservePda,
+          usdcMint,
+          vaultUsdcAta: vaultAta,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
     );
-    process.exit(1);
+    await sendIx(
+      base,
+      payer,
+      vault.methods
+        .setAllowlist([ASSET_SOL])
+        .accountsPartial({ admin: payer.publicKey, config: configPda })
+    );
+  } else {
+    throw new Error(
+      "Cinder state already exists. Restart with ./scripts/stack-c.sh before running the demo."
+    );
   }
+
+  await sendIx(
+    base,
+    payer,
+    ledger.methods.initialize().accountsPartial({
+      adapter: adapter.publicKey,
+      config: configPda,
+      book: bookPda,
+      feeAccrual: feesPda,
+      systemProgram: SystemProgram.programId,
+    }),
+    [adapter]
+  );
 
   for (const [user, userLedger] of [
     [alice, ledgerA],
     [bob, ledgerB],
   ] as const) {
-    await ledger.methods
-      .initUser()
-      .accounts({
+    await sendIx(
+      base,
+      payer,
+      ledger.methods.initUser().accountsPartial({
         adapter: adapter.publicKey,
         user: user.publicKey,
         config: configPda,
         userLedger,
         book: bookPda,
         systemProgram: SystemProgram.programId,
-      })
-      .signers([adapter, user])
-      .rpc();
+      }),
+      [adapter, user]
+    );
   }
 
   const sendBase = async (builder: any, signers: Keypair[]) => {
     const tx = await builder.transaction();
-    return provider.sendAndConfirm(tx, signers, {
-      skipPreflight: true,
-      commitment: "confirmed",
-    });
+    return sendTx(base, payer, tx, signers);
   };
   await sendBase(
     ledger.methods.delegateBook().accountsPartial({
@@ -291,13 +422,9 @@ async function main() {
     erProvider
   ) as Program<CinderLedger>;
 
-  const sendEr = async (builder: any, extra?: Keypair[]) => {
-    let tx = await builder.transaction();
-    tx.feePayer = adapter.publicKey;
-    tx.recentBlockhash = (await erConn.getLatestBlockhash()).blockhash;
-    tx = await adapterWallet.signTransaction(tx);
-    if (extra) for (const s of extra) tx.partialSign(s);
-    return erProvider.sendAndConfirm(tx, extra ?? [], { skipPreflight: true });
+  const sendEr = async (builder: any, extra: Keypair[] = []) => {
+    const tx = await builder.transaction();
+    return sendTx(erConn, adapter, tx, extra);
   };
   const perm = (account: PublicKey) => ({
     adapter: adapter.publicKey,
@@ -334,7 +461,7 @@ async function main() {
 
   // Pre-fund user cash on the ER (no G-BUF engine; mock residual does not bounce).
   await sendEr(
-    erProgram.methods.creditDeposit(new BN(CREDIT)).accounts({
+    erProgram.methods.creditDeposit(new BN(CREDIT)).accountsPartial({
       adapter: adapter.publicKey,
       config: configPda,
       book: bookPda,
@@ -342,7 +469,7 @@ async function main() {
     })
   );
   await sendEr(
-    erProgram.methods.creditDeposit(new BN(CREDIT)).accounts({
+    erProgram.methods.creditDeposit(new BN(CREDIT)).accountsPartial({
       adapter: adapter.publicKey,
       config: configPda,
       book: bookPda,
@@ -385,7 +512,7 @@ async function main() {
       ledger.idl as CinderLedger,
       new anchor.AnchorProvider(erConn, uw, { commitment: "confirmed" })
     ) as Program<CinderLedger>;
-    let tx = await erUser.methods
+    const tx = await erUser.methods
       .placeOrder(
         ASSET_SOL,
         new BN(lots),
@@ -394,20 +521,14 @@ async function main() {
         reduceOnly,
         new BN(nonce)
       )
-      .accounts({
+      .accountsPartial({
         user: user.publicKey,
         config: configPda,
         book: bookPda,
         userLedger,
       })
       .transaction();
-    tx.feePayer = user.publicKey;
-    tx.recentBlockhash = (await erConn.getLatestBlockhash()).blockhash;
-    tx = await uw.signTransaction(tx);
-    const sig = await erConn.sendRawTransaction(tx.serialize(), {
-      skipPreflight: true,
-    });
-    await erConn.confirmTransaction(sig, "confirmed");
+    await sendTx(erConn, user, tx);
   };
 
   const ack = async (
@@ -417,9 +538,9 @@ async function main() {
     vwap: number,
     fee = 0
   ) => {
-    let tx = await erProgram.methods
+    const tx = await erProgram.methods
       .ackPhoenixFill(oid(tag), new BN(lots), new BN(fee), new BN(vwap))
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         userLedger,
@@ -427,13 +548,7 @@ async function main() {
         feeAccrual: feesPda,
       })
       .transaction();
-    tx.feePayer = adapter.publicKey;
-    tx.recentBlockhash = (await erConn.getLatestBlockhash()).blockhash;
-    tx = await adapterWallet.signTransaction(tx);
-    const sig = await erConn.sendRawTransaction(tx.serialize(), {
-      skipPreflight: true,
-    });
-    await erConn.confirmTransaction(sig, "confirmed");
+    await sendTx(erConn, adapter, tx);
   };
 
   await place(alice, ledgerA, LOTS, 1, false, 0);

@@ -9,7 +9,7 @@
     "demo": "ts-node --transpile-only scripts/cinder-demo.ts"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "0.32.1",
+    "@anchor-lang/core": "1.0.2",
     "@ellipsis-labs/rise": "0.4.67",
     "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
     "@solana/spl-token": "^0.4.13",

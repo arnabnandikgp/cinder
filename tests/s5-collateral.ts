@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { BN, Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { BN, Program } from "@anchor-lang/core";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -68,7 +68,7 @@ describe("S5 vault post/pull (stand-in, no Phoenix CPI)", () => {
         phoenixTrader,
         ER_VALIDATOR
       )
-      .accounts({
+      .accountsPartial({
         admin: payer.publicKey,
         config: configPda,
         vaultAuthority: vaultAuthPda,
@@ -83,7 +83,7 @@ describe("S5 vault post/pull (stand-in, no Phoenix CPI)", () => {
 
     await ledger.methods
       .initialize()
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -105,7 +105,7 @@ describe("S5 vault post/pull (stand-in, no Phoenix CPI)", () => {
   it("post_collateral moves USDC from vault ATA to stand-in ATA", async () => {
     await vault.methods
       .postCollateral(new BN(AMOUNT))
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         vaultAuthority: vaultAuthPda,
@@ -125,7 +125,7 @@ describe("S5 vault post/pull (stand-in, no Phoenix CPI)", () => {
   it("pull_collateral returns USDC to vault ATA", async () => {
     await vault.methods
       .pullCollateral(new BN(AMOUNT))
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         standIn: standIn.publicKey,
         config: configPda,
@@ -146,7 +146,7 @@ describe("S5 vault post/pull (stand-in, no Phoenix CPI)", () => {
     try {
       await vault.methods
         .postCollateral(new BN(1))
-        .accounts({
+        .accountsPartial({
           adapter: standIn.publicKey,
           config: configPda,
           vaultAuthority: vaultAuthPda,

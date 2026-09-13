@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -145,7 +145,7 @@ describe("S2 PER / QFS isolation", function () {
 
     await vault.methods
       .initialize(adapter.publicKey, vaultAuth, phoenixTrader, ER_VALIDATOR)
-      .accounts({
+      .accountsPartial({
         admin: payer.publicKey,
         config: configPda,
         vaultAuthority: vaultAuth,
@@ -160,7 +160,7 @@ describe("S2 PER / QFS isolation", function () {
 
     await ledger.methods
       .initialize()
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
@@ -172,7 +172,7 @@ describe("S2 PER / QFS isolation", function () {
 
     await ledger.methods
       .initUser()
-      .accounts({
+      .accountsPartial({
         adapter: adapter.publicKey,
         user: userA.publicKey,
         config: configPda,
@@ -225,20 +225,22 @@ describe("S2 PER / QFS isolation", function () {
     await waitErOwner(erConn, ledgerA, ledger.programId, "user A ledger");
 
     const adapterWallet = new anchor.Wallet(adapter);
-    const erProvider = new anchor.AnchorProvider(erConn, adapterWallet, {
+    const adapterToken = await authToken(adapter);
+    const qfsAdapter = qfsConnection(adapterToken.token);
+    const qfsProvider = new anchor.AnchorProvider(qfsAdapter, adapterWallet, {
       commitment: "confirmed",
     });
     const erProgram = new Program(
       ledger.idl as CinderLedger,
-      erProvider
+      qfsProvider
     ) as Program<CinderLedger>;
 
     const sendEr = async (builder: any) => {
       let tx = await builder.transaction();
       tx.feePayer = adapter.publicKey;
-      tx.recentBlockhash = (await erConn.getLatestBlockhash()).blockhash;
+      tx.recentBlockhash = (await qfsAdapter.getLatestBlockhash()).blockhash;
       tx = await adapterWallet.signTransaction(tx);
-      return erProvider.sendAndConfirm(tx, [], { skipPreflight: true });
+      return qfsProvider.sendAndConfirm(tx, [], { skipPreflight: true });
     };
 
     const permAccounts = (account: PublicKey) => ({
