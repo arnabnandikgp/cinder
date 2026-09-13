@@ -141,8 +141,7 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
         item: &LiqQueueItem,
     ) -> Result<Option<HedgeOutcome>, AdapterError> {
         let oid = self.next_liq_oid();
-        self.ledger
-            .liquidate_user(&item.user, item.asset_id, oid)?;
+        self.ledger.liquidate_user(&item.user, item.asset_id, oid)?;
         let Some(lots_delta) = self.ledger.pending_liq_lots(&oid) else {
             return Ok(None);
         };
@@ -169,14 +168,24 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
                 asset_id: oid.asset_id,
             });
         }
-        self.inflight.insert(InFlight {
-            user: oid.user,
-            client_oid: oid.client_oid,
-            asset_id: oid.asset_id,
-            lots_delta: oid.lots_delta,
-            inserted_at_ms: now_ms,
-            venue_filled: false,
-        });
+        if self
+            .inflight
+            .insert(InFlight {
+                user: oid.user,
+                client_oid: oid.client_oid,
+                asset_id: oid.asset_id,
+                lots_delta: oid.lots_delta,
+                inserted_at_ms: now_ms,
+                venue_filled: false,
+            })
+            .is_err()
+        {
+            self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+            return Ok(HedgeOutcome::Failed {
+                oid: oid.client_oid,
+                reason: "duplicate live client oid".into(),
+            });
+        }
         let order = MarketOrder {
             asset_id: oid.asset_id,
             lots: oid.lots_delta,
@@ -277,17 +286,28 @@ mod tests {
     fn adapter() -> Adapter<MockPhoenix, MemoryLedger> {
         let mut operator = OperatorAuth::new("http://127.0.0.1:6699");
         operator
-            .authenticate(&MockTeeAuth { token: "op".into() }, &user(0), &|_| [0u8; 64])
+            .authenticate(&MockTeeAuth { token: "op".into() }, &user(0), &|_| {
+                [0u8; 64]
+            })
             .unwrap();
         let mut phoenix = MockPhoenix::new();
         phoenix.auto_fill = true;
         Adapter::new(phoenix, MemoryLedger::new(), operator)
     }
 
-    fn seed_long(ad: &mut Adapter<MockPhoenix, MemoryLedger>, u: PubkeyBytes, lots: i64, free: u64) {
+    fn seed_long(
+        ad: &mut Adapter<MockPhoenix, MemoryLedger>,
+        u: PubkeyBytes,
+        lots: i64,
+        free: u64,
+    ) {
         ad.ledger.ensure_user(u, free);
-        ad.ledger.user_lots.insert(u, [(1, lots)].into_iter().collect());
-        ad.ledger.book.insert(1, ad.ledger.book.get(&1).copied().unwrap_or(0) + lots);
+        ad.ledger
+            .user_lots
+            .insert(u, [(1, lots)].into_iter().collect());
+        ad.ledger
+            .book
+            .insert(1, ad.ledger.book.get(&1).copied().unwrap_or(0) + lots);
         ad.phoenix.set_lots(1, ad.phoenix.base_lots(1) + lots);
         ad.mark_observed_at_ms = Some(1_000);
     }
@@ -318,9 +338,10 @@ mod tests {
             .insert(loser, [(1, 10 * 1_000_000 + 200_000)].into_iter().collect());
         ad.ledger.mark_usdc_per_lot = 1_000_000;
         // Winner: entry below mark → positive uPnL, haircut 50%, still above MM.
-        ad.ledger
-            .user_entry
-            .insert(winner, [(1, 10 * 1_000_000 - 400_000)].into_iter().collect());
+        ad.ledger.user_entry.insert(
+            winner,
+            [(1, 10 * 1_000_000 - 400_000)].into_iter().collect(),
+        );
         let r = ad.scan_liquidations(1_000, 1).unwrap();
         assert!(r.liquidated.contains(&(loser, 1)));
         assert!(!r.liquidated.contains(&(winner, 1)));
@@ -389,7 +410,9 @@ mod tests {
         seed_long(&mut ad, b, 10, 100_000);
         // Soft stale: do not newly classify B.
         ad.mark_observed_at_ms = Some(1_000);
-        let r1 = ad.scan_liquidations(1_000 + cc::MARK_STALE_MS + 1, 1).unwrap();
+        let r1 = ad
+            .scan_liquidations(1_000 + cc::MARK_STALE_MS + 1, 1)
+            .unwrap();
         assert_eq!(r1.classified, 0);
         assert!(r1.liquidated.is_empty());
         assert_eq!(ad.ledger.lots_of(&b, 1), 10);
@@ -486,13 +509,13 @@ mod tests {
             im: 1,
             lots: 10,
         }];
-        ad.ledger.user_lots.insert(a, [(1, 6)].into_iter().collect());
+        ad.ledger
+            .user_lots
+            .insert(a, [(1, 6)].into_iter().collect());
         ad.ledger.book.insert(1, 6);
         ad.phoenix.set_lots(1, 6);
         ad.mark_observed_at_ms = Some(0);
-        let r = ad
-            .scan_liquidations(cc::MARK_STALE_MS + 1, 1)
-            .unwrap();
+        let r = ad.scan_liquidations(cc::MARK_STALE_MS + 1, 1).unwrap();
         assert_eq!(r.classified, 0);
         assert_eq!(r.liquidated, vec![(a, 1)]);
         assert_eq!(ad.ledger.lots_of(&a, 1), 0);

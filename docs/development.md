@@ -8,7 +8,8 @@
 | Rust | 1.89.0 |
 | Solana / Agave | 3.1.9 |
 | Anchor CLI and `anchor-lang` | 1.0.2 |
-| MagicBlock ER SDK | 0.16.2 |
+| MagicBlock ER SDK (Rust) | 0.16.2 |
+| MagicBlock ER client (TypeScript) | 0.14.3 |
 
 Install dependencies with `yarn install --frozen-lockfile`, then build with
 `yarn build`.

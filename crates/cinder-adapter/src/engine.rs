@@ -152,14 +152,24 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             });
         }
 
-        self.inflight.insert(InFlight {
-            user: oid.user,
-            client_oid: oid.client_oid,
-            asset_id: oid.asset_id,
-            lots_delta: oid.lots_delta,
-            inserted_at_ms: now_ms,
-            venue_filled: false,
-        });
+        if self
+            .inflight
+            .insert(InFlight {
+                user: oid.user,
+                client_oid: oid.client_oid,
+                asset_id: oid.asset_id,
+                lots_delta: oid.lots_delta,
+                inserted_at_ms: now_ms,
+                venue_filled: false,
+            })
+            .is_err()
+        {
+            self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+            return Ok(HedgeOutcome::Failed {
+                oid: oid.client_oid,
+                reason: "duplicate live client oid".into(),
+            });
+        }
 
         let order = MarketOrder {
             asset_id: oid.asset_id,
@@ -339,8 +349,14 @@ mod tests {
         assert!(matches!(out, HedgeOutcome::InvariantBroken { asset_id: 1 }));
         assert_eq!(ad.ledger.book_lots(1), 0);
         assert_eq!(ad.phoenix.base_lots(1), 99);
-        assert_eq!(ad.ledger.config_halt() & cc::INVARIANT_BROKEN, cc::INVARIANT_BROKEN);
-        assert_eq!(ad.ledger.book_halt() & cc::INVARIANT_BROKEN, cc::INVARIANT_BROKEN);
+        assert_eq!(
+            ad.ledger.config_halt() & cc::INVARIANT_BROKEN,
+            cc::INVARIANT_BROKEN
+        );
+        assert_eq!(
+            ad.ledger.book_halt() & cc::INVARIANT_BROKEN,
+            cc::INVARIANT_BROKEN
+        );
         assert!(!ad.ledger.invariant_ok());
     }
 
@@ -359,7 +375,9 @@ mod tests {
     #[test]
     fn halt_writer_mirrors_config_and_book() {
         let mut ad = adapter_with(MockPhoenix::new());
-        ad.ledger.write_halt(cc::HALT_ENTRIES | cc::OPERATOR_DOWN).unwrap();
+        ad.ledger
+            .write_halt(cc::HALT_ENTRIES | cc::OPERATOR_DOWN)
+            .unwrap();
         assert_eq!(ad.ledger.config_halt(), ad.ledger.book_halt());
         assert_eq!(
             ad.ledger.config_halt(),
@@ -382,24 +400,61 @@ mod tests {
         assert!(matches!(out, HedgeOutcome::InvariantBroken { asset_id: 1 }));
         assert!(ad.ledger.fills.is_empty());
         assert_eq!(ad.inflight.len(), 1);
-        assert_eq!(ad.ledger.config_halt() & cc::INVARIANT_BROKEN, cc::INVARIANT_BROKEN);
+        assert_eq!(
+            ad.ledger.config_halt() & cc::INVARIANT_BROKEN,
+            cc::INVARIANT_BROKEN
+        );
     }
 
     #[test]
     fn expire_does_not_fail_ack_venue_filled_rows() {
         let mut ad = adapter_with(MockPhoenix::new());
-        ad.inflight.insert(InFlight {
-            user: user(),
-            client_oid: oid(8),
-            asset_id: 1,
-            lots_delta: 10,
-            inserted_at_ms: 0,
-            venue_filled: true,
-        });
+        ad.inflight
+            .insert(InFlight {
+                user: user(),
+                client_oid: oid(8),
+                asset_id: 1,
+                lots_delta: 10,
+                inserted_at_ms: 0,
+                venue_filled: true,
+            })
+            .unwrap();
         let expired = ad.expire_inflight(cc::IN_FLIGHT_TTL_MS + 10).unwrap();
         assert!(expired.is_empty());
         assert!(ad.ledger.fails.is_empty());
         assert_eq!(ad.inflight.len(), 1);
+    }
+
+    #[test]
+    fn duplicate_live_oid_preserves_original_reconciliation_row() {
+        let mut ad = adapter_with(MockPhoenix::new());
+        let first = InFlight {
+            user: user(),
+            client_oid: oid(9),
+            asset_id: 1,
+            lots_delta: 10,
+            inserted_at_ms: 1_000,
+            venue_filled: false,
+        };
+        ad.inflight.insert(first.clone()).unwrap();
+        let duplicate = PendingOid {
+            user: [8u8; 32],
+            client_oid: oid(9),
+            asset_id: 1,
+            lots_delta: -10,
+            created_at_ms: 1_000,
+        };
+
+        let outcome = ad.hedge_pending(1_000, &duplicate).unwrap();
+
+        assert!(
+            matches!(outcome, HedgeOutcome::Failed { reason, .. } if reason == "duplicate live client oid")
+        );
+        assert_eq!(ad.inflight.get(&oid(9)), Some(&first));
+        assert_eq!(
+            ad.ledger.fails,
+            vec![(duplicate.user, duplicate.client_oid)]
+        );
     }
 
     #[test]
@@ -461,7 +516,10 @@ mod tests {
         let mut ad = adapter_with(MockPhoenix::new());
         ad.mark_observed_at_ms = Some(0);
         let out = ad
-            .hedge_pending(cc::MARK_STALE_MS + 1, &pending(13, 10, cc::MARK_STALE_MS + 1))
+            .hedge_pending(
+                cc::MARK_STALE_MS + 1,
+                &pending(13, 10, cc::MARK_STALE_MS + 1),
+            )
             .unwrap();
         assert!(matches!(out, HedgeOutcome::Failed { reason, .. } if reason == "stale mark"));
         assert_eq!(ad.ledger.config_halt() & cc::HALT_ENTRIES, cc::HALT_ENTRIES);
@@ -547,7 +605,10 @@ mod tests {
         assert_eq!(ad.ledger.reserve_roots, vec![1_000]);
         assert!(!ad.note_fill_for_root(1_000));
         assert!(ad.crank_reserve_root(1_000 + cc::COMMIT_EVERY_MS).unwrap());
-        assert_eq!(ad.ledger.reserve_roots, vec![1_000, 1_000 + cc::COMMIT_EVERY_MS]);
+        assert_eq!(
+            ad.ledger.reserve_roots,
+            vec![1_000, 1_000 + cc::COMMIT_EVERY_MS]
+        );
     }
 
     #[test]

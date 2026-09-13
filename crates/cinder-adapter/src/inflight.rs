@@ -19,8 +19,13 @@ pub struct InFlightTable {
 }
 
 impl InFlightTable {
-    pub fn insert(&mut self, row: InFlight) {
+    /// Insert a live venue order without replacing an existing client OID.
+    pub fn insert(&mut self, row: InFlight) -> Result<(), InFlight> {
+        if self.entries.contains_key(&row.client_oid) {
+            return Err(row);
+        }
         self.entries.insert(row.client_oid, row);
+        Ok(())
     }
 
     pub fn remove(&mut self, oid: &ClientOid) -> Option<InFlight> {
@@ -50,8 +55,7 @@ impl InFlightTable {
         self.entries
             .values()
             .filter(|r| {
-                !r.venue_filled
-                    && now_ms.saturating_sub(r.inserted_at_ms) > cc::IN_FLIGHT_TTL_MS
+                !r.venue_filled && now_ms.saturating_sub(r.inserted_at_ms) > cc::IN_FLIGHT_TTL_MS
             })
             .cloned()
             .collect()
