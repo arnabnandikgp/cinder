@@ -118,6 +118,7 @@ pub fn delegate_fees_handler(ctx: Context<DelegateFees>) -> Result<()> {
 pub fn init_user_permission_handler(ctx: Context<UserPermission>) -> Result<()> {
     let cfg = load_vault_config(&ctx.accounts.config)?;
     require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+    require_user_schema(&ctx.accounts.user_ledger)?;
     if permission_exists(&ctx.accounts.permission) {
         msg!("user permission already exists");
         return Ok(());
@@ -156,6 +157,7 @@ pub fn init_user_permission_handler(ctx: Context<UserPermission>) -> Result<()> 
 pub fn init_book_permission_handler(ctx: Context<BookPermission>) -> Result<()> {
     let cfg = load_vault_config(&ctx.accounts.config)?;
     require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+    require_book_schema(&ctx.accounts.book)?;
     if permission_exists(&ctx.accounts.permission) {
         msg!("book permission already exists");
         return Ok(());

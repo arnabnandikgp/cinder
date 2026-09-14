@@ -2,7 +2,9 @@ use anchor_lang::prelude::*;
 use cinder_common as cc;
 use ephemeral_rollups_sdk::anchor::ephemeral;
 
+mod migration;
 mod privacy;
+pub use migration::*;
 pub use privacy::*;
 
 declare_id!("h3Bw2xjj69JssRkaxr8Jxh6TtamvrjSxASXbfLeWyPg");
@@ -20,6 +22,7 @@ pub mod cinder_ledger {
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
 
         let book = &mut ctx.accounts.book;
+        book.schema_version = cc::ACCOUNT_SCHEMA_VERSION;
         book.residual_len = 0;
         book.residuals = [Residual::default(); cc::MAX_BOOK_MARKETS];
         book.phoenix_collateral = 0;
@@ -53,12 +56,15 @@ pub mod cinder_ledger {
     pub fn init_user(ctx: Context<InitUser>) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_book_schema(&ctx.accounts.book)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
+        ledger.schema_version = cc::ACCOUNT_SCHEMA_VERSION;
         ledger.user = ctx.accounts.user.key();
         ledger.free = 0;
         ledger.reserved = 0;
         ledger.withdrawable = 0;
+        ledger.bad_debt_usdc = 0;
         ledger.pending_oid_count = 0;
         ledger.nonce = 0;
         ledger.last_funding_epoch = ctx.accounts.book.funding_epoch;
@@ -79,6 +85,8 @@ pub mod cinder_ledger {
     pub fn credit_deposit(ctx: Context<CreditDeposit>, amount: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_book_schema(&ctx.accounts.book)?;
+        require_user_schema(&ctx.accounts.user_ledger)?;
         require!(!cc::deposit_blocked(cfg.paused), LedgerError::Halted);
         require!(!cc::deposit_blocked(ctx.accounts.book.halt), LedgerError::Halted);
         require!(amount > 0, LedgerError::ZeroAmount);
@@ -104,6 +112,8 @@ pub mod cinder_ledger {
         require!(lots_delta != 0, LedgerError::ZeroLots);
 
         let cfg = load_vault_config(&ctx.accounts.config)?;
+        require_book_schema(&ctx.accounts.book)?;
+        require_user_schema(&ctx.accounts.user_ledger)?;
         require!(!cc::entries_blocked(cfg.paused), LedgerError::Halted);
         require!(!cc::entries_blocked(ctx.accounts.book.halt), LedgerError::Halted);
         require!(asset_allowlisted(&cfg, asset_id), LedgerError::AssetNotAllowlisted);
@@ -159,6 +169,8 @@ pub mod cinder_ledger {
             asset_id,
             lots_delta,
             state: cc::OID_PENDING,
+            limit_price_ticks: 0,
+            last_valid_slot: 0,
         };
         ledger.pending_oid_count = ledger
             .pending_oid_count
@@ -177,6 +189,8 @@ pub mod cinder_ledger {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
         require!(filled_lots != 0, LedgerError::ZeroLots);
+        require_book_schema(&ctx.accounts.book)?;
+        require_user_schema(&ctx.accounts.user_ledger)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
         let (idx, oid) = take_pending_oid(ledger, &client_oid)?;
@@ -264,6 +278,7 @@ pub mod cinder_ledger {
     pub fn ack_phoenix_fail(ctx: Context<AckFail>, client_oid: [u8; 16]) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_user_schema(&ctx.accounts.user_ledger)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
         let (idx, oid) = take_pending_oid(ledger, &client_oid)?;
@@ -288,6 +303,8 @@ pub mod cinder_ledger {
     pub fn request_withdraw(ctx: Context<RequestWithdraw>, amount: u64) -> Result<()> {
         require!(amount > 0, LedgerError::ZeroAmount);
         let cfg = load_vault_config(&ctx.accounts.config)?;
+        require_book_schema(&ctx.accounts.book)?;
+        require_user_schema(&ctx.accounts.user_ledger)?;
         require!(!cc::withdraw_blocked(cfg.paused), LedgerError::Halted);
         require!(!cc::withdraw_blocked(ctx.accounts.book.halt), LedgerError::Halted);
 
@@ -310,6 +327,7 @@ pub mod cinder_ledger {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
         require!(amount > 0, LedgerError::ZeroAmount);
+        require_user_schema(&ctx.accounts.user_ledger)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
         require!(
@@ -323,6 +341,7 @@ pub mod cinder_ledger {
     pub fn set_book_halt(ctx: Context<AdapterBook>, halt: u8) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_book_schema(&ctx.accounts.book)?;
         ctx.accounts.book.halt = halt;
         Ok(())
     }
@@ -330,6 +349,7 @@ pub mod cinder_ledger {
     pub fn bump_funding_epoch(ctx: Context<AdapterBook>, epoch: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_book_schema(&ctx.accounts.book)?;
         require!(
             (ctx.accounts.book.halt & cc::INVARIANT_BROKEN) == 0
                 && (cfg.paused & cc::INVARIANT_BROKEN) == 0,
@@ -351,6 +371,8 @@ pub mod cinder_ledger {
     ) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_book_schema(&ctx.accounts.book)?;
+        require_user_schema(&ctx.accounts.user_ledger)?;
         require!(
             (ctx.accounts.book.halt & cc::INVARIANT_BROKEN) == 0
                 && (cfg.paused & cc::INVARIANT_BROKEN) == 0,
@@ -394,6 +416,7 @@ pub mod cinder_ledger {
     pub fn update_book_collateral(ctx: Context<AdapterBook>, phoenix_collateral: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_book_schema(&ctx.accounts.book)?;
         ctx.accounts.book.phoenix_collateral = phoenix_collateral;
         Ok(())
     }
@@ -402,6 +425,7 @@ pub mod cinder_ledger {
     pub fn heartbeat_scan(ctx: Context<AdapterBook>, now_ms: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_book_schema(&ctx.accounts.book)?;
         ctx.accounts.book.last_scan_ms = now_ms;
         Ok(())
     }
@@ -416,6 +440,8 @@ pub mod cinder_ledger {
     ) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_book_schema(&ctx.accounts.book)?;
+        require_user_schema(&ctx.accounts.user_ledger)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
         revert_pending_on_asset(ledger, asset_id)?;
@@ -449,6 +475,8 @@ pub mod cinder_ledger {
             asset_id,
             lots_delta,
             state: cc::OID_LIQUIDATING,
+            limit_price_ticks: 0,
+            last_valid_slot: 0,
         };
         ledger.pending_oid_count = ledger
             .pending_oid_count
@@ -467,6 +495,16 @@ pub mod cinder_ledger {
 
     pub fn delegate_fees(ctx: Context<DelegateFees>) -> Result<()> {
         privacy::delegate_fees_handler(ctx)
+    }
+
+    /// One-shot conversion of a legacy delegated UserLedger to the current layout.
+    pub fn migrate_user_ledger(ctx: Context<MigrateUserLedger>) -> Result<()> {
+        migration::migrate_user_ledger_handler(ctx)
+    }
+
+    /// One-shot conversion of the legacy delegated Book to the current layout.
+    pub fn migrate_book(ctx: Context<MigrateBook>) -> Result<()> {
+        migration::migrate_book_handler(ctx)
     }
 
     pub fn init_user_permission(ctx: Context<UserPermission>) -> Result<()> {
@@ -704,10 +742,12 @@ pub struct LiquidateUser<'info> {
 #[account]
 #[derive(InitSpace)]
 pub struct UserLedger {
+    pub schema_version: u8,
     pub user: Pubkey,
     pub free: u64,
     pub reserved: u64,
     pub withdrawable: u64,
+    pub bad_debt_usdc: u64,
     pub pending_oid_count: u8,
     pub nonce: u64,
     pub last_funding_epoch: u64,
@@ -720,6 +760,7 @@ pub struct UserLedger {
 #[account]
 #[derive(InitSpace)]
 pub struct Book {
+    pub schema_version: u8,
     pub residual_len: u8,
     pub residuals: [Residual; 32],
     pub phoenix_collateral: u64,
@@ -732,18 +773,11 @@ pub struct Book {
 }
 
 impl Book {
-    /// Discriminator plus the complete fixed-width Book layout.
-    /// `Book::INIT_SPACE` predates `funding_epoch` and `last_scan_ms`.
-    pub const ACCOUNT_SPACE: usize = 8
-        + 1
-        + (cc::MAX_BOOK_MARKETS * Residual::INIT_SPACE)
-        + 8
-        + 8
-        + 1
-        + 1
-        + 8
-        + 8
-        + 1;
+    pub const ACCOUNT_SPACE: usize = 8 + Self::INIT_SPACE;
+}
+
+impl UserLedger {
+    pub const ACCOUNT_SPACE: usize = 8 + Self::INIT_SPACE;
 }
 
 #[account]
@@ -769,6 +803,10 @@ pub struct OpenOid {
     pub asset_id: u16,
     pub lots_delta: i64,
     pub state: u8,
+    /// Exact Phoenix execution bound. Zero means no bound was supplied and must not reach the venue.
+    pub limit_price_ticks: u64,
+    /// Phoenix L1 expiry slot. Zero means no deadline was supplied and must not reach the venue.
+    pub last_valid_slot: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -817,6 +855,22 @@ fn load_vault_config(info: &AccountInfo) -> Result<cinder_vault::Config> {
     let mut slice: &[u8] = &data;
     cinder_vault::Config::try_deserialize(&mut slice)
         .map_err(|_| error!(LedgerError::InvalidConfig))
+}
+
+fn require_user_schema(ledger: &UserLedger) -> Result<()> {
+    require!(
+        ledger.schema_version == cc::ACCOUNT_SCHEMA_VERSION,
+        LedgerError::UnsupportedAccountSchema
+    );
+    Ok(())
+}
+
+fn require_book_schema(book: &Book) -> Result<()> {
+    require!(
+        book.schema_version == cc::ACCOUNT_SCHEMA_VERSION,
+        LedgerError::UnsupportedAccountSchema
+    );
+    Ok(())
 }
 
 fn stub_im(lots: i64) -> Result<u64> {
@@ -1201,4 +1255,14 @@ pub enum LedgerError {
     DuplicateFundingAsset,
     #[msg("unsettled funding must be folded first")]
     UnsettledFunding,
+    #[msg("account has already been migrated")]
+    AccountAlreadyMigrated,
+    #[msg("unsupported account schema")]
+    UnsupportedAccountSchema,
+    #[msg("invalid legacy account data")]
+    InvalidMigrationData,
+    #[msg("legacy account does not match its expected PDA")]
+    InvalidMigrationAccount,
+    #[msg("account must be rent-exempt at the new size before migration")]
+    MigrationRentShortfall,
 }

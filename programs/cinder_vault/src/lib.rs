@@ -4,6 +4,9 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use cinder_common as cc;
 use ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer;
 
+mod migration;
+pub use migration::*;
+
 /// Magic Action default escrow index (`ActionArgs::new`).
 const ACTION_ESCROW_INDEX: u8 = 255;
 
@@ -40,11 +43,13 @@ pub mod cinder_vault {
         config.bump_vault_authority = ctx.bumps.vault_authority;
 
         let root = &mut ctx.accounts.reserve_root;
+        root.schema_version = cc::ACCOUNT_SCHEMA_VERSION;
         root.epoch = 0;
         root.root = [0u8; 32];
         root.user_count = 0;
         root.total_free = 0;
         root.total_reserved = 0;
+        root.total_bad_debt = 0;
         root.book_hash = [0u8; 32];
         root.committed_at_base_slot = 0;
         Ok(())
@@ -69,6 +74,11 @@ pub mod cinder_vault {
             config.allowlist_assets[i] = *asset;
         }
         Ok(())
+    }
+
+    /// One-shot conversion of the legacy ReserveRoot to the current layout.
+    pub fn migrate_reserve_root(ctx: Context<MigrateReserveRoot>) -> Result<()> {
+        migration::migrate_reserve_root_handler(ctx)
     }
 
     pub fn escape_withdraw(_ctx: Context<EscapeWithdraw>) -> Result<()> {
@@ -196,6 +206,10 @@ pub mod cinder_vault {
             VaultError::Unauthorized
         );
         let rr = &mut ctx.accounts.reserve_root;
+        require!(
+            rr.schema_version == cc::ACCOUNT_SCHEMA_VERSION,
+            VaultError::UnsupportedAccountSchema
+        );
         rr.epoch = rr.epoch.checked_add(1).ok_or(VaultError::Overflow)?;
         rr.root = root;
         rr.user_count = user_count;
@@ -321,7 +335,7 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + ReserveRoot::INIT_SPACE,
+        space = ReserveRoot::ACCOUNT_SPACE,
         seeds = [cc::SEED_RESERVE],
         bump
     )]
@@ -541,13 +555,19 @@ pub struct Config {
 #[account]
 #[derive(InitSpace)]
 pub struct ReserveRoot {
+    pub schema_version: u8,
     pub epoch: u64,
     pub root: [u8; 32],
     pub user_count: u32,
     pub total_free: u64,
     pub total_reserved: u64,
+    pub total_bad_debt: u64,
     pub book_hash: [u8; 32],
     pub committed_at_base_slot: u64,
+}
+
+impl ReserveRoot {
+    pub const ACCOUNT_SPACE: usize = 8 + Self::INIT_SPACE;
 }
 
 #[error_code]
@@ -574,4 +594,10 @@ pub enum VaultError {
     BadEscrowAuth,
     #[msg("escrow PDA mismatch")]
     BadEscrow,
+    #[msg("account has already been migrated")]
+    AccountAlreadyMigrated,
+    #[msg("unsupported account schema")]
+    UnsupportedAccountSchema,
+    #[msg("invalid legacy account data")]
+    InvalidMigrationData,
 }

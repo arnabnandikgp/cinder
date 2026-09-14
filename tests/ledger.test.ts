@@ -119,7 +119,10 @@ describe("ledger accounts and order machine", () => {
     expect(config.allowlistLen).to.equal(0);
 
     const root = await vault.account.reserveRoot.fetch(reservePda);
+    expect(root.schemaVersion).to.equal(1);
     expect(root.epoch.toNumber()).to.equal(0);
+    expect(root.totalBadDebt.toNumber()).to.equal(0);
+    expect((await connection.getAccountInfo(reservePda))?.data.length).to.equal(117);
 
     await ledger.methods
       .initialize()
@@ -134,10 +137,12 @@ describe("ledger accounts and order machine", () => {
       .rpc();
 
     const book = await ledger.account.book.fetch(bookPda);
+    expect(book.schemaVersion).to.equal(1);
     expect(book.residualLen).to.equal(0);
     expect(book.invariantOk).to.equal(1);
     expect(book.halt).to.equal(0);
     expect(book.phoenixCollateral.toNumber()).to.equal(0);
+    expect((await connection.getAccountInfo(bookPda))?.data.length).to.equal(365);
 
     const fees = await ledger.account.feeAccrual.fetch(feesPda);
     expect(fees.phoenixFeesPaid.toNumber()).to.equal(0);
@@ -162,12 +167,15 @@ describe("ledger accounts and order machine", () => {
       .rpc();
 
     const ul = await ledger.account.userLedger.fetch(userLedgerPda);
+    expect(ul.schemaVersion).to.equal(1);
     expect(ul.user.toBase58()).to.equal(user.publicKey.toBase58());
     expect(ul.free.toNumber()).to.equal(0);
     expect(ul.reserved.toNumber()).to.equal(0);
+    expect(ul.badDebtUsdc.toNumber()).to.equal(0);
     expect(ul.nonce.toNumber()).to.equal(0);
     expect(ul.positionsLen).to.equal(0);
     expect(ul.pendingOidCount).to.equal(0);
+    expect((await connection.getAccountInfo(userLedgerPda))?.data.length).to.equal(980);
 
     await ledger.methods
       .creditDeposit(new BN(CREDIT))
@@ -182,6 +190,52 @@ describe("ledger accounts and order machine", () => {
 
     const credited = await ledger.account.userLedger.fetch(userLedgerPda);
     expect(credited.free.toNumber()).to.equal(CREDIT);
+  });
+
+  it("rejects a second migration of current accounts", async () => {
+    const expectAlreadyMigrated = async (request: Promise<string>) => {
+      try {
+        await request;
+        expect.fail("migration should be one-shot");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(/AccountAlreadyMigrated/);
+      }
+    };
+
+    await expectAlreadyMigrated(
+      ledger.methods
+        .migrateBook()
+        .accountsPartial({
+          adapter: adapter.publicKey,
+          config: configPda,
+          book: bookPda,
+        })
+        .signers([adapter])
+        .rpc()
+    );
+    await expectAlreadyMigrated(
+      ledger.methods
+        .migrateUserLedger()
+        .accountsPartial({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: userLedgerPda,
+        })
+        .signers([adapter])
+        .rpc()
+    );
+    await expectAlreadyMigrated(
+      vault.methods
+        .migrateReserveRoot()
+        .accountsPartial({
+          admin: payer.publicKey,
+          config: configPda,
+          reserveRoot: reservePda,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc()
+    );
   });
 
   it("place +10 lots then fail-ack restores free and lots", async () => {
@@ -204,6 +258,8 @@ describe("ledger accounts and order machine", () => {
     expect(ul.positions[0].reservedIm.toNumber()).to.equal(IM_TEN_LOTS);
     expect(ul.pendingOidCount).to.equal(1);
     expect(ul.nonce.toNumber()).to.equal(1);
+    expect(ul.openOids[0].limitPriceTicks.toNumber()).to.equal(0);
+    expect(ul.openOids[0].lastValidSlot.toNumber()).to.equal(0);
 
     const bookBefore = await ledger.account.book.fetch(bookPda);
     expect(bookBefore.residualLen).to.equal(0);
