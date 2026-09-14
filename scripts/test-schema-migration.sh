@@ -12,7 +12,7 @@ for bin in anchor mb-test-validator ephemeral-validator query-filtering-service;
   fi
 done
 
-for port in 8899 7799 6699 6700; do
+for port in 8899 8900 7799 7800 6699 6700; do
   if lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1; then
     echo "error: port ${port} is already in use" >&2
     exit 1
@@ -28,9 +28,10 @@ fixture="${storage}/fixture"
 
 cleanup() {
   for pid in "${qfs_pid:-}" "${er_pid:-}" "${base_pid:-}"; do
+    [ -n "${pid}" ] && kill -TERM "${pid}" 2>/dev/null || true
     [ -n "${pid}" ] && pkill -TERM -P "${pid}" 2>/dev/null || true
   done
-  sleep 0.2
+  sleep 2
   for pid in "${qfs_pid:-}" "${er_pid:-}" "${base_pid:-}"; do
     [ -n "${pid}" ] && pkill -KILL -P "${pid}" 2>/dev/null || true
     [ -n "${pid}" ] && kill -KILL "${pid}" 2>/dev/null || true
@@ -79,4 +80,4 @@ EPHEMERAL_PROVIDER_ENDPOINT=http://127.0.0.1:7799 \
 TEE_PROVIDER_ENDPOINT=http://127.0.0.1:6699 \
 TEE_WS_ENDPOINT=ws://127.0.0.1:6700 \
 CINDER_MIGRATION_MANIFEST="${fixture}/manifest.json" \
-  ./node_modules/.bin/ts-mocha -p ./tsconfig.json -t 180000 tests/schema-migration.test.ts
+  ./node_modules/.bin/ts-mocha --exit -p ./tsconfig.json -t 180000 tests/schema-migration.test.ts

@@ -67,11 +67,7 @@ function qfsConnection(token: string) {
 }
 
 async function privateRead(connection: Connection, address: PublicKey) {
-  try {
-    return await connection.getAccountInfo(address);
-  } catch {
-    return null;
-  }
+  return connection.getAccountInfo(address);
 }
 
 describe("v0 schema migration on delegated accounts", function () {
