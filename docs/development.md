@@ -41,3 +41,12 @@ so a new invocation starts from a clean state. Stop the stack with `Ctrl-C`.
 The repository CI also exercises Phoenix integration against a Surfpool fork.
 Those tests depend on a reachable mainnet RPC and are therefore more suitable
 for CI than a quick local check.
+
+To run that fork locally, supply your own authenticated mainnet RPC URL without
+committing it:
+
+```bash
+SURFPOOL_RPC_URL="https://your-mainnet-rpc.example" ./scripts/stack-fork.sh
+```
+
+CI reads the URL from the `SURFPOOL_RPC_URL` GitHub Actions secret.

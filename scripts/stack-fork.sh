@@ -4,6 +4,11 @@ set -euo pipefail
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
+if [[ -z "${SURFPOOL_RPC_URL:-}" ]]; then
+  echo "error: SURFPOOL_RPC_URL must point to a mainnet RPC" >&2
+  exit 1
+fi
+
 SURFPOOL_VERSION="1.5.0"
 # SHA256 of GitHub release tarballs for v1.5.0 (computed from the published assets).
 SURFPOOL_SHA_DARWIN_ARM64="418d1464050cb1e09225b37b907952383f712648544318a0ca7ce13304e7915a"
@@ -62,12 +67,12 @@ if ! command -v surfpool >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "stack-fork: surfpool start --rpc-url ${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}"
+echo "stack-fork: starting Surfpool with SURFPOOL_RPC_URL"
 echo "  RPC :8899  (point local ER/QFS remotes here)"
 echo "  Do not send-register-ixs to Phoenix mainnet; send built ixs to this fork."
 # Local fork only: skip-sig lets venue-boot pad the Phoenix onboarder signature.
 exec surfpool start \
-  --rpc-url "${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}" \
+  --rpc-url "${SURFPOOL_RPC_URL}" \
   --skip-signature-verification \
   --ci \
   --no-deploy
