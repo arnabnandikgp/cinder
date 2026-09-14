@@ -6,6 +6,7 @@
   "scripts": {
     "build": "anchor keys sync && anchor build",
     "test": "anchor test --validator legacy",
+    "test:schema-migration": "./scripts/test-schema-migration.sh",
     "demo": "ts-node --transpile-only scripts/cinder-demo.ts",
     "web:dev": "yarn --cwd web dev",
     "web:build": "yarn --cwd web build"

@@ -13,6 +13,9 @@ pub const MAX_BOOK_MARKETS: usize = 32;
 pub const MAX_OPEN_OIDS_PER_USER: usize = 8;
 pub const MAX_ALLOWLIST: usize = 32;
 
+/// Current serialized layout for versioned Cinder protocol accounts.
+pub const ACCOUNT_SCHEMA_VERSION: u8 = 1;
+
 /// UserLedger permission: user (view) + adapter (AUTHORITY + view).
 pub const MAX_USER_PERMISSION_MEMBERS: usize = 2;
 /// Book / FeeAccrual permission: adapter only.
@@ -58,6 +61,8 @@ pub const HALT_DEPOSIT: u8 = 1 << 2;
 pub const UNSAFE_POOL: u8 = 1 << 3;
 pub const INVARIANT_BROKEN: u8 = 1 << 4;
 pub const OPERATOR_DOWN: u8 = 1 << 5;
+pub const BAD_DEBT: u8 = 1 << 6;
+pub const VENUE_BREACH: u8 = 1 << 7;
 
 pub const OID_PENDING: u8 = 0;
 pub const OID_ACKED: u8 = 1;
@@ -65,11 +70,13 @@ pub const OID_FAILED: u8 = 2;
 pub const OID_LIQUIDATING: u8 = 3;
 
 pub fn entries_blocked(flags: u8) -> bool {
-    flags & (HALT_ENTRIES | UNSAFE_POOL | INVARIANT_BROKEN | OPERATOR_DOWN) != 0
+    flags
+        & (HALT_ENTRIES | UNSAFE_POOL | INVARIANT_BROKEN | OPERATOR_DOWN | BAD_DEBT | VENUE_BREACH)
+        != 0
 }
 
 pub fn withdraw_blocked(flags: u8) -> bool {
-    flags & (HALT_WITHDRAW | INVARIANT_BROKEN) != 0
+    flags & (HALT_WITHDRAW | INVARIANT_BROKEN | BAD_DEBT) != 0
 }
 
 pub fn deposit_blocked(flags: u8) -> bool {
@@ -216,5 +223,24 @@ mod realize_tests {
         let r = realize_on_fill(10, -15, 10_000_000, -16_500_000).unwrap();
         assert_eq!(r.realized_usdc, 1_000_000);
         assert_eq!(r.new_entry_quote, -5_500_000);
+    }
+}
+
+#[cfg(test)]
+mod halt_tests {
+    use super::*;
+
+    #[test]
+    fn bad_debt_blocks_entries_and_withdrawals_but_allows_deposits() {
+        assert!(entries_blocked(BAD_DEBT));
+        assert!(withdraw_blocked(BAD_DEBT));
+        assert!(!deposit_blocked(BAD_DEBT));
+    }
+
+    #[test]
+    fn venue_breach_blocks_new_entries_only() {
+        assert!(entries_blocked(VENUE_BREACH));
+        assert!(!withdraw_blocked(VENUE_BREACH));
+        assert!(!deposit_blocked(VENUE_BREACH));
     }
 }
