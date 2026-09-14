@@ -147,9 +147,15 @@ jobs:
           '
           echo "ANCHOR_WALLET=$HOME/.config/solana/id.json" >> "$GITHUB_ENV"
       - name: Start Surfpool mainnet fork
+        env:
+          SURFPOOL_RPC_URL: ${{ secrets.SURFPOOL_RPC_URL }}
         run: |
+          if [ -z "${SURFPOOL_RPC_URL}" ]; then
+            echo "SURFPOOL_RPC_URL repository secret is required" >&2
+            exit 1
+          fi
           surfpool start \
-            --rpc-url "${SURFPOOL_RPC_URL:-https://api.mainnet-beta.solana.com}" \
+            --rpc-url "${SURFPOOL_RPC_URL}" \
             --skip-signature-verification \
             --ci \
             --no-deploy \

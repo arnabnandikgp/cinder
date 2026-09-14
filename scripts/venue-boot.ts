@@ -13,6 +13,7 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
+import referralActivationPermissionFallback from "./fixtures/phoenix-referral-activation-permission.json";
 
 const FORK = process.env.PROVIDER_ENDPOINT || "http://127.0.0.1:8899";
 const API = process.env.PHOENIX_API_URL || "https://perp-api.phoenix.trade";
@@ -25,6 +26,52 @@ type KitIx = {
   accounts: readonly { address: string; role: number }[];
   data: ArrayLike<number>;
 };
+
+export type ReferralActivationPermission = {
+  trader_onboarder: string;
+  risk_authority: string;
+  permission_account: string;
+};
+
+type ReferralActivationApi = {
+  getReferralActivationPermission(): Promise<ReferralActivationPermission>;
+};
+
+function validateReferralActivationPermission(
+  permission: ReferralActivationPermission
+): ReferralActivationPermission {
+  new PublicKey(permission.trader_onboarder);
+  new PublicKey(permission.risk_authority);
+  new PublicKey(permission.permission_account);
+  return permission;
+}
+
+const PINNED_REFERRAL_ACTIVATION_PERMISSION =
+  validateReferralActivationPermission(referralActivationPermissionFallback);
+
+function isRateLimitError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    error.status === 429
+  );
+}
+
+export async function getReferralActivationPermission(
+  api: ReferralActivationApi,
+  warn: (message: string) => void = console.warn
+): Promise<ReferralActivationPermission> {
+  try {
+    return await api.getReferralActivationPermission();
+  } catch (error) {
+    if (!isRateLimitError(error)) throw error;
+    warn(
+      "Phoenix activation-permission endpoint returned HTTP 429; using the pinned on-chain account addresses"
+    );
+    return { ...PINNED_REFERRAL_ACTIVATION_PERMISSION };
+  }
+}
 
 function assertLocalRpc(url: string) {
   const parsed = new URL(url);
@@ -217,7 +264,7 @@ export async function bootVenue(opts: {
   }
 
   try {
-    const perm = await client.api.invite().getReferralActivationPermission();
+    const perm = await getReferralActivationPermission(client.api.invite());
     const onboardIx = await client.ixs.buildOnboardTraderDelegated({
       authority: perm.trader_onboarder as never,
       traderAuthority: authority as never,
