@@ -8,7 +8,7 @@ use crate::inflight::InFlight;
 use crate::ledger::{FundingPort, LedgerPort};
 use crate::phoenix::{MarketOrder, PhoenixVenue, PlaceResult};
 use crate::residual::{i1_holds, i1_live};
-use crate::{AdapterError, PubkeyBytes};
+use crate::{AdapterError, PubkeyBytes, RiskEngine};
 
 #[derive(Clone, Debug, Default)]
 pub struct ScanReport {
@@ -20,7 +20,7 @@ pub struct ScanReport {
     pub hedges: Vec<HedgeOutcome>,
 }
 
-impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
+impl<P: PhoenixVenue, L: LedgerPort + FundingPort, R: RiskEngine> Adapter<P, L, R> {
     /// One scan tick. `now_ms` is wall clock, not ER slots.
     pub fn scan_liquidations(
         &mut self,
@@ -61,7 +61,7 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
 
         let fresh = mark_age <= cc::MARK_STALE_MS;
         if fresh {
-            self.queued = self.classify(asset_id);
+            self.queued = self.classify(asset_id, now_ms)?;
             report.classified = self.queued.len();
         }
         // Soft/hard stale: drain the queue from the last fresh print. Do not reclassify.
@@ -112,16 +112,17 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
         Ok(report)
     }
 
-    fn classify(&self, asset_id: u16) -> Vec<LiqQueueItem> {
+    fn classify(&self, asset_id: u16, now_ms: u64) -> Result<Vec<LiqQueueItem>, AdapterError> {
         let mut items = Vec::new();
         for user in self.ledger.user_ids() {
             let lots = self.ledger.lots_of(&user, asset_id);
             if lots == 0 {
                 continue;
             }
-            let equity = self.ledger.user_equity(&user);
-            let mm = cc::stub_cinder_mm(lots.unsigned_abs()).unwrap_or(0) as i128;
-            let im = cc::stub_cinder_im(lots.unsigned_abs()).unwrap_or(0) as i128;
+            let quote = self.quote_user_health(&user, asset_id, lots, now_ms)?;
+            let equity = quote.effective_equity_usdc;
+            let mm = quote.post_position_mm_usdc as i128;
+            let im = quote.post_position_im_usdc as i128;
             items.push(LiqQueueItem {
                 user,
                 asset_id,
@@ -132,7 +133,7 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
             });
         }
         items.sort_by_key(|q| q.equity - q.mm);
-        items
+        Ok(items)
     }
 
     fn flatten_and_hedge(
@@ -140,6 +141,17 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
         now_ms: u64,
         item: &LiqQueueItem,
     ) -> Result<Option<HedgeOutcome>, AdapterError> {
+        let (limit_price_ticks, last_valid_slot) = {
+            let snapshot = self
+                .pool_risk_snapshots
+                .get(&item.asset_id)
+                .ok_or_else(|| AdapterError::Risk("missing liquidation risk snapshot".into()))?;
+            let deadline = snapshot
+                .observed_slot
+                .checked_add(1)
+                .ok_or_else(|| AdapterError::Risk("liquidation deadline overflow".into()))?;
+            (snapshot.mark_price_ticks, deadline)
+        };
         let oid = self.next_liq_oid();
         self.ledger.liquidate_user(&item.user, item.asset_id, oid)?;
         let Some(lots_delta) = self.ledger.pending_liq_lots(&oid) else {
@@ -151,6 +163,9 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
             asset_id: item.asset_id,
             lots_delta,
             created_at_ms: now_ms,
+            limit_price_ticks,
+            last_valid_slot,
+            post_fail_position_im_usdc: item.im as u64,
         };
         let out = self.hedge_liq(now_ms, &pending)?;
         Ok(Some(out))
@@ -168,6 +183,14 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
                 asset_id: oid.asset_id,
             });
         }
+        if let Some(reason) = self.dispatch_rejection_reason(oid) {
+            self.ledger
+                .ack_fail(&oid.user, &oid.client_oid, oid.post_fail_position_im_usdc)?;
+            return Ok(HedgeOutcome::Failed {
+                oid: oid.client_oid,
+                reason: reason.into(),
+            });
+        }
         if self
             .inflight
             .insert(InFlight {
@@ -175,12 +198,14 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
                 client_oid: oid.client_oid,
                 asset_id: oid.asset_id,
                 lots_delta: oid.lots_delta,
+                post_fail_position_im_usdc: oid.post_fail_position_im_usdc,
                 inserted_at_ms: now_ms,
                 venue_filled: false,
             })
             .is_err()
         {
-            self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+            self.ledger
+                .ack_fail(&oid.user, &oid.client_oid, oid.post_fail_position_im_usdc)?;
             return Ok(HedgeOutcome::Failed {
                 oid: oid.client_oid,
                 reason: "duplicate live client oid".into(),
@@ -190,11 +215,14 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
             asset_id: oid.asset_id,
             lots: oid.lots_delta,
             client_oid: oid.client_oid,
+            limit_price_ticks: oid.limit_price_ticks,
+            last_valid_slot: oid.last_valid_slot,
         };
         let placed = self.phoenix.place_market(&order)?;
         match placed {
             PlaceResult::Reject { reason } => {
-                self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+                self.ledger
+                    .ack_fail(&oid.user, &oid.client_oid, oid.post_fail_position_im_usdc)?;
                 self.inflight.remove(&oid.client_oid);
                 Ok(HedgeOutcome::Failed {
                     oid: oid.client_oid,
@@ -210,7 +238,11 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
                     });
                 }
                 if fill.filled_lots == 0 {
-                    self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+                    self.ledger.ack_fail(
+                        &oid.user,
+                        &oid.client_oid,
+                        oid.post_fail_position_im_usdc,
+                    )?;
                     self.inflight.remove(&oid.client_oid);
                     return Ok(HedgeOutcome::Failed {
                         oid: oid.client_oid,
@@ -240,6 +272,10 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort> Adapter<P, L> {
                 self.inflight.mark_venue_filled(&oid.client_oid);
                 self.ledger.ack_fill(&oid.user, &fill)?;
                 self.inflight.remove(&oid.client_oid);
+                if Self::fill_breaches_bound(&fill, oid) {
+                    let flags = self.ledger.config_halt() | cc::VENUE_BREACH | cc::HALT_ENTRIES;
+                    self.ledger.write_halt(flags)?;
+                }
                 if !i1_holds(&self.phoenix, &self.ledger, fill.asset_id) {
                     let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
                     self.ledger.write_halt(flags)?;
@@ -278,12 +314,13 @@ mod tests {
     use crate::operator::{MockTeeAuth, OperatorAuth};
     use crate::phoenix::{MockPhoenix, PoolHealth};
     use crate::residual::i1_live;
+    use crate::StubRiskEngine;
 
     fn user(n: u8) -> PubkeyBytes {
         [n; 32]
     }
 
-    fn adapter() -> Adapter<MockPhoenix, MemoryLedger> {
+    fn adapter() -> Adapter<MockPhoenix, MemoryLedger, StubRiskEngine> {
         let mut operator = OperatorAuth::new("http://127.0.0.1:6699");
         operator
             .authenticate(&MockTeeAuth { token: "op".into() }, &user(0), &|_| {
@@ -292,11 +329,31 @@ mod tests {
             .unwrap();
         let mut phoenix = MockPhoenix::new();
         phoenix.auto_fill = true;
-        Adapter::new(phoenix, MemoryLedger::new(), operator)
+        let mut adapter = Adapter::new(phoenix, MemoryLedger::new(), operator, StubRiskEngine);
+        adapter.observe_risk_snapshot(crate::RiskSnapshot {
+            asset_id: 1,
+            position_lots: 0,
+            mark_price_ticks: 1_000_000,
+            observed_slot: 1,
+            observed_at_ms: 1_000,
+            market_status: crate::MarketStatus::Active,
+            units: crate::UnitStatus::Verified,
+            phoenix_initial_margin_usdc: 1,
+            phoenix_maintenance_margin_usdc: 1,
+            total_notional_usdc: 0,
+            unrealized_pnl_usdc: 0,
+            first_tier_leverage: 10,
+            upnl_gain_factor_bps: Some(5_000),
+            quote_lot_to_usdc_numerator: 1,
+            quote_lot_to_usdc_denominator: 1,
+            tick_size_in_quote_lots_per_base_lot: 1,
+            post_pool_health: Some(PoolHealth::Safe),
+        });
+        adapter
     }
 
     fn seed_long(
-        ad: &mut Adapter<MockPhoenix, MemoryLedger>,
+        ad: &mut Adapter<MockPhoenix, MemoryLedger, StubRiskEngine>,
         u: PubkeyBytes,
         lots: i64,
         free: u64,
@@ -326,6 +383,26 @@ mod tests {
     }
 
     #[test]
+    fn missing_liquidation_bounds_do_not_mutate_the_ledger() {
+        let mut ad = adapter();
+        let user = user(8);
+        seed_long(&mut ad, user, 10, 100_000);
+        ad.pool_risk_snapshots.remove(&1);
+        let item = LiqQueueItem {
+            user,
+            asset_id: 1,
+            equity: 100_000,
+            mm: 625_000,
+            im: 1_250_000,
+            lots: 10,
+        };
+
+        assert!(ad.flatten_and_hedge(1_000, &item).is_err());
+        assert_eq!(ad.ledger.lots_of(&user, 1), 10);
+        assert!(ad.ledger.pending_liq.is_empty());
+    }
+
+    #[test]
     fn upnl_loss_trips_mm_profit_does_not() {
         let mut ad = adapter();
         let loser = user(1);
@@ -336,12 +413,19 @@ mod tests {
         ad.ledger
             .user_entry
             .insert(loser, [(1, 10 * 1_000_000 + 200_000)].into_iter().collect());
-        ad.ledger.mark_usdc_per_lot = 1_000_000;
+        let mut loser_risk = ad.pool_risk_snapshots[&1].clone();
+        loser_risk.position_lots = 10;
+        loser_risk.unrealized_pnl_usdc = -200_000;
+        ad.observe_user_risk_snapshot(loser, loser_risk);
         // Winner: entry below mark → positive uPnL, haircut 50%, still above MM.
         ad.ledger.user_entry.insert(
             winner,
             [(1, 10 * 1_000_000 - 400_000)].into_iter().collect(),
         );
+        let mut winner_risk = ad.pool_risk_snapshots[&1].clone();
+        winner_risk.position_lots = 10;
+        winner_risk.unrealized_pnl_usdc = 400_000;
+        ad.observe_user_risk_snapshot(winner, winner_risk);
         let r = ad.scan_liquidations(1_000, 1).unwrap();
         assert!(r.liquidated.contains(&(loser, 1)));
         assert!(!r.liquidated.contains(&(winner, 1)));
@@ -378,6 +462,9 @@ mod tests {
             asset_id: 1,
             lots_delta: -10,
             created_at_ms: 1_000,
+            limit_price_ticks: 1_000_000,
+            last_valid_slot: 2,
+            post_fail_position_im_usdc: 1_250_000,
         };
         let out = ad.hedge_liq(1_000, &pending).unwrap();
         assert!(matches!(out, HedgeOutcome::Filled(_)));
@@ -481,6 +568,8 @@ mod tests {
             filled_lots: -4,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 1_000_000,
+            post_position_im_usdc: 750_000,
         });
         let pending = PendingOid {
             user: a,
@@ -488,6 +577,9 @@ mod tests {
             asset_id: 1,
             lots_delta: -10,
             created_at_ms: 1_000,
+            limit_price_ticks: 1_000_000,
+            last_valid_slot: 2,
+            post_fail_position_im_usdc: 1_250_000,
         };
         let out = ad.hedge_liq(1_000, &pending).unwrap();
         assert!(matches!(out, HedgeOutcome::Filled(ref f) if f.filled_lots == -4));

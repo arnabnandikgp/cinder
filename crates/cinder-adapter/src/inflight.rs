@@ -8,6 +8,7 @@ pub struct InFlight {
     pub client_oid: ClientOid,
     pub asset_id: u16,
     pub lots_delta: i64,
+    pub post_fail_position_im_usdc: u64,
     pub inserted_at_ms: u64,
     /// Venue accepted a fill. Do not later `ack_fail` this row.
     pub venue_filled: bool,
