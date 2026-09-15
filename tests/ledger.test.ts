@@ -27,6 +27,7 @@ const ER_VALIDATOR = new PublicKey(
   "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
 );
 const ASSET_SOL = 1;
+const ASSET_BTC = 2;
 const HALT_ENTRIES = 1 << 0;
 const CREDIT = 100_000_000; // 100 USDC
 const LOTS = 10;
@@ -1548,12 +1549,52 @@ describe("ledger accounts and order machine", () => {
     });
 
     it("signals debt created while liquidating an already-flat position", async () => {
+      await vault.methods
+        .setAllowlist([ASSET_SOL, ASSET_BTC])
+        .accountsPartial({ admin: payer.publicKey, config: configPda })
+        .rpc();
       await ledger.methods
         .setBookHalt(0)
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
+        })
+        .signers([adapter])
+        .rpc();
+
+      const secondAssetOid = oid(132);
+      await ledger.methods
+        .placeOrder(
+          ASSET_BTC,
+          new BN(LOTS),
+          secondAssetOid,
+          50,
+          false,
+          new BN(3)
+        )
+        .accountsPartial({
+          user: replayUser.publicKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: replayLedger,
+        })
+        .signers([replayUser])
+        .rpc();
+      await ledger.methods
+        .ackPhoenixFill(
+          secondAssetOid,
+          new BN(LOTS),
+          new BN(0),
+          new BN(10_000_000),
+          new BN(IM_TEN_LOTS)
+        )
+        .accountsPartial({
+          adapter: adapter.publicKey,
+          config: configPda,
+          userLedger: replayLedger,
+          book: bookPda,
+          feeAccrual: feesPda,
         })
         .signers([adapter])
         .rpc();
@@ -1582,7 +1623,7 @@ describe("ledger accounts and order machine", () => {
         .signers([adapter])
         .rpc();
 
-      const closeOid = oid(132);
+      const closeOid = oid(133);
       await ledger.methods
         .placeOrder(
           ASSET_SOL,
@@ -1590,7 +1631,7 @@ describe("ledger accounts and order machine", () => {
           closeOid,
           50,
           true,
-          new BN(3)
+          new BN(4)
         )
         .accountsPartial({
           user: replayUser.publicKey,
@@ -1619,7 +1660,7 @@ describe("ledger accounts and order machine", () => {
         .rpc();
 
       await ledger.methods
-        .liquidateUser(ASSET_SOL, oid(133))
+        .liquidateUser(ASSET_SOL, oid(134))
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
@@ -1631,7 +1672,13 @@ describe("ledger accounts and order machine", () => {
 
       const state = await ledger.account.userLedger.fetch(replayLedger);
       const bookAfter = await ledger.account.book.fetch(bookPda);
-      expect(state.positionsLen).to.equal(0);
+      expect(state.positionsLen).to.equal(1);
+      const remaining = state.positions
+        .slice(0, state.positionsLen)
+        .find((position: { assetId: number }) => position.assetId === ASSET_BTC);
+      expect(remaining).to.exist;
+      expect(remaining.lots.toNumber()).to.equal(LOTS);
+      expect(remaining.reservedIm.toNumber()).to.equal(0);
       expect(state.badDebtUsdc.toNumber()).to.equal(1_000_000);
       expect(bookAfter.halt & (1 << 6)).to.equal(1 << 6);
       expect(bookAfter.halt & HALT_ENTRIES).to.equal(HALT_ENTRIES);

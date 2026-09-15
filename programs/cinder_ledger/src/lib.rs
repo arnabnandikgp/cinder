@@ -571,7 +571,12 @@ pub mod cinder_ledger {
         let lots = position_lots(ledger, asset_id);
         if lots == 0 {
             compact_positions(ledger);
-            apply_cash_halt(&mut ctx.accounts.book, ledger.bad_debt_usdc > 0, false);
+            let under_margined = resync_stub_margin(ledger)?;
+            apply_cash_halt(
+                &mut ctx.accounts.book,
+                ledger.bad_debt_usdc > 0,
+                under_margined,
+            );
             return Ok(());
         }
 
@@ -589,7 +594,7 @@ pub mod cinder_ledger {
         let prior_position_im = position_reserved_im(ledger, asset_id);
         set_position_lots(ledger, asset_id, 0, prior_position_im)?;
         compact_positions(ledger);
-        let _ = resync_stub_margin(ledger)?;
+        let under_margined = resync_stub_margin(ledger)?;
 
         ledger.open_oids[slot] = OpenOid {
             client_oid,
@@ -603,7 +608,11 @@ pub mod cinder_ledger {
             .pending_oid_count
             .checked_add(1)
             .ok_or(LedgerError::Overflow)?;
-        apply_cash_halt(&mut ctx.accounts.book, ledger.bad_debt_usdc > 0, false);
+        apply_cash_halt(
+            &mut ctx.accounts.book,
+            ledger.bad_debt_usdc > 0,
+            under_margined,
+        );
         Ok(())
     }
 
