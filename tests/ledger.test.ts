@@ -1580,7 +1580,7 @@ describe("ledger accounts and order machine", () => {
       expect(state.badDebtUsdc.toNumber()).to.equal(0);
       expect(state.free.toNumber()).to.equal(0);
       expect(state.reserved.toNumber()).to.equal(1_000_000);
-      expect(state.positions[0].reservedIm.toNumber()).to.equal(1_000_000);
+      expect(state.positions[0].reservedIm.toNumber()).to.equal(IM_TEN_LOTS);
       expect(book.halt & HALT_ENTRIES).to.equal(HALT_ENTRIES);
 
       await ledger.methods
@@ -1964,7 +1964,7 @@ describe("ledger accounts and order machine", () => {
         .find((position: { assetId: number }) => position.assetId === ASSET_BTC);
       expect(remaining).to.exist;
       expect(remaining.lots.toNumber()).to.equal(LOTS);
-      expect(remaining.reservedIm.toNumber()).to.equal(0);
+      expect(remaining.reservedIm.toNumber()).to.equal(IM_TEN_LOTS);
       expect(state.badDebtUsdc.toNumber()).to.equal(1_000_000);
       expect(bookAfter.halt & (1 << 6)).to.equal(1 << 6);
       expect(bookAfter.halt & HALT_ENTRIES).to.equal(HALT_ENTRIES);

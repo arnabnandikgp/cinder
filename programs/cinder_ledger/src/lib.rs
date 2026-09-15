@@ -372,13 +372,18 @@ pub mod cinder_ledger {
         let restored = tentative
             .checked_sub(oid.lots_delta)
             .ok_or(LedgerError::Overflow)?;
-        let old_im = position_reserved_im(ledger, oid.asset_id);
         require!(
             restored != 0 || post_position_im_usdc == 0,
             LedgerError::BadPostFillMargin
         );
-        apply_im_delta(ledger, old_im, post_position_im_usdc)?;
         set_position_lots(ledger, oid.asset_id, restored, post_position_im_usdc)?;
+        if restored == 0 {
+            compact_positions(ledger);
+        }
+        // A prior loss may mean the ledger cannot currently satisfy every
+        // stored target. Preserve the adapter-authorized targets and rebalance
+        // only the aggregate cash buckets.
+        let _under_margined = rebalance_stored_margins(ledger)?;
 
         ledger.open_oids[idx].state = cc::OID_FAILED;
         ledger.pending_oid_count = ledger
@@ -633,8 +638,6 @@ pub mod cinder_ledger {
         let slot = find_free_oid_slot(ledger).ok_or(LedgerError::OidCap)?;
 
         let lots_delta = lots.checked_neg().ok_or(LedgerError::Overflow)?;
-        let prior_position_im = position_reserved_im(ledger, asset_id);
-        apply_im_delta(ledger, prior_position_im, 0)?;
         set_position_lots(ledger, asset_id, 0, 0)?;
         compact_positions(ledger);
         let under_margined = rebalance_stored_margins(ledger)?;
@@ -1330,16 +1333,16 @@ fn rebalance_margin_targets(
         .checked_sub(actual_total)
         .ok_or(LedgerError::Overflow)?;
 
-    let mut remaining = actual_total;
     for (position, target) in ledger.positions[..targets.len()]
         .iter_mut()
         .zip(targets.iter().copied())
     {
-        let actual = remaining.min(target);
-        position.reserved_im = actual;
-        remaining -= actual;
+        // Per-position values are authoritative RiskEngine targets, while the
+        // aggregate `reserved` field records how much collateral is actually
+        // available. Never erase a target merely because cash is temporarily
+        // insufficient.
+        position.reserved_im = target;
     }
-    require!(remaining == 0, LedgerError::Overflow);
     Ok(actual_total < target_total)
 }
 

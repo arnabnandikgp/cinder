@@ -101,15 +101,29 @@ impl<P: PhoenixVenue, L: crate::ledger::LedgerPort + FundingPort, R: RiskEngine>
                 // applied during the fold, after the health decision below.
                 vec![(interval.asset_id, delta, 0)]
             };
-            self.ledger.allocate_funding(user, epoch, false, &owned)?;
-
-            if lots != 0 {
-                let health = self.quote_user_health(user, interval.asset_id, lots, now_ms)?;
-                if health.effective_equity_usdc < health.post_position_mm_usdc as i128 {
-                    let oid = self.next_liq_oid();
-                    self.ledger.liquidate_user(user, interval.asset_id, oid)?;
-                    report.liquidated.push((*user, interval.asset_id));
-                }
+            let liquidation = if lots == 0 {
+                None
+            } else {
+                let projected_collateral =
+                    crate::ledger::LedgerPort::user_collateral(&self.ledger, user)
+                        .checked_add(delta as i128)
+                        .ok_or_else(|| {
+                            AdapterError::Risk("projected funding equity overflow".into())
+                        })?;
+                let health = self.quote_user_health_with_collateral(
+                    user,
+                    interval.asset_id,
+                    lots,
+                    projected_collateral,
+                    now_ms,
+                )?;
+                (health.effective_equity_usdc < health.post_position_mm_usdc as i128)
+                    .then(|| (interval.asset_id, self.next_liq_oid()))
+            };
+            self.ledger
+                .apply_funding_decision(user, epoch, &owned, liquidation)?;
+            if liquidation.is_some() {
+                report.liquidated.push((*user, interval.asset_id));
             }
         }
 
@@ -434,6 +448,8 @@ mod tests {
             1_000 + cc::MARK_STALE_MS + 1,
         );
         assert!(matches!(result, Err(AdapterError::Risk(message)) if message.contains("stale")));
+        assert_eq!(adapter.ledger.last_funding_epoch(&user), 0);
+        assert!(adapter.ledger.user_unsettled[&user].is_empty());
     }
 
     #[test]

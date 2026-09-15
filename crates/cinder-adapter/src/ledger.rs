@@ -235,6 +235,16 @@ pub trait FundingPort {
         fold: bool,
         entries: &[(u16, i64, u64)],
     ) -> Result<(), AdapterError>;
+    /// Persist one user's funding accrual and any resulting tentative
+    /// liquidation atomically. Production ports must submit both ER
+    /// instructions in one transaction when `liquidation` is present.
+    fn apply_funding_decision(
+        &mut self,
+        user: &PubkeyBytes,
+        epoch: u64,
+        entries: &[(u16, i64, u64)],
+        liquidation: Option<(u16, ClientOid)>,
+    ) -> Result<(), AdapterError>;
     fn user_collateral(&self, user: &PubkeyBytes) -> i128;
     fn liquidate_user(
         &mut self,
@@ -550,6 +560,22 @@ impl FundingPort for MemoryLedger {
         Ok(())
     }
 
+    fn apply_funding_decision(
+        &mut self,
+        user: &PubkeyBytes,
+        epoch: u64,
+        entries: &[(u16, i64, u64)],
+        liquidation: Option<(u16, ClientOid)>,
+    ) -> Result<(), AdapterError> {
+        let mut next = self.clone();
+        <Self as FundingPort>::allocate_funding(&mut next, user, epoch, false, entries)?;
+        if let Some((asset_id, client_oid)) = liquidation {
+            <Self as FundingPort>::liquidate_user(&mut next, user, asset_id, client_oid)?;
+        }
+        *self = next;
+        Ok(())
+    }
+
     fn user_collateral(&self, user: &PubkeyBytes) -> i128 {
         let free = self.user_free.get(user).copied().unwrap_or(0);
         let reserved = self.user_reserved.get(user).copied().unwrap_or(0);
@@ -732,5 +758,23 @@ mod tests {
         ledger.ack_fill(&b, &b_fill).unwrap();
 
         assert_eq!(ledger.reserved[&1], 2_500_000);
+    }
+
+    #[test]
+    fn funding_decision_rolls_back_epoch_when_liquidation_fails() {
+        let user = user(3);
+        let mut ledger = MemoryLedger::new();
+        ledger.ensure_user(user, u64::MAX);
+        ledger
+            .user_lots
+            .insert(user, [(1, 1)].into_iter().collect());
+        ledger.bump_funding_epoch(1).unwrap();
+
+        let result = ledger.apply_funding_decision(&user, 1, &[(1, 1, 0)], Some((1, [9u8; 16])));
+        assert!(result.is_err());
+        assert_eq!(ledger.last_funding_epoch(&user), 0);
+        assert!(ledger.user_unsettled[&user].is_empty());
+        assert_eq!(ledger.lots_of(&user, 1), 1);
+        assert!(ledger.pending_liq.is_empty());
     }
 }

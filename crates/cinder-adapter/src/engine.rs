@@ -166,27 +166,55 @@ impl<P: PhoenixVenue, L: LedgerPort, R: RiskEngine> Adapter<P, L, R> {
         lots: i64,
         now_ms: u64,
     ) -> Result<UserRiskQuote, AdapterError> {
+        self.quote_user_health_with_collateral(
+            user,
+            asset_id,
+            lots,
+            self.ledger.user_collateral(user),
+            now_ms,
+        )
+    }
+
+    pub(crate) fn quote_user_health_with_collateral(
+        &self,
+        user: &PubkeyBytes,
+        asset_id: u16,
+        lots: i64,
+        collateral_usdc: i128,
+        now_ms: u64,
+    ) -> Result<UserRiskQuote, AdapterError> {
         let snapshot = self.user_risk_snapshots.get(&(*user, asset_id));
         #[cfg(any(test, feature = "test-utils"))]
         let snapshot = snapshot.or_else(|| self.pool_risk_snapshots.get(&asset_id));
         let snapshot = snapshot
             .ok_or_else(|| AdapterError::Risk("missing Rise/Phoenix risk snapshot".into()))?;
         self.risk
-            .quote_user_health(snapshot, lots, self.ledger.user_collateral(user), now_ms)
+            .quote_user_health(snapshot, lots, collateral_usdc, now_ms)
     }
 
     pub(crate) fn dispatch_rejection_reason(&self, oid: &PendingOid) -> Option<&'static str> {
         if oid.limit_price_ticks == 0 || oid.last_valid_slot == 0 {
             return Some("missing Phoenix bound/deadline");
         }
-        let Some(current_slot) = self
-            .pool_risk_snapshots
-            .get(&oid.asset_id)
-            .map(|snapshot| snapshot.observed_slot)
-        else {
+        let Some(snapshot) = self.pool_risk_snapshots.get(&oid.asset_id) else {
             return Some("missing Phoenix risk snapshot");
         };
-        (current_slot > oid.last_valid_slot).then_some("Phoenix deadline expired")
+        (snapshot.observed_slot > oid.last_valid_slot).then_some("Phoenix deadline expired")
+    }
+
+    fn entry_dispatch_rejection_reason(
+        &self,
+        now_ms: u64,
+        oid: &PendingOid,
+    ) -> Option<&'static str> {
+        if let Some(reason) = self.dispatch_rejection_reason(oid) {
+            return Some(reason);
+        }
+        let snapshot = self.pool_risk_snapshots.get(&oid.asset_id)?;
+        let Some(age_ms) = now_ms.checked_sub(snapshot.observed_at_ms) else {
+            return Some("future Phoenix risk snapshot");
+        };
+        (age_ms > cc::MARK_STALE_MS).then_some("stale Phoenix risk snapshot")
     }
 
     pub(crate) fn fill_breaches_bound(fill: &Fill, oid: &PendingOid) -> bool {
@@ -245,7 +273,7 @@ impl<P: PhoenixVenue, L: LedgerPort, R: RiskEngine> Adapter<P, L, R> {
             });
         }
 
-        if let Some(reason) = self.dispatch_rejection_reason(oid) {
+        if let Some(reason) = self.entry_dispatch_rejection_reason(now_ms, oid) {
             self.ledger
                 .ack_fail(&oid.user, &oid.client_oid, oid.post_fail_position_im_usdc)?;
             return Ok(HedgeOutcome::Failed {
@@ -659,6 +687,25 @@ mod tests {
             matches!(outcome, HedgeOutcome::Failed { reason, .. } if reason == "Phoenix deadline expired")
         );
         assert_eq!(adapter.ledger.fails.len(), 2);
+        assert!(adapter.inflight.is_empty());
+    }
+
+    #[test]
+    fn stale_risk_snapshot_never_reaches_phoenix() {
+        let mut adapter = adapter_with(MockPhoenix::new());
+        let now_ms = 1_000 + cc::MARK_STALE_MS + 1;
+        // Keep the generic feed clocks fresh to prove dispatch independently
+        // enforces the snapshot used for the Phoenix deadline.
+        adapter.mark_observed_at_ms = Some(now_ms);
+        adapter.trader_observed_at_ms = Some(now_ms);
+
+        let outcome = adapter
+            .hedge_pending(now_ms, &pending(44, 10, 1_000))
+            .unwrap();
+        assert!(
+            matches!(outcome, HedgeOutcome::Failed { reason, .. } if reason == "stale Phoenix risk snapshot")
+        );
+        assert_eq!(adapter.ledger.fails.len(), 1);
         assert!(adapter.inflight.is_empty());
     }
 

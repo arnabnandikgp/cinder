@@ -141,6 +141,17 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort, R: RiskEngine> Adapter<P, L, 
         now_ms: u64,
         item: &LiqQueueItem,
     ) -> Result<Option<HedgeOutcome>, AdapterError> {
+        let (limit_price_ticks, last_valid_slot) = {
+            let snapshot = self
+                .pool_risk_snapshots
+                .get(&item.asset_id)
+                .ok_or_else(|| AdapterError::Risk("missing liquidation risk snapshot".into()))?;
+            let deadline = snapshot
+                .observed_slot
+                .checked_add(1)
+                .ok_or_else(|| AdapterError::Risk("liquidation deadline overflow".into()))?;
+            (snapshot.mark_price_ticks, deadline)
+        };
         let oid = self.next_liq_oid();
         self.ledger.liquidate_user(&item.user, item.asset_id, oid)?;
         let Some(lots_delta) = self.ledger.pending_liq_lots(&oid) else {
@@ -152,18 +163,8 @@ impl<P: PhoenixVenue, L: LedgerPort + FundingPort, R: RiskEngine> Adapter<P, L, 
             asset_id: item.asset_id,
             lots_delta,
             created_at_ms: now_ms,
-            limit_price_ticks: self
-                .pool_risk_snapshots
-                .get(&item.asset_id)
-                .ok_or_else(|| AdapterError::Risk("missing liquidation risk snapshot".into()))?
-                .mark_price_ticks,
-            last_valid_slot: self
-                .pool_risk_snapshots
-                .get(&item.asset_id)
-                .ok_or_else(|| AdapterError::Risk("missing liquidation risk snapshot".into()))?
-                .observed_slot
-                .checked_add(1)
-                .ok_or_else(|| AdapterError::Risk("liquidation deadline overflow".into()))?,
+            limit_price_ticks,
+            last_valid_slot,
             post_fail_position_im_usdc: item.im as u64,
         };
         let out = self.hedge_liq(now_ms, &pending)?;
@@ -379,6 +380,26 @@ mod tests {
         assert_eq!(ad.ledger.lots_of(&a, 1), 0);
         assert_eq!(ad.ledger.book_lots(1), ad.phoenix.base_lots(1));
         assert!(i1_holds(&ad.phoenix, &ad.ledger, 1));
+    }
+
+    #[test]
+    fn missing_liquidation_bounds_do_not_mutate_the_ledger() {
+        let mut ad = adapter();
+        let user = user(8);
+        seed_long(&mut ad, user, 10, 100_000);
+        ad.pool_risk_snapshots.remove(&1);
+        let item = LiqQueueItem {
+            user,
+            asset_id: 1,
+            equity: 100_000,
+            mm: 625_000,
+            im: 1_250_000,
+            lots: 10,
+        };
+
+        assert!(ad.flatten_and_hedge(1_000, &item).is_err());
+        assert_eq!(ad.ledger.lots_of(&user, 1), 10);
+        assert!(ad.ledger.pending_liq.is_empty());
     }
 
     #[test]
