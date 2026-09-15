@@ -228,11 +228,17 @@ pub mod cinder_ledger {
         require_user_schema(&ctx.accounts.user_ledger)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
-        if let Some(acked) = find_acknowledged_oid(ledger, &client_oid) {
-            require!(acked.lots_delta == filled_lots, LedgerError::BadFillSize);
-            return Ok(());
-        }
-        let (idx, oid) = take_pending_oid(ledger, &client_oid)?;
+        let pending = take_pending_oid(ledger, &client_oid);
+        let (idx, oid) = match pending {
+            Ok(found) => found,
+            Err(err) => {
+                if let Some(acked) = find_acknowledged_oid(ledger, &client_oid) {
+                    require!(acked.lots_delta == filled_lots, LedgerError::BadFillSize);
+                    return Ok(());
+                }
+                return Err(err);
+            }
+        };
         require!(
             filled_lots.signum() == oid.lots_delta.signum()
                 && filled_lots.abs() <= oid.lots_delta.abs(),
@@ -564,6 +570,8 @@ pub mod cinder_ledger {
 
         let lots = position_lots(ledger, asset_id);
         if lots == 0 {
+            compact_positions(ledger);
+            apply_cash_halt(&mut ctx.accounts.book, ledger.bad_debt_usdc > 0, false);
             return Ok(());
         }
 
