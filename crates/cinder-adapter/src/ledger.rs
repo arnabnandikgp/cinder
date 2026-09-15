@@ -25,7 +25,7 @@ pub struct MemoryLedger {
     pub fails: Vec<(PubkeyBytes, ClientOid)>,
     pub reserved: std::collections::BTreeMap<u16, u64>,
     pub user_lots: std::collections::BTreeMap<PubkeyBytes, std::collections::BTreeMap<u16, i64>>,
-    pub user_cash: std::collections::BTreeMap<PubkeyBytes, u64>,
+    pub user_cash: std::collections::BTreeMap<PubkeyBytes, i128>,
     pub vault_ata: u64,
     pub phoenix_collateral: u64,
     pub reserve_roots: Vec<u64>,
@@ -34,12 +34,15 @@ pub struct MemoryLedger {
     pub user_epoch: std::collections::BTreeMap<PubkeyBytes, u64>,
     pub user_free: std::collections::BTreeMap<PubkeyBytes, u64>,
     pub user_reserved: std::collections::BTreeMap<PubkeyBytes, u64>,
-    pub user_unsettled: std::collections::BTreeMap<PubkeyBytes, std::collections::BTreeMap<u16, i64>>,
+    pub user_bad_debt: std::collections::BTreeMap<PubkeyBytes, u64>,
+    pub user_unsettled:
+        std::collections::BTreeMap<PubkeyBytes, std::collections::BTreeMap<u16, i64>>,
     pub user_entry: std::collections::BTreeMap<PubkeyBytes, std::collections::BTreeMap<u16, i64>>,
     pub pending_liq: std::collections::BTreeMap<ClientOid, PendingLiq>,
     pub liquidations: Vec<(PubkeyBytes, u16)>,
     pub last_scan_ms: u64,
     pub mark_usdc_per_lot: i64,
+    pub phoenix_fees_paid: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -74,7 +77,7 @@ impl MemoryLedger {
             .sum()
     }
 
-    pub fn sum_user_cash(&self) -> u64 {
+    pub fn sum_user_cash(&self) -> i128 {
         self.user_cash.values().copied().sum()
     }
 
@@ -109,14 +112,42 @@ impl MemoryLedger {
     pub fn ensure_user(&mut self, user: PubkeyBytes, free: u64) {
         self.user_free.entry(user).or_insert(free);
         self.user_reserved.entry(user).or_insert(0);
-        self.user_epoch.entry(user).or_insert(self.book_funding_epoch);
+        self.user_bad_debt.entry(user).or_insert(0);
+        self.user_epoch
+            .entry(user)
+            .or_insert(self.book_funding_epoch);
         self.user_unsettled.entry(user).or_default();
         self.user_lots.entry(user).or_default();
-        self.user_cash.insert(
-            user,
-            self.user_free.get(&user).copied().unwrap_or(0)
-                + self.user_reserved.get(&user).copied().unwrap_or(0),
-        );
+        self.sync_user_cash(&user);
+    }
+
+    fn sync_user_cash(&mut self, user: &PubkeyBytes) {
+        let free = self.user_free.get(user).copied().unwrap_or(0) as i128;
+        let reserved = self.user_reserved.get(user).copied().unwrap_or(0) as i128;
+        let bad_debt = self.user_bad_debt.get(user).copied().unwrap_or(0) as i128;
+        self.user_cash.insert(*user, free + reserved - bad_debt);
+    }
+
+    fn aggregate_asset_im_after_fill(
+        &self,
+        user: &PubkeyBytes,
+        asset_id: u16,
+        next_user_lots: i64,
+    ) -> Result<u64, AdapterError> {
+        let mut total = cc::stub_cinder_im(next_user_lots.unsigned_abs())
+            .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;
+        for (owner, positions) in &self.user_lots {
+            if owner == user {
+                continue;
+            }
+            let lots = positions.get(&asset_id).copied().unwrap_or(0);
+            let im = cc::stub_cinder_im(lots.unsigned_abs())
+                .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;
+            total = total
+                .checked_add(im)
+                .ok_or_else(|| AdapterError::Ledger("aggregate im overflow".into()))?;
+        }
+        Ok(total)
     }
 }
 
@@ -152,57 +183,70 @@ pub trait FundingPort {
 
 impl LedgerPort for MemoryLedger {
     fn ack_fill(&mut self, user: &PubkeyBytes, fill: &Fill) -> Result<(), AdapterError> {
-        if self
+        if let Some((prior_user, prior_fill)) = self
             .fills
             .iter()
-            .any(|(_, f)| f.client_oid == fill.client_oid)
+            .find(|(_, prior)| prior.client_oid == fill.client_oid)
         {
-            return Err(AdapterError::Ledger("duplicate fill oid".into()));
-        }
-        let free = self.user_free.get(user).copied().unwrap_or(0);
-        if fill.fee_usdc > 0 && free < fill.fee_usdc {
-            return Err(AdapterError::Ledger("insufficient free for fee".into()));
+            if prior_user == user && prior_fill == fill {
+                return Ok(());
+            }
+            return Err(AdapterError::Ledger(
+                "conflicting duplicate fill oid".into(),
+            ));
         }
         let liq = self.pending_liq.get(&fill.client_oid).cloned();
-        let (next_user_lots, next_entry) = if let Some(ref liq) = liq {
-            let cur = self.lots_of(user, fill.asset_id);
-            let unfilled = liq
+        let lots_before = if let Some(ref pending) = liq {
+            pending
                 .lots_delta
-                .checked_sub(fill.filled_lots)
-                .ok_or_else(|| AdapterError::Ledger("liq unfilled overflow".into()))?;
-            let final_lots = cur
-                .checked_sub(unfilled)
-                .ok_or_else(|| AdapterError::Ledger("liq restore overflow".into()))?;
-            let entry = if final_lots == 0 {
-                None
-            } else if let Some(orig) = liq.lots_delta.checked_neg() {
-                if orig != 0 {
-                    self.user_entry
-                        .get(user)
-                        .and_then(|m| m.get(&fill.asset_id))
-                        .map(|e| {
-                            ((*e as i128) * (final_lots as i128) / (orig as i128)) as i64
-                        })
-                } else {
-                    None
-                }
-            } else {
-                return Err(AdapterError::Ledger("liq orig overflow".into()));
-            };
-            (final_lots, entry)
+                .checked_neg()
+                .ok_or_else(|| AdapterError::Ledger("liq lots overflow".into()))?
         } else {
-            let next = self
-                .lots_of(user, fill.asset_id)
-                .checked_add(fill.filled_lots)
-                .ok_or_else(|| AdapterError::Ledger("lots overflow".into()))?;
-            (next, None)
+            self.lots_of(user, fill.asset_id)
         };
+        let next_user_lots = lots_before
+            .checked_add(fill.filled_lots)
+            .ok_or_else(|| AdapterError::Ledger("lots overflow".into()))?;
+        let entry_before = self
+            .user_entry
+            .get(user)
+            .and_then(|m| m.get(&fill.asset_id))
+            .copied()
+            .unwrap_or(0);
+        let realized = cc::realize_on_fill(
+            lots_before,
+            fill.filled_lots,
+            entry_before,
+            fill.vwap_quote_lots,
+        )
+        .ok_or_else(|| AdapterError::Ledger("fill realization overflow".into()))?;
         let next_book = self
             .book_lots(fill.asset_id)
             .checked_add(fill.filled_lots)
             .ok_or_else(|| AdapterError::Ledger("book overflow".into()))?;
-        let im = cc::stub_cinder_im(next_book.unsigned_abs())
-            .ok_or_else(|| AdapterError::Ledger("im overflow".into()))?;
+        let aggregate_im =
+            self.aggregate_asset_im_after_fill(user, fill.asset_id, next_user_lots)?;
+        let next_fee_total = self
+            .phoenix_fees_paid
+            .checked_add(fill.fee_usdc)
+            .ok_or_else(|| AdapterError::Ledger("fee accrual overflow".into()))?;
+        let mut next_free = self.user_free.get(user).copied().unwrap_or(0);
+        let mut next_reserved = self.user_reserved.get(user).copied().unwrap_or(0);
+        let mut next_bad_debt = self.user_bad_debt.get(user).copied().unwrap_or(0);
+        cc::apply_signed_cash(
+            &mut next_free,
+            &mut next_reserved,
+            &mut next_bad_debt,
+            realized.realized_usdc,
+        )
+        .ok_or_else(|| AdapterError::Ledger("realized pnl overflow".into()))?;
+        cc::debit_cash(
+            &mut next_free,
+            &mut next_reserved,
+            &mut next_bad_debt,
+            fill.fee_usdc,
+        )
+        .ok_or_else(|| AdapterError::Ledger("fee debt overflow".into()))?;
 
         if next_book == 0 {
             self.book.remove(&fill.asset_id);
@@ -223,17 +267,25 @@ impl LedgerPort for MemoryLedger {
                 .entry(*user)
                 .or_default()
                 .insert(fill.asset_id, next_user_lots);
-            if let Some(e) = next_entry {
-                self.user_entry
-                    .entry(*user)
-                    .or_default()
-                    .insert(fill.asset_id, e);
-            }
+            self.user_entry
+                .entry(*user)
+                .or_default()
+                .insert(fill.asset_id, realized.new_entry_quote);
         }
-        if fill.fee_usdc > 0 {
-            *self.user_free.entry(*user).or_insert(0) -= fill.fee_usdc;
+        self.user_free.insert(*user, next_free);
+        self.user_reserved.insert(*user, next_reserved);
+        self.user_bad_debt.insert(*user, next_bad_debt);
+        self.phoenix_fees_paid = next_fee_total;
+        if next_bad_debt > 0 {
+            self.book_halt |= cc::BAD_DEBT | cc::HALT_ENTRIES | cc::HALT_WITHDRAW;
+            self.config_halt |= cc::BAD_DEBT | cc::HALT_ENTRIES | cc::HALT_WITHDRAW;
         }
-        self.reserved.insert(fill.asset_id, im);
+        if aggregate_im == 0 {
+            self.reserved.remove(&fill.asset_id);
+        } else {
+            self.reserved.insert(fill.asset_id, aggregate_im);
+        }
+        self.sync_user_cash(user);
         Ok(())
     }
 
@@ -369,7 +421,6 @@ impl FundingPort for MemoryLedger {
         } else if !entries.is_empty() {
             return Err(AdapterError::Ledger("fold replay rejects entries".into()));
         }
-        let mut leftover_map = std::collections::BTreeMap::new();
         if let Some(m) = self.user_unsettled.remove(user) {
             let mut credits = Vec::new();
             let mut debits = Vec::new();
@@ -380,22 +431,19 @@ impl FundingPort for MemoryLedger {
                     debits.push((asset, delta));
                 }
             }
-            for (asset, delta) in credits.into_iter().chain(debits) {
-                let rest = apply_signed_cash(self, user, delta)?;
-                leftover_map.insert(asset, rest);
+            for (_, delta) in credits.into_iter().chain(debits) {
+                apply_signed_cash(self, user, delta)?;
             }
         }
-        leftover_map.retain(|_, v| *v != 0);
-        self.user_unsettled.insert(*user, leftover_map);
-        let cash = self.user_free.get(user).copied().unwrap_or(0)
-            + self.user_reserved.get(user).copied().unwrap_or(0);
-        self.user_cash.insert(*user, cash);
+        self.user_unsettled.insert(*user, Default::default());
+        self.sync_user_cash(user);
         Ok(())
     }
 
     fn user_equity(&self, user: &PubkeyBytes) -> i128 {
         let free = self.user_free.get(user).copied().unwrap_or(0);
         let reserved = self.user_reserved.get(user).copied().unwrap_or(0);
+        let bad_debt = self.user_bad_debt.get(user).copied().unwrap_or(0);
         let unsettled: i64 = self
             .user_unsettled
             .get(user)
@@ -413,7 +461,7 @@ impl FundingPort for MemoryLedger {
                 upnl += cc::upnl_usdc(*lots, self.mark_usdc_per_lot, entry);
             }
         }
-        cc::cinder_equity(free, reserved, unsettled, upnl)
+        cc::cinder_equity(free, reserved, unsettled, upnl) - bad_debt as i128
     }
 
     fn liquidate_user(
@@ -427,13 +475,9 @@ impl FundingPort for MemoryLedger {
             .get(user)
             .and_then(|m| m.get(&asset_id).copied());
         if let Some(delta) = delta {
-            let rest = apply_signed_cash(self, user, delta)?;
+            apply_signed_cash(self, user, delta)?;
             if let Some(m) = self.user_unsettled.get_mut(user) {
-                if rest == 0 {
-                    m.remove(&asset_id);
-                } else {
-                    m.insert(asset_id, rest);
-                }
+                m.remove(&asset_id);
             }
         }
         let lots = self.lots_of(user, asset_id);
@@ -455,9 +499,7 @@ impl FundingPort for MemoryLedger {
             }
         }
         self.liquidations.push((*user, asset_id));
-        let cash = self.user_free.get(user).copied().unwrap_or(0)
-            + self.user_reserved.get(user).copied().unwrap_or(0);
-        self.user_cash.insert(*user, cash);
+        self.sync_user_cash(user);
         Ok(())
     }
 
@@ -498,29 +540,91 @@ fn apply_signed_cash(
     ledger: &mut MemoryLedger,
     user: &PubkeyBytes,
     delta: i64,
-) -> Result<i64, AdapterError> {
+) -> Result<(), AdapterError> {
     let free = ledger.user_free.entry(*user).or_insert(0);
     let reserved = ledger.user_reserved.entry(*user).or_insert(0);
-    if delta > 0 {
-        *free = free
-            .checked_add(delta as u64)
-            .ok_or_else(|| AdapterError::Ledger("overflow".into()))?;
-        return Ok(0);
+    let bad_debt = ledger.user_bad_debt.entry(*user).or_insert(0);
+    cc::apply_signed_cash(free, reserved, bad_debt, delta)
+        .ok_or_else(|| AdapterError::Ledger("cash overflow".into()))?;
+    if *bad_debt > 0 {
+        ledger.book_halt |= cc::BAD_DEBT | cc::HALT_ENTRIES | cc::HALT_WITHDRAW;
+        ledger.config_halt |= cc::BAD_DEBT | cc::HALT_ENTRIES | cc::HALT_WITHDRAW;
     }
-    if delta == 0 {
-        return Ok(0);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn user(n: u8) -> PubkeyBytes {
+        [n; 32]
     }
-    if delta == i64::MIN {
-        return Err(AdapterError::Ledger("funding delta overflow".into()));
+
+    fn fill(tag: u8, lots: i64, fee: u64, vwap: i64) -> Fill {
+        let mut client_oid = [0u8; 16];
+        client_oid[0] = tag;
+        Fill {
+            client_oid,
+            asset_id: 1,
+            filled_lots: lots,
+            fee_usdc: fee,
+            vwap_quote_lots: vwap,
+        }
     }
-    let mut owe = delta.unsigned_abs();
-    let take_free = owe.min(*free);
-    *free -= take_free;
-    owe -= take_free;
-    if owe > 0 {
-        let take_res = owe.min(*reserved);
-        *reserved -= take_res;
-        owe -= take_res;
+
+    #[test]
+    fn fills_persist_entry_and_realize_loss_before_fee() {
+        let a = user(1);
+        let mut ledger = MemoryLedger::new();
+        ledger.ensure_user(a, 3_000_000);
+
+        ledger.ack_fill(&a, &fill(1, 10, 0, 10_000_000)).unwrap();
+        assert_eq!(ledger.user_entry[&a][&1], 10_000_000);
+
+        ledger
+            .ack_fill(&a, &fill(2, -10, 500_000, -1_000_000))
+            .unwrap();
+        assert_eq!(ledger.lots_of(&a, 1), 0);
+        assert_eq!(ledger.user_free[&a], 0);
+        assert_eq!(ledger.user_bad_debt[&a], 6_500_000);
+        assert_eq!(ledger.user_cash[&a], -6_500_000);
+        assert_eq!(ledger.phoenix_fees_paid, 500_000);
     }
-    Ok(if owe == 0 { 0 } else { -(owe as i64) })
+
+    #[test]
+    fn liquidation_fill_realizes_from_pre_liquidation_position() {
+        let a = user(1);
+        let mut ledger = MemoryLedger::new();
+        ledger.ensure_user(a, 0);
+        ledger.user_lots.insert(a, [(1, 10)].into_iter().collect());
+        ledger
+            .user_entry
+            .insert(a, [(1, 10_000_000)].into_iter().collect());
+        ledger.book.insert(1, 10);
+
+        let liq_oid = fill(3, -4, 0, -4_400_000).client_oid;
+        ledger.liquidate_user(&a, 1, liq_oid).unwrap();
+        ledger.ack_fill(&a, &fill(3, -4, 0, -4_400_000)).unwrap();
+
+        assert_eq!(ledger.lots_of(&a, 1), 6);
+        assert_eq!(ledger.user_entry[&a][&1], 6_000_000);
+        assert_eq!(ledger.user_free[&a], 400_000);
+        assert_eq!(ledger.user_bad_debt[&a], 0);
+    }
+
+    #[test]
+    fn reserved_margin_is_aggregated_across_users() {
+        let a = user(1);
+        let b = user(2);
+        let mut ledger = MemoryLedger::new();
+        ledger.ensure_user(a, 0);
+        ledger.ensure_user(b, 0);
+
+        ledger.ack_fill(&a, &fill(4, 10, 0, 0)).unwrap();
+        ledger.ack_fill(&b, &fill(5, 10, 0, 0)).unwrap();
+
+        let per_user = cc::stub_cinder_im(10).unwrap();
+        assert_eq!(ledger.reserved[&1], per_user * 2);
+    }
 }

@@ -321,6 +321,38 @@ mod tests {
     }
 
     #[test]
+    fn confirmed_fill_fee_becomes_debt_and_replay_is_a_noop() {
+        let fill = Fill {
+            client_oid: oid(2),
+            asset_id: 1,
+            filled_lots: 10,
+            fee_usdc: 250,
+            vwap_quote_lots: 10_000_000,
+        };
+        let mut phoenix = MockPhoenix::new();
+        phoenix.fill_next(fill.clone());
+        let mut ad = adapter_with(phoenix);
+        ad.ledger.ensure_user(user(), 100);
+
+        let out = ad.hedge_pending(1_000, &pending(2, 10, 1_000)).unwrap();
+        assert!(matches!(out, HedgeOutcome::Filled(_)));
+        assert_eq!(ad.ledger.user_free[&user()], 0);
+        assert_eq!(ad.ledger.user_bad_debt[&user()], 150);
+        assert_eq!(ad.ledger.phoenix_fees_paid, 250);
+        assert_eq!(
+            ad.ledger.book_halt() & (cc::BAD_DEBT | cc::HALT_ENTRIES | cc::HALT_WITHDRAW),
+            cc::BAD_DEBT | cc::HALT_ENTRIES | cc::HALT_WITHDRAW
+        );
+        assert_eq!(ad.ledger.config_halt(), ad.ledger.book_halt());
+
+        ad.ledger.ack_fill(&user(), &fill).unwrap();
+        assert_eq!(ad.ledger.fills.len(), 1);
+        assert_eq!(ad.ledger.book_lots(1), 10);
+        assert_eq!(ad.ledger.user_bad_debt[&user()], 150);
+        assert_eq!(ad.ledger.phoenix_fees_paid, 250);
+    }
+
+    #[test]
     fn mock_reject_sends_ack_fail() {
         let mut phoenix = MockPhoenix::new();
         phoenix.reject_next("venue reject");

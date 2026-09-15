@@ -148,7 +148,7 @@ impl<P: PhoenixVenue, L: crate::ledger::LedgerPort + FundingPort> Adapter<P, L> 
 mod tests {
     use super::*;
     use crate::engine::Adapter;
-    use crate::ledger::{LedgerPort, MemoryLedger};
+    use crate::ledger::{FundingPort, LedgerPort, MemoryLedger};
     use crate::operator::{MockTeeAuth, OperatorAuth};
     use crate::phoenix::MockPhoenix;
     use crate::residual::i2_holds_unsettled;
@@ -312,5 +312,27 @@ mod tests {
             })
             .unwrap();
         assert_eq!(r.liquidated, vec![(a, 1)]);
+    }
+
+    #[test]
+    fn positive_funding_repays_bad_debt_before_free_cash() {
+        let a = user(1);
+        let mut ledger = MemoryLedger::new();
+        ledger.ensure_user(a, 0);
+        ledger.user_bad_debt.insert(a, 100);
+
+        ledger.bump_funding_epoch(1).unwrap();
+        ledger.allocate_funding(&a, 1, false, &[(1, 60)]).unwrap();
+        ledger.allocate_funding(&a, 1, true, &[]).unwrap();
+        assert_eq!(ledger.user_bad_debt[&a], 40);
+        assert_eq!(ledger.user_free[&a], 0);
+        assert_eq!(ledger.user_cash[&a], -40);
+
+        ledger.bump_funding_epoch(2).unwrap();
+        ledger.allocate_funding(&a, 2, false, &[(1, 80)]).unwrap();
+        ledger.allocate_funding(&a, 2, true, &[]).unwrap();
+        assert_eq!(ledger.user_bad_debt[&a], 0);
+        assert_eq!(ledger.user_free[&a], 40);
+        assert_eq!(ledger.user_cash[&a], 40);
     }
 }

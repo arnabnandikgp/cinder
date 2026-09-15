@@ -34,6 +34,7 @@ const QFS_WS = process.env.TEE_WS_ENDPOINT || "ws://127.0.0.1:6700";
 const ASSET_SOL = 1;
 const CREDIT = 100_000_000;
 const LOTS = 10;
+const IM_TEN_LOTS = 1_250_000;
 
 function pda(programId: PublicKey, seeds: (Buffer | Uint8Array)[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, programId)[0];
@@ -340,7 +341,13 @@ describe("two-user netting and QFS isolation after trades", function () {
     const adapterWallet = new anchor.Wallet(adapter);
     const sendAck = async (userLedger: PublicKey, tag: number, lots: number) => {
       let tx = await erProgram.methods
-        .ackPhoenixFill(oid(tag), new BN(lots), new BN(0), new BN(0))
+        .ackPhoenixFill(
+          oid(tag),
+          new BN(lots),
+          new BN(0),
+          new BN(0),
+          new BN(IM_TEN_LOTS)
+        )
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
