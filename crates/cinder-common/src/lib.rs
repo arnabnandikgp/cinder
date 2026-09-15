@@ -69,6 +69,53 @@ pub const OID_ACKED: u8 = 1;
 pub const OID_FAILED: u8 = 2;
 pub const OID_LIQUIDATING: u8 = 3;
 
+/// Apply an external cash credit. Existing debt is always retired before any
+/// amount becomes withdrawable free collateral.
+pub fn credit_cash(free: &mut u64, bad_debt: &mut u64, amount: u64) -> Option<()> {
+    let debt_payment = amount.min(*bad_debt);
+    let free_credit = amount.checked_sub(debt_payment)?;
+    let next_free = free.checked_add(free_credit)?;
+    *bad_debt -= debt_payment;
+    *free = next_free;
+    Some(())
+}
+
+/// Apply an irreversible cash debit. A debit consumes free collateral, then
+/// reserved collateral, and records any remainder as explicit bad debt.
+pub fn debit_cash(
+    free: &mut u64,
+    reserved: &mut u64,
+    bad_debt: &mut u64,
+    amount: u64,
+) -> Option<()> {
+    let free_debit = amount.min(*free);
+    let after_free = amount.checked_sub(free_debit)?;
+    let reserved_debit = after_free.min(*reserved);
+    let debt_increase = after_free.checked_sub(reserved_debit)?;
+    let next_debt = bad_debt.checked_add(debt_increase)?;
+
+    *free -= free_debit;
+    *reserved -= reserved_debit;
+    *bad_debt = next_debt;
+    Some(())
+}
+
+/// Apply signed native-USDC cash through the same debt-aware path used by
+/// fills and funding folds. Positive values are credits; negative values are
+/// debits. `i64::MIN` is handled through `unsigned_abs` without overflow.
+pub fn apply_signed_cash(
+    free: &mut u64,
+    reserved: &mut u64,
+    bad_debt: &mut u64,
+    delta: i64,
+) -> Option<()> {
+    if delta >= 0 {
+        credit_cash(free, bad_debt, delta as u64)
+    } else {
+        debit_cash(free, reserved, bad_debt, delta.unsigned_abs())
+    }
+}
+
 pub fn entries_blocked(flags: u8) -> bool {
     flags
         & (HALT_ENTRIES | UNSAFE_POOL | INVARIANT_BROKEN | OPERATOR_DOWN | BAD_DEBT | VENUE_BREACH)
@@ -242,5 +289,47 @@ mod halt_tests {
         assert!(entries_blocked(VENUE_BREACH));
         assert!(!withdraw_blocked(VENUE_BREACH));
         assert!(!deposit_blocked(VENUE_BREACH));
+    }
+}
+
+#[cfg(test)]
+mod cash_tests {
+    use super::*;
+
+    #[test]
+    fn debit_drains_free_then_reserved_then_records_debt() {
+        let mut free = 5;
+        let mut reserved = 7;
+        let mut debt = 2;
+        debit_cash(&mut free, &mut reserved, &mut debt, 20).unwrap();
+        assert_eq!((free, reserved, debt), (0, 0, 10));
+    }
+
+    #[test]
+    fn credits_retire_debt_before_increasing_free() {
+        let mut free = 3;
+        let mut debt = 8;
+        credit_cash(&mut free, &mut debt, 5).unwrap();
+        assert_eq!((free, debt), (3, 3));
+        credit_cash(&mut free, &mut debt, 7).unwrap();
+        assert_eq!((free, debt), (7, 0));
+    }
+
+    #[test]
+    fn signed_minimum_becomes_debt_without_negation_overflow() {
+        let mut free = 0;
+        let mut reserved = 0;
+        let mut debt = 0;
+        apply_signed_cash(&mut free, &mut reserved, &mut debt, i64::MIN).unwrap();
+        assert_eq!(debt, 1u64 << 63);
+    }
+
+    #[test]
+    fn overflow_does_not_partially_mutate_cash() {
+        let mut free = 1;
+        let mut reserved = 2;
+        let mut debt = u64::MAX;
+        assert!(debit_cash(&mut free, &mut reserved, &mut debt, 4).is_none());
+        assert_eq!((free, reserved, debt), (1, 2, u64::MAX));
     }
 }

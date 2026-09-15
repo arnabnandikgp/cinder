@@ -49,6 +49,7 @@ const RPC_OPTS = { skipPreflight: true, commitment: "confirmed" as const };
 const ASSET_SOL = 1;
 const CREDIT = 100_000_000;
 const LOTS = 10;
+const IM_TEN_LOTS = 1_250_000;
 const OPEN_VWAP = 10_000_000;
 const CLOSE_VWAP = -11_000_000;
 const STUB_MM = 625_000; // stub_cinder_mm(10)
@@ -536,10 +537,17 @@ async function main() {
     tag: number,
     lots: number,
     vwap: number,
+    postPositionIm: number,
     fee = 0
   ) => {
     const tx = await erProgram.methods
-      .ackPhoenixFill(oid(tag), new BN(lots), new BN(fee), new BN(vwap))
+      .ackPhoenixFill(
+        oid(tag),
+        new BN(lots),
+        new BN(fee),
+        new BN(vwap),
+        new BN(postPositionIm)
+      )
       .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
@@ -552,9 +560,9 @@ async function main() {
   };
 
   await place(alice, ledgerA, LOTS, 1, false, 0);
-  await ack(ledgerA, 1, LOTS, OPEN_VWAP);
+  await ack(ledgerA, 1, LOTS, OPEN_VWAP, IM_TEN_LOTS);
   await place(bob, ledgerB, -LOTS, 2, false, 0);
-  await ack(ledgerB, 2, -LOTS, -OPEN_VWAP);
+  await ack(ledgerB, 2, -LOTS, -OPEN_VWAP, IM_TEN_LOTS);
 
   const snapshot = async (title: string) => {
     const a = await erProgram.account.userLedger.fetch(ledgerA);
@@ -578,7 +586,7 @@ async function main() {
   }
 
   await place(alice, ledgerA, -LOTS, 3, true, 1);
-  await ack(ledgerA, 3, -LOTS, CLOSE_VWAP);
+  await ack(ledgerA, 3, -LOTS, CLOSE_VWAP, 0);
   const end = await snapshot("3. After Alice closes (realized PnL into free)");
   if (end.lotsA !== 0) throw new Error("Alice should be flat");
   if (end.freeA !== CREDIT + 1_000_000) {

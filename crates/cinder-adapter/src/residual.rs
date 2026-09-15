@@ -38,7 +38,7 @@ pub fn i1_live(book: i64, pending: i64, phoenix: i64) -> bool {
 
 /// I2 cash form (after funding fold).
 pub fn i2_holds(
-    user_cash_sum: u64,
+    user_cash_sum: i128,
     vault_ata: u64,
     phoenix_collateral: u64,
     in_flight_usdc: i64,
@@ -55,14 +55,14 @@ pub fn i2_holds(
 
 /// I2 between funding settles: include unsettled on both sides.
 pub fn i2_holds_unsettled(
-    user_cash_sum: u64,
+    user_cash_sum: i128,
     user_unsettled: i64,
     vault_ata: u64,
     phoenix_collateral: u64,
     pool_unsettled: i64,
     in_flight_usdc: i64,
 ) -> bool {
-    let lhs = user_cash_sum as i128 + user_unsettled as i128;
+    let lhs = user_cash_sum + user_unsettled as i128;
     let rhs = vault_ata as i128
         + phoenix_collateral as i128
         + pool_unsettled as i128
@@ -91,6 +91,12 @@ mod tests {
     fn i2_unsettled_balances_until_fold() {
         assert!(i2_holds_unsettled(200, -6, 150, 50, -6, 0));
         assert!(!i2_holds(194, 150, 50, 0));
+    }
+
+    #[test]
+    fn i2_accounts_for_user_bad_debt_as_negative_cash() {
+        assert!(i2_holds(-10, 0, 0, -10));
+        assert!(!i2_holds(0, 0, 0, -10));
     }
 
     #[test]

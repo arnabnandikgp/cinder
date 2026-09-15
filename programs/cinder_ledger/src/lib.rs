@@ -19,7 +19,11 @@ pub mod cinder_ledger {
 
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
 
         let book = &mut ctx.accounts.book;
         book.schema_version = cc::ACCOUNT_SCHEMA_VERSION;
@@ -55,7 +59,11 @@ pub mod cinder_ledger {
 
     pub fn init_user(ctx: Context<InitUser>) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_book_schema(&ctx.accounts.book)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
@@ -84,18 +92,26 @@ pub mod cinder_ledger {
 
     pub fn credit_deposit(ctx: Context<CreditDeposit>, amount: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_book_schema(&ctx.accounts.book)?;
         require_user_schema(&ctx.accounts.user_ledger)?;
         require!(!cc::deposit_blocked(cfg.paused), LedgerError::Halted);
-        require!(!cc::deposit_blocked(ctx.accounts.book.halt), LedgerError::Halted);
+        require!(
+            !cc::deposit_blocked(ctx.accounts.book.halt),
+            LedgerError::Halted
+        );
         require!(amount > 0, LedgerError::ZeroAmount);
 
         let ledger = &mut ctx.accounts.user_ledger;
-        ledger.free = ledger
-            .free
-            .checked_add(amount)
-            .ok_or(LedgerError::Overflow)?;
+        let mut free = ledger.free;
+        let mut bad_debt = ledger.bad_debt_usdc;
+        cc::credit_cash(&mut free, &mut bad_debt, amount).ok_or(LedgerError::Overflow)?;
+        ledger.free = free;
+        ledger.bad_debt_usdc = bad_debt;
         Ok(())
     }
 
@@ -108,29 +124,43 @@ pub mod cinder_ledger {
         reduce_only: bool,
         nonce: u64,
     ) -> Result<()> {
-        require!(max_slippage_bps <= cc::BPS_DENOM as u16, LedgerError::BadSlippage);
+        require!(
+            max_slippage_bps <= cc::BPS_DENOM as u16,
+            LedgerError::BadSlippage
+        );
         require!(lots_delta != 0, LedgerError::ZeroLots);
 
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_book_schema(&ctx.accounts.book)?;
         require_user_schema(&ctx.accounts.user_ledger)?;
         require!(!cc::entries_blocked(cfg.paused), LedgerError::Halted);
-        require!(!cc::entries_blocked(ctx.accounts.book.halt), LedgerError::Halted);
-        require!(asset_allowlisted(&cfg, asset_id), LedgerError::AssetNotAllowlisted);
+        require!(
+            !cc::entries_blocked(ctx.accounts.book.halt),
+            LedgerError::Halted
+        );
+        require!(
+            asset_allowlisted(&cfg, asset_id),
+            LedgerError::AssetNotAllowlisted
+        );
 
         let ledger = &mut ctx.accounts.user_ledger;
-        require_keys_eq!(ledger.user, ctx.accounts.user.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            ledger.user,
+            ctx.accounts.user.key(),
+            LedgerError::Unauthorized
+        );
+        require!(ledger.bad_debt_usdc == 0, LedgerError::Halted);
         require!(nonce == ledger.nonce, LedgerError::BadNonce);
-        ledger.nonce = ledger
-            .nonce
-            .checked_add(1)
-            .ok_or(LedgerError::Overflow)?;
+        ledger.nonce = ledger.nonce.checked_add(1).ok_or(LedgerError::Overflow)?;
 
         require!(
             (ledger.pending_oid_count as usize) < cc::MAX_OPEN_OIDS_PER_USER,
             LedgerError::OidCap
         );
-        require!(!oid_duplicate(ledger, &client_oid), LedgerError::DuplicateOid);
+        require!(
+            !oid_duplicate(ledger, &client_oid),
+            LedgerError::DuplicateOid
+        );
         let slot = find_free_oid_slot(ledger).ok_or(LedgerError::OidCap)?;
 
         let old_lots = position_lots(ledger, asset_id);
@@ -185,14 +215,23 @@ pub mod cinder_ledger {
         filled_lots: i64,
         fee_usdc: u64,
         vwap_quote_lots: i64,
+        post_position_im_usdc: u64,
     ) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require!(filled_lots != 0, LedgerError::ZeroLots);
         require_book_schema(&ctx.accounts.book)?;
         require_user_schema(&ctx.accounts.user_ledger)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
+        if let Some(acked) = find_acknowledged_oid(ledger, &client_oid) {
+            require!(acked.lots_delta == filled_lots, LedgerError::BadFillSize);
+            return Ok(());
+        }
         let (idx, oid) = take_pending_oid(ledger, &client_oid)?;
         require!(
             filled_lots.signum() == oid.lots_delta.signum()
@@ -214,17 +253,10 @@ pub mod cinder_ledger {
             .checked_sub(unfilled)
             .ok_or(LedgerError::Overflow)?;
         let entry_before = position_entry(ledger, oid.asset_id);
-        let realized = cc::realize_on_fill(
-            lots_before,
-            filled_lots,
-            entry_before,
-            vwap_quote_lots,
-        )
-        .ok_or(LedgerError::Overflow)?;
-        let old_im = stub_im(tentative)?;
-        let new_im = stub_im(final_lots)?;
-        apply_im_delta(ledger, old_im, new_im)?;
-        set_position_lots(ledger, oid.asset_id, final_lots, new_im)?;
+        let realized = cc::realize_on_fill(lots_before, filled_lots, entry_before, vwap_quote_lots)
+            .ok_or(LedgerError::Overflow)?;
+        let prior_position_im = position_reserved_im(ledger, oid.asset_id);
+        set_position_lots(ledger, oid.asset_id, final_lots, prior_position_im)?;
         {
             let n = ledger.positions_len as usize;
             if let Some(pos) = ledger.positions[..n]
@@ -234,10 +266,7 @@ pub mod cinder_ledger {
                 pos.entry_quote_lots = realized.new_entry_quote;
             }
         }
-        if realized.realized_usdc != 0 {
-            let leftover = apply_signed_cash(ledger, realized.realized_usdc)?;
-            require!(leftover == 0, LedgerError::InsufficientFree);
-        }
+        apply_signed_cash(ledger, realized.realized_usdc)?;
         if final_lots == 0 {
             {
                 let n = ledger.positions_len as usize;
@@ -252,8 +281,7 @@ pub mod cinder_ledger {
         }
 
         if fee_usdc > 0 {
-            require!(ledger.free >= fee_usdc, LedgerError::InsufficientFree);
-            ledger.free -= fee_usdc;
+            debit_cash(ledger, fee_usdc)?;
             ctx.accounts.fee_accrual.phoenix_fees_paid = ctx
                 .accounts
                 .fee_accrual
@@ -261,6 +289,9 @@ pub mod cinder_ledger {
                 .checked_add(fee_usdc)
                 .ok_or(LedgerError::Overflow)?;
         }
+
+        let under_margined =
+            rebalance_position_margin(ledger, oid.asset_id, post_position_im_usdc)?;
 
         ledger.open_oids[idx].state = cc::OID_ACKED;
         ledger.open_oids[idx].lots_delta = filled_lots;
@@ -272,12 +303,32 @@ pub mod cinder_ledger {
         let book = &mut ctx.accounts.book;
         add_book_lots(book, oid.asset_id, filled_lots)?;
         book.last_ack_slot_er = Clock::get()?.slot;
+        if under_margined {
+            book.halt |= cc::HALT_ENTRIES;
+        }
+        if ledger.bad_debt_usdc > 0 {
+            book.halt |= cc::BAD_DEBT | cc::HALT_ENTRIES | cc::HALT_WITHDRAW;
+        }
+        emit!(PhoenixFillAcknowledged {
+            user: ledger.user,
+            client_oid,
+            asset_id: oid.asset_id,
+            filled_lots,
+            realized_usdc: realized.realized_usdc,
+            fee_usdc,
+            bad_debt_usdc: ledger.bad_debt_usdc,
+            under_margined,
+        });
         Ok(())
     }
 
     pub fn ack_phoenix_fail(ctx: Context<AckFail>, client_oid: [u8; 16]) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_user_schema(&ctx.accounts.user_ledger)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
@@ -306,13 +357,24 @@ pub mod cinder_ledger {
         require_book_schema(&ctx.accounts.book)?;
         require_user_schema(&ctx.accounts.user_ledger)?;
         require!(!cc::withdraw_blocked(cfg.paused), LedgerError::Halted);
-        require!(!cc::withdraw_blocked(ctx.accounts.book.halt), LedgerError::Halted);
+        require!(
+            !cc::withdraw_blocked(ctx.accounts.book.halt),
+            LedgerError::Halted
+        );
 
         let ledger = &mut ctx.accounts.user_ledger;
-        require_keys_eq!(ledger.user, ctx.accounts.user.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            ledger.user,
+            ctx.accounts.user.key(),
+            LedgerError::Unauthorized
+        );
+        require!(ledger.bad_debt_usdc == 0, LedgerError::Halted);
         require!(ledger.pending_oid_count == 0, LedgerError::NotFlat);
         require!(is_flat(ledger), LedgerError::NotFlat);
-        require!(unsettled_funding_zero(ledger), LedgerError::UnsettledFunding);
+        require!(
+            unsettled_funding_zero(ledger),
+            LedgerError::UnsettledFunding
+        );
         require!(ledger.free >= amount, LedgerError::InsufficientFree);
 
         ledger.free -= amount;
@@ -325,7 +387,11 @@ pub mod cinder_ledger {
 
     pub fn complete_withdraw(ctx: Context<CompleteWithdraw>, amount: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require!(amount > 0, LedgerError::ZeroAmount);
         require_user_schema(&ctx.accounts.user_ledger)?;
 
@@ -340,7 +406,11 @@ pub mod cinder_ledger {
 
     pub fn set_book_halt(ctx: Context<AdapterBook>, halt: u8) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_book_schema(&ctx.accounts.book)?;
         ctx.accounts.book.halt = halt;
         Ok(())
@@ -348,7 +418,11 @@ pub mod cinder_ledger {
 
     pub fn bump_funding_epoch(ctx: Context<AdapterBook>, epoch: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_book_schema(&ctx.accounts.book)?;
         require!(
             (ctx.accounts.book.halt & cc::INVARIANT_BROKEN) == 0
@@ -356,7 +430,13 @@ pub mod cinder_ledger {
             LedgerError::Halted
         );
         require!(
-            epoch == ctx.accounts.book.funding_epoch.checked_add(1).ok_or(LedgerError::Overflow)?,
+            epoch
+                == ctx
+                    .accounts
+                    .book
+                    .funding_epoch
+                    .checked_add(1)
+                    .ok_or(LedgerError::Overflow)?,
             LedgerError::BadFundingEpoch
         );
         ctx.accounts.book.funding_epoch = epoch;
@@ -370,7 +450,11 @@ pub mod cinder_ledger {
         entries: Vec<FundingEntry>,
     ) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_book_schema(&ctx.accounts.book)?;
         require_user_schema(&ctx.accounts.user_ledger)?;
         require!(
@@ -378,13 +462,20 @@ pub mod cinder_ledger {
                 && (cfg.paused & cc::INVARIANT_BROKEN) == 0,
             LedgerError::Halted
         );
-        require!(entries.len() <= cc::MAX_USER_POSITIONS, LedgerError::PositionCap);
+        require!(
+            entries.len() <= cc::MAX_USER_POSITIONS,
+            LedgerError::PositionCap
+        );
 
         let book_epoch = ctx.accounts.book.funding_epoch;
         let ledger = &mut ctx.accounts.user_ledger;
 
         if fold {
-            if ledger.last_funding_epoch.checked_add(1).ok_or(LedgerError::Overflow)? == epoch
+            if ledger
+                .last_funding_epoch
+                .checked_add(1)
+                .ok_or(LedgerError::Overflow)?
+                == epoch
                 && epoch == book_epoch
             {
                 apply_funding_entries(ledger, &entries)?;
@@ -395,7 +486,12 @@ pub mod cinder_ledger {
                     LedgerError::BadFundingEpoch
                 );
             }
-            fold_unsettled(ledger)?;
+            let under_margined = fold_unsettled(ledger)?;
+            apply_cash_halt(
+                &mut ctx.accounts.book,
+                ledger.bad_debt_usdc > 0,
+                under_margined,
+            );
             return Ok(());
         }
 
@@ -413,9 +509,16 @@ pub mod cinder_ledger {
         Ok(())
     }
 
-    pub fn update_book_collateral(ctx: Context<AdapterBook>, phoenix_collateral: u64) -> Result<()> {
+    pub fn update_book_collateral(
+        ctx: Context<AdapterBook>,
+        phoenix_collateral: u64,
+    ) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_book_schema(&ctx.accounts.book)?;
         ctx.accounts.book.phoenix_collateral = phoenix_collateral;
         Ok(())
@@ -424,7 +527,11 @@ pub mod cinder_ledger {
     /// Adapter heartbeat. Writes `Book.last_scan_ms`. Does not flatten.
     pub fn heartbeat_scan(ctx: Context<AdapterBook>, now_ms: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_book_schema(&ctx.accounts.book)?;
         ctx.accounts.book.last_scan_ms = now_ms;
         Ok(())
@@ -439,7 +546,11 @@ pub mod cinder_ledger {
         client_oid: [u8; 16],
     ) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(cfg.adapter, ctx.accounts.adapter.key(), LedgerError::Unauthorized);
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
         require_book_schema(&ctx.accounts.book)?;
         require_user_schema(&ctx.accounts.user_ledger)?;
 
@@ -447,8 +558,8 @@ pub mod cinder_ledger {
         revert_pending_on_asset(ledger, asset_id)?;
         if let Some(idx) = find_position_index(ledger, asset_id) {
             let delta = ledger.positions[idx].unsettled_funding;
-            let leftover = apply_signed_cash(ledger, delta)?;
-            ledger.positions[idx].unsettled_funding = leftover;
+            apply_signed_cash(ledger, delta)?;
+            ledger.positions[idx].unsettled_funding = 0;
         }
 
         let lots = position_lots(ledger, asset_id);
@@ -460,15 +571,17 @@ pub mod cinder_ledger {
             (ledger.pending_oid_count as usize) < cc::MAX_OPEN_OIDS_PER_USER,
             LedgerError::OidCap
         );
-        require!(!oid_duplicate(ledger, &client_oid), LedgerError::DuplicateOid);
+        require!(
+            !oid_duplicate(ledger, &client_oid),
+            LedgerError::DuplicateOid
+        );
         let slot = find_free_oid_slot(ledger).ok_or(LedgerError::OidCap)?;
 
-        let lots_delta = lots
-            .checked_neg()
-            .ok_or(LedgerError::Overflow)?;
-        let old_im = stub_im(lots)?;
-        apply_im_delta(ledger, old_im, 0)?;
-        set_position_lots(ledger, asset_id, 0, 0)?;
+        let lots_delta = lots.checked_neg().ok_or(LedgerError::Overflow)?;
+        let prior_position_im = position_reserved_im(ledger, asset_id);
+        set_position_lots(ledger, asset_id, 0, prior_position_im)?;
+        compact_positions(ledger);
+        let _ = resync_stub_margin(ledger)?;
 
         ledger.open_oids[slot] = OpenOid {
             client_oid,
@@ -482,6 +595,7 @@ pub mod cinder_ledger {
             .pending_oid_count
             .checked_add(1)
             .ok_or(LedgerError::Overflow)?;
+        apply_cash_halt(&mut ctx.accounts.book, ledger.bad_debt_usdc > 0, false);
         Ok(())
     }
 
@@ -821,6 +935,18 @@ pub struct FundingEntry {
     pub delta_usdc: i64,
 }
 
+#[event]
+pub struct PhoenixFillAcknowledged {
+    pub user: Pubkey,
+    pub client_oid: [u8; 16],
+    pub asset_id: u16,
+    pub filled_lots: i64,
+    pub realized_usdc: i64,
+    pub fee_usdc: u64,
+    pub bad_debt_usdc: u64,
+    pub under_margined: bool,
+}
+
 #[derive(Accounts)]
 pub struct AllocateFunding<'info> {
     pub adapter: Signer<'info>,
@@ -838,7 +964,7 @@ pub struct AllocateFunding<'info> {
         bump = user_ledger.bump
     )]
     pub user_ledger: Box<Account<'info, UserLedger>>,
-    #[account(seeds = [cc::SEED_BOOK], bump = book.bump)]
+    #[account(mut, seeds = [cc::SEED_BOOK], bump = book.bump)]
     pub book: Box<Account<'info, Book>>,
 }
 
@@ -933,6 +1059,14 @@ fn position_entry(ledger: &UserLedger, asset_id: u16) -> i64 {
         .iter()
         .find(|p| p.asset_id == asset_id)
         .map(|p| p.entry_quote_lots)
+        .unwrap_or(0)
+}
+
+fn position_reserved_im(ledger: &UserLedger, asset_id: u16) -> u64 {
+    ledger.positions[..ledger.positions_len as usize]
+        .iter()
+        .find(|p| p.asset_id == asset_id)
+        .map(|p| p.reserved_im)
         .unwrap_or(0)
 }
 
@@ -1032,69 +1166,121 @@ fn apply_funding_entries(ledger: &mut UserLedger, entries: &[FundingEntry]) -> R
     Ok(())
 }
 
-fn apply_signed_cash(ledger: &mut UserLedger, delta: i64) -> Result<i64> {
-    if delta > 0 {
-        ledger.free = ledger
-            .free
-            .checked_add(delta as u64)
-            .ok_or(LedgerError::Overflow)?;
-        return Ok(0);
-    }
-    if delta == 0 {
-        return Ok(0);
-    }
-    require!(delta != i64::MIN, LedgerError::Overflow);
-    let mut owe = delta.unsigned_abs();
-    let take_free = owe.min(ledger.free);
-    ledger.free -= take_free;
-    owe -= take_free;
-    if owe > 0 {
-        let take_res = owe.min(ledger.reserved);
-        ledger.reserved -= take_res;
-        owe -= take_res;
-    }
-    if owe == 0 {
-        Ok(0)
-    } else {
-        Ok(-(owe as i64))
-    }
+fn apply_signed_cash(ledger: &mut UserLedger, delta: i64) -> Result<()> {
+    let mut free = ledger.free;
+    let mut reserved = ledger.reserved;
+    let mut bad_debt = ledger.bad_debt_usdc;
+    cc::apply_signed_cash(&mut free, &mut reserved, &mut bad_debt, delta)
+        .ok_or(error!(LedgerError::Overflow))?;
+    ledger.free = free;
+    ledger.reserved = reserved;
+    ledger.bad_debt_usdc = bad_debt;
+    Ok(())
 }
 
-fn fold_unsettled(ledger: &mut UserLedger) -> Result<()> {
+fn debit_cash(ledger: &mut UserLedger, amount: u64) -> Result<()> {
+    let mut free = ledger.free;
+    let mut reserved = ledger.reserved;
+    let mut bad_debt = ledger.bad_debt_usdc;
+    cc::debit_cash(&mut free, &mut reserved, &mut bad_debt, amount)
+        .ok_or(error!(LedgerError::Overflow))?;
+    ledger.free = free;
+    ledger.reserved = reserved;
+    ledger.bad_debt_usdc = bad_debt;
+    Ok(())
+}
+
+fn fold_unsettled(ledger: &mut UserLedger) -> Result<bool> {
     let n = ledger.positions_len as usize;
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by_key(|&i| ledger.positions[i].unsettled_funding < 0);
     for i in order {
         let delta = ledger.positions[i].unsettled_funding;
-        let leftover = apply_signed_cash(ledger, delta)?;
-        ledger.positions[i].unsettled_funding = leftover;
+        apply_signed_cash(ledger, delta)?;
+        ledger.positions[i].unsettled_funding = 0;
     }
-    resync_im(ledger)
+    resync_stub_margin(ledger)
 }
 
-fn resync_im(ledger: &mut UserLedger) -> Result<()> {
+fn resync_stub_margin(ledger: &mut UserLedger) -> Result<bool> {
     let n = ledger.positions_len as usize;
-    let mut need = 0u64;
+    let mut targets = [0u64; cc::MAX_USER_POSITIONS];
+    let mut target_total = 0u64;
     for i in 0..n {
-        let im = if ledger.positions[i].lots == 0 {
+        targets[i] = if ledger.positions[i].lots == 0 {
             0
         } else {
             stub_im(ledger.positions[i].lots)?
         };
-        ledger.positions[i].reserved_im = im;
-        need = need.checked_add(im).ok_or(LedgerError::Overflow)?;
+        target_total = target_total
+            .checked_add(targets[i])
+            .ok_or(LedgerError::Overflow)?;
     }
-    if ledger.reserved < need {
-        let d = need - ledger.reserved;
-        require!(ledger.free >= d, LedgerError::InsufficientFree);
-        ledger.free -= d;
-        ledger.reserved = need;
-    } else if ledger.reserved > need {
-        let d = ledger.reserved - need;
-        ledger.reserved = need;
-        ledger.free = ledger.free.checked_add(d).ok_or(LedgerError::Overflow)?;
+    rebalance_margin_targets(ledger, &targets[..n], target_total)
+}
+
+fn rebalance_position_margin(
+    ledger: &mut UserLedger,
+    asset_id: u16,
+    post_position_im_usdc: u64,
+) -> Result<bool> {
+    let n = ledger.positions_len as usize;
+    let mut targets = [0u64; cc::MAX_USER_POSITIONS];
+    let mut target_total = 0u64;
+    let mut target_position_found = false;
+    for (i, position) in ledger.positions[..n].iter().enumerate() {
+        targets[i] = if position.asset_id == asset_id && position.lots != 0 {
+            target_position_found = true;
+            post_position_im_usdc
+        } else {
+            position.reserved_im
+        };
+        target_total = target_total
+            .checked_add(targets[i])
+            .ok_or(LedgerError::Overflow)?;
     }
-    Ok(())
+    require!(
+        target_position_found || post_position_im_usdc == 0,
+        LedgerError::BadPostFillMargin
+    );
+    rebalance_margin_targets(ledger, &targets[..n], target_total)
+}
+
+fn rebalance_margin_targets(
+    ledger: &mut UserLedger,
+    targets: &[u64],
+    target_total: u64,
+) -> Result<bool> {
+    let cash = ledger
+        .free
+        .checked_add(ledger.reserved)
+        .ok_or(LedgerError::Overflow)?;
+    let actual_total = cash.min(target_total);
+    ledger.reserved = actual_total;
+    ledger.free = cash
+        .checked_sub(actual_total)
+        .ok_or(LedgerError::Overflow)?;
+
+    let mut remaining = actual_total;
+    for (position, target) in ledger.positions[..targets.len()]
+        .iter_mut()
+        .zip(targets.iter().copied())
+    {
+        let actual = remaining.min(target);
+        position.reserved_im = actual;
+        remaining -= actual;
+    }
+    require!(remaining == 0, LedgerError::Overflow);
+    Ok(actual_total < target_total)
+}
+
+fn apply_cash_halt(book: &mut Book, has_bad_debt: bool, under_margined: bool) {
+    if under_margined {
+        book.halt |= cc::HALT_ENTRIES;
+    }
+    if has_bad_debt {
+        book.halt |= cc::BAD_DEBT | cc::HALT_ENTRIES | cc::HALT_WITHDRAW;
+    }
 }
 
 fn oid_slot_free(oid: &OpenOid) -> bool {
@@ -1107,9 +1293,10 @@ fn oid_slot_free(oid: &OpenOid) -> bool {
 }
 
 fn oid_duplicate(ledger: &UserLedger, client_oid: &[u8; 16]) -> bool {
-    ledger.open_oids.iter().any(|o| {
-        !oid_slot_free(o) && o.client_oid == *client_oid
-    })
+    ledger
+        .open_oids
+        .iter()
+        .any(|o| !oid_slot_free(o) && o.client_oid == *client_oid)
 }
 
 fn find_free_oid_slot(ledger: &UserLedger) -> Option<usize> {
@@ -1121,9 +1308,7 @@ fn revert_pending_on_asset(ledger: &mut UserLedger, asset_id: u16) -> Result<()>
         .open_oids
         .iter()
         .enumerate()
-        .filter(|(_, o)| {
-            o.asset_id == asset_id && o.state == cc::OID_PENDING && o.lots_delta != 0
-        })
+        .filter(|(_, o)| o.asset_id == asset_id && o.state == cc::OID_PENDING && o.lots_delta != 0)
         .map(|(i, _)| i)
         .collect();
     for idx in idxs {
@@ -1159,12 +1344,22 @@ fn take_pending_oid(ledger: &UserLedger, client_oid: &[u8; 16]) -> Result<(usize
     Ok((idx, ledger.open_oids[idx]))
 }
 
+fn find_acknowledged_oid<'a>(ledger: &'a UserLedger, client_oid: &[u8; 16]) -> Option<&'a OpenOid> {
+    ledger
+        .open_oids
+        .iter()
+        .find(|oid| oid.client_oid == *client_oid && oid.state == cc::OID_ACKED)
+}
+
 fn add_book_lots(book: &mut Book, asset_id: u16, filled_lots: i64) -> Result<()> {
     if let Some(r) = book.residuals[..book.residual_len as usize]
         .iter_mut()
         .find(|r| r.asset_id == asset_id)
     {
-        r.lots = r.lots.checked_add(filled_lots).ok_or(LedgerError::Overflow)?;
+        r.lots = r
+            .lots
+            .checked_add(filled_lots)
+            .ok_or(LedgerError::Overflow)?;
         if r.lots == 0 {
             compact_residuals(book);
         }
@@ -1241,6 +1436,8 @@ pub enum LedgerError {
     InvalidConfig,
     #[msg("bad fill size")]
     BadFillSize,
+    #[msg("post-fill margin must be zero for a flat position")]
+    BadPostFillMargin,
     #[msg("bad slippage bps")]
     BadSlippage,
     #[msg("missing ER validator")]
