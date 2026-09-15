@@ -4,5 +4,8 @@ version = "0.1.0"
 description = "Cinder operator: residual hedging, reconciliation, and safety controls"
 edition = "2021"
 
+[features]
+test-utils = []
+
 [dependencies]
 cinder-common = { path = "../cinder-common" }

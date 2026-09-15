@@ -52,7 +52,7 @@ const LOTS = 10;
 const IM_TEN_LOTS = 1_250_000;
 const OPEN_VWAP = 10_000_000;
 const CLOSE_VWAP = -11_000_000;
-const STUB_MM = 625_000; // stub_cinder_mm(10)
+const DEMO_MM = 625_000; // local mocked risk fixture
 
 async function ensurePrograms(
   conn: Connection,
@@ -518,18 +518,22 @@ async function main() {
         ASSET_SOL,
         new BN(lots),
         oid(tag),
-        50,
+        new BN(1_000_000),
+        new BN(1_000_000),
+        new BN(reduceOnly ? 0 : IM_TEN_LOTS),
+        new BN(reduceOnly ? 0 : Math.abs(lots) * 1_000_000),
         reduceOnly,
         new BN(nonce)
       )
       .accountsPartial({
         user: user.publicKey,
+        adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
         userLedger,
       })
       .transaction();
-    await sendTx(erConn, user, tx);
+    await sendTx(erConn, user, tx, [adapter]);
   };
 
   const ack = async (
@@ -546,6 +550,7 @@ async function main() {
         new BN(lots),
         new BN(fee),
         new BN(vwap),
+        new BN(1_000_000),
         new BN(postPositionIm)
       )
       .accountsPartial({
@@ -573,7 +578,7 @@ async function main() {
     const bookLots =
       book.residualLen > 0 ? book.residuals[0].lots.toNumber() : 0;
     pane(title, [
-      `Alice  lots=${lotsA}  free=${usdc(a.free.toNumber())}  reserved=${usdc(a.reserved.toNumber())}  Cinder MM (stub)=${usdc(STUB_MM)}`,
+      `Alice  lots=${lotsA}  free=${usdc(a.free.toNumber())}  reserved=${usdc(a.reserved.toNumber())}  local risk MM=${usdc(DEMO_MM)}`,
       `Bob    lots=${lotsB}  free=${usdc(b.free.toNumber())}  reserved=${usdc(b.reserved.toNumber())}`,
       `Book   public net=${bookLots}  (Alice+Bob=${lotsA + lotsB})`,
     ]);
@@ -596,7 +601,7 @@ async function main() {
   }
 
   pane("Notes (not in this tape)", [
-    "No live liq/funding clocks. Stub MM on localnet. escape_withdraw unsupported. Market/IOC only.",
+    "No live liq/funding clocks. Local mocked risk fixture. escape_withdraw unsupported. Market/IOC only.",
   ]);
 }
 

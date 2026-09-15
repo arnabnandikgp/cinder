@@ -8,6 +8,11 @@ pub struct MarketOrder {
     pub asset_id: u16,
     pub lots: i64,
     pub client_oid: ClientOid,
+    /// Exact Phoenix L1 tick bound signed by the user and co-signed by the
+    /// adapter. A zero value is never dispatchable.
+    pub limit_price_ticks: u64,
+    /// Exact Phoenix L1 expiry slot. A zero value is never dispatchable.
+    pub last_valid_slot: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -17,6 +22,11 @@ pub struct Fill {
     pub filled_lots: i64,
     pub fee_usdc: u64,
     pub vwap_quote_lots: i64,
+    /// Per-base-lot execution price in Phoenix ticks.  This is intentionally
+    /// separate from aggregate quote flow so bound checks compare like units.
+    pub fill_price_ticks: u64,
+    /// Exact post-fill user margin authorized by the risk engine.
+    pub post_position_im_usdc: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -113,6 +123,8 @@ impl PhoenixVenue for MockPhoenix {
                 filled_lots: order.lots,
                 fee_usdc: 0,
                 vwap_quote_lots: 0,
+                fill_price_ticks: order.limit_price_ticks,
+                post_position_im_usdc: 0,
             }),
             None => {
                 return Err(AdapterError::Phoenix(

@@ -35,6 +35,8 @@ const ASSET_SOL = 1;
 const CREDIT = 100_000_000;
 const LOTS = 10;
 const IM_TEN_LOTS = 1_250_000;
+const LIMIT_TICKS = new BN(1_000_000);
+const LAST_VALID_SLOT = new BN("18446744073709551615");
 
 function pda(programId: PublicKey, seeds: (Buffer | Uint8Array)[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, programId)[0];
@@ -321,9 +323,20 @@ describe("two-user netting and QFS isolation after trades", function () {
         new anchor.AnchorProvider(erConn, adapterWallet, { commitment: "confirmed" })
       ) as Program<CinderLedger>;
       let tx = await erUser.methods
-        .placeOrder(ASSET_SOL, new BN(lots), oid(tag), 50, false, new BN(0))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(lots),
+          oid(tag),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(IM_TEN_LOTS),
+          new BN(Math.abs(lots) * 1_000_000),
+          false,
+          new BN(0)
+        )
         .accountsPartial({
           user: user.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger,
@@ -331,6 +344,7 @@ describe("two-user netting and QFS isolation after trades", function () {
         .transaction();
       tx.feePayer = user.publicKey;
       tx.recentBlockhash = (await erConn.getLatestBlockhash()).blockhash;
+      tx.partialSign(adapter);
       tx = await adapterWallet.signTransaction(tx);
       await erConn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
     };
@@ -346,6 +360,7 @@ describe("two-user netting and QFS isolation after trades", function () {
           new BN(lots),
           new BN(0),
           new BN(0),
+          LIMIT_TICKS,
           new BN(IM_TEN_LOTS)
         )
         .accountsPartial({
