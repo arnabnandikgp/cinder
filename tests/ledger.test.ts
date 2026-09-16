@@ -29,11 +29,14 @@ const ER_VALIDATOR = new PublicKey(
 const ASSET_SOL = 1;
 const ASSET_BTC = 2;
 const HALT_ENTRIES = 1 << 0;
+const VENUE_BREACH = 1 << 7;
 const CREDIT = 100_000_000; // 100 USDC
 const LOTS = 10;
 // stub IM: 10 lots * 1e6 * 12500 / (10 * 10000) = 1_250_000
 const IM_TEN_LOTS = 1_250_000;
 const IM_PER_LOT = IM_TEN_LOTS / LOTS;
+const LIMIT_TICKS = new BN(1_000_000);
+const LAST_VALID_SLOT = new BN("18446744073709551615");
 
 function pda(programId: PublicKey, seeds: (Buffer | Uint8Array)[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, programId)[0];
@@ -53,6 +56,7 @@ describe("ledger accounts and order machine", () => {
   const connection = provider.connection;
 
   const adapter = Keypair.generate();
+  const unauthorizedAdapter = Keypair.generate();
   const user = Keypair.generate();
   const phoenixTrader = Keypair.generate().publicKey;
 
@@ -240,16 +244,83 @@ describe("ledger accounts and order machine", () => {
     );
   });
 
+  it("requires the configured adapter and nonzero Phoenix order bounds", async () => {
+    const expectFailure = async (request: Promise<string>, pattern: RegExp) => {
+      try {
+        await request;
+        expect.fail("place_order should have failed");
+      } catch (e: any) {
+        const code = e.error?.errorCode?.code ?? e.toString();
+        expect(code).to.match(pattern);
+      }
+    };
+    const place = (
+      adapterKey: PublicKey,
+      signers: Keypair[],
+      limit: BN,
+      deadline: BN
+    ) =>
+      ledger.methods
+        .placeOrder(
+          ASSET_SOL,
+          new BN(1),
+          oid(200),
+          limit,
+          deadline,
+          new BN(IM_PER_LOT),
+          new BN(1_000_000),
+          false,
+          new BN(0)
+        )
+        .accountsPartial({
+          user: user.publicKey,
+          adapter: adapterKey,
+          config: configPda,
+          book: bookPda,
+          userLedger: userLedgerPda,
+        })
+        .signers(signers)
+        .rpc();
+
+    await expectFailure(
+      place(unauthorizedAdapter.publicKey, [user, unauthorizedAdapter], LIMIT_TICKS, LAST_VALID_SLOT),
+      /Unauthorized/
+    );
+    await expectFailure(
+      place(adapter.publicKey, [user, adapter], new BN(0), LAST_VALID_SLOT),
+      /ZeroLimitPrice/
+    );
+    await expectFailure(
+      place(adapter.publicKey, [user, adapter], LIMIT_TICKS, new BN(0)),
+      /ZeroDeadline/
+    );
+
+    const state = await ledger.account.userLedger.fetch(userLedgerPda);
+    expect(state.nonce.toNumber()).to.equal(0);
+    expect(state.pendingOidCount).to.equal(0);
+  });
+
   it("place +10 lots then fail-ack restores free and lots", async () => {
     await ledger.methods
-      .placeOrder(ASSET_SOL, new BN(LOTS), oid(1), 50, false, new BN(0))
+      .placeOrder(
+        ASSET_SOL,
+        new BN(LOTS),
+        oid(1),
+        LIMIT_TICKS,
+        LAST_VALID_SLOT,
+        new BN(IM_TEN_LOTS),
+        new BN(LOTS * 1_000_000),
+        false,
+        new BN(0)
+      )
       .accountsPartial({
         user: user.publicKey,
+        adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
         userLedger: userLedgerPda,
       })
-      .signers([user])
+      .signers([user, adapter])
       .rpc();
 
     let ul = await ledger.account.userLedger.fetch(userLedgerPda);
@@ -260,17 +331,18 @@ describe("ledger accounts and order machine", () => {
     expect(ul.positions[0].reservedIm.toNumber()).to.equal(IM_TEN_LOTS);
     expect(ul.pendingOidCount).to.equal(1);
     expect(ul.nonce.toNumber()).to.equal(1);
-    expect(ul.openOids[0].limitPriceTicks.toNumber()).to.equal(0);
-    expect(ul.openOids[0].lastValidSlot.toNumber()).to.equal(0);
+    expect(ul.openOids[0].limitPriceTicks.toNumber()).to.equal(LIMIT_TICKS.toNumber());
+    expect(ul.openOids[0].lastValidSlot.toString()).to.equal(LAST_VALID_SLOT.toString());
 
     const bookBefore = await ledger.account.book.fetch(bookPda);
     expect(bookBefore.residualLen).to.equal(0);
 
     await ledger.methods
-      .ackPhoenixFail(oid(1))
+      .ackPhoenixFail(oid(1), new BN(0))
       .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
+        book: bookPda,
         userLedger: userLedgerPda,
       })
       .signers([adapter])
@@ -288,14 +360,25 @@ describe("ledger accounts and order machine", () => {
 
   it("place then fill-ack updates position, reserved IM, and Book", async () => {
     await ledger.methods
-      .placeOrder(ASSET_SOL, new BN(LOTS), oid(2), 50, false, new BN(1))
+      .placeOrder(
+        ASSET_SOL,
+        new BN(LOTS),
+        oid(2),
+        LIMIT_TICKS,
+        LAST_VALID_SLOT,
+        new BN(IM_TEN_LOTS),
+        new BN(LOTS * 1_000_000),
+        false,
+        new BN(1)
+      )
       .accountsPartial({
         user: user.publicKey,
+        adapter: adapter.publicKey,
         config: configPda,
         book: bookPda,
         userLedger: userLedgerPda,
       })
-      .signers([user])
+      .signers([user, adapter])
       .rpc();
 
     await ledger.methods
@@ -304,6 +387,7 @@ describe("ledger accounts and order machine", () => {
         new BN(LOTS),
         new BN(0),
         new BN(0),
+        new BN(LIMIT_TICKS.toNumber() + 1),
         new BN(IM_TEN_LOTS)
       )
       .accountsPartial({
@@ -330,6 +414,19 @@ describe("ledger accounts and order machine", () => {
     expect(book.residualLen).to.equal(1);
     expect(book.residuals[0].assetId).to.equal(ASSET_SOL);
     expect(book.residuals[0].lots.toNumber()).to.equal(LOTS);
+    expect(book.halt & (VENUE_BREACH | HALT_ENTRIES)).to.equal(
+      VENUE_BREACH | HALT_ENTRIES
+    );
+
+    await ledger.methods
+      .setBookHalt(0)
+      .accountsPartial({
+        adapter: adapter.publicKey,
+        config: configPda,
+        book: bookPda,
+      })
+      .signers([adapter])
+      .rpc();
   });
 
   it("HALT_ENTRIES blocks place_order", async () => {
@@ -345,14 +442,25 @@ describe("ledger accounts and order machine", () => {
 
     try {
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(LOTS), oid(3), 50, false, new BN(2))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(LOTS),
+          oid(3),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(IM_TEN_LOTS),
+          new BN(LOTS * 1_000_000),
+          false,
+          new BN(2)
+        )
         .accountsPartial({
           user: user.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: userLedgerPda,
         })
-        .signers([user])
+        .signers([user, adapter])
         .rpc();
       expect.fail("place_order should fail when HALT_ENTRIES is set");
     } catch (e: any) {
@@ -388,6 +496,7 @@ describe("ledger accounts and order machine", () => {
   describe("order machine", () => {
     const placeAccounts = () => ({
       user: user.publicKey,
+      adapter: adapter.publicKey,
       config: configPda,
       book: bookPda,
       userLedger: userLedgerPda,
@@ -396,9 +505,19 @@ describe("ledger accounts and order machine", () => {
     it("replay nonce fails", async () => {
       try {
         await ledger.methods
-          .placeOrder(ASSET_SOL, new BN(1), oid(4), 50, false, new BN(0))
+          .placeOrder(
+            ASSET_SOL,
+            new BN(1),
+            oid(4),
+            LIMIT_TICKS,
+            LAST_VALID_SLOT,
+            new BN(IM_PER_LOT),
+            new BN(1_000_000),
+            false,
+            new BN(0)
+          )
           .accountsPartial(placeAccounts())
-          .signers([user])
+          .signers([user, adapter])
           .rpc();
         expect.fail("replayed nonce should fail");
       } catch (e: any) {
@@ -410,9 +529,19 @@ describe("ledger accounts and order machine", () => {
     it("reduce-only that would increase exposure fails", async () => {
       try {
         await ledger.methods
-          .placeOrder(ASSET_SOL, new BN(1), oid(5), 50, true, new BN(2))
+          .placeOrder(
+            ASSET_SOL,
+            new BN(1),
+            oid(5),
+            LIMIT_TICKS,
+            LAST_VALID_SLOT,
+            new BN(IM_PER_LOT),
+            new BN(1_000_000),
+            true,
+            new BN(2)
+          )
           .accountsPartial(placeAccounts())
-          .signers([user])
+          .signers([user, adapter])
           .rpc();
         expect.fail("reduce-only increase should fail");
       } catch (e: any) {
@@ -425,7 +554,7 @@ describe("ledger accounts and order machine", () => {
       const liqOid = oid(90);
       try {
         await ledger.methods
-          .liquidateUser(ASSET_SOL, liqOid)
+          .liquidateUser(ASSET_SOL, liqOid, LIMIT_TICKS, LAST_VALID_SLOT)
           .accountsPartial({
             adapter: user.publicKey,
             config: configPda,
@@ -441,7 +570,7 @@ describe("ledger accounts and order machine", () => {
       }
 
       await ledger.methods
-        .liquidateUser(ASSET_SOL, liqOid)
+        .liquidateUser(ASSET_SOL, liqOid, LIMIT_TICKS, LAST_VALID_SLOT)
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
@@ -470,6 +599,7 @@ describe("ledger accounts and order machine", () => {
           new BN(-LOTS),
           new BN(0),
           new BN(0),
+          LIMIT_TICKS,
           new BN(0)
         )
         .accountsPartial({
@@ -514,12 +644,15 @@ describe("ledger accounts and order machine", () => {
             ASSET_SOL,
             new BN(1),
             oid(20 + i),
-            50,
+            LIMIT_TICKS,
+            LAST_VALID_SLOT,
+            new BN(IM_PER_LOT),
+            new BN(1_000_000),
             false,
             new BN(startNonce + i)
           )
           .accountsPartial(placeAccounts())
-          .signers([user])
+          .signers([user, adapter])
           .rpc();
       }
       const mid = await ledger.account.userLedger.fetch(userLedgerPda);
@@ -531,12 +664,15 @@ describe("ledger accounts and order machine", () => {
             ASSET_SOL,
             new BN(1),
             oid(40),
-            50,
+            LIMIT_TICKS,
+            LAST_VALID_SLOT,
+            new BN(IM_PER_LOT),
+            new BN(1_000_000),
             false,
             new BN(startNonce + 8)
           )
           .accountsPartial(placeAccounts())
-          .signers([user])
+          .signers([user, adapter])
           .rpc();
         expect.fail("ninth concurrent oid should fail");
       } catch (e: any) {
@@ -585,14 +721,25 @@ describe("ledger accounts and order machine", () => {
 
     it("open then full close credits realized into free; fail-ack does not", async () => {
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(LOTS), oid(70), 50, false, new BN(0))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(LOTS),
+          oid(70),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(IM_TEN_LOTS),
+          new BN(LOTS * 1_000_000),
+          false,
+          new BN(0)
+        )
         .accountsPartial({
           user: pnlUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: pnlLedger,
         })
-        .signers([pnlUser])
+        .signers([pnlUser, adapter])
         .rpc();
       await ledger.methods
         .ackPhoenixFill(
@@ -600,6 +747,7 @@ describe("ledger accounts and order machine", () => {
           new BN(LOTS),
           new BN(0),
           new BN(OPEN_VWAP),
+          LIMIT_TICKS,
           new BN(IM_TEN_LOTS)
         )
         .accountsPartial({
@@ -617,23 +765,35 @@ describe("ledger accounts and order machine", () => {
       expect(opened.free.toNumber()).to.equal(CREDIT - IM_TEN_LOTS);
 
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(-LOTS), oid(71), 50, true, new BN(1))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(-LOTS),
+          oid(71),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(0),
+          new BN(0),
+          true,
+          new BN(1)
+        )
         .accountsPartial({
           user: pnlUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: pnlLedger,
         })
-        .signers([pnlUser])
+        .signers([pnlUser, adapter])
         .rpc();
       const mid = await ledger.account.userLedger.fetch(pnlLedger);
       const freeWhilePending = mid.free.toNumber();
 
       await ledger.methods
-        .ackPhoenixFail(oid(71))
+        .ackPhoenixFail(oid(71), new BN(IM_TEN_LOTS))
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
+          book: bookPda,
           userLedger: pnlLedger,
         })
         .signers([adapter])
@@ -644,14 +804,25 @@ describe("ledger accounts and order machine", () => {
       expect(afterFail.free.toNumber()).to.not.equal(freeWhilePending + PROFIT);
 
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(-LOTS), oid(72), 50, true, new BN(2))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(-LOTS),
+          oid(72),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(0),
+          new BN(0),
+          true,
+          new BN(2)
+        )
         .accountsPartial({
           user: pnlUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: pnlLedger,
         })
-        .signers([pnlUser])
+        .signers([pnlUser, adapter])
         .rpc();
       await ledger.methods
         .ackPhoenixFill(
@@ -659,6 +830,7 @@ describe("ledger accounts and order machine", () => {
           new BN(-LOTS),
           new BN(0),
           new BN(CLOSE_VWAP),
+          LIMIT_TICKS,
           new BN(0)
         )
         .accountsPartial({
@@ -679,14 +851,25 @@ describe("ledger accounts and order machine", () => {
 
     it("out-of-order ack uses confirmed lots not tentative", async () => {
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(LOTS), oid(80), 50, false, new BN(3))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(LOTS),
+          oid(80),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(IM_TEN_LOTS),
+          new BN(LOTS * 1_000_000),
+          false,
+          new BN(3)
+        )
         .accountsPartial({
           user: pnlUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: pnlLedger,
         })
-        .signers([pnlUser])
+        .signers([pnlUser, adapter])
         .rpc();
       await ledger.methods
         .ackPhoenixFill(
@@ -694,6 +877,7 @@ describe("ledger accounts and order machine", () => {
           new BN(LOTS),
           new BN(0),
           new BN(OPEN_VWAP),
+          LIMIT_TICKS,
           new BN(IM_TEN_LOTS)
         )
         .accountsPartial({
@@ -706,24 +890,46 @@ describe("ledger accounts and order machine", () => {
         .signers([adapter])
         .rpc();
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(5), oid(81), 50, false, new BN(4))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(5),
+          oid(81),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(15 * IM_PER_LOT),
+          new BN(15_000_000),
+          false,
+          new BN(4)
+        )
         .accountsPartial({
           user: pnlUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: pnlLedger,
         })
-        .signers([pnlUser])
+        .signers([pnlUser, adapter])
         .rpc();
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(-4), oid(82), 50, false, new BN(5))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(-4),
+          oid(82),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(11 * IM_PER_LOT),
+          new BN(11_000_000),
+          false,
+          new BN(5)
+        )
         .accountsPartial({
           user: pnlUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: pnlLedger,
         })
-        .signers([pnlUser])
+        .signers([pnlUser, adapter])
         .rpc();
       const freeBefore = (
         await ledger.account.userLedger.fetch(pnlLedger)
@@ -734,6 +940,7 @@ describe("ledger accounts and order machine", () => {
           new BN(-4),
           new BN(0),
           new BN(-4_400_000),
+          LIMIT_TICKS,
           new BN(11 * IM_PER_LOT)
         )
         .accountsPartial({
@@ -1079,14 +1286,25 @@ describe("ledger accounts and order machine", () => {
         .signers([adapter])
         .rpc();
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(LOTS), oid(80), 50, false, new BN(0))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(LOTS),
+          oid(80),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(IM_TEN_LOTS),
+          new BN(LOTS * 1_000_000),
+          false,
+          new BN(0)
+        )
         .accountsPartial({
           user: fundUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: fundLedger,
         })
-        .signers([fundUser])
+        .signers([fundUser, adapter])
         .rpc();
       await ledger.methods
         .ackPhoenixFill(
@@ -1094,6 +1312,7 @@ describe("ledger accounts and order machine", () => {
           new BN(LOTS),
           new BN(0),
           new BN(0),
+          LIMIT_TICKS,
           new BN(IM_TEN_LOTS)
         )
         .accountsPartial({
@@ -1110,6 +1329,7 @@ describe("ledger accounts and order machine", () => {
     it("accrue writes unsettled only; fold moves cash; epoch gates", async () => {
       const before = await ledger.account.userLedger.fetch(fundLedger);
       const freeBefore = before.free.toNumber();
+      const reservedBefore = before.reserved.toNumber();
 
       await ledger.methods
         .bumpFundingEpoch(new BN(1))
@@ -1123,7 +1343,7 @@ describe("ledger accounts and order machine", () => {
 
       await ledger.methods
         .allocateFunding(new BN(1), false, [
-          { assetId: ASSET_SOL, deltaUsdc: new BN(DELTA) },
+          { assetId: ASSET_SOL, deltaUsdc: new BN(DELTA), postPositionImUsdc: new BN(IM_TEN_LOTS) },
         ])
         .accountsPartial({
           adapter: adapter.publicKey,
@@ -1136,6 +1356,7 @@ describe("ledger accounts and order machine", () => {
 
       const accrued = await ledger.account.userLedger.fetch(fundLedger);
       expect(accrued.free.toNumber()).to.equal(freeBefore);
+      expect(accrued.reserved.toNumber()).to.equal(reservedBefore);
       expect(accrued.positions[0].unsettledFunding.toNumber()).to.equal(DELTA);
       expect(accrued.lastFundingEpoch.toNumber()).to.equal(1);
 
@@ -1193,7 +1414,13 @@ describe("ledger accounts and order machine", () => {
       }
 
       await ledger.methods
-        .allocateFunding(new BN(1), true, [])
+        .allocateFunding(new BN(1), true, [
+          {
+            assetId: ASSET_SOL,
+            deltaUsdc: new BN(0),
+            postPositionImUsdc: new BN(2_000_000),
+          },
+        ])
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
@@ -1204,7 +1431,10 @@ describe("ledger accounts and order machine", () => {
         .rpc();
 
       const folded = await ledger.account.userLedger.fetch(fundLedger);
-      expect(folded.free.toNumber()).to.equal(freeBefore + DELTA);
+      expect(folded.free.toNumber()).to.equal(
+        freeBefore + reservedBefore + DELTA - 2_000_000
+      );
+      expect(folded.reserved.toNumber()).to.equal(2_000_000);
       expect(folded.positions[0].unsettledFunding.toNumber()).to.equal(0);
     });
   });
@@ -1308,14 +1538,25 @@ describe("ledger accounts and order machine", () => {
         .signers([adapter])
         .rpc();
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(LOTS), oid(118), 50, false, new BN(0))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(LOTS),
+          oid(118),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(IM_TEN_LOTS),
+          new BN(LOTS * 1_000_000),
+          false,
+          new BN(0)
+        )
         .accountsPartial({
           user: marginUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: marginLedger,
         })
-        .signers([marginUser])
+        .signers([marginUser, adapter])
         .rpc();
       await ledger.methods
         .ackPhoenixFill(
@@ -1323,6 +1564,7 @@ describe("ledger accounts and order machine", () => {
           new BN(LOTS),
           new BN(1_000_000),
           new BN(10_000_000),
+          LIMIT_TICKS,
           new BN(IM_TEN_LOTS)
         )
         .accountsPartial({
@@ -1340,7 +1582,7 @@ describe("ledger accounts and order machine", () => {
       expect(state.badDebtUsdc.toNumber()).to.equal(0);
       expect(state.free.toNumber()).to.equal(0);
       expect(state.reserved.toNumber()).to.equal(1_000_000);
-      expect(state.positions[0].reservedIm.toNumber()).to.equal(1_000_000);
+      expect(state.positions[0].reservedIm.toNumber()).to.equal(IM_TEN_LOTS);
       expect(book.halt & HALT_ENTRIES).to.equal(HALT_ENTRIES);
 
       await ledger.methods
@@ -1354,19 +1596,111 @@ describe("ledger accounts and order machine", () => {
         .rpc();
     });
 
+    it("halts entries when a failed close restores an unfunded margin target", async () => {
+      const user = Keypair.generate();
+      await airdrop(user.publicKey);
+      const userLedger = pda(ledger.programId, [
+        Buffer.from("user"),
+        user.publicKey.toBuffer(),
+      ]);
+      const accounts = {
+        adapter: adapter.publicKey,
+        config: configPda,
+        book: bookPda,
+        userLedger,
+      };
+      await ledger.methods
+        .initUser()
+        .accountsPartial({ ...accounts, user: user.publicKey, systemProgram: SystemProgram.programId })
+        .signers([adapter, user])
+        .rpc();
+      await ledger.methods
+        .creditDeposit(new BN(2_000_000))
+        .accountsPartial(accounts)
+        .signers([adapter])
+        .rpc();
+      const place = (lots: number, tag: number, postIm: number, nonce: number) =>
+        ledger.methods
+          .placeOrder(
+            ASSET_SOL,
+            new BN(lots),
+            oid(tag),
+            LIMIT_TICKS,
+            LAST_VALID_SLOT,
+            new BN(postIm),
+            new BN(lots > 0 ? OPEN_VWAP : 0),
+            lots < 0,
+            new BN(nonce)
+          )
+          .accountsPartial({ ...accounts, user: user.publicKey })
+          .signers([adapter, user])
+          .rpc();
+      await place(LOTS, 140, IM_TEN_LOTS, 0);
+      await ledger.methods
+        .ackPhoenixFill(
+          oid(140), new BN(LOTS), new BN(0), new BN(OPEN_VWAP),
+          LIMIT_TICKS, new BN(IM_TEN_LOTS)
+        )
+        .accountsPartial({ ...accounts, feeAccrual: feesPda })
+        .signers([adapter])
+        .rpc();
+      await place(-LOTS, 141, 0, 1);
+      const bookBefore = await ledger.account.book.fetch(bookPda);
+
+      // Fresh venue risk can require more margin than the remaining cash.
+      await ledger.methods
+        .ackPhoenixFail(oid(141), new BN(3_000_000))
+        .accountsPartial(accounts)
+        .signers([adapter])
+        .rpc();
+
+      const state = await ledger.account.userLedger.fetch(userLedger);
+      const bookAfter = await ledger.account.book.fetch(bookPda);
+      expect(state.positions[0].lots.toNumber()).to.equal(LOTS);
+      expect(state.positions[0].reservedIm.toNumber()).to.equal(3_000_000);
+      expect(state.reserved.toNumber()).to.equal(2_000_000);
+      expect(state.free.toNumber()).to.equal(0);
+      expect(state.badDebtUsdc.toNumber()).to.equal(0);
+      expect(state.pendingOidCount).to.equal(0);
+      expect(state.openOids.find((row: { clientOid: number[] }) =>
+        row.clientOid.every((byte: number, i: number) => byte === oid(141)[i])
+      )?.state).to.equal(2); // OID_FAILED
+      expect(bookAfter.halt & HALT_ENTRIES).to.equal(HALT_ENTRIES);
+      expect(bookAfter.residualLen).to.equal(bookBefore.residualLen);
+      expect(bookAfter.residuals.map((row: { lots: BN }) => row.lots.toString()))
+        .to.deep.equal(bookBefore.residuals.map((row: { lots: BN }) => row.lots.toString()));
+
+      await ledger.methods
+        .setBookHalt(0)
+        .accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda })
+        .signers([adapter])
+        .rpc();
+    });
+
     it("prioritizes a live reused OID over an older acknowledged row", async () => {
       const blockerOid = oid(130);
       const reusedOid = oid(131);
       const place = (clientOid: number[], nonce: number) =>
         ledger.methods
-          .placeOrder(ASSET_SOL, new BN(1), clientOid, 50, false, new BN(nonce))
+          .placeOrder(
+            ASSET_SOL,
+            new BN(1),
+            clientOid,
+            LIMIT_TICKS,
+            LAST_VALID_SLOT,
+            new BN(IM_PER_LOT),
+            new BN(1_000_000),
+            false,
+            new BN(nonce)
+          )
           .accountsPartial({
             user: replayUser.publicKey,
+            adapter: adapter.publicKey,
             config: configPda,
             book: bookPda,
             userLedger: replayLedger,
           })
-          .signers([replayUser])
+          .signers([replayUser, adapter])
           .rpc();
       const acknowledge = (clientOid: number[], postIm: number) =>
         ledger.methods
@@ -1375,6 +1709,7 @@ describe("ledger accounts and order machine", () => {
             new BN(1),
             new BN(0),
             new BN(1_000_000),
+            LIMIT_TICKS,
             new BN(postIm)
           )
           .accountsPartial({
@@ -1391,10 +1726,11 @@ describe("ledger accounts and order machine", () => {
       await place(reusedOid, 1);
       await acknowledge(reusedOid, 2 * IM_PER_LOT);
       await ledger.methods
-        .ackPhoenixFail(blockerOid)
+        .ackPhoenixFail(blockerOid, new BN(0))
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
+          book: bookPda,
           userLedger: replayLedger,
         })
         .signers([adapter])
@@ -1428,14 +1764,25 @@ describe("ledger accounts and order machine", () => {
       const feesBefore = await ledger.account.feeAccrual.fetch(feesPda);
 
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(LOTS), oid(120), 50, false, new BN(0))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(LOTS),
+          oid(120),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(IM_TEN_LOTS),
+          new BN(LOTS * 1_000_000),
+          false,
+          new BN(0)
+        )
         .accountsPartial({
           user: debtUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: debtLedger,
         })
-        .signers([debtUser])
+        .signers([debtUser, adapter])
         .rpc();
       await ledger.methods
         .ackPhoenixFill(
@@ -1443,6 +1790,7 @@ describe("ledger accounts and order machine", () => {
           new BN(LOTS),
           new BN(0),
           new BN(OPEN_VWAP),
+          LIMIT_TICKS,
           new BN(IM_TEN_LOTS)
         )
         .accountsPartial({
@@ -1455,14 +1803,25 @@ describe("ledger accounts and order machine", () => {
         .signers([adapter])
         .rpc();
       await ledger.methods
-        .placeOrder(ASSET_SOL, new BN(-LOTS), oid(121), 50, true, new BN(1))
+        .placeOrder(
+          ASSET_SOL,
+          new BN(-LOTS),
+          oid(121),
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(0),
+          new BN(0),
+          true,
+          new BN(1)
+        )
         .accountsPartial({
           user: debtUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: debtLedger,
         })
-        .signers([debtUser])
+        .signers([debtUser, adapter])
         .rpc();
 
       const acknowledgeLoss = () =>
@@ -1472,6 +1831,7 @@ describe("ledger accounts and order machine", () => {
             new BN(-LOTS),
             new BN(FEE),
             new BN(LOSS_CLOSE_VWAP),
+            LIMIT_TICKS,
             new BN(0)
           )
           .accountsPartial({
@@ -1569,17 +1929,21 @@ describe("ledger accounts and order machine", () => {
           ASSET_BTC,
           new BN(LOTS),
           secondAssetOid,
-          50,
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(IM_TEN_LOTS),
+          new BN(LOTS * 1_000_000),
           false,
           new BN(3)
         )
         .accountsPartial({
           user: replayUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: replayLedger,
         })
-        .signers([replayUser])
+        .signers([replayUser, adapter])
         .rpc();
       await ledger.methods
         .ackPhoenixFill(
@@ -1587,6 +1951,7 @@ describe("ledger accounts and order machine", () => {
           new BN(LOTS),
           new BN(0),
           new BN(10_000_000),
+          LIMIT_TICKS,
           new BN(IM_TEN_LOTS)
         )
         .accountsPartial({
@@ -1612,7 +1977,7 @@ describe("ledger accounts and order machine", () => {
         .rpc();
       await ledger.methods
         .allocateFunding(new BN(nextEpoch), false, [
-          { assetId: ASSET_SOL, deltaUsdc: new BN(-11_000_000) },
+          { assetId: ASSET_SOL, deltaUsdc: new BN(-11_000_000), postPositionImUsdc: new BN(0) },
         ])
         .accountsPartial({
           adapter: adapter.publicKey,
@@ -1629,17 +1994,21 @@ describe("ledger accounts and order machine", () => {
           ASSET_SOL,
           new BN(-2),
           closeOid,
-          50,
+          LIMIT_TICKS,
+          LAST_VALID_SLOT,
+          new BN(0),
+          new BN(0),
           true,
           new BN(4)
         )
         .accountsPartial({
           user: replayUser.publicKey,
+          adapter: adapter.publicKey,
           config: configPda,
           book: bookPda,
           userLedger: replayLedger,
         })
-        .signers([replayUser])
+        .signers([replayUser, adapter])
         .rpc();
       await ledger.methods
         .ackPhoenixFill(
@@ -1647,6 +2016,7 @@ describe("ledger accounts and order machine", () => {
           new BN(-2),
           new BN(0),
           new BN(-2_000_000),
+          LIMIT_TICKS,
           new BN(0)
         )
         .accountsPartial({
@@ -1660,7 +2030,7 @@ describe("ledger accounts and order machine", () => {
         .rpc();
 
       await ledger.methods
-        .liquidateUser(ASSET_SOL, oid(134))
+        .liquidateUser(ASSET_SOL, oid(134), LIMIT_TICKS, LAST_VALID_SLOT)
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
@@ -1678,7 +2048,7 @@ describe("ledger accounts and order machine", () => {
         .find((position: { assetId: number }) => position.assetId === ASSET_BTC);
       expect(remaining).to.exist;
       expect(remaining.lots.toNumber()).to.equal(LOTS);
-      expect(remaining.reservedIm.toNumber()).to.equal(0);
+      expect(remaining.reservedIm.toNumber()).to.equal(IM_TEN_LOTS);
       expect(state.badDebtUsdc.toNumber()).to.equal(1_000_000);
       expect(bookAfter.halt & (1 << 6)).to.equal(1 << 6);
       expect(bookAfter.halt & HALT_ENTRIES).to.equal(HALT_ENTRIES);

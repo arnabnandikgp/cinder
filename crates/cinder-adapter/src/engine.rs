@@ -5,7 +5,7 @@ use crate::ledger::LedgerPort;
 use crate::operator::OperatorAuth;
 use crate::phoenix::{Fill, MarketOrder, PhoenixVenue, PlaceResult, PoolHealth};
 use crate::residual::{i1_holds, i1_live};
-use crate::{AdapterError, ClientOid, PubkeyBytes};
+use crate::{AdapterError, ClientOid, PubkeyBytes, RiskEngine, RiskSnapshot, UserRiskQuote};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PendingOid {
@@ -14,6 +14,17 @@ pub struct PendingOid {
     pub asset_id: u16,
     pub lots_delta: i64,
     pub created_at_ms: u64,
+    pub limit_price_ticks: u64,
+    pub last_valid_slot: u64,
+    /// Exact margin for the restored position if this tentative order fails.
+    pub post_fail_position_im_usdc: u64,
+}
+
+/// The two values that the adapter co-signs into `place_order`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreflightOrder {
+    pub post_position_im_usdc: u64,
+    pub post_total_notional_usdc: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,7 +44,7 @@ pub enum HedgeOutcome {
     InvariantBroken { asset_id: u16 },
 }
 
-pub struct Adapter<P, L> {
+pub struct Adapter<P, L, R> {
     pub phoenix: P,
     pub ledger: L,
     pub inflight: InFlightTable,
@@ -51,10 +62,17 @@ pub struct Adapter<P, L> {
     pub last_in_process_scan_ms: Option<u64>,
     pub last_heartbeat_ms: u64,
     pub queued: Vec<LiqQueueItem>,
+    pub risk: R,
+    /// Latest validated normalized pooled-trader snapshots, used for venue
+    /// expiry and residual checks.
+    pub pool_risk_snapshots: std::collections::BTreeMap<u16, RiskSnapshot>,
+    /// Latest validated normalized per-user Rise simulations.  A pool snapshot
+    /// must never be re-used as a user's health snapshot.
+    pub user_risk_snapshots: std::collections::BTreeMap<(PubkeyBytes, u16), RiskSnapshot>,
 }
 
-impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
-    pub fn new(phoenix: P, ledger: L, operator: OperatorAuth) -> Self {
+impl<P: PhoenixVenue, L: LedgerPort, R: RiskEngine> Adapter<P, L, R> {
+    pub fn new(phoenix: P, ledger: L, operator: OperatorAuth, risk: R) -> Self {
         Self {
             phoenix,
             ledger,
@@ -70,7 +88,142 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             last_in_process_scan_ms: None,
             last_heartbeat_ms: 0,
             queued: Vec::new(),
+            risk,
+            pool_risk_snapshots: std::collections::BTreeMap::new(),
+            user_risk_snapshots: std::collections::BTreeMap::new(),
         }
+    }
+
+    pub fn observe_risk_snapshot(&mut self, snapshot: RiskSnapshot) {
+        self.pool_risk_snapshots.insert(snapshot.asset_id, snapshot);
+    }
+
+    pub fn observe_user_risk_snapshot(&mut self, user: PubkeyBytes, snapshot: RiskSnapshot) {
+        self.user_risk_snapshots
+            .insert((user, snapshot.asset_id), snapshot);
+    }
+
+    /// Produce the exact values co-signed into the tentative ledger order.
+    /// The pool snapshot is separate because it describes the aggregate
+    /// Phoenix cross trader, while the user snapshot describes the simulated
+    /// user transition.
+    pub fn preflight_order(
+        &self,
+        user_snapshot: &RiskSnapshot,
+        pool_snapshot: &RiskSnapshot,
+        current_lots: i64,
+        lots_delta: i64,
+        post_intended_residual_lots: i64,
+        collateral_usdc: i128,
+        now_ms: u64,
+    ) -> Result<PreflightOrder, AdapterError> {
+        if user_snapshot.asset_id != pool_snapshot.asset_id {
+            return Err(AdapterError::Risk("user/pool asset mismatch".into()));
+        }
+        let post_lots = current_lots
+            .checked_add(lots_delta)
+            .ok_or_else(|| AdapterError::Risk("position overflow".into()))?;
+        let user = self.risk.quote_user_after_order(
+            user_snapshot,
+            current_lots,
+            post_lots,
+            collateral_usdc,
+            now_ms,
+        )?;
+        let pool = self.risk.quote_pool_after_residual(
+            pool_snapshot,
+            post_intended_residual_lots,
+            now_ms,
+        )?;
+        if !pool.health.allows_new_hedge() {
+            return Err(AdapterError::Risk(
+                "post-residual Phoenix pool is not safe".into(),
+            ));
+        }
+        if user.effective_equity_usdc < user.post_position_im_usdc as i128 {
+            return Err(AdapterError::Risk("insufficient initial margin".into()));
+        }
+        let leverage = user_snapshot
+            .first_tier_leverage
+            .min(cc::MAX_USER_LEVERAGE as u64);
+        let capacity = u128::try_from(user.effective_equity_usdc)
+            .ok()
+            .and_then(|equity| equity.checked_mul(leverage as u128))
+            .ok_or_else(|| AdapterError::Risk("non-positive or overflowing collateral".into()))?;
+        if user.total_notional_usdc as u128 > capacity {
+            return Err(AdapterError::Risk("user leverage exceeded".into()));
+        }
+        Ok(PreflightOrder {
+            post_position_im_usdc: user.post_position_im_usdc,
+            post_total_notional_usdc: user.total_notional_usdc,
+        })
+    }
+
+    pub(crate) fn quote_user_health(
+        &self,
+        user: &PubkeyBytes,
+        asset_id: u16,
+        lots: i64,
+        now_ms: u64,
+    ) -> Result<UserRiskQuote, AdapterError> {
+        self.quote_user_health_with_collateral(
+            user,
+            asset_id,
+            lots,
+            self.ledger.user_collateral(user),
+            now_ms,
+        )
+    }
+
+    pub(crate) fn quote_user_health_with_collateral(
+        &self,
+        user: &PubkeyBytes,
+        asset_id: u16,
+        lots: i64,
+        collateral_usdc: i128,
+        now_ms: u64,
+    ) -> Result<UserRiskQuote, AdapterError> {
+        let snapshot = self.user_risk_snapshots.get(&(*user, asset_id));
+        #[cfg(any(test, feature = "test-utils"))]
+        let snapshot = snapshot.or_else(|| self.pool_risk_snapshots.get(&asset_id));
+        let snapshot = snapshot
+            .ok_or_else(|| AdapterError::Risk("missing Rise/Phoenix risk snapshot".into()))?;
+        self.risk
+            .quote_user_health(snapshot, lots, collateral_usdc, now_ms)
+    }
+
+    pub(crate) fn dispatch_rejection_reason(&self, oid: &PendingOid) -> Option<&'static str> {
+        if oid.limit_price_ticks == 0 || oid.last_valid_slot == 0 {
+            return Some("missing Phoenix bound/deadline");
+        }
+        let Some(snapshot) = self.pool_risk_snapshots.get(&oid.asset_id) else {
+            return Some("missing Phoenix risk snapshot");
+        };
+        (snapshot.observed_slot > oid.last_valid_slot).then_some("Phoenix deadline expired")
+    }
+
+    fn entry_dispatch_rejection_reason(
+        &self,
+        now_ms: u64,
+        oid: &PendingOid,
+    ) -> Option<&'static str> {
+        if let Some(reason) = self.dispatch_rejection_reason(oid) {
+            return Some(reason);
+        }
+        let snapshot = self.pool_risk_snapshots.get(&oid.asset_id)?;
+        let Some(age_ms) = now_ms.checked_sub(snapshot.observed_at_ms) else {
+            return Some("future Phoenix risk snapshot");
+        };
+        (age_ms > cc::MARK_STALE_MS).then_some("stale Phoenix risk snapshot")
+    }
+
+    pub(crate) fn fill_breaches_bound(fill: &Fill, oid: &PendingOid) -> bool {
+        fill.fill_price_ticks == 0
+            || if fill.filled_lots > 0 {
+                fill.fill_price_ticks > oid.limit_price_ticks
+            } else {
+                fill.fill_price_ticks < oid.limit_price_ticks
+            }
     }
 
     pub fn next_liq_oid(&mut self) -> ClientOid {
@@ -112,10 +265,20 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
         oid: &PendingOid,
     ) -> Result<HedgeOutcome, AdapterError> {
         if now_ms.saturating_sub(oid.created_at_ms) > cc::OID_TTL_MS {
-            self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+            self.ledger
+                .ack_fail(&oid.user, &oid.client_oid, oid.post_fail_position_im_usdc)?;
             return Ok(HedgeOutcome::Failed {
                 oid: oid.client_oid,
                 reason: "oid ttl".into(),
+            });
+        }
+
+        if let Some(reason) = self.entry_dispatch_rejection_reason(now_ms, oid) {
+            self.ledger
+                .ack_fail(&oid.user, &oid.client_oid, oid.post_fail_position_im_usdc)?;
+            return Ok(HedgeOutcome::Failed {
+                oid: oid.client_oid,
+                reason: reason.into(),
             });
         }
 
@@ -159,12 +322,14 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                 client_oid: oid.client_oid,
                 asset_id: oid.asset_id,
                 lots_delta: oid.lots_delta,
+                post_fail_position_im_usdc: oid.post_fail_position_im_usdc,
                 inserted_at_ms: now_ms,
                 venue_filled: false,
             })
             .is_err()
         {
-            self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+            self.ledger
+                .ack_fail(&oid.user, &oid.client_oid, oid.post_fail_position_im_usdc)?;
             return Ok(HedgeOutcome::Failed {
                 oid: oid.client_oid,
                 reason: "duplicate live client oid".into(),
@@ -175,11 +340,14 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
             asset_id: oid.asset_id,
             lots: oid.lots_delta,
             client_oid: oid.client_oid,
+            limit_price_ticks: oid.limit_price_ticks,
+            last_valid_slot: oid.last_valid_slot,
         };
         let placed = self.phoenix.place_market(&order)?;
         match placed {
             PlaceResult::Reject { reason } => {
-                self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+                self.ledger
+                    .ack_fail(&oid.user, &oid.client_oid, oid.post_fail_position_im_usdc)?;
                 self.inflight.remove(&oid.client_oid);
                 Ok(HedgeOutcome::Failed {
                     oid: oid.client_oid,
@@ -195,7 +363,11 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                     });
                 }
                 if fill.filled_lots == 0 {
-                    self.ledger.ack_fail(&oid.user, &oid.client_oid)?;
+                    self.ledger.ack_fail(
+                        &oid.user,
+                        &oid.client_oid,
+                        oid.post_fail_position_im_usdc,
+                    )?;
                     self.inflight.remove(&oid.client_oid);
                     return Ok(HedgeOutcome::Failed {
                         oid: oid.client_oid,
@@ -225,6 +397,10 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
                 self.inflight.mark_venue_filled(&oid.client_oid);
                 self.ledger.ack_fill(&oid.user, &fill)?;
                 self.inflight.remove(&oid.client_oid);
+                if Self::fill_breaches_bound(&fill, oid) {
+                    let flags = self.ledger.config_halt() | cc::VENUE_BREACH | cc::HALT_ENTRIES;
+                    self.ledger.write_halt(flags)?;
+                }
                 if !i1_holds(&self.phoenix, &self.ledger, fill.asset_id) {
                     let flags = self.ledger.config_halt() | cc::INVARIANT_BROKEN;
                     self.ledger.write_halt(flags)?;
@@ -244,7 +420,8 @@ impl<P: PhoenixVenue, L: LedgerPort> Adapter<P, L> {
         let stale = self.inflight.expired(now_ms);
         let mut oids = Vec::new();
         for row in stale {
-            self.ledger.ack_fail(&row.user, &row.client_oid)?;
+            self.ledger
+                .ack_fail(&row.user, &row.client_oid, row.post_fail_position_im_usdc)?;
             self.inflight.remove(&row.client_oid);
             oids.push(row.client_oid);
         }
@@ -258,6 +435,7 @@ mod tests {
     use crate::ledger::MemoryLedger;
     use crate::operator::MockTeeAuth;
     use crate::phoenix::{MockPhoenix, PoolHealth};
+    use crate::{MarketStatus, RiskSnapshot, StubRiskEngine, UnitStatus};
 
     fn oid(n: u8) -> ClientOid {
         let mut o = [0u8; 16];
@@ -276,18 +454,62 @@ mod tests {
             asset_id: 1,
             lots_delta: lots,
             created_at_ms,
+            limit_price_ticks: 100,
+            last_valid_slot: 100,
+            post_fail_position_im_usdc: 0,
         }
     }
 
-    fn adapter_with(phoenix: MockPhoenix) -> Adapter<MockPhoenix, MemoryLedger> {
+    fn rise_snapshot(asset_id: u16, lots: i64, observed_at_ms: u64) -> RiskSnapshot {
+        RiskSnapshot {
+            asset_id,
+            position_lots: lots,
+            mark_price_ticks: 1_000_000,
+            observed_slot: 10,
+            observed_at_ms,
+            market_status: MarketStatus::Active,
+            units: UnitStatus::Verified,
+            phoenix_initial_margin_usdc: lots.unsigned_abs() * 100_000,
+            phoenix_maintenance_margin_usdc: lots.unsigned_abs() * 50_000,
+            total_notional_usdc: lots.unsigned_abs() * 1_000_000,
+            unrealized_pnl_usdc: 0,
+            first_tier_leverage: 10,
+            upnl_gain_factor_bps: Some(5_000),
+            tick_size_in_quote_lots_per_base_lot: 1,
+            quote_lot_to_usdc_numerator: 1,
+            quote_lot_to_usdc_denominator: 1,
+            post_pool_health: Some(PoolHealth::Safe),
+        }
+    }
+
+    fn adapter_with(phoenix: MockPhoenix) -> Adapter<MockPhoenix, MemoryLedger, StubRiskEngine> {
         let mut operator = OperatorAuth::new("http://127.0.0.1:6699");
         operator
             .authenticate(&MockTeeAuth { token: "op".into() }, &user(), &|_| [0u8; 64])
             .unwrap();
-        let mut ad = Adapter::new(phoenix, MemoryLedger::new(), operator);
+        let mut ad = Adapter::new(phoenix, MemoryLedger::new(), operator, StubRiskEngine);
         ad.mark_observed_at_ms = Some(1_000);
         ad.trader_observed_at_ms = Some(1_000);
         ad.pool_health = PoolHealth::Safe;
+        ad.observe_risk_snapshot(RiskSnapshot {
+            asset_id: 1,
+            position_lots: 0,
+            mark_price_ticks: 100,
+            observed_slot: 1,
+            observed_at_ms: 1_000,
+            market_status: MarketStatus::Active,
+            units: UnitStatus::Verified,
+            phoenix_initial_margin_usdc: 1,
+            phoenix_maintenance_margin_usdc: 1,
+            total_notional_usdc: 0,
+            unrealized_pnl_usdc: 0,
+            first_tier_leverage: 10,
+            upnl_gain_factor_bps: Some(5_000),
+            quote_lot_to_usdc_numerator: 1,
+            quote_lot_to_usdc_denominator: 1,
+            tick_size_in_quote_lots_per_base_lot: 1,
+            post_pool_health: Some(PoolHealth::Safe),
+        });
         ad
     }
 
@@ -310,6 +532,8 @@ mod tests {
             filled_lots: 10,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 1_250_000,
         });
         let mut ad = adapter_with(phoenix);
         let out = ad.hedge_pending(1_000, &pending(1, 10, 1_000)).unwrap();
@@ -321,6 +545,171 @@ mod tests {
     }
 
     #[test]
+    fn preflight_requires_coherent_fresh_rise_snapshots() {
+        let operator = OperatorAuth::new("http://127.0.0.1:6699");
+        let adapter = Adapter::new(
+            MockPhoenix::new(),
+            MemoryLedger::new(),
+            operator,
+            crate::RiseRiskEngine,
+        );
+        let mut user_risk = rise_snapshot(1, 10, 1_000);
+        // Includes five million of notional from the user's other positions.
+        user_risk.total_notional_usdc = 15_000_000;
+        let pool_risk = rise_snapshot(1, 10, 1_000);
+        let quote = adapter
+            .preflight_order(&user_risk, &pool_risk, 0, 10, 10, 2_000_000, 1_000)
+            .unwrap();
+        assert_eq!(quote.post_position_im_usdc, 1_250_000);
+        assert_eq!(quote.post_total_notional_usdc, 15_000_000);
+
+        let mut wrong_asset = pool_risk.clone();
+        wrong_asset.asset_id = 2;
+        assert!(adapter
+            .preflight_order(&user_risk, &wrong_asset, 0, 10, 10, 2_000_000, 1_000)
+            .is_err());
+        let mut unsafe_pool = pool_risk.clone();
+        unsafe_pool.post_pool_health = Some(PoolHealth::Cancellable);
+        assert!(adapter
+            .preflight_order(&user_risk, &unsafe_pool, 0, 10, 10, 2_000_000, 1_000)
+            .is_err());
+        assert!(adapter
+            .preflight_order(
+                &user_risk,
+                &pool_risk,
+                0,
+                10,
+                10,
+                2_000_000,
+                1_000 + cc::MARK_STALE_MS + 1,
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn buy_and_sell_bounds_are_directional_in_ticks() {
+        let mut order = pending(40, 10, 1_000);
+        order.limit_price_ticks = 100;
+        let mut fill = Fill {
+            client_oid: order.client_oid,
+            asset_id: 1,
+            filled_lots: 10,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 0,
+        };
+        assert!(
+            !Adapter::<MockPhoenix, MemoryLedger, StubRiskEngine>::fill_breaches_bound(
+                &fill, &order
+            )
+        );
+        fill.fill_price_ticks = 99;
+        assert!(
+            !Adapter::<MockPhoenix, MemoryLedger, StubRiskEngine>::fill_breaches_bound(
+                &fill, &order
+            )
+        );
+        fill.fill_price_ticks = 101;
+        assert!(
+            Adapter::<MockPhoenix, MemoryLedger, StubRiskEngine>::fill_breaches_bound(
+                &fill, &order
+            )
+        );
+
+        order.lots_delta = -10;
+        fill.filled_lots = -10;
+        fill.fill_price_ticks = 100;
+        assert!(
+            !Adapter::<MockPhoenix, MemoryLedger, StubRiskEngine>::fill_breaches_bound(
+                &fill, &order
+            )
+        );
+        fill.fill_price_ticks = 101;
+        assert!(
+            !Adapter::<MockPhoenix, MemoryLedger, StubRiskEngine>::fill_breaches_bound(
+                &fill, &order
+            )
+        );
+        fill.fill_price_ticks = 99;
+        assert!(
+            Adapter::<MockPhoenix, MemoryLedger, StubRiskEngine>::fill_breaches_bound(
+                &fill, &order
+            )
+        );
+    }
+
+    #[test]
+    fn violating_confirmed_fill_is_acked_then_halts_entries() {
+        let mut phoenix = MockPhoenix::new();
+        phoenix.fill_next(Fill {
+            client_oid: oid(41),
+            asset_id: 1,
+            filled_lots: 10,
+            fee_usdc: 0,
+            vwap_quote_lots: 0,
+            fill_price_ticks: 101,
+            post_position_im_usdc: 0,
+        });
+        let mut adapter = adapter_with(phoenix);
+        let order = pending(41, 10, 1_000);
+        assert!(matches!(
+            adapter.hedge_pending(1_000, &order).unwrap(),
+            HedgeOutcome::Filled(_)
+        ));
+        assert_eq!(adapter.ledger.fills.len(), 1);
+        assert_eq!(adapter.ledger.book_lots(1), 10);
+        assert_eq!(
+            adapter.ledger.book_halt() & (cc::VENUE_BREACH | cc::HALT_ENTRIES),
+            cc::VENUE_BREACH | cc::HALT_ENTRIES
+        );
+    }
+
+    #[test]
+    fn missing_or_expired_envelope_never_reaches_phoenix() {
+        let mut adapter = adapter_with(MockPhoenix::new());
+        let mut unbounded = pending(42, 10, 1_000);
+        unbounded.limit_price_ticks = 0;
+        let outcome = adapter.hedge_pending(1_000, &unbounded).unwrap();
+        assert!(
+            matches!(outcome, HedgeOutcome::Failed { reason, .. } if reason == "missing Phoenix bound/deadline")
+        );
+
+        let mut expired = pending(43, 10, 1_000);
+        expired.last_valid_slot = 5;
+        adapter
+            .pool_risk_snapshots
+            .get_mut(&1)
+            .unwrap()
+            .observed_slot = 6;
+        let outcome = adapter.hedge_pending(1_000, &expired).unwrap();
+        assert!(
+            matches!(outcome, HedgeOutcome::Failed { reason, .. } if reason == "Phoenix deadline expired")
+        );
+        assert_eq!(adapter.ledger.fails.len(), 2);
+        assert!(adapter.inflight.is_empty());
+    }
+
+    #[test]
+    fn stale_risk_snapshot_never_reaches_phoenix() {
+        let mut adapter = adapter_with(MockPhoenix::new());
+        let now_ms = 1_000 + cc::MARK_STALE_MS + 1;
+        // Keep the generic feed clocks fresh to prove dispatch independently
+        // enforces the snapshot used for the Phoenix deadline.
+        adapter.mark_observed_at_ms = Some(now_ms);
+        adapter.trader_observed_at_ms = Some(now_ms);
+
+        let outcome = adapter
+            .hedge_pending(now_ms, &pending(44, 10, 1_000))
+            .unwrap();
+        assert!(
+            matches!(outcome, HedgeOutcome::Failed { reason, .. } if reason == "stale Phoenix risk snapshot")
+        );
+        assert_eq!(adapter.ledger.fails.len(), 1);
+        assert!(adapter.inflight.is_empty());
+    }
+
+    #[test]
     fn confirmed_fill_fee_becomes_debt_and_replay_is_a_noop() {
         let fill = Fill {
             client_oid: oid(2),
@@ -328,6 +717,8 @@ mod tests {
             filled_lots: 10,
             fee_usdc: 250,
             vwap_quote_lots: 10_000_000,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 0,
         };
         let mut phoenix = MockPhoenix::new();
         phoenix.fill_next(fill.clone());
@@ -375,6 +766,8 @@ mod tests {
             filled_lots: 10,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 0,
         });
         let mut ad = adapter_with(phoenix);
         let out = ad.hedge_pending(1_000, &pending(3, 10, 1_000)).unwrap();
@@ -426,6 +819,8 @@ mod tests {
             filled_lots: 10,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 0,
         });
         let mut ad = adapter_with(phoenix);
         let out = ad.hedge_pending(1_000, &pending(5, 10, 1_000)).unwrap();
@@ -447,6 +842,7 @@ mod tests {
                 client_oid: oid(8),
                 asset_id: 1,
                 lots_delta: 10,
+                post_fail_position_im_usdc: 0,
                 inserted_at_ms: 0,
                 venue_filled: true,
             })
@@ -465,6 +861,7 @@ mod tests {
             client_oid: oid(9),
             asset_id: 1,
             lots_delta: 10,
+            post_fail_position_im_usdc: 0,
             inserted_at_ms: 1_000,
             venue_filled: false,
         };
@@ -475,6 +872,9 @@ mod tests {
             asset_id: 1,
             lots_delta: -10,
             created_at_ms: 1_000,
+            limit_price_ticks: 100,
+            last_valid_slot: 100,
+            post_fail_position_im_usdc: 0,
         };
 
         let outcome = ad.hedge_pending(1_000, &duplicate).unwrap();
@@ -498,13 +898,14 @@ mod tests {
             filled_lots: 10,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 1_250_000,
         });
         let mut ad = adapter_with(phoenix);
         let out = ad.hedge_pending(1_000, &pending(10, 10, 1_000)).unwrap();
         assert!(matches!(out, HedgeOutcome::Filled(_)));
         assert_eq!(ad.ledger.book_lots(1), ad.phoenix.base_lots(1));
-        let want = cc::stub_cinder_im(10).unwrap();
-        assert!(ad.ledger.reserved.get(&1).copied().unwrap() >= want);
+        assert_eq!(ad.ledger.reserved.get(&1).copied(), Some(1_250_000));
     }
 
     #[test]
@@ -516,6 +917,8 @@ mod tests {
             filled_lots: 0,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 0,
         });
         let mut ad = adapter_with(phoenix);
         let out = ad.hedge_pending(1_000, &pending(11, 10, 1_000)).unwrap();
@@ -535,6 +938,8 @@ mod tests {
             filled_lots: 4,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 0,
         });
         let mut ad = adapter_with(phoenix);
         let out = ad.hedge_pending(1_000, &pending(12, 10, 1_000)).unwrap();
@@ -571,6 +976,8 @@ mod tests {
             filled_lots: 10,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 0,
         });
         let mut ad = adapter_with(phoenix);
         ad.hedge_pending(
@@ -581,6 +988,9 @@ mod tests {
                 asset_id: 1,
                 lots_delta: 10,
                 created_at_ms: 1_000,
+                limit_price_ticks: 100,
+                last_valid_slot: 100,
+                post_fail_position_im_usdc: 0,
             },
         )
         .unwrap();
@@ -590,6 +1000,8 @@ mod tests {
             filled_lots: -10,
             fee_usdc: 0,
             vwap_quote_lots: 0,
+            fill_price_ticks: 100,
+            post_position_im_usdc: 0,
         });
         ad.hedge_pending(
             1_000,
@@ -599,6 +1011,9 @@ mod tests {
                 asset_id: 1,
                 lots_delta: -10,
                 created_at_ms: 1_000,
+                limit_price_ticks: 100,
+                last_valid_slot: 100,
+                post_fail_position_im_usdc: 0,
             },
         )
         .unwrap();
