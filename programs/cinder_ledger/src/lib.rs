@@ -363,6 +363,7 @@ pub mod cinder_ledger {
             ctx.accounts.adapter.key(),
             LedgerError::Unauthorized
         );
+        require_book_schema(&ctx.accounts.book)?;
         require_user_schema(&ctx.accounts.user_ledger)?;
 
         let ledger = &mut ctx.accounts.user_ledger;
@@ -383,13 +384,18 @@ pub mod cinder_ledger {
         // A prior loss may mean the ledger cannot currently satisfy every
         // stored target. Preserve the adapter-authorized targets and rebalance
         // only the aggregate cash buckets.
-        let _under_margined = rebalance_stored_margins(ledger)?;
+        let under_margined = rebalance_stored_margins(ledger)?;
 
         ledger.open_oids[idx].state = cc::OID_FAILED;
         ledger.pending_oid_count = ledger
             .pending_oid_count
             .checked_sub(1)
             .ok_or(LedgerError::Overflow)?;
+        apply_cash_halt(
+            &mut ctx.accounts.book,
+            ledger.bad_debt_usdc > 0,
+            under_margined,
+        );
         Ok(())
     }
 
@@ -833,6 +839,8 @@ pub struct AckFail<'info> {
         owner = VAULT_PROGRAM_ID
     )]
     pub config: UncheckedAccount<'info>,
+    #[account(mut, seeds = [cc::SEED_BOOK], bump = book.bump)]
+    pub book: Box<Account<'info, Book>>,
     #[account(
         mut,
         seeds = [cc::SEED_USER, user_ledger.user.as_ref()],

@@ -342,6 +342,7 @@ describe("ledger accounts and order machine", () => {
       .accountsPartial({
         adapter: adapter.publicKey,
         config: configPda,
+        book: bookPda,
         userLedger: userLedgerPda,
       })
       .signers([adapter])
@@ -792,6 +793,7 @@ describe("ledger accounts and order machine", () => {
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
+          book: bookPda,
           userLedger: pnlLedger,
         })
         .signers([adapter])
@@ -1594,6 +1596,87 @@ describe("ledger accounts and order machine", () => {
         .rpc();
     });
 
+    it("halts entries when a failed close restores an unfunded margin target", async () => {
+      const user = Keypair.generate();
+      await airdrop(user.publicKey);
+      const userLedger = pda(ledger.programId, [
+        Buffer.from("user"),
+        user.publicKey.toBuffer(),
+      ]);
+      const accounts = {
+        adapter: adapter.publicKey,
+        config: configPda,
+        book: bookPda,
+        userLedger,
+      };
+      await ledger.methods
+        .initUser()
+        .accountsPartial({ ...accounts, user: user.publicKey, systemProgram: SystemProgram.programId })
+        .signers([adapter, user])
+        .rpc();
+      await ledger.methods
+        .creditDeposit(new BN(2_000_000))
+        .accountsPartial(accounts)
+        .signers([adapter])
+        .rpc();
+      const place = (lots: number, tag: number, postIm: number, nonce: number) =>
+        ledger.methods
+          .placeOrder(
+            ASSET_SOL,
+            new BN(lots),
+            oid(tag),
+            LIMIT_TICKS,
+            LAST_VALID_SLOT,
+            new BN(postIm),
+            new BN(lots > 0 ? OPEN_VWAP : 0),
+            lots < 0,
+            new BN(nonce)
+          )
+          .accountsPartial({ ...accounts, user: user.publicKey })
+          .signers([adapter, user])
+          .rpc();
+      await place(LOTS, 140, IM_TEN_LOTS, 0);
+      await ledger.methods
+        .ackPhoenixFill(
+          oid(140), new BN(LOTS), new BN(0), new BN(OPEN_VWAP),
+          LIMIT_TICKS, new BN(IM_TEN_LOTS)
+        )
+        .accountsPartial({ ...accounts, feeAccrual: feesPda })
+        .signers([adapter])
+        .rpc();
+      await place(-LOTS, 141, 0, 1);
+      const bookBefore = await ledger.account.book.fetch(bookPda);
+
+      // Fresh venue risk can require more margin than the remaining cash.
+      await ledger.methods
+        .ackPhoenixFail(oid(141), new BN(3_000_000))
+        .accountsPartial(accounts)
+        .signers([adapter])
+        .rpc();
+
+      const state = await ledger.account.userLedger.fetch(userLedger);
+      const bookAfter = await ledger.account.book.fetch(bookPda);
+      expect(state.positions[0].lots.toNumber()).to.equal(LOTS);
+      expect(state.positions[0].reservedIm.toNumber()).to.equal(3_000_000);
+      expect(state.reserved.toNumber()).to.equal(2_000_000);
+      expect(state.free.toNumber()).to.equal(0);
+      expect(state.badDebtUsdc.toNumber()).to.equal(0);
+      expect(state.pendingOidCount).to.equal(0);
+      expect(state.openOids.find((row: { clientOid: number[] }) =>
+        row.clientOid.every((byte: number, i: number) => byte === oid(141)[i])
+      )?.state).to.equal(2); // OID_FAILED
+      expect(bookAfter.halt & HALT_ENTRIES).to.equal(HALT_ENTRIES);
+      expect(bookAfter.residualLen).to.equal(bookBefore.residualLen);
+      expect(bookAfter.residuals.map((row: { lots: BN }) => row.lots.toString()))
+        .to.deep.equal(bookBefore.residuals.map((row: { lots: BN }) => row.lots.toString()));
+
+      await ledger.methods
+        .setBookHalt(0)
+        .accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda })
+        .signers([adapter])
+        .rpc();
+    });
+
     it("prioritizes a live reused OID over an older acknowledged row", async () => {
       const blockerOid = oid(130);
       const reusedOid = oid(131);
@@ -1647,6 +1730,7 @@ describe("ledger accounts and order machine", () => {
         .accountsPartial({
           adapter: adapter.publicKey,
           config: configPda,
+          book: bookPda,
           userLedger: replayLedger,
         })
         .signers([adapter])
