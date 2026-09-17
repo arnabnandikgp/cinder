@@ -16,6 +16,7 @@ import { execFileSync } from "child_process";
 import { verifyOperatorExecution } from "./support/operator-execution";
 import { refreshLocalMark } from "./support/native-oracle";
 import { activateLocalPhoenix } from "../scripts/fixtures/local-phoenix";
+import { confirmForkTransaction } from "./support/native-confirmation";
 type KitIx = {
     programAddress: string;
     data: ArrayLike<number>;
@@ -70,7 +71,7 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
         // sending then verifies that failure leaves actual local state unchanged.
         await rpc("simulateTransaction", [encoded.toString("base64"), { encoding: "base64", sigVerify: false }]);
         const signature = await connection.sendRawTransaction(encoded, { skipPreflight: true, maxRetries: 0 });
-        const result = await connection.confirmTransaction({ ...latest, signature }, "confirmed");
+        const result = await confirmForkTransaction(connection, { ...latest, signature });
         if (result.value.err) {
             const receipt = await connection.getTransaction(signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
             throw new Error(`local transaction failed: ${JSON.stringify(result.value.err)}\n${receipt?.meta?.logMessages?.join("\n")}`);
@@ -178,7 +179,7 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
             await send([await funding(failedId, amount)]);
         }
         catch (error) {
-            message = String(error);
+            message = error instanceof Error ? String(error) : JSON.stringify(error);
         }
         finally {
             indexes = original;
@@ -218,6 +219,9 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
         expect(health.isLiquidatable).to.equal(false);
     });
     it("executes through the real operator and private PER/QFS ledger", async function () {
+        // Six scenarios may each need up to 60 seconds to converge after
+        // funding/native/ACK crash boundaries on a slower Linux runner.
+        this.timeout(420000);
         if (process.env.CINDER_R5_PRIVATE !== "1") { this.skip(); return; }
         await verifyOperatorExecution({ endpoint, operator, vault, config, native, global, trader, quote, source, indexes, buffers, rpc, send });
     });
@@ -434,7 +438,7 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
                 expect(denied.value.logs.some(line => line.includes("ExecutionGuardFailed"))).to.equal(true);
                 const beforeAccounts = await connection.getMultipleAccountsInfo([trader, marketBook, ...indexes.map(s => new PublicKey(s)), ...buffers.map(s => new PublicKey(s))]);
                 const rejectedSig = await connection.sendRawTransaction(reject.serialize(), { skipPreflight: true, maxRetries: 0 });
-                const rejectedResult = await connection.confirmTransaction({ ...latest, signature: rejectedSig }, "confirmed");
+                const rejectedResult = await confirmForkTransaction(connection, { ...latest, signature: rejectedSig });
                 expect(rejectedResult.value.err).not.to.equal(null);
                 const afterAccounts = await connection.getMultipleAccountsInfo([trader, marketBook, ...indexes.map(s => new PublicKey(s)), ...buffers.map(s => new PublicKey(s))]);
                 expect(afterAccounts.map(a => a!.data.toString("hex"))).to.deep.equal(beforeAccounts.map(a => a!.data.toString("hex")));

@@ -18,7 +18,9 @@ done
 storage="$(mktemp -d "${TMPDIR:-/tmp}/cinder-r5-runtime.XXXXXX")"
 cleanup() {
   for pid in "${qfs_pid:-}" "${er_pid:-}" "${fork_pid:-}"; do
-    if [[ -n "$pid" ]]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+    # The npm ER/QFS launchers forward SIGINT to their native child, but not
+    # SIGTERM. Wait for that forwarded shutdown before releasing local ports.
+    if [[ -n "$pid" ]]; then kill -INT "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
   done
   echo "Local test logs/storage: $storage"
 }
@@ -40,4 +42,4 @@ er_pid=$!
 query-filtering-service --listen-addr 127.0.0.1:6699 --listen-addr-ws 127.0.0.1:6700 --ephemeral-url http://127.0.0.1:7799 --ephemeral-url-ws ws://127.0.0.1:7800 >"$storage/qfs.log" 2>&1 &
 qfs_pid=$!
 ./scripts/wait-rpc.sh http://127.0.0.1:6699
-CINDER_R5_PRIVATE="${CINDER_R5_PRIVATE:-1}" node node_modules/mocha/bin/mocha.js -r ts-node/register/transpile-only tests/runtime-funding-fork.test.ts
+CINDER_R5_PRIVATE="${CINDER_R5_PRIVATE:-1}" node node_modules/mocha/bin/mocha.js -r ts-node/register/transpile-only tests/native-clock.test.ts tests/native-confirmation.test.ts tests/runtime-funding-fork.test.ts

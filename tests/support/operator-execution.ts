@@ -13,7 +13,7 @@ import { createServer } from "http";
 import type { AddressInfo } from "net";
 import type { CinderLedger } from "../../target/types/cinder_ledger";
 import type { CinderVault } from "../../target/types/cinder_vault";
-import { refreshLocalMark } from "./native-oracle";
+import { refreshLocalMark, settleLocalClock } from "./native-oracle";
 
 export async function verifyOperatorExecution(ctx: {
     endpoint: string; operator: Keypair; vault: anchor.Program<CinderVault>; config: PublicKey;
@@ -177,7 +177,7 @@ export async function verifyOperatorExecution(ctx: {
     });
 
     const assetMap = new PublicKey("2nHGAaEw3D5dd4hVueaUNoygkQFmoeKqRQWnSPqSMFUC");
-    // The fork has no live oracle crank. Refresh the real SOL price-component
+    // The fork has no live oracle crank. Refresh the real venue price-component
     // slots/oracle timestamps in local storage, preserving all prices, weights,
     // validity rules and economic metadata. Native execution still validates
     // and recomputes the mark from those components.
@@ -225,6 +225,7 @@ export async function verifyOperatorExecution(ctx: {
         }
         const run = async () => {
             nativeReadOpen = false;
+            await settleLocalClock(connection, ctx.rpc);
             await refreshMark();
             return new Promise<{ code: number | null; output: string }>((resolve, reject) => {
                 const child = spawn("target/debug/cinder-operator", ["execute", configPath, journalPath], { env: { ...process.env, CINDER_LIVE_L1: publicUrl, CINDER_LIVE_QFS: privateUrl }, stdio: ["ignore", "pipe", "pipe"] });
@@ -235,7 +236,11 @@ export async function verifyOperatorExecution(ctx: {
             });
         };
         const converge = async (caseIndex: number) => {
-            const deadline = performance.now() + 30000;
+            // Funding prepare/send/confirm/Book sync, native crash recovery and
+            // ACK confirmation each need separate one-shot operator passes.
+            // Surfpool can also transiently report a future block time: retain
+            // the real freshness rejection and allow a later pass to retry.
+            const deadline = performance.now() + 60000;
             let result = await run();
             while ((result.code === 3 || result.code === null) && performance.now() < deadline) { await new Promise(resolve => setTimeout(resolve, 250)); result = await run(); }
             let journalState = "";
