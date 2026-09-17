@@ -12,13 +12,52 @@ use phoenix_rise_math::Side;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use solana_signer::Signer;
+use std::collections::BTreeMap;
+
+#[derive(Default)]
+struct EvidenceCache {
+    history: Option<Vec<[u8; 64]>>,
+    receipts: BTreeMap<[u8; 64], Value>,
+    bytes: usize,
+}
+impl EvidenceCache {
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+    fn transaction(
+        &mut self,
+        sig: [u8; 64],
+        fetch: impl FnOnce() -> Result<Value>,
+    ) -> Result<&Value> {
+        if !self.receipts.contains_key(&sig) {
+            let value = fetch()?; // Transport/RPC failures are never cached.
+            let size = serde_json::to_vec(&value)
+                .map_err(|_| RuntimeError::Decode)?
+                .len();
+            let bytes = self
+                .bytes
+                .checked_add(size)
+                .ok_or(RuntimeError::Incomplete)?;
+            if bytes > 64 * 1024 * 1024 {
+                return Err(RuntimeError::Incomplete);
+            }
+            self.receipts.insert(sig, value);
+            self.bytes = bytes;
+        }
+        self.receipts.get(&sig).ok_or(RuntimeError::Incomplete)
+    }
+}
 
 pub(crate) struct RiseRecovery {
     context: Shared,
+    evidence: EvidenceCache,
 }
 impl RiseRecovery {
     pub fn new(context: Shared) -> Self {
-        Self { context }
+        Self {
+            context,
+            evidence: EvidenceCache::default(),
+        }
     }
 }
 impl VenueSubmissionPort for RiseRecovery {
@@ -30,6 +69,9 @@ impl VenueSubmissionPort for RiseRecovery {
     }
 }
 impl VenueRecoveryPort for RiseRecovery {
+    fn begin_recovery(&mut self) {
+        self.evidence.reset();
+    }
     fn observe(&mut self, op: &Operation) -> std::result::Result<VenueObservation, ErrorCode> {
         let result = (|| {
             let mut c = self.context.borrow_mut();
@@ -39,7 +81,9 @@ impl VenueRecoveryPort for RiseRecovery {
             let operator = c.signer.pubkey().to_bytes();
             let native_asset = c.config.market(op.intent.asset_id)?.phoenix_asset_id;
             if let Some(sig) = op.venue_signature {
-                let value = c.l1.transaction(&text_signature(&sig), &c.signer, true)?;
+                let value = self.evidence.transaction(sig, || {
+                    c.l1.transaction(&text_signature(&sig), &c.signer, true)
+                })?;
                 if value.is_null() {
                     return Ok(VenueObservation::Unknown);
                 }
@@ -50,21 +94,35 @@ impl VenueRecoveryPort for RiseRecovery {
                     &operator,
                     native_asset,
                     &sig,
-                    &value,
+                    value,
                 )?
                 .ok_or(RuntimeError::Identity);
             }
             let mut found = None;
             // No client-ID filter exists in Rise REST order history. Join
             // native packets/events in authoritative pooled-trader receipts.
-            for row in c.l1.history(&c.config.phoenix_trader, &c.signer)? {
-                let sig = signature(string(&row["signature"])?)?;
-                let value = c.l1.transaction(&text_signature(&sig), &c.signer, true)?;
+            if self.evidence.history.is_none() {
+                self.evidence.history = Some(
+                    c.l1.history(&c.config.phoenix_trader, &c.signer)?
+                        .iter()
+                        .map(|row| signature(string(&row["signature"])?))
+                        .collect::<Result<Vec<_>>>()?,
+                );
+            }
+            for sig in self
+                .evidence
+                .history
+                .clone()
+                .ok_or(RuntimeError::Incomplete)?
+            {
+                let value = self.evidence.transaction(sig, || {
+                    c.l1.transaction(&text_signature(&sig), &c.signer, true)
+                })?;
                 if value.is_null() {
                     continue;
                 }
                 if let Some(outcome) =
-                    decode_outcome(op, &trader, &program, &operator, native_asset, &sig, &value)?
+                    decode_outcome(op, &trader, &program, &operator, native_asset, &sig, value)?
                 {
                     // Two executions with the same global ID are an incident,
                     // not alternative candidate receipts to choose between.
@@ -96,6 +154,9 @@ pub(crate) fn decode_outcome(
     value: &Value,
 ) -> Result<Option<VenueObservation>> {
     let receipt = Receipt::decode(value, sig)?;
+    if value["meta"]["innerInstructions"].is_null() {
+        return Ok(None);
+    }
     let groups = array(&value["meta"]["innerInstructions"])?;
     let mut found = None;
     for group in groups {
@@ -329,6 +390,80 @@ mod tests {
     use super::*;
     use crate::venue_fixture::{receipt, VenueFixture};
     use crate::{BoundedIntent, Journal, OrderIdentity, OrderKind};
+
+    #[test]
+    fn receipt_cache_is_pass_scoped_and_does_not_cache_failed_requests() {
+        let mut cache = EvidenceCache::default();
+        let mut calls = 0;
+        for _ in 0..2 {
+            assert_eq!(
+                cache
+                    .transaction([1; 64], || {
+                        calls += 1;
+                        Ok(serde_json::json!({"receipt": 1}))
+                    })
+                    .unwrap()["receipt"],
+                1
+            );
+        }
+        assert_eq!(calls, 1);
+        assert_eq!(
+            cache.transaction([2; 64], || Err(RuntimeError::Rpc)),
+            Err(RuntimeError::Rpc)
+        );
+        assert!(cache
+            .transaction([2; 64], || Ok(Value::Null))
+            .unwrap()
+            .is_null());
+        cache.history = Some(vec![[1; 64]]);
+        cache.reset();
+        assert!(cache.history.is_none());
+        assert!(cache.receipts.is_empty());
+        assert_eq!(cache.bytes, 0);
+        assert_eq!(
+            cache
+                .transaction([1; 64], || Ok(serde_json::json!({"receipt": 2})))
+                .unwrap()["receipt"],
+            2
+        );
+        cache.bytes = 64 * 1024 * 1024;
+        assert_eq!(
+            cache.transaction([3; 64], || Ok(Value::Null)),
+            Err(RuntimeError::Incomplete)
+        );
+    }
+
+    #[test]
+    fn unrecorded_inner_instructions_are_absent_evidence_not_a_decode_failure() {
+        let (_, op, f) = fixture();
+        let mut raw = receipt(&f);
+        raw["meta"]["innerInstructions"] = Value::Null;
+        assert_eq!(
+            decode_outcome(
+                &op,
+                &bytes(&f.trader).unwrap(),
+                &bytes(&f.program).unwrap(),
+                &[5; 32],
+                0,
+                &signature(&f.signature).unwrap(),
+                &raw
+            ),
+            Ok(None)
+        );
+        raw["meta"]["innerInstructions"] = serde_json::json!("malformed");
+        assert_eq!(
+            decode_outcome(
+                &op,
+                &bytes(&f.trader).unwrap(),
+                &bytes(&f.program).unwrap(),
+                &[5; 32],
+                0,
+                &signature(&f.signature).unwrap(),
+                &raw
+            ),
+            Err(RuntimeError::Decode)
+        );
+    }
     fn fixture() -> (tempfile::TempDir, Operation, VenueFixture) {
         let dir = tempfile::tempdir().unwrap();
         let mut journal = Journal::open(dir.path().join("private/journal.sqlite")).unwrap();

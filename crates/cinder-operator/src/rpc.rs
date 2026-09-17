@@ -40,6 +40,30 @@ pub fn unix_ms() -> u64 {
         .unwrap_or(0)
 }
 
+fn validate_challenge(challenge: &str, pubkey: &str, now_ms: u64) -> Result<()> {
+    // QFS verifies these exact bytes. Never wrap an arbitrary server message
+    // and never let the trading key sign a transaction-shaped challenge.
+    let timestamp = challenge
+        .strip_prefix("Login to Query Filtering Service\nTimestamp: ")
+        .and_then(|rest| rest.split_once("\nUser: "))
+        .filter(|(timestamp, user)| {
+            challenge.len() <= 256
+                && *user == pubkey
+                && !timestamp.is_empty()
+                && timestamp.len() <= 20
+                && timestamp.bytes().all(|b| b.is_ascii_digit())
+        })
+        .and_then(|(timestamp, _)| timestamp.parse::<u64>().ok().map(|n| (timestamp, n)))
+        .filter(|(timestamp, n)| *timestamp == n.to_string())
+        .map(|(_, n)| n)
+        .ok_or(RuntimeError::Authentication)?;
+    let now = now_ms / 1000;
+    if now == 0 || now.saturating_sub(timestamp) > 300 || timestamp.saturating_sub(now) > 30 {
+        return Err(RuntimeError::Authentication);
+    }
+    Ok(())
+}
+
 pub fn load_signer(path: &Path) -> Result<Keypair> {
     let mut options = OpenOptions::new();
     options.read(true);
@@ -137,9 +161,7 @@ impl Rpc {
                 .map_err(|_| RuntimeError::Authentication)?,
         )?;
         let challenge = string(&challenge["challenge"])?;
-        if challenge.len() > 4096 {
-            return Err(RuntimeError::Authentication);
-        }
+        validate_challenge(challenge, &pubkey, unix_ms())?;
         let signature = signer.sign_message(challenge.as_bytes()).to_string();
         let mut login_url = self.url.clone();
         login_url.set_path("/auth/login");
@@ -264,6 +286,33 @@ pub(crate) fn data(account: &Value, owner: &str) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod secret_tests {
     use super::*;
+
+    #[test]
+    fn authentication_signs_only_the_exact_bounded_qfs_domain_and_user() {
+        let pubkey = Keypair::new().pubkey().to_string();
+        let challenge =
+            format!("Login to Query Filtering Service\nTimestamp: 1000\nUser: {pubkey}");
+        assert_eq!(validate_challenge(&challenge, &pubkey, 1_000_000), Ok(()));
+        for bad in [
+            "transaction message".to_owned(),
+            challenge.replace("Query Filtering Service", "another service"),
+            challenge.replace("1000", "01000"),
+            challenge.replace("1000", "1000\nInjected: transaction"),
+            challenge.replace("1000", "18446744073709551616"),
+            challenge.replace("1000", "NaN"),
+            format!("{challenge}\n"),
+            "x".repeat(4097),
+        ] {
+            assert_eq!(
+                validate_challenge(&bad, &pubkey, 1_000_000),
+                Err(RuntimeError::Authentication)
+            );
+        }
+        assert!(validate_challenge(&challenge, "another user", 1_000_000).is_err());
+        assert!(validate_challenge(&challenge, &pubkey, 1_301_000).is_err());
+        assert!(validate_challenge(&challenge, &pubkey, 969_000).is_err());
+        assert!(validate_challenge(&challenge, &pubkey, 0).is_err());
+    }
 
     #[test]
     fn key_file_must_be_valid_and_owner_only() {

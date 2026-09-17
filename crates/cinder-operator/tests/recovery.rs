@@ -63,6 +63,10 @@ struct World {
     unavailable: bool,
     gate_unavailable: bool,
     foreign_identity: bool,
+    venue_reads: usize,
+    ack_reads: usize,
+    reconciliation_reads: usize,
+    recovery_passes: usize,
 }
 
 type Shared = Rc<RefCell<World>>;
@@ -73,8 +77,12 @@ struct Venue(Shared);
 struct Ledger(Shared);
 
 impl VenueRecoveryPort for Venue {
+    fn begin_recovery(&mut self) {
+        self.0.borrow_mut().recovery_passes += 1;
+    }
     fn observe(&mut self, operation: &Operation) -> Result<VenueObservation, ErrorCode> {
-        let world = self.0.borrow();
+        let mut world = self.0.borrow_mut();
+        world.venue_reads += 1;
         if world.unavailable {
             return Err(ErrorCode::VenueUnavailable);
         }
@@ -119,7 +127,8 @@ impl VenueSubmissionPort for Venue {
 
 impl LedgerRecoveryPort for Ledger {
     fn observe_ack(&mut self, operation: &Operation) -> Result<AckObservation, ErrorCode> {
-        let world = self.0.borrow();
+        let mut world = self.0.borrow_mut();
+        world.ack_reads += 1;
         if world.unavailable {
             return Err(ErrorCode::LedgerUnavailable);
         }
@@ -139,7 +148,8 @@ impl LedgerRecoveryPort for Ledger {
     }
 
     fn reconciliation(&mut self) -> Result<ReconciliationSnapshot, ErrorCode> {
-        let world = self.0.borrow();
+        let mut world = self.0.borrow_mut();
+        world.reconciliation_reads += 1;
         if world.unavailable {
             return Err(ErrorCode::ReconciliationUnavailable);
         }
@@ -447,6 +457,51 @@ fn incomplete_stale_mismatched_or_unwritable_gate_prevents_new_submission() {
                 .entries_enabled
         );
         assert_eq!(shared.borrow().venue_sends, 0);
+    }
+}
+
+#[test]
+fn unavailable_venue_ack_and_reconciliation_stay_gated_without_sends() {
+    for terminal in [false, true] {
+        let dir = tempdir();
+        let path = dir.path().join("journal.sqlite");
+        let shared = world();
+        let mut journal = Journal::open(&path).unwrap();
+        let op = journal.prepare_intent(intent(3, 0)).unwrap();
+        if terminal {
+            journal
+                .record_fill_facts(&op.operation_id, &[fact(10, 1)], 1000)
+                .unwrap();
+            journal.record_venue_filled(&op.operation_id, 1000).unwrap();
+        }
+        drop(journal);
+        shared.borrow_mut().unavailable = true;
+        let mut runtime = coordinator(&path, &shared);
+        for _ in 0..2 {
+            let report = runtime.recover(1000).unwrap();
+            assert!(!report.entries_enabled);
+            assert_eq!(report.reason, Some(HaltReason::PortUnavailable));
+        }
+        let world = shared.borrow();
+        assert_eq!(world.recovery_passes, 2);
+        assert_eq!(world.venue_reads, if terminal { 0 } else { 2 });
+        assert_eq!(world.ack_reads, if terminal { 2 } else { 0 });
+        assert_eq!(world.reconciliation_reads, 2);
+        assert_eq!(world.venue_sends, 0);
+        assert_eq!(world.ack_sends, 0);
+        assert_ne!(world.halt & cc::OPERATOR_DOWN, 0);
+        assert_eq!(
+            runtime
+                .journal()
+                .operation(&op.operation_id)
+                .unwrap()
+                .last_error_code,
+            Some(if terminal {
+                ErrorCode::LedgerUnavailable
+            } else {
+                ErrorCode::VenueUnavailable
+            })
+        );
     }
 }
 

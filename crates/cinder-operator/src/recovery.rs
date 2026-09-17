@@ -10,6 +10,9 @@ use crate::{
 /// Production implementations must use history/transaction evidence, not an
 /// absent lookup result or a local timeout, for DefinitelyNeverSubmitted.
 pub trait VenueRecoveryPort {
+    /// Discard cached evidence before each pass so newly finalized outcomes
+    /// and previously failed RPC requests are observed again.
+    fn begin_recovery(&mut self) {}
     /// Verify the exact global venue ID, pooled trader, asset, and direction
     /// before returning facts. Per-user client IDs are never a venue lookup key.
     fn observe(&mut self, operation: &Operation) -> Result<VenueObservation, ErrorCode>;
@@ -192,6 +195,7 @@ where
         mut clock: impl FnMut() -> u64,
     ) -> Result<ReconciliationReport, JournalError> {
         self.entries_enabled = false;
+        self.venue.begin_recovery();
         let started_at_ms = clock();
         let mut now_ms = started_at_ms;
         if self.ledger.set_operator_down(true).is_err() {

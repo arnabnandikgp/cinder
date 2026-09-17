@@ -32,7 +32,10 @@ Configuration contains public account pins, market mappings, key-file and lock
 paths, and **names** of RPC environment variables. Keep actual RPC URLs/API keys
 in your secret environment; never commit them. HTTPS is required except for
 loopback HTTP in local tests. Existing bearer-token URL parameters are rejected:
-the runtime obtains its own operator token.
+the runtime obtains its own operator token. Before signing, it validates QFS's
+exact `Login to Query Filtering Service` challenge domain, timestamp, and
+operator public key. Challenges older than five minutes or more than 30 seconds
+in the future are rejected; arbitrary server-supplied messages are never signed.
 
 The key file must be a Solana JSON keypair, owner-only (0600 on Unix), owned by
 the running operator, and neither a symlink nor a multiply linked file.
@@ -179,8 +182,10 @@ and is not live-venue integration proof.** The other privacy checks verify
 operator visibility and unrelated-user account/history redaction.
 
 This experimental runtime is bounded to 99 users per coherent private read,
-32 markets, 64 index/buffer accounts, and 10,000 history rows per scan. Exceeding
-limits halts instead of truncating. Missing archival history requires restoring
+32 markets, 64 index/buffer accounts, and 10,000 history rows per scan. Pooled
+history and raw receipts are reused within each recovery pass, then discarded;
+the receipt cache is capped at 64 MiB of serialized JSON. Exceeding limits halts
+instead of truncating. Missing archival history requires restoring
 trusted RPC access; it cannot be worked around by assuming rejection.
 
 Native SOL collateral, queued venue withdrawals, spline/conditional orders,

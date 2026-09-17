@@ -246,11 +246,37 @@ describe("ledger accounts and order machine", () => {
   });
 
   describe("guarded operator recovery", () => {
-    const recoveryUser = Keypair.generate();
+    let recoveryUser: Keypair;
     let recoveryLedger: PublicKey;
     const clientOid = oid(210);
     const accounts = () => ({ adapter: adapter.publicKey, config: configPda,
       book: bookPda, userLedger: recoveryLedger });
+
+    before(async () => {
+      // Also support selecting only this suite/scenario on a fresh validator.
+      if (await connection.getAccountInfo(configPda) === null) {
+        await vault.methods.initialize(adapter.publicKey, vaultAuth, phoenixTrader, ER_VALIDATOR)
+          .accountsPartial({ admin: payer.publicKey, config: configPda, vaultAuthority: vaultAuth,
+            reserveRoot: reservePda, usdcMint, vaultUsdcAta: vaultAta,
+            tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId }).rpc();
+      }
+      if (await connection.getAccountInfo(bookPda) === null) {
+        await ledger.methods.initialize().accountsPartial({ adapter: adapter.publicKey,
+          config: configPda, book: bookPda, feeAccrual: feesPda,
+          systemProgram: SystemProgram.programId }).signers([adapter]).rpc();
+      }
+      await vault.methods.setAllowlist([ASSET_SOL])
+        .accountsPartial({ admin: payer.publicKey, config: configPda }).rpc();
+    });
+
+    beforeEach(async () => {
+      recoveryUser = Keypair.generate();
+      recoveryLedger = pda(ledger.programId, [Buffer.from("user"), recoveryUser.publicKey.toBuffer()]);
+      await ledger.methods.initUser().accountsPartial({ ...accounts(), user: recoveryUser.publicKey,
+        systemProgram: SystemProgram.programId }).signers([adapter, recoveryUser]).rpc();
+      await ledger.methods.creditDeposit(new BN(CREDIT)).accountsPartial(accounts()).signers([adapter]).rpc();
+    });
 
     async function expectRejected(request: Promise<unknown>, pattern: RegExp) {
       let error: any;
@@ -299,10 +325,6 @@ describe("ledger accounts and order machine", () => {
     });
 
     it("requires the exact guarded intent and applies failure only once", async () => {
-      recoveryLedger = pda(ledger.programId, [Buffer.from("user"), recoveryUser.publicKey.toBuffer()]);
-      await ledger.methods.initUser().accountsPartial({ ...accounts(), user: recoveryUser.publicKey,
-        systemProgram: SystemProgram.programId }).signers([adapter, recoveryUser]).rpc();
-      await ledger.methods.creditDeposit(new BN(CREDIT)).accountsPartial(accounts()).signers([adapter]).rpc();
       await place(0);
       const observed = await guard(0);
       for (const altered of [
@@ -324,6 +346,9 @@ describe("ledger accounts and order machine", () => {
     });
 
     it("rejects reused-OID and non-nonce cash-write races without losing the pending order", async () => {
+      await place(0);
+      await ledger.methods.ackPhoenixFailGuarded(await guard(0), new BN(0))
+        .accountsPartial(accounts()).signers([adapter]).rpc();
       const old = await guard(0);
       await place(1);
       await expectRejected(ledger.methods.ackPhoenixFailGuarded(old, new BN(0))

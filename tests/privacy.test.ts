@@ -375,6 +375,10 @@ describe("PER / QFS isolation", function () {
       && (receipt.meta?.logMessages?.length ?? 0) === 0
       && (receipt.meta?.preBalances?.length ?? 0) === 0
       && (receipt.meta?.postBalances?.length ?? 0) === 0
+      && receipt.transaction.message.staticAccountKeys.length === 0
+      && (receipt.meta?.loadedAddresses?.writable.length ?? 0) === 0
+      && (receipt.meta?.loadedAddresses?.readonly.length ?? 0) === 0
+      && (receipt.meta?.innerInstructions?.length ?? 0) === 0
     );
     expect(denied, "private history must remain permissioned").to.equal(true);
   });
