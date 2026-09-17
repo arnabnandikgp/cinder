@@ -154,8 +154,13 @@ pub trait LedgerRecoveryPort {
     fn reconciliation(&mut self) -> Result<ReconciliationSnapshot, ErrorCode>;
     /// Fresh post-intent user, pool and stressed backing checks, including
     /// confirmed collateral and partial-fill paths. Recovery success is not
-    /// admission proof. Ports without this implementation cannot dispatch.
-    fn check_admission(&mut self, _operation: &Operation) -> Result<(), ErrorCode> {
+    /// admission proof. Return the actual observation times used by these
+    /// checks, not a local completion timestamp. Ports without this
+    /// implementation cannot dispatch.
+    fn check_admission(
+        &mut self,
+        _operation: &Operation,
+    ) -> Result<AdmissionObservation, ErrorCode> {
         Err(ErrorCode::ReconciliationUnavailable)
     }
     fn plan_execution_budget(
@@ -199,6 +204,25 @@ pub trait LedgerRecoveryPort {
     /// Change ONLY OPERATOR_DOWN in the existing halt masks. Preserve every
     /// other flag. Failure to write/confirm the gate prevents all submissions.
     fn set_operator_down(&mut self, down: bool) -> Result<(), ErrorCode>;
+}
+
+/// Freshness evidence from the full post-intent admission check. Refreshing
+/// admission supersedes startup observations, without extending either TTL.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AdmissionObservation {
+    pub ledger_observed_at_ms: u64,
+    pub trader_observed_at_ms: u64,
+    pub mark_observed_at_ms: u64,
+}
+
+impl AdmissionObservation {
+    fn is_fresh(&self, now_ms: u64) -> bool {
+        let fresh =
+            |observed: u64, ttl: u64| now_ms.checked_sub(observed).is_some_and(|age| age <= ttl);
+        fresh(self.ledger_observed_at_ms, cc::TRADER_STATE_STALE_MS)
+            && fresh(self.trader_observed_at_ms, cc::TRADER_STATE_STALE_MS)
+            && fresh(self.mark_observed_at_ms, cc::MARK_STALE_MS)
+    }
 }
 
 /// A complete authoritative view of all markets and private claims. Production
@@ -562,12 +586,15 @@ where
                         return self.report(Some(HaltReason::AdmissionUnsafe));
                     }
                 }
-                if let Err(error) = self.ledger.check_admission(&operation) {
-                    self.journal.mark_error(id, error, now_ms)?;
-                    return self.report(Some(HaltReason::AdmissionUnsafe));
-                }
+                let admission = match self.ledger.check_admission(&operation) {
+                    Ok(observation) => observation,
+                    Err(error) => {
+                        self.journal.mark_error(id, error, now_ms)?;
+                        return self.report(Some(HaltReason::AdmissionUnsafe));
+                    }
+                };
                 let admission_at_ms = clock();
-                if admission_at_ms < now_ms || !snapshot.is_fresh_complete(admission_at_ms) {
+                if admission_at_ms < now_ms || !admission.is_fresh(admission_at_ms) {
                     return self.report(Some(HaltReason::StaleOrIncomplete));
                 }
                 now_ms = admission_at_ms;
@@ -832,12 +859,13 @@ where
 
 impl ReconciliationSnapshot {
     fn is_fresh_complete(&self, now_ms: u64) -> bool {
-        let fresh =
-            |observed: u64, ttl: u64| now_ms.checked_sub(observed).is_some_and(|age| age <= ttl);
         self.complete
-            && fresh(self.ledger_observed_at_ms, cc::TRADER_STATE_STALE_MS)
-            && fresh(self.trader_observed_at_ms, cc::TRADER_STATE_STALE_MS)
-            && fresh(self.mark_observed_at_ms, cc::MARK_STALE_MS)
+            && AdmissionObservation {
+                ledger_observed_at_ms: self.ledger_observed_at_ms,
+                trader_observed_at_ms: self.trader_observed_at_ms,
+                mark_observed_at_ms: self.mark_observed_at_ms,
+            }
+            .is_fresh(now_ms)
     }
 
     fn invariants_hold(&self) -> bool {

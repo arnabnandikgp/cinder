@@ -269,6 +269,9 @@ estimate. For the full operator/PER test stack, explicitly opt in:
 CINDER_R5_FORK=1 bash scripts/test-runtime-fork.sh
 ```
 
+Set `CINDER_R5_ACCOUNT_LATENCY_MS=300` to additionally exercise admission under
+delayed local account reads; the default is no injected latency.
+
 That stack loads the installed MagicBlock local-test binaries/public fixtures
 on the localhost Phoenix fork. Without a live oracle crank, the fixture refreshes
 the real SOL mark and populated component observation slots/oracle timestamps,
@@ -480,6 +483,13 @@ fresh, explicit post-intent admission check for user risk, pool risk, confirmed
 collateral and partial-fill paths. That port defaults to denial; the concrete
 runtime implements it only with explicit execution policy. Neither a configured passing stress
 report nor successful recovery alone authorizes native dispatch.
+
+The admission port returns the actual private-ledger, native-trader and mark
+observation times used in its checks. After admission I/O, the coordinator
+checks those newer observations against the unchanged two-second TTLs, rather
+than requiring the earlier startup snapshot to remain fresh through every
+budget and funding check. Stale/future observations or a backwards clock still
+block dispatch; the atomic native snapshot and freshness guards remain required.
 
 The 20% Phoenix IM buffer / 50 USDC floor is a collateral-availability target,
 not insurance capital. A vault-to-transit transfer does not fund Phoenix. The

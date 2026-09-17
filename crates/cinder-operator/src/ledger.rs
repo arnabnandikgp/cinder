@@ -8,8 +8,8 @@ use crate::transaction::{
     anchor_ix, bytes, decode_ix, instruction_data, send, sign, Receipt, SignedTransaction,
 };
 use crate::{
-    AckFinality, AckObservation, BoundedIntent, ErAckCommand, ErAckSubmissionPort,
-    ErAckSubmitResult, ErrorCode, LedgerRecoveryPort, Operation, PreparedAck,
+    AckFinality, AckObservation, AdmissionObservation, BoundedIntent, ErAckCommand,
+    ErAckSubmissionPort, ErAckSubmitResult, ErrorCode, LedgerRecoveryPort, Operation, PreparedAck,
     ReconciliationSnapshot,
 };
 use anchor_lang::InstructionData;
@@ -467,7 +467,7 @@ impl LedgerRecoveryPort for QfsLedger {
     ) -> std::result::Result<Option<crate::FundingIntent>, ErrorCode> {
         (|| {
             let mut c = self.context.borrow_mut();
-            let (view, shortfall) = admission(&mut c, op)?;
+            let (view, shortfall, _) = admission(&mut c, op)?;
             if shortfall == 0 {
                 return Ok(None);
             }
@@ -484,20 +484,28 @@ impl LedgerRecoveryPort for QfsLedger {
         })()
         .map_err(error)
     }
-    fn check_admission(&mut self, op: &Operation) -> std::result::Result<(), ErrorCode> {
+    fn check_admission(
+        &mut self,
+        op: &Operation,
+    ) -> std::result::Result<AdmissionObservation, ErrorCode> {
         (|| {
             let mut c = self.context.borrow_mut();
             c.execution_admission = None;
-            let (view, shortfall) = admission(&mut c, op)?;
+            let (view, shortfall, observed) = admission(&mut c, op)?;
             if shortfall != 0 {
                 return Err(RuntimeError::Incomplete);
             }
+            let observation = AdmissionObservation {
+                ledger_observed_at_ms: observed,
+                trader_observed_at_ms: view.observed_ms,
+                mark_observed_at_ms: view.mark_ms,
+            };
             c.execution_admission = Some((
                 op.operation_id,
                 op.execution_budget.ok_or(RuntimeError::Incomplete)?,
                 view,
             ));
-            Ok(())
+            Ok(observation)
         })()
         .map_err(error)
     }
@@ -723,7 +731,7 @@ impl LedgerRecoveryPort for QfsLedger {
     }
 }
 
-fn admission(c: &mut Context, op: &Operation) -> Result<(crate::rise::RiseView, u64)> {
+fn admission(c: &mut Context, op: &Operation) -> Result<(crate::rise::RiseView, u64, u64)> {
     pending(c, &op.intent)?;
     let (book, ledgers, observed) = c.private_ledgers()?;
     let assets = c.config.markets.iter().map(|m| m.cinder_asset_id).collect();
@@ -760,7 +768,7 @@ fn admission(c: &mut Context, op: &Operation) -> Result<(crate::rise::RiseView, 
         .ok_or(RuntimeError::Configuration)?;
     let shortfall =
         crate::admission::assess(&view, &ledgers, op, execution, solvency, crate::unix_ms())?;
-    Ok((view, shortfall))
+    Ok((view, shortfall, observed))
 }
 
 fn decode_book_sync(

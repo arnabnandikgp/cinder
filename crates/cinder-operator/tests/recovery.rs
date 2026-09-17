@@ -80,6 +80,7 @@ struct World {
     solvency_unsafe: bool,
     solvency_missing: bool,
     admission_unsafe: bool,
+    admission_observation: Option<AdmissionObservation>,
     stress_policy_missing: bool,
     unsent_expired: bool,
     planned_budget: Option<ExecutionBudget>,
@@ -341,11 +342,17 @@ impl LedgerRecoveryPort for Ledger {
         }
         Ok(w.book_cash == w.collateral && w.book_cash == prepared.collateral_usdc)
     }
-    fn check_admission(&mut self, _: &Operation) -> Result<(), ErrorCode> {
-        if self.0.borrow().admission_unsafe {
+    fn check_admission(&mut self, _: &Operation) -> Result<AdmissionObservation, ErrorCode> {
+        let world = self.0.borrow();
+        if world.admission_unsafe {
             Err(ErrorCode::ReconciliationUnavailable)
         } else {
-            Ok(()) // Explicit abstract fixture, never a production fallback.
+            // Explicit abstract fixture, never a production fallback.
+            Ok(world.admission_observation.unwrap_or(AdmissionObservation {
+                ledger_observed_at_ms: world.observed_at,
+                trader_observed_at_ms: world.observed_at,
+                mark_observed_at_ms: world.observed_at,
+            }))
         }
     }
     fn observe_ack(&mut self, operation: &Operation) -> Result<AckObservation, ErrorCode> {
@@ -1116,6 +1123,61 @@ fn stale_or_backwards_clock_cannot_dispatch_or_release_the_gate() {
             assert_eq!(report.reason, Some(HaltReason::StaleOrIncomplete));
             assert!(!report.entries_enabled);
             assert_eq!(shared.borrow().venue_sends, 0);
+            assert_ne!(shared.borrow().halt & cc::OPERATOR_DOWN, 0);
+        }
+    }
+}
+
+#[test]
+fn fresh_admission_supersedes_startup_snapshot_after_slow_preparation() {
+    let dir = tempdir();
+    let shared = world();
+    shared.borrow_mut().admission_observation = Some(AdmissionObservation {
+        ledger_observed_at_ms: 3500,
+        trader_observed_at_ms: 3500,
+        mark_observed_at_ms: 3500,
+    });
+    let mut runtime = coordinator(&dir.path().join("journal.sqlite"), &shared);
+    runtime.prepare(intent(3, 0)).unwrap();
+    // Startup was fresh at its gates, but preparation I/O took >2 seconds.
+    // Dispatch uses the later, fully revalidated admission observations.
+    let mut times = [1000, 1000, 1000, 3501].into_iter();
+    let report = runtime
+        .recover_with_clock(|| times.next().unwrap())
+        .unwrap();
+    assert_eq!(report.reason, Some(HaltReason::UnresolvedOperations));
+    assert_eq!(shared.borrow().venue_sends, 1);
+    assert!(!report.entries_enabled);
+    assert_ne!(shared.borrow().halt & cc::OPERATOR_DOWN, 0);
+}
+
+#[test]
+fn stale_future_or_backwards_admission_cannot_dispatch() {
+    for field in 0..3 {
+        for (observed, dispatch_at) in [(1500, 3501), (4000, 3501), (999, 999)] {
+            let dir = tempdir();
+            let shared = world();
+            let fresh_at = if dispatch_at == 999 { 999 } else { 3500 };
+            let mut observation = AdmissionObservation {
+                ledger_observed_at_ms: fresh_at,
+                trader_observed_at_ms: fresh_at,
+                mark_observed_at_ms: fresh_at,
+            };
+            match field {
+                0 => observation.ledger_observed_at_ms = observed,
+                1 => observation.trader_observed_at_ms = observed,
+                _ => observation.mark_observed_at_ms = observed,
+            }
+            shared.borrow_mut().admission_observation = Some(observation);
+            let mut runtime = coordinator(&dir.path().join("journal.sqlite"), &shared);
+            runtime.prepare(intent(3, 0)).unwrap();
+            let mut times = [1000, 1000, 1000, dispatch_at].into_iter();
+            let report = runtime
+                .recover_with_clock(|| times.next().unwrap())
+                .unwrap();
+            assert_eq!(report.reason, Some(HaltReason::StaleOrIncomplete));
+            assert_eq!(shared.borrow().venue_sends, 0);
+            assert!(!report.entries_enabled);
             assert_ne!(shared.borrow().halt & cc::OPERATOR_DOWN, 0);
         }
     }

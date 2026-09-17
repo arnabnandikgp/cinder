@@ -23,6 +23,8 @@ export async function verifyOperatorExecution(ctx: {
     send: (ixs: anchor.web3.TransactionInstruction[], pad?: boolean) => Promise<string>;
 }) {
     const qfsEndpoint = "http://127.0.0.1:6699";
+    const accountLatencyMs = Number(process.env.CINDER_R5_ACCOUNT_LATENCY_MS ?? "0");
+    if (!Number.isInteger(accountLatencyMs) || accountLatencyMs < 0 || accountLatencyMs > 1000) throw new Error("invalid local account-read latency");
     const connection = new Connection(ctx.endpoint, "confirmed");
     for (const endpoint of [ctx.endpoint, qfsEndpoint]) {
         const url = new URL(endpoint);
@@ -76,7 +78,14 @@ export async function verifyOperatorExecution(ctx: {
     let nativeReadOpen = false;
     const publicRpc = async (method: string, params: unknown[]) => {
         if (method === "getMultipleAccounts" && (params[0] as string[]).length >= 7 && (params[0] as string[]).includes(assetMap.toBase58())) {
-            if (!nativeReadOpen) await refreshMark();
+            if (!nativeReadOpen) {
+                // Deliberately model RPC latency: startup observations may age
+                // out while a later, independently fresh admission succeeds.
+                // Delay before publishing the oracle fixture, so the injected
+                // latency does not itself stale native slot-based components.
+                if (accountLatencyMs) await new Promise(resolve => setTimeout(resolve, accountLatencyMs));
+                await refreshMark();
+            }
             nativeReadOpen = !nativeReadOpen;
         }
         if (method !== "getProgramAccounts" || !owners.includes(String(params[0]))) return ctx.rpc(method, params);

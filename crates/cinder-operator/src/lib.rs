@@ -41,10 +41,10 @@ pub use execution::{build_bounded_ioc, IocMarketAccounts};
 pub use funding::{build_phoenix_funding, decode_phoenix_funding_receipt, PhoenixFundingAccounts};
 pub use journal::{Journal, JournalError, JournalStatus, SCHEMA_VERSION};
 pub use recovery::{
-    AckFinality, AckObservation, BookSyncObservation, ErAckCommand, ErAckSubmissionPort,
-    ErAckSubmitResult, FundingObservation, HaltReason, LedgerRecoveryPort, ReconciliationReport,
-    ReconciliationSnapshot, RecoveryCoordinator, VenueRecoveryPort, VenueSubmissionPort,
-    VenueSubmitResult,
+    AckFinality, AckObservation, AdmissionObservation, BookSyncObservation, ErAckCommand,
+    ErAckSubmissionPort, ErAckSubmitResult, FundingObservation, HaltReason, LedgerRecoveryPort,
+    ReconciliationReport, ReconciliationSnapshot, RecoveryCoordinator, VenueRecoveryPort,
+    VenueSubmissionPort, VenueSubmitResult,
 };
 pub use types::{
     derive_venue_identity, BookSyncAttempt, BoundedIntent, ErrorCode, ExecutionBudget, FillFact,
