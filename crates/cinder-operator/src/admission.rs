@@ -127,7 +127,7 @@ pub(crate) fn assess(
                 .any(|p| p.unsettled_funding != 0)
         })
     {
-        return Err(RuntimeError::Incomplete);
+        return Err(RuntimeError::FundingAllocationRequired);
     }
     let mut projected: Vec<_> = ledgers.iter().map(|(a, l)| (*a, l.clone())).collect();
     // Admission considers confirmed inventory, never another intent's tentative

@@ -23,6 +23,7 @@ pub enum RuntimeError {
     Incomplete,
     Stale,
     Unsupported,
+    FundingAllocationRequired,
     Journal,
 }
 impl std::fmt::Display for RuntimeError {

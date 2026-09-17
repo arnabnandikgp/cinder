@@ -19,7 +19,9 @@ use serde_json::json;
 use solana_signer::Signer;
 use std::collections::{BTreeMap, BTreeSet};
 
-fn error(_: RuntimeError) -> ErrorCode {
+fn error(cause: RuntimeError) -> ErrorCode {
+    // Only static categories are emitted, never RPC bodies or private state.
+    eprintln!("Ledger port failed: {cause}");
     ErrorCode::LedgerUnavailable
 }
 fn pending(
@@ -755,7 +757,10 @@ fn admission(c: &mut Context, op: &Operation) -> Result<(crate::rise::RiseView, 
     {
         return Err(RuntimeError::Stale);
     }
-    crate::admission::accounting(&view, &book, &ledgers)?;
+    crate::admission::accounting(&view, &book, &ledgers).map_err(|cause| {
+        eprintln!("Admission accounting check failed: {cause}");
+        cause
+    })?;
     let execution = c
         .config
         .execution_policy
@@ -767,7 +772,11 @@ fn admission(c: &mut Context, op: &Operation) -> Result<(crate::rise::RiseView, 
         .as_ref()
         .ok_or(RuntimeError::Configuration)?;
     let shortfall =
-        crate::admission::assess(&view, &ledgers, op, execution, solvency, crate::unix_ms())?;
+        crate::admission::assess(&view, &ledgers, op, execution, solvency, crate::unix_ms())
+            .map_err(|cause| {
+                eprintln!("Post-intent risk assessment failed: {cause}");
+                cause
+            })?;
     Ok((view, shortfall, observed))
 }
 
