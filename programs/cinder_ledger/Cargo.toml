@@ -22,5 +22,6 @@ anchor-debug = []
 [dependencies]
 anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
 cinder-common = { path = "../../crates/cinder-common" }
+solana-sha256-hasher = { version = "=3.1.0", features = ["sha2"] }
 cinder-vault = { path = "../cinder_vault", features = ["no-entrypoint"] }
 ephemeral-rollups-sdk = { version = "=0.16.2", features = ["anchor", "access-control"] }

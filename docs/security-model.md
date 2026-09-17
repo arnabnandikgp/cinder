@@ -25,6 +25,26 @@ as fills or acknowledged as failures. Halt flags can block new entries,
 withdrawals, or deposits when a safety condition is detected. The adapter is
 expected to stop entering new venue risk when reconciliation fails.
 
+The operator journal preserves order causality across restarts. Unknown venue
+outcomes halt entries and require reconciliation; a timeout must never be used
+as proof that Phoenix did not fill. The journal is private metadata and must be
+kept on restricted, encrypted storage without bearer tokens or signing keys.
+The runtime uses one operator QFS token in memory. Authentication signs only
+QFS's fixed login domain with a bounded, fresh timestamp and the exact operator
+public key; arbitrary server messages are rejected before signing. This guards
+against cross-protocol signature reuse, not against a compromised private RPC's
+data or confidentiality failures. Placement receipts establish
+the exact user/ledger/nonce/client-ID identity; guarded acknowledgements also
+check a hash of the observed private ledger to reject concurrent-write races.
+The placement nonce remains an adapter attestation, not an independently stored
+field in each on-chain OID. The honest-operator trust assumption still applies.
+
+A pool-scoped local lease supplements the SQLite lock. All processes controlling
+the same pooled trader must share one private lock directory on one host;
+independent directories or hosts are not fenced. Exclusive operator signing-key
+ownership is required. Recovery is not a distributed execution service.
+See [operator recovery](operator.md) for configuration and remaining limitations.
+
 ## Scope
 
 This repository is a prototype. It has not received a production security

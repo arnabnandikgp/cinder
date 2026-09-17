@@ -36,6 +36,9 @@ so a new invocation starts from a clean state. Stop the stack with `Ctrl-C`.
 # Require the local stack in another terminal.
 ./scripts/test-privacy.sh
 ./scripts/test-netting.sh
+
+# Durable journal and crash/restart tests; no RPC or QFS stack required.
+cargo test --locked -p cinder-operator
 ```
 
 The repository CI also exercises Phoenix integration against a Surfpool fork.

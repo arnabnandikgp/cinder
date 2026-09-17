@@ -65,6 +65,16 @@ pub mod cinder_vault {
         Ok(())
     }
 
+    /// Operator ownership only; all administrative/economic halt bits survive.
+    pub fn set_operator_down(ctx: Context<AdapterConfig>, down: bool) -> Result<()> {
+        if down {
+            ctx.accounts.config.paused |= cc::OPERATOR_DOWN;
+        } else {
+            ctx.accounts.config.paused &= !cc::OPERATOR_DOWN;
+        }
+        Ok(())
+    }
+
     pub fn set_allowlist(ctx: Context<AdminConfig>, assets: Vec<u16>) -> Result<()> {
         require!(assets.len() <= cc::MAX_ALLOWLIST, VaultError::AllowlistTooLong);
         let config = &mut ctx.accounts.config;
@@ -363,6 +373,14 @@ pub struct AdminConfig<'info> {
         bump = config.bump_config,
         has_one = admin @ VaultError::Unauthorized
     )]
+    pub config: Account<'info, Config>,
+}
+
+#[derive(Accounts)]
+pub struct AdapterConfig<'info> {
+    pub adapter: Signer<'info>,
+    #[account(mut, seeds = [cc::SEED_CONFIG], bump = config.bump_config,
+        has_one = adapter @ VaultError::Unauthorized)]
     pub config: Account<'info, Config>,
 }
 

@@ -10,6 +10,8 @@ Cinder's aggregate position.
 - [Security model](security-model.md) records the privacy and reconciliation
   boundaries.
 - [Development](development.md) covers the supported local workflow.
+- [Operator recovery](operator.md) explains durable order tracking, restart
+  safety, and the current runtime boundary.
 
 The repository also contains detailed tests that serve as executable examples
 of the ledger, privacy, and netting behavior.

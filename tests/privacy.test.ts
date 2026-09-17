@@ -23,6 +23,7 @@ import {
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { CinderVault } from "../target/types/cinder_vault";
 import { CinderLedger } from "../target/types/cinder_ledger";
+import { verifyOperatorRecovery } from "./support/operator-recovery";
 
 const ER_VALIDATOR = new PublicKey(
   "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
@@ -111,6 +112,7 @@ describe("PER / QFS isolation", function () {
   let bookPda: PublicKey;
   let feesPda: PublicKey;
   let ledgerA: PublicKey;
+  let privateWriteSignature: string;
 
   before(async function () {
     if (!(await rpcUp(QFS)) || !(await rpcUp(ER)) || !(await rpcUp(BASE))) {
@@ -156,6 +158,13 @@ describe("PER / QFS isolation", function () {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
+      .rpc();
+
+    // Recovery places SOL orders; initialize the public allowlist before ER
+    // first loads Config. The earlier privacy-only fixture did not trade.
+    await vault.methods
+      .setAllowlist([1])
+      .accountsPartial({ admin: payer.publicKey, config: configPda })
       .rpc();
 
     await ledger.methods
@@ -270,6 +279,16 @@ describe("PER / QFS isolation", function () {
         userLedger: ledgerA,
       })
     );
+    // Synthetic collateral for this access-control fixture only. No token
+    // transfer or Phoenix order is submitted by this privacy test.
+    privateWriteSignature = await sendEr(
+      erProgram.methods.creditDeposit(new anchor.BN(123456789)).accountsPartial({
+        adapter: adapter.publicKey,
+        config: configPda,
+        book: bookPda,
+        userLedger: ledgerA,
+      })
+    );
   });
 
   it("A token reads A on QFS :6699", async function () {
@@ -311,5 +330,72 @@ describe("PER / QFS isolation", function () {
     const book = await conn.getAccountInfo(bookPda);
     expect(a, "adapter should read A's ledger").to.not.equal(null);
     expect(book, "adapter should read Book").to.not.equal(null);
+  });
+
+  it("adapter can discover its authorized private ledgers", async function () {
+    if (skip) this.skip();
+    const tok = await authToken(adapter);
+    const accounts = await qfsConnection(tok.token).getProgramAccounts(ledger.programId);
+    expect(accounts.some(({ pubkey }) => pubkey.equals(ledgerA))).to.equal(true);
+  });
+
+  it("adapter can recover a private transaction receipt through QFS", async function () {
+    if (skip) this.skip();
+    const tok = await authToken(adapter);
+    const conn = qfsConnection(tok.token);
+    const receipt = await conn.getTransaction(privateWriteSignature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    expect(receipt, "operator requires private receipt evidence for recovery").to
+      .not.equal(null);
+    expect(receipt!.meta!.err).to.equal(null);
+    const instructionCoder = new anchor.BorshInstructionCoder(ledger.idl);
+    const decoded = receipt!.transaction.message.compiledInstructions
+      .map((ix) => instructionCoder.decode(Buffer.from(ix.data)))
+      .find((ix) => ix?.name.replace(/_/g, "").toLowerCase() === "creditdeposit");
+    expect(decoded, "authorized recovery must retain instruction arguments").to
+      .not.equal(undefined);
+    expect((decoded!.data as { amount: anchor.BN }).amount.toString()).to.equal(
+      "123456789"
+    );
+  });
+
+  it("B receives no private transaction message, logs, or balances through QFS", async function () {
+    if (skip) this.skip();
+    const tok = await authToken(userB);
+    const conn = qfsConnection(tok.token);
+    const receipt = await conn.getTransaction(privateWriteSignature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    // Status-only receipts are allowed; transport errors must fail this test.
+    const denied = receipt === null || (
+      receipt.transaction.message.compiledInstructions.length === 0
+      && (receipt.meta?.logMessages?.length ?? 0) === 0
+      && (receipt.meta?.preBalances?.length ?? 0) === 0
+      && (receipt.meta?.postBalances?.length ?? 0) === 0
+      && receipt.transaction.message.staticAccountKeys.length === 0
+      && (receipt.meta?.loadedAddresses?.writable.length ?? 0) === 0
+      && (receipt.meta?.loadedAddresses?.readonly.length ?? 0) === 0
+      && (receipt.meta?.innerInstructions?.length ?? 0) === 0
+    );
+    expect(denied, "private history must remain permissioned").to.equal(true);
+  });
+
+  it("B's program-account discovery excludes A's private ledger", async function () {
+    if (skip) this.skip();
+    const tok = await authToken(userB);
+    const accounts = await qfsConnection(tok.token).getProgramAccounts(ledger.programId);
+    expect(accounts.some(({ pubkey }) => pubkey.equals(ledgerA))).to.equal(false);
+  });
+
+  it("operator restarts recover guarded fill/fail acknowledgements through real QFS", async function () {
+    if (skip) this.skip();
+    const tok = await authToken(adapter);
+    const provider = new anchor.AnchorProvider(qfsConnection(tok.token), new anchor.Wallet(adapter), { commitment: "confirmed" });
+    const privateLedger = new Program<CinderLedger>(ledger.idl, provider);
+    await verifyOperatorRecovery({ base: BASE, qfs: QFS, adapter, user: userA, ledger, vault, privateLedger,
+      config: configPda, book: bookPda, userLedger: ledgerA, fees: feesPda, trader: phoenixTrader });
   });
 });
