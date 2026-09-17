@@ -23,6 +23,7 @@ import {
 } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { CinderVault } from "../target/types/cinder_vault";
 import { CinderLedger } from "../target/types/cinder_ledger";
+import { verifyOperatorRecovery } from "./support/operator-recovery";
 
 const ER_VALIDATOR = new PublicKey(
   "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
@@ -157,6 +158,13 @@ describe("PER / QFS isolation", function () {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
+      .rpc();
+
+    // Recovery places SOL orders; initialize the public allowlist before ER
+    // first loads Config. The earlier privacy-only fixture did not trade.
+    await vault.methods
+      .setAllowlist([1])
+      .accountsPartial({ admin: payer.publicKey, config: configPda })
       .rpc();
 
     await ledger.methods
@@ -376,5 +384,14 @@ describe("PER / QFS isolation", function () {
     const tok = await authToken(userB);
     const accounts = await qfsConnection(tok.token).getProgramAccounts(ledger.programId);
     expect(accounts.some(({ pubkey }) => pubkey.equals(ledgerA))).to.equal(false);
+  });
+
+  it("operator restarts recover guarded fill/fail acknowledgements through real QFS", async function () {
+    if (skip) this.skip();
+    const tok = await authToken(adapter);
+    const provider = new anchor.AnchorProvider(qfsConnection(tok.token), new anchor.Wallet(adapter), { commitment: "confirmed" });
+    const privateLedger = new Program<CinderLedger>(ledger.idl, provider);
+    await verifyOperatorRecovery({ base: BASE, qfs: QFS, adapter, user: userA, ledger, vault, privateLedger,
+      config: configPda, book: bookPda, userLedger: ledgerA, fees: feesPda, trader: phoenixTrader });
   });
 });

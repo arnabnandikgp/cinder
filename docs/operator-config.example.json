@@ -1,0 +1,14 @@
+{
+  "operator_keypair": ".cinder-operator/operator.json",
+  "pool_lock_directory": ".cinder-operator/locks",
+  "l1_rpc_env": "CINDER_L1_RPC",
+  "qfs_rpc_env": "CINDER_QFS_RPC",
+  "phoenix_program": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih",
+  "phoenix_global_config": "2zskx2iyCvb6Stg7RBZkt1f6MrF4dpYtMG3yMvKwqtUZ",
+  "phoenix_trader": "REPLACE_WITH_YOUR_POOL_CROSS_TRADER",
+  "phoenix_asset_map": "2nHGAaEw3D5dd4hVueaUNoygkQFmoeKqRQWnSPqSMFUC",
+  "phoenix_quote_mint": "PhUsd11YkbjSaWjFncfAAmatntsjx3MgDR9B6g1ks3A",
+  "markets": [{ "cinder_asset_id": 1, "phoenix_asset_id": 0, "symbol": "SOL" }],
+  "global_trader_index": ["HCrPXLByGqRh2szQi3gj7oRdRVBNi1gccAyn4CQCT3HK"],
+  "active_trader_buffer": ["2U32rSzzrQS3eVmGHsnbw5kcqKF3wQXpHGd3hMq5YJok"]
+}

@@ -21,8 +21,13 @@ pub enum VenueSubmitResult {
 }
 
 pub trait VenueSubmissionPort {
+    /// Recovery-only ports cannot open new venue risk. Disabling submission
+    /// must not create a spurious ambiguous send.
+    fn submission_enabled(&self) -> bool {
+        true
+    }
     /// Submit exactly the persisted venue ID, direction, integer bound and
-    /// L1 deadline. Revalidate fresh R3 risk and expiry before sending.
+    /// L1 deadline. Revalidate fresh risk and expiry before sending.
     fn submit(&mut self, operation: &Operation) -> Result<VenueSubmitResult, ErrorCode>;
 }
 
@@ -43,7 +48,15 @@ pub enum ErAckSubmitResult {
 }
 
 pub trait ErAckSubmissionPort {
-    /// Calculate fresh post-transition margin through the R3 risk boundary.
+    /// Prepare an acknowledgement without broadcasting it. Production ports
+    /// must return its identity so it can be persisted before submission.
+    fn prepare_ack(
+        &mut self,
+        _command: &ErAckCommand,
+    ) -> Result<Option<crate::PreparedAck>, ErrorCode> {
+        Ok(None)
+    }
+    /// Calculate fresh post-transition margin through the shared risk boundary.
     /// Aggregate only the persisted facts and acknowledge this full identity.
     /// Retries must not mutate a later order that reused the client OID.
     fn submit_ack(&mut self, command: &ErAckCommand) -> Result<ErAckSubmitResult, ErrorCode>;
@@ -75,6 +88,13 @@ pub trait LedgerRecoveryPort {
     /// Attest the full operation with authoritative receipts/history. Current
     /// OpenOid alone cannot prove a nonce, and old ACKED rows are not proof.
     fn observe_ack(&mut self, operation: &Operation) -> Result<AckObservation, ErrorCode>;
+    fn observe_ack_attempts(
+        &mut self,
+        operation: &Operation,
+        _attempts: &[crate::PreparedAck],
+    ) -> Result<AckObservation, ErrorCode> {
+        self.observe_ack(operation)
+    }
     fn reconciliation(&mut self) -> Result<ReconciliationSnapshot, ErrorCode>;
     /// Change ONLY OPERATOR_DOWN in the existing halt masks. Preserve every
     /// other flag. Failure to write/confirm the gate prevents all submissions.
@@ -218,8 +238,8 @@ where
                         self.journal
                             .record_venue_rejected(&operation.operation_id, now_ms)?;
                     } else {
-                        // Terminal partial IOC facts remain blocked in this
-                        // foundation; R5 provides partial-fill ack semantics.
+                        // Terminal partial IOC facts stay blocked until
+                        // partial-fill acknowledgement semantics exist.
                         self.journal
                             .record_venue_filled(&operation.operation_id, now_ms)?;
                     }
@@ -250,7 +270,10 @@ where
             if (!is_fill && !is_fail) || (is_fill && !self.journal.fill_is_complete(&operation)) {
                 continue;
             }
-            let observation = match self.ledger.observe_ack(&operation) {
+            let observation = match self.ledger.observe_ack_attempts(
+                &operation,
+                &self.journal.ack_attempts(&operation.operation_id)?,
+            ) {
                 Ok(value) => value,
                 Err(_) => {
                     self.journal.mark_error(
@@ -323,7 +346,9 @@ where
         // Only one submission against a reconciled snapshot per pass. Other
         // prepared operations wait for this outcome and a new risk observation.
         if let Some(id) = ready_to_submit.first() {
-            self.submit_venue(id, now_ms)?;
+            if self.venue.submission_enabled() {
+                self.submit_venue(id, now_ms)?;
+            }
             return self.report(Some(HaltReason::UnresolvedOperations));
         }
         if self.ledger.set_operator_down(false).is_err() {
@@ -367,8 +392,34 @@ where
                 intent: operation.intent.clone(),
             }
         };
+        let prepared = match self.ledger.prepare_ack(&command) {
+            Ok(value) => value,
+            Err(_) => {
+                self.journal.mark_error(
+                    &operation.operation_id,
+                    ErrorCode::LedgerUnavailable,
+                    now_ms,
+                )?;
+                return Ok(());
+            }
+        };
+        if let Some(ack) = &prepared {
+            self.journal
+                .record_prepared_ack(&operation.operation_id, ack)?;
+        }
         match self.ledger.submit_ack(&command) {
             Ok(ErAckSubmitResult::Accepted(signature)) => {
+                if prepared
+                    .as_ref()
+                    .is_some_and(|ack| ack.signature != signature)
+                {
+                    self.journal.mark_error(
+                        &operation.operation_id,
+                        ErrorCode::CorrelationMismatch,
+                        now_ms,
+                    )?;
+                    return Ok(());
+                }
                 if fill {
                     self.journal.record_fill_ack_submission(
                         &operation.operation_id,

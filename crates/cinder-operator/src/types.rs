@@ -7,6 +7,15 @@ pub const VENUE_OID_DOMAIN: &[u8] = b"cinder:phoenix:v1";
 pub type OperationId = [u8; 32];
 pub type VenueOid = [u8; 16];
 
+/// Persisted before sending an ER acknowledgement. A missing RPC response
+/// never loses the signature needed to find its receipt after a restart.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreparedAck {
+    pub signature: [u8; 64],
+    pub last_valid_block_height: u64,
+    pub observed_ledger_nonce: u64,
+}
+
 /// The private operation identity.  `client_oid` is deliberately not global:
 /// this full tuple is the local idempotency key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -174,7 +183,7 @@ impl ErrorCode {
 
 /// An authoritative, deduplicable venue fill event.  Aggregate values are
 /// calculated with checked arithmetic, while each event remains durable for
-/// later R5 partial-fill/cancel work.
+/// authoritative partial-fill/cancellation handling.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FillFact {
     pub event_id: [u8; 32],

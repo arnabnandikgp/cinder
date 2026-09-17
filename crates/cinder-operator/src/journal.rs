@@ -17,7 +17,7 @@ use std::{
 use std::os::unix::{fs::MetadataExt, fs::OpenOptionsExt, fs::PermissionsExt};
 
 /// Refuse to open a newer journal rather than silently misinterpreting it.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// SQLite journal errors are intentionally local and typed.  Remote error text
 /// belongs neither in this error type nor in persistent journal records.
@@ -99,9 +99,9 @@ pub struct JournalStatus {
     pub operation_counts: BTreeMap<OrderState, u64>,
 }
 
-/// One SQLite connection and one non-blocking lifetime lock.  This is the R4
-/// in-process mutation fence for Cinder's single Book/cross-trader; it is not a
-/// multi-replica lease or distributed fencing protocol.
+/// One SQLite connection and one non-blocking journal-file lifetime lock.
+/// OperatorRuntime additionally holds the shared pool lease; neither lock
+/// provides multi-host or distributed fencing.
 pub struct Journal {
     connection: Connection,
     _writer_lock: File,
@@ -109,6 +109,138 @@ pub struct Journal {
 }
 
 impl Journal {
+    /// Pin the journal to one deployment, pool and operator. Changing a URL
+    /// does not change this binding; changing an account identity does.
+    pub fn bind_runtime(&mut self, binding: [u8; 32]) -> Result<(), JournalError> {
+        let bound: bool =
+            self.connection
+                .query_row("SELECT EXISTS(SELECT 1 FROM runtime_binding)", [], |r| {
+                    r.get(0)
+                })?;
+        let active: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM operations WHERE state!=1)",
+            [],
+            |r| r.get(0),
+        )?;
+        // Do not retroactively attest the pre-send discipline of an unbound
+        // legacy/test journal. Unknown historical sends need explicit repair.
+        if !bound && active {
+            return Err(JournalError::IntentConflict);
+        }
+        self.connection.execute(
+            "INSERT OR IGNORE INTO runtime_binding VALUES (1, ?)",
+            params![binding.as_slice()],
+        )?;
+        let found: Vec<u8> = self.connection.query_row(
+            "SELECT binding FROM runtime_binding WHERE singleton=1",
+            [],
+            |r| r.get(0),
+        )?;
+        if found != binding {
+            return Err(JournalError::IntentConflict);
+        }
+        Ok(())
+    }
+
+    /// Monotonic local registry: a user that disappears from a later scan
+    /// cannot silently disappear from reconciliation.
+    pub fn remember_users(
+        &mut self,
+        users: &[(crate::PubkeyBytes, crate::PubkeyBytes)],
+    ) -> Result<(), JournalError> {
+        let tx = self.connection.transaction()?;
+        for (ledger, user) in users {
+            tx.execute(
+                "INSERT OR IGNORE INTO users VALUES (?, ?)",
+                params![ledger.as_slice(), user.as_slice()],
+            )?;
+            let found: Vec<u8> = tx.query_row(
+                "SELECT user_pubkey FROM users WHERE user_ledger=?",
+                params![ledger.as_slice()],
+                |r| r.get(0),
+            )?;
+            if found != user {
+                return Err(JournalError::IntentConflict);
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn known_users(
+        &self,
+    ) -> Result<Vec<(crate::PubkeyBytes, crate::PubkeyBytes)>, JournalError> {
+        let mut stmt = self
+            .connection
+            .prepare("SELECT user_ledger,user_pubkey FROM users ORDER BY user_ledger")?;
+        let rows = stmt.query_map([], |r| {
+            Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?))
+        })?;
+        rows.map(|row| {
+            let (l, u) = row?;
+            Ok((
+                l.try_into()
+                    .map_err(|_| JournalError::CorruptState("invalid registry ledger"))?,
+                u.try_into()
+                    .map_err(|_| JournalError::CorruptState("invalid registry user"))?,
+            ))
+        })
+        .collect()
+    }
+
+    pub fn record_prepared_ack(
+        &mut self,
+        id: &OperationId,
+        ack: &crate::PreparedAck,
+    ) -> Result<(), JournalError> {
+        let op = self.operation(id)?;
+        if !matches!(
+            op.state,
+            OrderState::AckSubmissionIntent | OrderState::FailSubmissionIntent
+        ) {
+            return Err(JournalError::CorruptState(
+                "ack preparation outside write-ahead state",
+            ));
+        }
+        self.connection.execute(
+            "INSERT INTO ack_attempts VALUES (?,?,?,?)",
+            params![
+                id.as_slice(),
+                ack.signature.as_slice(),
+                ack.last_valid_block_height.to_be_bytes().as_slice(),
+                ack.observed_ledger_nonce.to_be_bytes().as_slice()
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn ack_attempts(&self, id: &OperationId) -> Result<Vec<crate::PreparedAck>, JournalError> {
+        let mut stmt=self.connection.prepare("SELECT signature,expiry_height,observed_nonce FROM ack_attempts WHERE operation_id=? ORDER BY rowid")?;
+        let rows = stmt.query_map(params![id.as_slice()], |r| {
+            Ok((
+                r.get::<_, Vec<u8>>(0)?,
+                r.get::<_, Vec<u8>>(1)?,
+                r.get::<_, Vec<u8>>(2)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (s, h, n) = row?;
+            Ok(crate::PreparedAck {
+                signature: s
+                    .try_into()
+                    .map_err(|_| JournalError::CorruptState("invalid ack signature"))?,
+                last_valid_block_height: u64::from_be_bytes(
+                    h.try_into()
+                        .map_err(|_| JournalError::CorruptState("invalid ack expiry"))?,
+                ),
+                observed_ledger_nonce: u64::from_be_bytes(
+                    n.try_into()
+                        .map_err(|_| JournalError::CorruptState("invalid ack nonce"))?,
+                ),
+            })
+        })
+        .collect()
+    }
     /// Open (or initialize) a private SQLite WAL journal.
     ///
     /// On Unix the directory is 0700 and the database, lock, WAL, and shared
@@ -537,9 +669,9 @@ impl Journal {
         )
     }
 
-    /// Partial fills are durable but deliberately not acked in R4a.  R5 owns
-    /// authoritative cancellation/remainder semantics; this avoids guessing a
-    /// full fill or a fail-ack for the remaining tentative lots.
+    /// Partial fills are durable but not acknowledged until authoritative
+    /// remainder handling is implemented. Never guess a full fill or a
+    /// fail-ack for the remaining tentative lots.
     pub fn fill_is_complete(&self, operation: &Operation) -> bool {
         operation.filled_lots == operation.intent.requested_lots
     }
@@ -767,7 +899,7 @@ impl Journal {
         Ok(())
     }
 
-    fn operation_by_identity(
+    pub fn operation_by_identity(
         &self,
         identity: &OrderIdentity,
     ) -> Result<Option<Operation>, JournalError> {
@@ -947,7 +1079,7 @@ impl Journal {
                     "unversioned database already contains tables",
                 ));
             }
-            self.connection.execute_batch(&format!(
+            self.connection.execute_batch(
                 "BEGIN IMMEDIATE;
                  CREATE TABLE operations (
                     operation_id BLOB PRIMARY KEY NOT NULL CHECK(length(operation_id) = 32),
@@ -986,11 +1118,18 @@ impl Journal {
                     observed_at_ms BLOB NOT NULL CHECK(length(observed_at_ms) = 8),
                     PRIMARY KEY(operation_id, event_id)
                  );
-                 PRAGMA user_version = {SCHEMA_VERSION};
+                 PRAGMA user_version = 1;
                  COMMIT;"
-            ))?;
-        } else if version != SCHEMA_VERSION {
+            )?;
+        } else if version != 1 && version != SCHEMA_VERSION {
             return Err(JournalError::CorruptState("unsupported prior schema"));
+        }
+        if version < 2 {
+            self.connection.execute_batch("BEGIN IMMEDIATE;
+                CREATE TABLE runtime_binding (singleton INTEGER PRIMARY KEY CHECK(singleton=1), binding BLOB NOT NULL CHECK(length(binding)=32));
+                CREATE TABLE users (user_ledger BLOB PRIMARY KEY CHECK(length(user_ledger)=32),user_pubkey BLOB UNIQUE NOT NULL CHECK(length(user_pubkey)=32));
+                CREATE TABLE ack_attempts (operation_id BLOB NOT NULL REFERENCES operations(operation_id),signature BLOB PRIMARY KEY CHECK(length(signature)=64),expiry_height BLOB NOT NULL CHECK(length(expiry_height)=8),observed_nonce BLOB NOT NULL CHECK(length(observed_nonce)=8));
+                PRAGMA user_version=2; COMMIT;")?;
         }
         let integrity: String = self
             .connection
@@ -1005,7 +1144,13 @@ impl Journal {
         if orphan.is_some() {
             return Err(JournalError::CorruptState("orphaned journal record"));
         }
-        for table in ["operations", "fill_facts"] {
+        for table in [
+            "operations",
+            "fill_facts",
+            "runtime_binding",
+            "users",
+            "ack_attempts",
+        ] {
             let exists: Option<String> = self
                 .connection
                 .query_row(
@@ -1271,6 +1416,24 @@ fn lock_path(path: &Path) -> Result<PathBuf, JournalError> {
     Ok(path.with_file_name(lock_name))
 }
 
+pub(crate) fn pool_lock(directory: &Path, identity: &[u8; 32]) -> Result<File, JournalError> {
+    ensure_private_dir(directory)?;
+    let path = directory.canonicalize()?.join(format!(
+        "pool-{}.lock",
+        bs58::encode(identity).into_string()
+    ));
+    ensure_private_regular_or_missing(&path)?;
+    let file = open_private_file(&path)?;
+    file.try_lock_exclusive().map_err(|e| {
+        if e.kind() == io::ErrorKind::WouldBlock {
+            JournalError::AlreadyLocked
+        } else {
+            JournalError::Io(e)
+        }
+    })?;
+    Ok(file)
+}
+
 fn ensure_private_dir(path: &Path) -> Result<(), JournalError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => {
@@ -1363,6 +1526,22 @@ fn sidecar_path(path: &Path, suffix: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pool_lease_fences_separate_journal_paths_and_releases_on_drop() {
+        let dir = tempfile::tempdir().unwrap();
+        let _first = Journal::open(dir.path().join("first/journal.sqlite")).unwrap();
+        let _second = Journal::open(dir.path().join("second/journal.sqlite")).unwrap();
+        let locks = dir.path().join("locks");
+        let owner = pool_lock(&locks, &[7; 32]).unwrap();
+        assert!(matches!(
+            pool_lock(&locks, &[7; 32]),
+            Err(JournalError::AlreadyLocked)
+        ));
+        let _other_pool = pool_lock(&locks, &[8; 32]).unwrap();
+        drop(owner);
+        pool_lock(&locks, &[7; 32]).unwrap();
+    }
     use tempfile::TempDir;
 
     fn tempdir() -> TempDir {

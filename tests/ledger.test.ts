@@ -20,6 +20,7 @@ import {
 } from "@solana/web3.js";
 import { DELEGATION_PROGRAM_ID } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { expect } from "chai";
+import { createHash } from "crypto";
 import { CinderVault } from "../target/types/cinder_vault";
 import { CinderLedger } from "../target/types/cinder_ledger";
 
@@ -242,6 +243,104 @@ describe("ledger accounts and order machine", () => {
         })
         .rpc()
     );
+  });
+
+  describe("guarded operator recovery", () => {
+    const recoveryUser = Keypair.generate();
+    let recoveryLedger: PublicKey;
+    const clientOid = oid(210);
+    const accounts = () => ({ adapter: adapter.publicKey, config: configPda,
+      book: bookPda, userLedger: recoveryLedger });
+
+    async function expectRejected(request: Promise<unknown>, pattern: RegExp) {
+      let error: any;
+      try { await request; } catch (e) { error = e; }
+      expect(error, "transaction should be rejected").to.exist;
+      expect(error.error?.errorCode?.code ?? error.toString()).to.match(pattern);
+    }
+
+    async function guard(placementNonce: number) {
+      const state = await ledger.account.userLedger.fetch(recoveryLedger);
+      const encoded = await ledger.coder.accounts.encode("userLedger", state);
+      return { clientOid, placementNonce: new BN(placementNonce),
+        observedLedgerNonce: state.nonce,
+        observedLedgerHash: Array.from(createHash("sha256").update(encoded.subarray(8)).digest()),
+        kind: 1, assetId: ASSET_SOL, requestedLots: new BN(LOTS),
+        limitPriceTicks: LIMIT_TICKS, lastValidSlot: LAST_VALID_SLOT };
+    }
+
+    async function place(nonce: number) {
+      await ledger.methods.placeOrder(ASSET_SOL, new BN(LOTS), clientOid,
+        LIMIT_TICKS, LAST_VALID_SLOT, new BN(IM_TEN_LOTS), new BN(10_000_000), false, new BN(nonce))
+        .accountsPartial({ ...accounts(), user: recoveryUser.publicKey })
+        .signers([adapter, recoveryUser]).rpc();
+    }
+
+    it("changes only OPERATOR_DOWN and rejects a foreign operator", async () => {
+      const flags = HALT_ENTRIES | (1 << 6) | VENUE_BREACH;
+      const configBefore = (await vault.account.config.fetch(configPda)).paused;
+      const bookBefore = (await ledger.account.book.fetch(bookPda)).halt;
+      try {
+        await vault.methods.setHalt(flags).accountsPartial({ admin: payer.publicKey, config: configPda }).rpc();
+        await ledger.methods.setBookHalt(flags).accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda }).signers([adapter]).rpc();
+        await expectRejected(vault.methods.setOperatorDown(false).accountsPartial({ adapter: unauthorizedAdapter.publicKey, config: configPda }).signers([unauthorizedAdapter]).rpc(), /Unauthorized/);
+        await expectRejected(ledger.methods.setOperatorDown(false).accountsPartial({ adapter: unauthorizedAdapter.publicKey, config: configPda, book: bookPda }).signers([unauthorizedAdapter]).rpc(), /Unauthorized/);
+        for (const down of [true, false]) {
+          await vault.methods.setOperatorDown(down).accountsPartial({ adapter: adapter.publicKey, config: configPda }).signers([adapter]).rpc();
+          await ledger.methods.setOperatorDown(down).accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda }).signers([adapter]).rpc();
+          const expected = flags | (down ? 1 << 5 : 0);
+          expect((await vault.account.config.fetch(configPda)).paused).to.equal(expected);
+          expect((await ledger.account.book.fetch(bookPda)).halt).to.equal(expected);
+        }
+      } finally {
+        await vault.methods.setHalt(configBefore).accountsPartial({ admin: payer.publicKey, config: configPda }).rpc();
+        await ledger.methods.setBookHalt(bookBefore).accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda }).signers([adapter]).rpc();
+      }
+    });
+
+    it("requires the exact guarded intent and applies failure only once", async () => {
+      recoveryLedger = pda(ledger.programId, [Buffer.from("user"), recoveryUser.publicKey.toBuffer()]);
+      await ledger.methods.initUser().accountsPartial({ ...accounts(), user: recoveryUser.publicKey,
+        systemProgram: SystemProgram.programId }).signers([adapter, recoveryUser]).rpc();
+      await ledger.methods.creditDeposit(new BN(CREDIT)).accountsPartial(accounts()).signers([adapter]).rpc();
+      await place(0);
+      const observed = await guard(0);
+      for (const altered of [
+        { ...observed, limitPriceTicks: LIMIT_TICKS.addn(1) },
+        { ...observed, requestedLots: new BN(-LOTS) },
+        { ...observed, placementNonce: new BN(1) },
+        { ...observed, kind: 2 },
+      ]) {
+        await expectRejected(ledger.methods.ackPhoenixFailGuarded(altered, new BN(0))
+          .accountsPartial(accounts()).signers([adapter]).rpc(), /OidNotFound|BadNonce/);
+      }
+      await expectRejected(ledger.methods.ackPhoenixFailGuarded(observed, new BN(0))
+        .accountsPartial({ ...accounts(), adapter: unauthorizedAdapter.publicKey })
+        .signers([unauthorizedAdapter]).rpc(), /Unauthorized/);
+      await ledger.methods.ackPhoenixFailGuarded(observed, new BN(0)).accountsPartial(accounts()).signers([adapter]).rpc();
+      await expectRejected(ledger.methods.ackPhoenixFailGuarded(observed, new BN(0))
+        .accountsPartial(accounts()).signers([adapter]).rpc(), /BadNonce|OidNotFound/);
+      expect((await ledger.account.userLedger.fetch(recoveryLedger)).free.toNumber()).to.equal(CREDIT);
+    });
+
+    it("rejects reused-OID and non-nonce cash-write races without losing the pending order", async () => {
+      const old = await guard(0);
+      await place(1);
+      await expectRejected(ledger.methods.ackPhoenixFailGuarded(old, new BN(0))
+        .accountsPartial(accounts()).signers([adapter]).rpc(), /BadNonce/);
+      const observed = await guard(1);
+      await ledger.methods.creditDeposit(new BN(1)).accountsPartial(accounts()).signers([adapter]).rpc();
+      const changed = await ledger.account.userLedger.fetch(recoveryLedger);
+      expect(changed.nonce.toString()).to.equal(observed.observedLedgerNonce.toString());
+      await expectRejected(ledger.methods.ackPhoenixFailGuarded(observed, new BN(0))
+        .accountsPartial(accounts()).signers([adapter]).rpc(), /BadNonce/);
+      expect((await ledger.account.userLedger.fetch(recoveryLedger)).pendingOidCount).to.equal(1);
+      await ledger.methods.ackPhoenixFailGuarded(await guard(1), new BN(0))
+        .accountsPartial(accounts()).signers([adapter]).rpc();
+      const restored = await ledger.account.userLedger.fetch(recoveryLedger);
+      expect(restored.pendingOidCount).to.equal(0);
+      expect(restored.free.toNumber()).to.equal(CREDIT + 1);
+    });
   });
 
   it("requires the configured adapter and nonzero Phoenix order bounds", async () => {

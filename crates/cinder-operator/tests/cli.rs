@@ -19,7 +19,10 @@ fn administration_commands_do_not_simulate_live_trading_or_expose_operations() {
     let output = run("status");
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("Journal schema: 1"));
+    assert!(stdout.contains(&format!(
+        "Journal schema: {}",
+        cinder_operator::SCHEMA_VERSION
+    )));
     assert!(stdout.contains("Live trading: not implemented"));
     assert!(!stdout.contains("user_pubkey"));
     assert!(!stdout.contains("client_oid"));

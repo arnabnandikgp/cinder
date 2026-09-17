@@ -219,6 +219,39 @@ pub mod cinder_ledger {
         Ok(())
     }
 
+    /// Restart-safe acknowledgement. The operator proves the placement nonce
+    /// from private receipts; this guard atomically checks the observed ledger
+    /// generation and immutable pending order before applying its venue facts.
+    pub fn ack_phoenix_fill_guarded(
+        ctx: Context<AckFill>,
+        guard: AckGuard,
+        filled_lots: i64,
+        fee_usdc: u64,
+        vwap_quote_lots: i64,
+        fill_price_ticks: u64,
+        post_position_im_usdc: u64,
+    ) -> Result<()> {
+        guard.validate(&ctx.accounts.user_ledger)?;
+        ack_phoenix_fill(
+            ctx,
+            guard.client_oid,
+            filled_lots,
+            fee_usdc,
+            vwap_quote_lots,
+            fill_price_ticks,
+            post_position_im_usdc,
+        )
+    }
+
+    pub fn ack_phoenix_fail_guarded(
+        ctx: Context<AckFail>,
+        guard: AckGuard,
+        post_position_im_usdc: u64,
+    ) -> Result<()> {
+        guard.validate(&ctx.accounts.user_ledger)?;
+        ack_phoenix_fail(ctx, guard.client_oid, post_position_im_usdc)
+    }
+
     pub fn ack_phoenix_fill(
         ctx: Context<AckFill>,
         client_oid: [u8; 16],
@@ -449,6 +482,24 @@ pub mod cinder_ledger {
             LedgerError::InsufficientWithdrawable
         );
         ledger.withdrawable -= amount;
+        Ok(())
+    }
+
+    /// Atomic bit update: an in-flight acknowledgement may set another halt
+    /// between an operator read and this instruction. Never clear that halt.
+    pub fn set_operator_down(ctx: Context<AdapterBook>, down: bool) -> Result<()> {
+        let cfg = load_vault_config(&ctx.accounts.config)?;
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
+        require_book_schema(&ctx.accounts.book)?;
+        if down {
+            ctx.accounts.book.halt |= cc::OPERATOR_DOWN;
+        } else {
+            ctx.accounts.book.halt &= !cc::OPERATOR_DOWN;
+        }
         Ok(())
     }
 
@@ -888,6 +939,69 @@ pub struct CompleteWithdraw<'info> {
         bump = user_ledger.bump
     )]
     pub user_ledger: Box<Account<'info, UserLedger>>,
+}
+
+/// Receipt identity plus an optimistic-concurrency guard; no account migration.
+/// Placement nonce is attested by the trusted adapter, not stored in OpenOid.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AckGuard {
+    pub client_oid: [u8; 16],
+    pub placement_nonce: u64,
+    pub observed_ledger_nonce: u64,
+    pub observed_ledger_hash: [u8; 32],
+    pub kind: u8,
+    pub asset_id: u16,
+    pub requested_lots: i64,
+    pub limit_price_ticks: u64,
+    pub last_valid_slot: u64,
+}
+
+impl AckGuard {
+    pub fn validate(&self, ledger: &UserLedger) -> Result<()> {
+        require_user_schema(ledger)?;
+        require!(
+            ledger.nonce == self.observed_ledger_nonce,
+            LedgerError::BadNonce
+        );
+        require!(
+            ledger_state_hash(ledger)? == self.observed_ledger_hash,
+            LedgerError::BadNonce
+        );
+        let state = match self.kind {
+            1 => {
+                require!(self.placement_nonce < ledger.nonce, LedgerError::BadNonce);
+                cc::OID_PENDING
+            }
+            2 => {
+                require!(self.placement_nonce <= ledger.nonce, LedgerError::BadNonce);
+                cc::OID_LIQUIDATING
+            }
+            _ => return err!(LedgerError::BadNonce),
+        };
+        require!(
+            ledger
+                .open_oids
+                .iter()
+                .any(|oid| oid.client_oid == self.client_oid
+                    && oid.state == state
+                    && oid.asset_id == self.asset_id
+                    && oid.lots_delta == self.requested_lots
+                    && oid.limit_price_ticks == self.limit_price_ticks
+                    && oid.last_valid_slot == self.last_valid_slot),
+            LedgerError::OidNotFound
+        );
+        Ok(())
+    }
+}
+
+/// Optimistic concurrency for every private write, not just placements:
+/// acknowledgements and funding may change positions without advancing nonce.
+pub fn ledger_state_hash(ledger: &UserLedger) -> Result<[u8; 32]> {
+    let mut serialized = Vec::with_capacity(UserLedger::INIT_SPACE);
+    ledger
+        .serialize(&mut serialized)
+        .map_err(|_| error!(LedgerError::Overflow))?;
+    Ok(solana_sha256_hasher::hash(&serialized).to_bytes())
 }
 
 #[derive(Accounts)]
@@ -1550,4 +1664,108 @@ pub enum LedgerError {
     InvalidMigrationAccount,
     #[msg("account must be rent-exempt at the new size before migration")]
     MigrationRentShortfall,
+}
+
+#[cfg(test)]
+mod recovery_guard_tests {
+    use super::*;
+
+    fn fixture() -> (UserLedger, AckGuard) {
+        let mut ledger = UserLedger {
+            schema_version: cc::ACCOUNT_SCHEMA_VERSION,
+            user: Pubkey::new_unique(),
+            free: 100_000_000,
+            reserved: 0,
+            withdrawable: 0,
+            bad_debt_usdc: 0,
+            pending_oid_count: 1,
+            nonce: 5,
+            last_funding_epoch: 0,
+            positions_len: 0,
+            positions: [Position::default(); 16],
+            open_oids: [OpenOid::default(); 8],
+            bump: 0,
+        };
+        ledger.open_oids[0] = OpenOid {
+            client_oid: [7; 16],
+            asset_id: 1,
+            lots_delta: 10,
+            state: cc::OID_PENDING,
+            limit_price_ticks: 8000,
+            last_valid_slot: u64::MAX,
+        };
+        let guard = AckGuard {
+            client_oid: [7; 16],
+            placement_nonce: 4,
+            observed_ledger_nonce: 5,
+            observed_ledger_hash: ledger_state_hash(&ledger).unwrap(),
+            kind: 1,
+            asset_id: 1,
+            requested_lots: 10,
+            limit_price_ticks: 8000,
+            last_valid_slot: u64::MAX,
+        };
+        (ledger, guard)
+    }
+
+    #[test]
+    fn guard_requires_exact_pending_order_and_valid_kind_nonce() {
+        let (ledger, guard) = fixture();
+        guard.validate(&ledger).unwrap();
+        for mutation in 0..8 {
+            let mut g = guard.clone();
+            match mutation {
+                0 => g.client_oid = [8; 16],
+                1 => g.asset_id = 2,
+                2 => g.requested_lots = -10,
+                3 => g.limit_price_ticks -= 1,
+                4 => g.last_valid_slot -= 1,
+                5 => g.placement_nonce = ledger.nonce,
+                6 => g.kind = 2,
+                _ => g.kind = 0,
+            }
+            assert!(g.validate(&ledger).is_err());
+        }
+    }
+
+    #[test]
+    fn non_nonce_cash_funding_or_ack_writes_invalidate_guard() {
+        for mutation in 0..3 {
+            let (mut ledger, guard) = fixture();
+            match mutation {
+                0 => ledger.free += 1,
+                1 => ledger.last_funding_epoch += 1,
+                _ => ledger.open_oids[1].state = cc::OID_ACKED,
+            }
+            assert_eq!(ledger.nonce, guard.observed_ledger_nonce);
+            assert!(guard.validate(&ledger).is_err());
+        }
+    }
+
+    #[test]
+    fn reused_client_oid_cannot_replay_an_old_ledger_generation() {
+        let (mut ledger, guard) = fixture();
+        ledger.nonce += 1;
+        assert!(guard.validate(&ledger).is_err());
+        let fresh = AckGuard {
+            placement_nonce: 5,
+            observed_ledger_nonce: 6,
+            observed_ledger_hash: ledger_state_hash(&ledger).unwrap(),
+            ..guard
+        };
+        fresh.validate(&ledger).unwrap();
+    }
+
+    #[test]
+    fn liquidation_kind_accepts_its_current_nonce_but_not_a_user_pending_row() {
+        let (mut ledger, mut guard) = fixture();
+        guard.kind = 2;
+        guard.placement_nonce = ledger.nonce;
+        assert!(guard.validate(&ledger).is_err());
+        ledger.open_oids[0].state = cc::OID_LIQUIDATING;
+        guard.observed_ledger_hash = ledger_state_hash(&ledger).unwrap();
+        guard.validate(&ledger).unwrap();
+        guard.placement_nonce += 1;
+        assert!(guard.validate(&ledger).is_err());
+    }
 }

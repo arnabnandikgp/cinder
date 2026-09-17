@@ -32,8 +32,9 @@ Users ── QFS ──► MagicBlock ER user ledgers ──► Cinder adapter �
 The on-chain vault holds shared collateral and configuration on Solana L1. The
 ledger program maintains private user state on the ER. The adapter is the
 testable decision core for reconciling the net residual with Phoenix. The
-operator crate adds durable order tracking and restart recovery; live QFS/Rise
-connections are not implemented yet.
+operator crate adds durable order tracking, authenticated QFS recovery, and
+authoritative Rise RPC reconciliation. It does not submit new Phoenix orders
+or run autonomous maintenance loops yet.
 
 Read [the architecture guide](docs/architecture.md) for the account model and
 execution lifecycle, and [the security model](docs/security-model.md) for the
@@ -95,7 +96,7 @@ cargo test --workspace         # Rust unit tests
 
 See [development notes](docs/development.md) for local endpoints, test setup,
 and toolchain details, and [operator recovery](docs/operator.md) for the runtime
-foundation and its current limitations.
+recovery commands, configuration, and current limitations.
 
 ## License
 

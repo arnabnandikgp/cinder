@@ -22,7 +22,7 @@ env:
 
 jobs:
   operator-unit:
-    name: operator unit tests
+    name: protocol unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -36,7 +36,7 @@ jobs:
           shared-key: cinder-ci
           cache-targets: true
       - name: Operator recovery and protocol core tests
-        run: cargo test --locked -p cinder-operator -p cinder-adapter -p cinder-common
+        run: cargo test --locked --workspace
 
   onchain:
     name: on-chain programs
@@ -71,6 +71,7 @@ jobs:
         run: |
           anchor build
           anchor deploy --provider.cluster localnet
+          cargo build --locked -p cinder-operator --bin cinder-operator --example recovery-fixture
           yarn run ts-mocha -p ./tsconfig.json -t 120000 tests/privacy.test.ts
       - name: Privacy stack log on failure
         if: failure()
