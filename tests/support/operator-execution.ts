@@ -23,7 +23,6 @@ export async function verifyOperatorExecution(ctx: {
     send: (ixs: anchor.web3.TransactionInstruction[], pad?: boolean) => Promise<string>;
 }) {
     const qfsEndpoint = "http://127.0.0.1:6699";
-    const er = new Connection("http://127.0.0.1:7799", "confirmed");
     const connection = new Connection(ctx.endpoint, "confirmed");
     for (const endpoint of [ctx.endpoint, qfsEndpoint]) {
         const url = new URL(endpoint);
@@ -44,17 +43,17 @@ export async function verifyOperatorExecution(ctx: {
     await ctx.send([await ledger.methods.delegateBook().accountsPartial({ adapter: ctx.operator.publicKey, config: ctx.config, book, validator }).instruction()]);
     await ctx.send([await ledger.methods.delegateFees().accountsPartial({ adapter: ctx.operator.publicKey, config: ctx.config, feeAccrual: fees, validator }).instruction()]);
     await ledger.methods.delegateUser().accountsPartial({ adapter: ctx.operator.publicKey, user: user.publicKey, config: ctx.config, userLedger, validator }).signers([user]).rpc();
+    const auth = await getAuthToken(qfsEndpoint, ctx.operator.publicKey, message => Promise.resolve(nacl.sign.detached(message, ctx.operator.secretKey)));
+    const qfs = new Connection(`${qfsEndpoint}?token=${auth.token}`, { wsEndpoint: `ws://127.0.0.1:6700?token=${auth.token}`, commitment: "confirmed" });
     for (const address of [book, fees, userLedger]) {
         const deadline = performance.now() + 15000;
         for (;;) {
-            const account = await er.getAccountInfo(address);
+            const account = await qfs.getAccountInfo(address);
             if (account?.owner.equals(ledger.programId)) break;
-            if (performance.now() >= deadline) throw new Error("delegation did not reach local ER");
+            if (performance.now() >= deadline) throw new Error("delegation did not become visible through local QFS");
             await new Promise(resolve => setTimeout(resolve, 250));
         }
     }
-    const auth = await getAuthToken(qfsEndpoint, ctx.operator.publicKey, message => Promise.resolve(nacl.sign.detached(message, ctx.operator.secretKey)));
-    const qfs = new Connection(`${qfsEndpoint}?token=${auth.token}`, { wsEndpoint: `ws://127.0.0.1:6700?token=${auth.token}`, commitment: "confirmed" });
     const privateLedger = new anchor.Program<CinderLedger>(ledgerIdl, new anchor.AnchorProvider(qfs, new anchor.Wallet(ctx.operator), { commitment: "confirmed" }));
     const permissionAccounts = (account: PublicKey) => ({ adapter: ctx.operator.publicKey, config: ctx.config, permission: permissionPdaFromAccount(account), magicProgram: MAGIC_PROGRAM_ID, permissionProgram: PERMISSION_PROGRAM_ID, ephemeralVault: EPHEMERAL_VAULT_ID });
     await privateLedger.methods.initBookPermission().accountsPartial({ ...permissionAccounts(book), book }).rpc({ skipPreflight: true });
@@ -231,7 +230,13 @@ export async function verifyOperatorExecution(ctx: {
             let result = await run();
             while ((result.code === 3 || result.code === null) && performance.now() < deadline) { await new Promise(resolve => setTimeout(resolve, 250)); result = await run(); }
             let journalState = "";
-            if (result.code !== 0) journalState = execFileSync("sqlite3", [journalPath, "SELECT state,last_error_code,count(*) FROM operations GROUP BY state,last_error_code; SELECT 'funding',count(*),count(signature),count(confirmed_slot),count(book_synced_slot),count(failed_slot) FROM funding_outbox;"], { encoding: "utf8" });
+            if (result.code !== 0) {
+                try {
+                    journalState = execFileSync("sqlite3", [journalPath, "SELECT state,last_error_code,count(*) FROM operations GROUP BY state,last_error_code; SELECT 'funding',count(*),count(signature),count(confirmed_slot),count(book_synced_slot),count(failed_slot) FROM funding_outbox;"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] });
+                } catch {
+                    journalState = "journal diagnostic unavailable (sqlite3 missing, failed or timed out)";
+                }
+            }
             expect(result.code, `case ${caseIndex}: ${result.output}\nJournal state/error counts: ${journalState}\nLast native error: ${lastNativeError}\nRecent RPC methods: ${recentCalls.join(", ")}`).to.equal(0);
         };
         for (const [caseIndex, request] of [10, 100, -5, -25, 1, 1].entries()) {

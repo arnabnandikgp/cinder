@@ -517,8 +517,13 @@ in that directory. Separate directories/hosts are **not** fenced; replicas and
 manual/foreign activity on the pooled trader are unsupported. Abrupt process
 death is not a chain-level liveness watchdog; that belongs to later maintenance.
 
-SQLite schema 2 adds runtime binding, durable users, and prepared ack attempts.
-Schema 1 upgrades transactionally. An unbound legacy journal with historical
+SQLite uses schema 7. Supported schemas 1–6 upgrade through ordered,
+transactional migrations: schema 2 adds runtime binding, durable users and
+prepared ACK attempts; 3 adds native submission attempts; 4 adds the funding
+outbox; 5 adds funding failure and Book synchronization evidence; 6 adds
+immutable execution budgets; and 7 adds unsigned funding cancellation timestamps.
+Existing recovery state is preserved, and legacy operations do not acquire
+invented budgets or signatures. An unbound legacy journal with historical
 side effects cannot be adopted silently because its pre-send discipline was
 not established. Future schemas, unsafe paths, bad permissions, and linked
 database/sidecar files are rejected.
