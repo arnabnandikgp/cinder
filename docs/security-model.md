@@ -25,6 +25,13 @@ as fills or acknowledged as failures. Halt flags can block new entries,
 withdrawals, or deposits when a safety condition is detected. The adapter is
 expected to stop entering new venue risk when reconciliation fails.
 
+The operator journal preserves order causality across restarts. Unknown venue
+outcomes halt entries and require reconciliation; a timeout must never be used
+as proof that Phoenix did not fill. The journal is private metadata and must be
+kept on restricted, encrypted storage without bearer tokens or signing keys.
+See [operator recovery](operator.md) for the implemented boundary and remaining
+production integration work.
+
 ## Scope
 
 This repository is a prototype. It has not received a production security

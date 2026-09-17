@@ -35,8 +35,8 @@ jobs:
           workspaces: .
           shared-key: cinder-ci
           cache-targets: true
-      - name: Adapter + common unit tests
-        run: cargo test -p cinder-adapter -p cinder-common
+      - name: Operator recovery and protocol core tests
+        run: cargo test --locked -p cinder-operator -p cinder-adapter -p cinder-common
 
   onchain:
     name: on-chain programs

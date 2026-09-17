@@ -14,6 +14,12 @@ The vault program owns protocol configuration and collateral state. The ledger
 program owns private user state and the aggregate book. Both use program-derived
 addresses for their long-lived accounts.
 
+`cinder-adapter` contains the testable decision logic, not a live daemon.
+`cinder-operator` owns the durable journal and serial recovery coordinator.
+Its venue and private-ledger connections are injectable interfaces; production
+QFS/Rise connections and autonomous maintenance loops remain future work.
+See [operator recovery](operator.md) for the implemented boundary.
+
 ## Privacy boundary
 
 Users access the ER through the Query Filtering Service (QFS), authenticated by
