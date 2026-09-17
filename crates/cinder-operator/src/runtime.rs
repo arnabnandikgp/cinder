@@ -1,4 +1,4 @@
-//! Recovery-only operator connections; new Phoenix execution is disabled.
+//! Authenticated recovery and explicitly opted-in, bounded execution passes.
 use crate::rpc::{data, string, unix_ms, Result, Rpc, RuntimeError};
 use crate::transaction::{bytes, decode_ix, instruction_data, key, signature, Receipt};
 use crate::{
@@ -40,6 +40,13 @@ pub struct RuntimeConfig {
     pub markets: Vec<MarketMapping>,
     pub global_trader_index: Vec<String>,
     pub active_trader_buffer: Vec<String>,
+    /// Recovery can assess current health without a stress policy. Its absence
+    /// can never authorize new venue risk; there are no trading defaults.
+    #[serde(default)]
+    pub solvency_policy: Option<crate::SolvencyPolicy>,
+    /// Explicit IOC cost/notional policy; absent in recovery-only deployments.
+    #[serde(default)]
+    pub execution_policy: Option<crate::ExecutionPolicy>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -61,7 +68,7 @@ impl RuntimeConfig {
         }
         serde_json::from_reader(file).map_err(|_| RuntimeError::Configuration)
     }
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         use phoenix_rise_ix::constants::*;
         let p = key(&self.phoenix_program)?;
         let g = key(&self.phoenix_global_config)?;
@@ -90,6 +97,12 @@ impl RuntimeConfig {
             })
         {
             return Err(RuntimeError::Configuration);
+        }
+        if let Some(policy) = &self.solvency_policy {
+            policy.validate(&ids)?;
+        }
+        if let Some(policy) = &self.execution_policy {
+            policy.validate(&ids)?;
         }
         if self.global_trader_index.is_empty()
             || self.active_trader_buffer.is_empty()
@@ -129,6 +142,7 @@ pub(crate) struct Context {
     pub l1: Rpc,
     pub qfs: Rpc,
     pub users: BTreeMap<[u8; 32], [u8; 32]>,
+    pub execution_admission: Option<([u8; 32], crate::ExecutionBudget, crate::rise::RiseView)>,
 }
 pub(crate) type Shared = Rc<RefCell<Context>>;
 pub(crate) type PrivateSnapshot = (Book, Vec<([u8; 32], UserLedger)>, u64);
@@ -419,6 +433,16 @@ pub struct OperatorRuntime {
 }
 impl OperatorRuntime {
     pub fn open(config: RuntimeConfig, journal_path: &Path) -> Result<Self> {
+        Self::open_mode(config, journal_path, false)
+    }
+    /// Explicit opt-in. Recovery-only callers cannot accidentally dispatch.
+    pub fn open_execution(config: RuntimeConfig, journal_path: &Path) -> Result<Self> {
+        if config.execution_policy.is_none() || config.solvency_policy.is_none() {
+            return Err(RuntimeError::Configuration);
+        }
+        Self::open_mode(config, journal_path, true)
+    }
+    fn open_mode(config: RuntimeConfig, journal_path: &Path, execution: bool) -> Result<Self> {
         config.validate()?;
         let signer = crate::load_signer(&config.operator_keypair)?;
         let mut hasher = Sha256::new();
@@ -466,6 +490,7 @@ impl OperatorRuntime {
             l1,
             qfs,
             users: BTreeMap::new(),
+            execution_admission: None,
         };
         context.vault_config()?;
         let mut journal = Journal::open(journal_path).map_err(|_| RuntimeError::Journal)?;
@@ -486,7 +511,10 @@ impl OperatorRuntime {
             .map_err(|_| RuntimeError::Journal)?;
         context.users = users;
         let context = Rc::new(RefCell::new(context));
-        let venue = crate::venue::RiseRecovery::new(context.clone());
+        let mut venue = crate::venue::RiseRecovery::new(context.clone());
+        if execution {
+            venue.enable_execution();
+        }
         let ledger = crate::ledger::QfsLedger::new(context.clone());
         Ok(Self {
             coordinator: RecoveryCoordinator::new(journal, venue, ledger),

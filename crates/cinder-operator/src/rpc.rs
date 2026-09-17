@@ -186,6 +186,20 @@ impl Rpc {
         Ok(())
     }
     pub fn call(&mut self, method: &str, params: Value, signer: &Keypair) -> Result<Value> {
+        let value = self.call_envelope(method, params, signer)?;
+        if !value["error"].is_null() {
+            return Err(RuntimeError::Rpc);
+        }
+        value.get("result").cloned().ok_or(RuntimeError::Decode)
+    }
+    /// Error details remain transient. Only a send-specific decoder may turn
+    /// an explicit preflight failure into a proved non-broadcast outcome.
+    pub(crate) fn call_envelope(
+        &mut self,
+        method: &str,
+        params: Value,
+        signer: &Keypair,
+    ) -> Result<Value> {
         self.authenticate(signer)?;
         let mut url = self.url.clone();
         if let Some((token, _)) = &self.auth {
@@ -203,10 +217,7 @@ impl Rpc {
             return Err(RuntimeError::Authentication);
         }
         let value = Self::decode(response)?;
-        if !value["error"].is_null() {
-            return Err(RuntimeError::Rpc);
-        }
-        value.get("result").cloned().ok_or(RuntimeError::Decode)
+        Ok(value)
     }
     pub fn accounts(&mut self, keys: &[String], signer: &Keypair) -> Result<(u64, Vec<Value>)> {
         if keys.is_empty() || keys.len() > 100 {
@@ -258,6 +269,9 @@ impl Rpc {
                 return Err(RuntimeError::Incomplete);
             }
             rows.extend(page.iter().cloned());
+            if page.len() < 1000 {
+                return Ok(rows);
+            }
             before = Some(cursor);
         }
     }

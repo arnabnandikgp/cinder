@@ -17,7 +17,7 @@ use std::{
 use std::os::unix::{fs::MetadataExt, fs::OpenOptionsExt, fs::PermissionsExt};
 
 /// Refuse to open a newer journal rather than silently misinterpreting it.
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 7;
 
 /// SQLite journal errors are intentionally local and typed.  Remote error text
 /// belongs neither in this error type nor in persistent journal records.
@@ -109,6 +109,433 @@ pub struct Journal {
 }
 
 impl Journal {
+    /// Commit intent before signing or sending the PDA funding instruction.
+    /// Only one unresolved pool deposit may exist, and an order gets at most
+    /// one immutable funding intent. A conflict requires reconciliation.
+    pub fn prepare_funding(
+        &mut self,
+        intent: crate::FundingIntent,
+    ) -> Result<crate::FundingRecord, JournalError> {
+        if intent.amount == 0
+            || intent.phoenix_trader == [0; 32]
+            || intent.phoenix_program == [0; 32]
+            || intent
+                != crate::FundingIntent::new(
+                    intent.operation_id,
+                    intent.amount,
+                    intent.phoenix_trader,
+                    intent.phoenix_program,
+                )
+        {
+            return Err(JournalError::InvalidIntent("invalid funding intent"));
+        }
+        let operation = self.operation(&intent.operation_id)?;
+        if operation.state != OrderState::Prepared || operation.filled_lots != 0 {
+            return Err(JournalError::IntentConflict);
+        }
+        if let Some(existing) = self.funding(&intent.operation_id)? {
+            return if existing.intent == intent {
+                Ok(existing)
+            } else {
+                Err(JournalError::IntentConflict)
+            };
+        }
+        if self.has_unresolved_funding()? {
+            return Err(JournalError::IntentConflict);
+        }
+        if self
+            .nonterminal_operations()?
+            .iter()
+            .any(|op| op.state != OrderState::Prepared)
+        {
+            return Err(JournalError::IntentConflict);
+        }
+        self.connection.execute("INSERT INTO funding_outbox(operation_id,funding_id,amount,trader,program) VALUES (?,?,?,?,?)",
+            params![intent.operation_id.as_slice(),intent.funding_id.as_slice(),u64_blob(intent.amount).as_slice(),intent.phoenix_trader.as_slice(),intent.phoenix_program.as_slice()])?;
+        self.funding(&intent.operation_id)?
+            .ok_or(JournalError::CorruptState("missing funding intent"))
+    }
+
+    /// This is the funding send write-ahead barrier. An uncertain reply never
+    /// clears it. Neither a timeout nor an expired blockhash proves rejection.
+    pub fn record_prepared_funding(
+        &mut self,
+        id: &OperationId,
+        attempt: &crate::PreparedVenue,
+    ) -> Result<(), JournalError> {
+        if self.operation(id)?.state != OrderState::Prepared {
+            return Err(JournalError::IntentConflict);
+        }
+        if attempt.signature == [0; 64] || attempt.last_valid_block_height == 0 {
+            return Err(JournalError::InvalidIntent("invalid funding transaction"));
+        }
+        let changed = self.connection.execute("UPDATE funding_outbox SET signature=?,expiry_height=? WHERE operation_id=? AND signature IS NULL AND confirmed_slot IS NULL AND cancelled_ms IS NULL",
+            params![attempt.signature.as_slice(),u64_blob(attempt.last_valid_block_height).as_slice(),id.as_slice()])?;
+        if changed != 1 {
+            return Err(JournalError::IntentConflict);
+        }
+        Ok(())
+    }
+
+    /// Call only after authenticating a finalized vault-owned receipt at its
+    /// canonical funding PDA. A receipt is proof of the atomic bridge, not a
+    /// substitute for refreshing native cash and the private Book afterward.
+    pub fn confirm_funding(
+        &mut self,
+        id: &OperationId,
+        receipt: &cinder_vault::PhoenixFundingReceipt,
+    ) -> Result<(), JournalError> {
+        let record = self.funding(id)?.ok_or(JournalError::IntentConflict)?;
+        if record.attempt.is_none()
+            || record.failed_at_slot.is_some()
+            || receipt.schema_version != cinder_common::ACCOUNT_SCHEMA_VERSION
+            || receipt.funding_id != record.intent.funding_id
+            || receipt.amount != record.intent.amount
+            || receipt.phoenix_trader.to_bytes() != record.intent.phoenix_trader
+            || receipt.phoenix_program.to_bytes() != record.intent.phoenix_program
+            || receipt.funded_at_slot == 0
+        {
+            return Err(JournalError::IntentConflict);
+        }
+        if let Some(slot) = record.confirmed_at_slot {
+            return if slot == receipt.funded_at_slot {
+                Ok(())
+            } else {
+                Err(JournalError::IntentConflict)
+            };
+        }
+        self.connection.execute("UPDATE funding_outbox SET confirmed_slot=? WHERE operation_id=? AND confirmed_slot IS NULL",
+            params![u64_blob(receipt.funded_at_slot).as_slice(),id.as_slice()])?;
+        Ok(())
+    }
+
+    pub fn has_unresolved_funding(&self) -> Result<bool, JournalError> {
+        Ok(self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM funding_outbox WHERE failed_slot IS NULL AND book_synced_slot IS NULL AND cancelled_ms IS NULL)",
+            [],
+            |r| r.get(0),
+        )?)
+    }
+
+    /// Release only a NEVER-signed outbox after its order has been conclusively
+    /// rejected. Preserve a distinct audit disposition, not a fabricated native
+    /// failure slot. The funding WAL prevents a send without a stored attempt.
+    pub fn cancel_unsent_funding(
+        &mut self,
+        id: &OperationId,
+        now_ms: u64,
+    ) -> Result<(), JournalError> {
+        let op = self.operation(id)?;
+        if now_ms == 0
+            || op.venue_signature.is_some()
+            || op.filled_lots != 0
+            || !matches!(
+                op.state,
+                OrderState::VenueRejected
+                    | OrderState::FailSubmissionIntent
+                    | OrderState::FailSubmitted
+                    | OrderState::Failed
+            )
+        {
+            return Err(JournalError::IntentConflict);
+        }
+        let record = self.funding(id)?.ok_or(JournalError::IntentConflict)?;
+        if record.cancelled_at_ms.is_some() {
+            return Ok(());
+        }
+        if record.attempt.is_some()
+            || record.confirmed_at_slot.is_some()
+            || record.failed_at_slot.is_some()
+            || record.book_synced_at_slot.is_some()
+        {
+            return Err(JournalError::IntentConflict);
+        }
+        let count = self.connection.execute("UPDATE funding_outbox SET cancelled_ms=? WHERE operation_id=? AND signature IS NULL AND confirmed_slot IS NULL AND failed_slot IS NULL AND book_synced_slot IS NULL AND cancelled_ms IS NULL",
+            params![u64_blob(now_ms).as_slice(),id.as_slice()])?;
+        if count != 1 {
+            return Err(JournalError::IntentConflict);
+        }
+        Ok(())
+    }
+
+    pub fn funding(&self, id: &OperationId) -> Result<Option<crate::FundingRecord>, JournalError> {
+        self.connection.query_row("SELECT funding_id,amount,trader,program,signature,expiry_height,confirmed_slot,failed_slot,book_synced_slot,cancelled_ms FROM funding_outbox WHERE operation_id=?",params![id.as_slice()],|r| {
+            fn bytes<const N:usize>(r:&rusqlite::Row<'_>, index:usize) -> rusqlite::Result<[u8;N]> {
+                r.get::<_,Vec<u8>>(index)?.try_into().map_err(|_|SqlError::InvalidQuery)
+            }
+            let signature=r.get::<_,Option<Vec<u8>>>(4)?;
+            let expiry=r.get::<_,Option<Vec<u8>>>(5)?;
+            let attempt=match (signature,expiry) {
+                (Some(s),Some(h))=>Some(crate::PreparedVenue{signature:s.try_into().map_err(|_|SqlError::InvalidQuery)?,last_valid_block_height:u64::from_be_bytes(h.try_into().map_err(|_|SqlError::InvalidQuery)?)}),
+                (None,None)=>None,
+                _=>return Err(SqlError::InvalidQuery),
+            };
+            let slot=|index|r.get::<_,Option<Vec<u8>>>(index)?.map(|b|b.try_into().map(u64::from_be_bytes).map_err(|_|SqlError::InvalidQuery)).transpose();
+            if slot(9)?.is_some() && (attempt.is_some() || slot(6)?.is_some() || slot(7)?.is_some() || slot(8)?.is_some()) { return Err(SqlError::InvalidQuery); }
+            Ok(crate::FundingRecord{intent:crate::FundingIntent{operation_id:*id,funding_id:bytes(r,0)?,amount:u64::from_be_bytes(bytes(r,1)?),phoenix_trader:bytes(r,2)?,phoenix_program:bytes(r,3)?},attempt,confirmed_at_slot:slot(6)?,failed_at_slot:slot(7)?,book_synced_at_slot:slot(8)?,cancelled_at_ms:slot(9)?})
+        }).optional().map_err(Into::into)
+    }
+
+    /// Includes funding attached to terminal orders: an order's lifecycle
+    /// cannot hide an unfinished custody or Book write after a restart.
+    pub fn funding_records(&self) -> Result<Vec<crate::FundingRecord>, JournalError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT operation_id FROM funding_outbox ORDER BY operation_id")?;
+        let ids = statement
+            .query_map([], |r| blob::<32>(r, 0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        ids.iter()
+            .map(|id| {
+                self.funding(id)?
+                    .ok_or(JournalError::CorruptState("missing funding record"))
+            })
+            .collect()
+    }
+
+    pub fn reject_funding(
+        &mut self,
+        id: &OperationId,
+        slot: u64,
+        now_ms: u64,
+    ) -> Result<(), JournalError> {
+        let record = self.funding(id)?.ok_or(JournalError::IntentConflict)?;
+        if slot == 0 || record.attempt.is_none() || record.confirmed_at_slot.is_some() {
+            return Err(JournalError::IntentConflict);
+        }
+        if let Some(existing) = record.failed_at_slot {
+            return if existing == slot {
+                Ok(())
+            } else {
+                Err(JournalError::IntentConflict)
+            };
+        }
+        let op = self.operation(id)?;
+        if op.state != OrderState::Prepared || self.venue_attempt(id)?.is_some() {
+            return Err(JournalError::IntentConflict);
+        }
+        // Resolve custody and close the unsent hedge atomically. A crash here
+        // must not leave a rejected deposit's order eligible for dispatch.
+        let tx = self.connection.transaction()?;
+        tx.execute(
+            "UPDATE funding_outbox SET failed_slot=? WHERE operation_id=?",
+            params![u64_blob(slot).as_slice(), id.as_slice()],
+        )?;
+        tx.execute(
+            "UPDATE operations SET state=?,updated_at_ms=? WHERE operation_id=?",
+            params![
+                OrderState::VenueRejected as i64,
+                u64_blob(now_ms).as_slice(),
+                id.as_slice()
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn book_sync_attempts(
+        &self,
+        id: &OperationId,
+    ) -> Result<Vec<crate::BookSyncAttempt>, JournalError> {
+        let mut statement = self.connection.prepare("SELECT signature,expiry_height,collateral,native_slot,applied_slot,failed_slot FROM funding_book_sync WHERE operation_id=? ORDER BY sequence")?;
+        let rows = statement
+            .query_map(params![id.as_slice()], |r| {
+                let slot = |index| {
+                    r.get::<_, Option<Vec<u8>>>(index)?
+                        .map(|b| {
+                            b.try_into()
+                                .map(u64::from_be_bytes)
+                                .map_err(|_| SqlError::InvalidQuery)
+                        })
+                        .transpose()
+                };
+                Ok(crate::BookSyncAttempt {
+                    prepared: crate::PreparedBookSync {
+                        transaction: crate::PreparedVenue {
+                            signature: blob(r, 0)?,
+                            last_valid_block_height: u64::from_be_bytes(blob(r, 1)?),
+                        },
+                        collateral_usdc: u64::from_be_bytes(blob(r, 2)?),
+                        native_observed_slot: u64::from_be_bytes(blob(r, 3)?),
+                    },
+                    applied_at_slot: slot(4)?,
+                    failed_at_slot: slot(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Persist the exact absolute Book assignment before broadcasting. Only a
+    /// proved terminal write permits a freshly observed replacement assignment.
+    pub fn record_prepared_book_sync(
+        &mut self,
+        id: &OperationId,
+        prepared: &crate::PreparedBookSync,
+    ) -> Result<(), JournalError> {
+        let funding = self.funding(id)?.ok_or(JournalError::IntentConflict)?;
+        let attempts = self.book_sync_attempts(id)?;
+        if funding.confirmed_at_slot.is_none()
+            || funding.failed_at_slot.is_some()
+            || funding.book_synced_at_slot.is_some()
+            || prepared.native_observed_slot < funding.confirmed_at_slot.unwrap_or(u64::MAX)
+            || prepared.transaction.signature == [0; 64]
+            || prepared.transaction.last_valid_block_height == 0
+            || attempts
+                .iter()
+                .any(|a| a.failed_at_slot.is_none() && a.applied_at_slot.is_none())
+            || attempts
+                .last()
+                .is_some_and(|a| prepared.native_observed_slot < a.prepared.native_observed_slot)
+            || attempts.len() >= 64
+        {
+            return Err(JournalError::IntentConflict);
+        }
+        self.connection.execute("INSERT INTO funding_book_sync(operation_id,signature,expiry_height,collateral,native_slot) VALUES (?,?,?,?,?)",params![id.as_slice(),prepared.transaction.signature.as_slice(),u64_blob(prepared.transaction.last_valid_block_height).as_slice(),u64_blob(prepared.collateral_usdc).as_slice(),u64_blob(prepared.native_observed_slot).as_slice()])?;
+        Ok(())
+    }
+
+    pub fn finish_book_sync_attempt(
+        &mut self,
+        id: &OperationId,
+        signature: &[u8; 64],
+        slot: u64,
+        applied: bool,
+    ) -> Result<(), JournalError> {
+        let attempts = self.book_sync_attempts(id)?;
+        let attempt = attempts.last().ok_or(JournalError::IntentConflict)?;
+        if slot == 0 || attempt.prepared.transaction.signature != *signature {
+            return Err(JournalError::IntentConflict);
+        }
+        let existing = if applied {
+            attempt.applied_at_slot
+        } else {
+            attempt.failed_at_slot
+        };
+        if let Some(existing) = existing {
+            return if existing == slot {
+                Ok(())
+            } else {
+                Err(JournalError::IntentConflict)
+            };
+        }
+        if attempt.applied_at_slot.is_some() || attempt.failed_at_slot.is_some() {
+            return Err(JournalError::IntentConflict);
+        }
+        self.connection.execute(
+            if applied {
+                "UPDATE funding_book_sync SET applied_slot=? WHERE signature=?"
+            } else {
+                "UPDATE funding_book_sync SET failed_slot=? WHERE signature=?"
+            },
+            params![u64_blob(slot).as_slice(), signature.as_slice()],
+        )?;
+        Ok(())
+    }
+
+    /// Call after receipt authentication AND re-reading the Book/native cash.
+    /// A successful transaction alone cannot prove the current Book matches.
+    pub fn complete_funding_book_sync(
+        &mut self,
+        id: &OperationId,
+        collateral: u64,
+    ) -> Result<(), JournalError> {
+        let funding = self.funding(id)?.ok_or(JournalError::IntentConflict)?;
+        let attempts = self.book_sync_attempts(id)?;
+        let last = attempts.last().ok_or(JournalError::IntentConflict)?;
+        let slot = last.applied_at_slot.ok_or(JournalError::IntentConflict)?;
+        if funding.confirmed_at_slot.is_none()
+            || funding.failed_at_slot.is_some()
+            || last.prepared.collateral_usdc != collateral
+        {
+            return Err(JournalError::IntentConflict);
+        }
+        if funding.book_synced_at_slot.is_some_and(|s| s != slot) {
+            return Err(JournalError::IntentConflict);
+        }
+        self.connection.execute(
+            "UPDATE funding_outbox SET book_synced_slot=? WHERE operation_id=?",
+            params![u64_blob(slot).as_slice(), id.as_slice()],
+        )?;
+        Ok(())
+    }
+
+    /// Atomically persist the signed IOC identity and enter the write-ahead
+    /// send state. At most one native transaction may be prepared for an order:
+    /// Phoenix client IDs are correlation keys, not an assumed dedupe service.
+    pub fn record_prepared_venue(
+        &mut self,
+        id: &OperationId,
+        attempt: &crate::PreparedVenue,
+        now_ms: u64,
+    ) -> Result<Operation, JournalError> {
+        if self.has_unresolved_funding()? {
+            return Err(JournalError::IntentConflict);
+        }
+        let operation = self.operation(id)?;
+        if operation.state != OrderState::Prepared || operation.filled_lots != 0 {
+            return Err(JournalError::InvalidTransition {
+                from: operation.state,
+                to: OrderState::SubmissionIntent,
+            });
+        }
+        if self.venue_attempt(id)?.is_some() {
+            return Err(JournalError::IntentConflict);
+        }
+        let tx = self.connection.transaction()?;
+        tx.execute(
+            "INSERT INTO venue_attempts VALUES (?,?,?)",
+            params![
+                id.as_slice(),
+                attempt.signature.as_slice(),
+                u64_blob(attempt.last_valid_block_height).as_slice(),
+            ],
+        )?;
+        let changed = tx.execute(
+            "UPDATE operations SET state=?,venue_signature=?,updated_at_ms=?,last_error_code=NULL
+             WHERE operation_id=? AND state=?",
+            params![
+                OrderState::SubmissionIntent as i64,
+                attempt.signature.as_slice(),
+                u64_blob(now_ms).as_slice(),
+                id.as_slice(),
+                OrderState::Prepared as i64,
+            ],
+        )?;
+        if changed != 1 {
+            return Err(JournalError::IntentConflict);
+        }
+        tx.commit()?;
+        self.operation(id)
+    }
+
+    pub fn venue_attempt(
+        &self,
+        id: &OperationId,
+    ) -> Result<Option<crate::PreparedVenue>, JournalError> {
+        let row = self
+            .connection
+            .query_row(
+                "SELECT signature,expiry_height FROM venue_attempts WHERE operation_id=?",
+                params![id.as_slice()],
+                |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?)),
+            )
+            .optional()?;
+        row.map(|(signature, expiry)| {
+            Ok(crate::PreparedVenue {
+                signature: signature
+                    .try_into()
+                    .map_err(|_| JournalError::CorruptState("invalid native signature"))?,
+                last_valid_block_height: u64::from_be_bytes(
+                    expiry
+                        .try_into()
+                        .map_err(|_| JournalError::CorruptState("invalid native expiry"))?,
+                ),
+            })
+        })
+        .transpose()
+    }
+
     /// Pin the journal to one deployment, pool and operator. Changing a URL
     /// does not change this binding; changing an account identity does.
     pub fn bind_runtime(&mut self, binding: [u8; 32]) -> Result<(), JournalError> {
@@ -118,7 +545,7 @@ impl Journal {
                     r.get(0)
                 })?;
         let active: bool = self.connection.query_row(
-            "SELECT EXISTS(SELECT 1 FROM operations WHERE state!=1)",
+            "SELECT EXISTS(SELECT 1 FROM operations WHERE state!=1) OR EXISTS(SELECT 1 FROM funding_outbox WHERE signature IS NOT NULL)",
             [],
             |r| r.get(0),
         )?;
@@ -313,6 +740,37 @@ impl Journal {
         &self.path
     }
 
+    /// Freeze operator execution policy before any funding/signing boundary.
+    /// Legacy operations retain None; migration must not invent a quote cap.
+    pub fn record_execution_budget(
+        &mut self,
+        operation_id: &OperationId,
+        budget: crate::ExecutionBudget,
+    ) -> Result<Operation, JournalError> {
+        budget.validate().map_err(JournalError::InvalidIntent)?;
+        let operation = self.operation(operation_id)?;
+        if let Some(existing) = operation.execution_budget {
+            return if existing == budget {
+                Ok(operation)
+            } else {
+                Err(JournalError::IntentConflict)
+            };
+        }
+        if operation.state != OrderState::Prepared
+            || operation.filled_lots != 0
+            || operation.venue_signature.is_some()
+            || self.venue_attempt(operation_id)?.is_some()
+            || self.funding(operation_id)?.is_some()
+        {
+            return Err(JournalError::IntentConflict);
+        }
+        self.connection.execute(
+            "UPDATE operations SET max_quote_lots=?, max_execution_fee=? WHERE operation_id=? AND max_quote_lots IS NULL",
+            params![u64_blob(budget.max_quote_lots).as_slice(), u64_blob(budget.max_fee_usdc).as_slice(), operation_id.as_slice()],
+        )?;
+        self.operation(operation_id)
+    }
+
     /// Store an immutable intent.  Exact replays return the existing operation;
     /// same-identity changes are rejected before any venue side effect.
     pub fn prepare_intent(&mut self, intent: BoundedIntent) -> Result<Operation, JournalError> {
@@ -393,6 +851,9 @@ impl Journal {
         operation_id: &OperationId,
         now_ms: u64,
     ) -> Result<Operation, JournalError> {
+        if self.has_unresolved_funding()? {
+            return Err(JournalError::IntentConflict);
+        }
         self.transition(
             operation_id,
             OrderState::Prepared,
@@ -408,6 +869,12 @@ impl Journal {
         signature: [u8; 64],
         now_ms: u64,
     ) -> Result<Operation, JournalError> {
+        if self
+            .venue_attempt(operation_id)?
+            .is_some_and(|attempt| attempt.signature != signature)
+        {
+            return Err(JournalError::IntentConflict);
+        }
         self.transition_with_signature(
             operation_id,
             OrderState::SubmissionIntent,
@@ -426,7 +893,7 @@ impl Journal {
         now_ms: u64,
     ) -> Result<Operation, JournalError> {
         let operation = self.operation(operation_id)?;
-        if operation.filled_lots != 0 {
+        if operation.filled_lots != 0 || self.venue_attempt(operation_id)?.is_some() {
             return Err(JournalError::InvalidTransition {
                 from: operation.state,
                 to: OrderState::Prepared,
@@ -558,6 +1025,11 @@ impl Journal {
                 }
                 continue;
             }
+            if operation.state == OrderState::VenueFilled {
+                return Err(JournalError::InvalidFill(
+                    "terminal IOC facts cannot gain additional fills",
+                ));
+            }
             filled_lots = filled_lots
                 .checked_add(fill.filled_lots)
                 .ok_or(JournalError::ArithmeticOverflow)?;
@@ -669,11 +1141,20 @@ impl Journal {
         )
     }
 
-    /// Partial fills are durable but not acknowledged until authoritative
-    /// remainder handling is implemented. Never guess a full fill or a
-    /// fail-ack for the remaining tentative lots.
-    pub fn fill_is_complete(&self, operation: &Operation) -> bool {
-        operation.filled_lots == operation.intent.requested_lots
+    /// Only an authoritative terminal venue outcome closes the IOC remainder.
+    /// Acknowledging its actual filled quantity restores the unfilled tentative
+    /// lots on-chain. Even a fully filled Open observation is not terminal proof.
+    pub fn fill_is_acknowledgeable(&self, operation: &Operation) -> bool {
+        matches!(
+            operation.state,
+            OrderState::VenueFilled
+                | OrderState::AckSubmissionIntent
+                | OrderState::AckSubmitted
+                | OrderState::Acked
+        ) && operation.filled_lots != 0
+            && operation.filled_lots.signum() == operation.intent.requested_lots.signum()
+            && operation.filled_lots.unsigned_abs()
+                <= operation.intent.requested_lots.unsigned_abs()
     }
 
     pub fn begin_fill_ack(
@@ -682,7 +1163,7 @@ impl Journal {
         now_ms: u64,
     ) -> Result<Operation, JournalError> {
         let operation = self.operation(operation_id)?;
-        if !self.fill_is_complete(&operation) {
+        if !self.fill_is_acknowledgeable(&operation) {
             return Err(JournalError::InvalidTransition {
                 from: operation.state,
                 to: OrderState::AckSubmissionIntent,
@@ -824,6 +1305,20 @@ impl Journal {
         let rows = statement.query_map([], decode_operation)?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(JournalError::Sql)
+    }
+
+    /// Include terminal operations: acknowledging a real fill never clears a
+    /// proved execution-budget breach. Recovery cannot silently resume trading.
+    pub fn has_execution_budget_breach(&self) -> Result<bool, JournalError> {
+        let mut statement = self
+            .connection
+            .prepare(&operation_select_sql("WHERE max_quote_lots IS NOT NULL"))?;
+        for row in statement.query_map([], decode_operation)? {
+            if !row?.execution_within_budget() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn fill_facts(&self, operation_id: &OperationId) -> Result<Vec<FillFact>, JournalError> {
@@ -1121,7 +1616,7 @@ impl Journal {
                  PRAGMA user_version = 1;
                  COMMIT;"
             )?;
-        } else if version != 1 && version != SCHEMA_VERSION {
+        } else if !matches!(version, 1..=SCHEMA_VERSION) {
             return Err(JournalError::CorruptState("unsupported prior schema"));
         }
         if version < 2 {
@@ -1131,11 +1626,82 @@ impl Journal {
                 CREATE TABLE ack_attempts (operation_id BLOB NOT NULL REFERENCES operations(operation_id),signature BLOB PRIMARY KEY CHECK(length(signature)=64),expiry_height BLOB NOT NULL CHECK(length(expiry_height)=8),observed_nonce BLOB NOT NULL CHECK(length(observed_nonce)=8));
                 PRAGMA user_version=2; COMMIT;")?;
         }
+        if version < 3 {
+            self.connection.execute_batch(
+                "BEGIN IMMEDIATE;
+                CREATE TABLE venue_attempts (
+                    operation_id BLOB PRIMARY KEY NOT NULL REFERENCES operations(operation_id),
+                    signature BLOB UNIQUE NOT NULL CHECK(length(signature)=64),
+                    expiry_height BLOB NOT NULL CHECK(length(expiry_height)=8)
+                );
+                PRAGMA user_version=3; COMMIT;",
+            )?;
+        }
+        if version < 4 {
+            self.connection.execute_batch(
+                "BEGIN IMMEDIATE;
+                CREATE TABLE funding_outbox (
+                    operation_id BLOB PRIMARY KEY NOT NULL REFERENCES operations(operation_id),
+                    funding_id BLOB UNIQUE NOT NULL CHECK(length(funding_id)=32),
+                    amount BLOB NOT NULL CHECK(length(amount)=8),
+                    trader BLOB NOT NULL CHECK(length(trader)=32),
+                    program BLOB NOT NULL CHECK(length(program)=32),
+                    signature BLOB UNIQUE CHECK(signature IS NULL OR length(signature)=64),
+                    expiry_height BLOB CHECK(expiry_height IS NULL OR length(expiry_height)=8),
+                    confirmed_slot BLOB CHECK(confirmed_slot IS NULL OR length(confirmed_slot)=8),
+                    CHECK((signature IS NULL)=(expiry_height IS NULL)),
+                    CHECK(confirmed_slot IS NULL OR signature IS NOT NULL)
+                ); PRAGMA user_version=4; COMMIT;",
+            )?;
+        }
+        if version < 5 {
+            self.connection.execute_batch("BEGIN IMMEDIATE;
+                ALTER TABLE funding_outbox ADD COLUMN failed_slot BLOB CHECK(failed_slot IS NULL OR length(failed_slot)=8);
+                ALTER TABLE funding_outbox ADD COLUMN book_synced_slot BLOB CHECK(book_synced_slot IS NULL OR length(book_synced_slot)=8);
+                CREATE TABLE funding_book_sync (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operation_id BLOB NOT NULL REFERENCES funding_outbox(operation_id),
+                    signature BLOB UNIQUE NOT NULL CHECK(length(signature)=64),
+                    expiry_height BLOB NOT NULL CHECK(length(expiry_height)=8),
+                    collateral BLOB NOT NULL CHECK(length(collateral)=8),
+                    native_slot BLOB NOT NULL CHECK(length(native_slot)=8),
+                    applied_slot BLOB CHECK(applied_slot IS NULL OR length(applied_slot)=8),
+                    failed_slot BLOB CHECK(failed_slot IS NULL OR length(failed_slot)=8),
+                    CHECK(applied_slot IS NULL OR failed_slot IS NULL)
+                );
+                PRAGMA user_version=5; COMMIT;")?;
+        }
+        if version < 6 {
+            self.connection.execute_batch("BEGIN IMMEDIATE;
+                ALTER TABLE operations ADD COLUMN max_quote_lots BLOB CHECK(max_quote_lots IS NULL OR length(max_quote_lots)=8);
+                ALTER TABLE operations ADD COLUMN max_execution_fee BLOB CHECK(max_execution_fee IS NULL OR length(max_execution_fee)=8);
+                PRAGMA user_version=6; COMMIT;")?;
+        }
+        if version < 7 {
+            self.connection.execute_batch("BEGIN IMMEDIATE;
+                ALTER TABLE funding_outbox ADD COLUMN cancelled_ms BLOB CHECK(cancelled_ms IS NULL OR length(cancelled_ms)=8);
+                PRAGMA user_version=7; COMMIT;")?;
+        }
         let integrity: String = self
             .connection
             .query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
         if integrity != "ok" {
             return Err(JournalError::CorruptState("SQLite integrity check failed"));
+        }
+        // Validate cancellation/attempt exclusivity even for rows excluded
+        // from the unresolved gate; a corrupt disposition cannot hide a send.
+        self.funding_records()?;
+        let unresolved_funding:i64=self.connection.query_row("SELECT COUNT(*) FROM funding_outbox WHERE failed_slot IS NULL AND book_synced_slot IS NULL AND cancelled_ms IS NULL",[],|r|r.get(0))?;
+        if unresolved_funding > 1 {
+            return Err(JournalError::CorruptState("concurrent unresolved funding"));
+        }
+        if unresolved_funding != 0 {
+            let active_native:bool=self.connection.query_row("SELECT EXISTS(SELECT 1 FROM venue_attempts a JOIN operations o ON o.operation_id=a.operation_id WHERE o.state NOT IN (10,13))",[],|r|r.get(0))?;
+            if active_native {
+                return Err(JournalError::CorruptState(
+                    "native execution overlaps unresolved custody",
+                ));
+            }
         }
         let orphan: Option<String> = self
             .connection
@@ -1150,6 +1716,9 @@ impl Journal {
             "runtime_binding",
             "users",
             "ack_attempts",
+            "venue_attempts",
+            "funding_outbox",
+            "funding_book_sync",
         ] {
             let exists: Option<String> = self
                 .connection
@@ -1166,6 +1735,77 @@ impl Journal {
         let mut statement = self.connection.prepare(&operation_select_sql(""))?;
         for row in statement.query_map([], decode_operation)? {
             let operation = row?;
+            if let Some(funding) = self.funding(&operation.operation_id)? {
+                let intent = &funding.intent;
+                if intent.amount == 0
+                    || intent.phoenix_trader == [0; 32]
+                    || intent.phoenix_program == [0; 32]
+                    || *intent
+                        != crate::FundingIntent::new(
+                            intent.operation_id,
+                            intent.amount,
+                            intent.phoenix_trader,
+                            intent.phoenix_program,
+                        )
+                    || funding
+                        .attempt
+                        .as_ref()
+                        .is_some_and(|a| a.signature == [0; 64] || a.last_valid_block_height == 0)
+                    || funding.confirmed_at_slot == Some(0)
+                    || funding.failed_at_slot == Some(0)
+                    || funding.book_synced_at_slot == Some(0)
+                    || (funding.failed_at_slot.is_some()
+                        && (funding.attempt.is_none()
+                            || funding.confirmed_at_slot.is_some()
+                            || funding.book_synced_at_slot.is_some()
+                            || operation.state == OrderState::Prepared))
+                    || (funding.book_synced_at_slot.is_some()
+                        && funding.confirmed_at_slot.is_none())
+                    || (funding.book_synced_at_slot.is_none()
+                        && self.venue_attempt(&operation.operation_id)?.is_some())
+                {
+                    return Err(JournalError::CorruptState("invalid funding outbox"));
+                }
+                let attempts = self.book_sync_attempts(&operation.operation_id)?;
+                if attempts.len() > 64 {
+                    return Err(JournalError::CorruptState("too many Book sync attempts"));
+                }
+                for (index, attempt) in attempts.iter().enumerate() {
+                    if funding.confirmed_at_slot.is_none()
+                        || funding.failed_at_slot.is_some()
+                        || attempt.prepared.transaction.signature == [0; 64]
+                        || attempt.prepared.transaction.last_valid_block_height == 0
+                        || attempt.prepared.native_observed_slot
+                            < funding.confirmed_at_slot.unwrap_or(u64::MAX)
+                        || attempt.applied_at_slot == Some(0)
+                        || attempt.failed_at_slot == Some(0)
+                        || (index > 0
+                            && attempt.prepared.native_observed_slot
+                                < attempts[index - 1].prepared.native_observed_slot)
+                        || (index + 1 < attempts.len()
+                            && attempt.failed_at_slot.is_none()
+                            && attempt.applied_at_slot.is_none())
+                        || (attempt.applied_at_slot.is_some() && attempt.failed_at_slot.is_some())
+                    {
+                        return Err(JournalError::CorruptState("invalid Book sync attempt"));
+                    }
+                }
+                if funding.book_synced_at_slot.is_some()
+                    && funding.book_synced_at_slot
+                        != attempts.last().and_then(|a| a.applied_at_slot)
+                {
+                    return Err(JournalError::CorruptState("missing Book sync receipt"));
+                }
+            }
+            if let Some(attempt) = self.venue_attempt(&operation.operation_id)? {
+                if operation.state == OrderState::Prepared
+                    || operation.venue_signature != Some(attempt.signature)
+                {
+                    return Err(JournalError::CorruptState(
+                        "native attempt identity mismatch",
+                    ));
+                }
+            }
             if (operation.state == OrderState::Submitted && operation.venue_signature.is_none())
                 || (matches!(
                     operation.state,
@@ -1225,10 +1865,10 @@ impl Journal {
             if matches!(
                 operation.state,
                 OrderState::AckSubmissionIntent | OrderState::AckSubmitted | OrderState::Acked
-            ) && lots != operation.intent.requested_lots
+            ) && !self.fill_is_acknowledgeable(&operation)
             {
                 return Err(JournalError::CorruptState(
-                    "partial fill acknowledgement is unsupported",
+                    "invalid fill acknowledgement quantity",
                 ));
             }
         }
@@ -1252,7 +1892,7 @@ fn operation_select_sql(where_clause: &str) -> String {
                 limit_price_ticks, last_valid_slot, post_fail_position_im_usdc, state,
                 venue_signature, er_ack_signature, filled_lots, fill_vwap_quote_lots,
                 fee_usdc, venue_observed_at_ms, last_error_code, retry_count,
-                created_at_ms, updated_at_ms
+                created_at_ms, updated_at_ms, max_quote_lots, max_execution_fee
          FROM operations {where_clause}"
     )
 }
@@ -1297,6 +1937,21 @@ fn decode_operation(row: &rusqlite::Row<'_>) -> rusqlite::Result<Operation> {
         let retry_count = read_u64(&row.get::<_, Vec<u8>>(21)?)?;
         let created_at_ms = read_u64(&row.get::<_, Vec<u8>>(22)?)?;
         let updated_at_ms = read_u64(&row.get::<_, Vec<u8>>(23)?)?;
+        let execution_budget = match (
+            row.get::<_, Option<Vec<u8>>>(24)?,
+            row.get::<_, Option<Vec<u8>>>(25)?,
+        ) {
+            (None, None) => None,
+            (Some(quote), Some(fee)) => {
+                let budget = crate::ExecutionBudget {
+                    max_quote_lots: read_u64(&quote)?,
+                    max_fee_usdc: read_u64(&fee)?,
+                };
+                budget.validate().map_err(JournalError::CorruptState)?;
+                Some(budget)
+            }
+            _ => return Err(JournalError::CorruptState("incomplete execution budget")),
+        };
         let intent = BoundedIntent {
             identity: OrderIdentity {
                 user_ledger,
@@ -1330,6 +1985,7 @@ fn decode_operation(row: &rusqlite::Row<'_>) -> rusqlite::Result<Operation> {
                 preimage,
             },
             intent,
+            execution_budget,
             state,
             venue_signature,
             er_ack_signature,
@@ -1399,6 +2055,12 @@ fn u64_blob(value: u64) -> [u8; 8] {
 fn read_u64(value: &[u8]) -> Result<u64, JournalError> {
     let fixed = fixed::<8>(value)?;
     Ok(u64::from_be_bytes(fixed))
+}
+
+fn blob<const N: usize>(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<[u8; N]> {
+    row.get::<_, Vec<u8>>(index)?
+        .try_into()
+        .map_err(|_| SqlError::InvalidQuery)
 }
 
 fn fixed<const N: usize>(value: &[u8]) -> Result<[u8; N], JournalError> {

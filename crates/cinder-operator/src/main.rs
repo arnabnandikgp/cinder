@@ -5,9 +5,10 @@ use cinder_operator::{Journal, OperatorRuntime, RuntimeConfig};
 fn main() -> ExitCode {
     let mut args = env::args_os().skip(1);
     let command = args.next();
-    if command.as_deref().and_then(|s| s.to_str()) == Some("recover") {
+    let execute = command.as_deref().and_then(|s| s.to_str()) == Some("execute");
+    if execute || command.as_deref().and_then(|s| s.to_str()) == Some("recover") {
         let Some(config) = args.next().map(PathBuf::from) else {
-            eprintln!("Usage: cinder-operator recover <config.json> [journal-path]");
+            eprintln!("Usage: cinder-operator <recover|execute> <config.json> [journal-path]");
             return ExitCode::from(2);
         };
         let path = args
@@ -18,10 +19,21 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
         let result = RuntimeConfig::read(&config)
-            .and_then(|config| OperatorRuntime::open(config, &path))
+            .and_then(|config| {
+                if execute {
+                    OperatorRuntime::open_execution(config, &path)
+                } else {
+                    OperatorRuntime::open(config, &path)
+                }
+            })
+            .inspect_err(|_| {
+                eprintln!("Operator setup failed");
+            })
             .and_then(|mut runtime| {
-                let recovery = runtime.recover();
-                // A recovery-only command is not an execution service. Leave
+                let recovery = runtime.recover().inspect_err(|_| {
+                    eprintln!("Operator pass failed");
+                });
+                // Neither one-pass command is an autonomous service. Leave
                 // ownership gates closed before releasing the process lease.
                 let halted = runtime.halt();
                 match (recovery, halted) {
@@ -35,7 +47,7 @@ fn main() -> ExitCode {
                     "Recovery: {:?}; unresolved operations: {}",
                     report.reason, report.unresolved_operations
                 );
-                println!("Process stopped: OPERATOR_DOWN; live venue execution disabled");
+                println!("Process stopped: OPERATOR_DOWN; execution pass: {execute}");
                 if report.unresolved_operations == 0 && report.reason.is_none() {
                     ExitCode::SUCCESS
                 } else {
@@ -58,7 +70,7 @@ fn main() -> ExitCode {
             Some("init" | "status")
         )
     {
-        eprintln!("Usage: cinder-operator <init|status> [journal-path]\n       cinder-operator recover <config.json> [journal-path]\nRecovery only; live trading is not implemented.");
+        eprintln!("Usage: cinder-operator <init|status> [journal-path]\n       cinder-operator <recover|execute> <config.json> [journal-path]\nExecute requires explicit solvency and execution policies.");
         return ExitCode::from(2);
     }
     if command.as_deref().and_then(|s| s.to_str()) == Some("status") && !path.exists() {
@@ -75,7 +87,7 @@ fn main() -> ExitCode {
             for (state, count) in status.operation_counts {
                 println!("{state:?}: {count}");
             }
-            println!("Live trading: not implemented");
+            println!("Trading: opt-in execute command; status does not connect to a venue");
             ExitCode::SUCCESS
         }
         Err(error) => {

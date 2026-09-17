@@ -1,5 +1,9 @@
 name: start-privacy-stack
 description: Start the pinned local base validator, ER, and QFS services
+inputs:
+  start:
+    description: Start services after installing the binaries (false for a custom fork)
+    default: "true"
 runs:
   using: composite
   steps:
@@ -24,6 +28,7 @@ runs:
         command -v query-filtering-service
         command -v mb-stack
     - name: Start local privacy stack
+      if: inputs.start == 'true'
       shell: bash
       env:
         RUST_LOG: info

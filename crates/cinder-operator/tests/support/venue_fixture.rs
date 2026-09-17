@@ -15,6 +15,10 @@ pub struct VenueFixture {
     pub oid: [u8; 16],
     pub native_asset_id: u32,
     pub lots: i64,
+    #[serde(default)]
+    pub filled_lots: Option<i64>,
+    #[serde(default)]
+    pub max_quote_lots: Option<u64>,
     pub ticks: u64,
     pub bound: u64,
     pub deadline: u64,
@@ -32,8 +36,8 @@ pub fn receipt(f: &VenueFixture) -> Value {
     let operator = key(&f.operator);
     let side = if f.lots > 0 { Side::Bid } else { Side::Ask };
     let opposite = if f.lots > 0 { Side::Ask } else { Side::Bid };
-    let quote = f
-        .lots
+    let filled = f.filled_lots.unwrap_or(f.lots);
+    let quote = filled
         .unsigned_abs()
         .checked_mul(f.ticks)
         .unwrap()
@@ -62,7 +66,7 @@ pub fn receipt(f: &VenueFixture) -> Value {
                 side,
                 price_in_ticks: Some(Ticks::new(f.bound)),
                 num_base_lots: BaseLots::new(f.lots.unsigned_abs()),
-                num_quote_lots: None,
+                num_quote_lots: f.max_quote_lots.map(QuoteLots::new),
                 min_base_lots_to_fill: BaseLots::new(0),
                 min_quote_lots_to_fill: QuoteLots::new(0),
                 self_trade_behavior: SelfTradeBehavior::Abort,
@@ -79,7 +83,7 @@ pub fn receipt(f: &VenueFixture) -> Value {
             order_sequence_number: 1,
             side: opposite,
             price: Ticks::new(f.ticks),
-            base_lots_filled: BaseLots::new(f.lots.unsigned_abs()),
+            base_lots_filled: BaseLots::new(filled.unsigned_abs()),
             quote_lots_filled: QuoteLots::new(quote),
             quantity_remaining: BaseLots::new(0),
             maker: [99; 32],
@@ -94,10 +98,10 @@ pub fn receipt(f: &VenueFixture) -> Value {
             trade_sequence_number: 1,
             prev_trade_sequence_number_slot: 0,
             side,
-            base_lots_filled: BaseLots::new(f.lots.unsigned_abs()),
+            base_lots_filled: BaseLots::new(filled.unsigned_abs()),
             quote_lots_filled: QuoteLots::new(quote),
             fee_in_quote_lots: QuoteLots::new(f.fee),
-            base_lot_position: SignedBaseLots::new(f.lots),
+            base_lot_position: SignedBaseLots::new(filled),
             virtual_quote_lot_position: SignedQuoteLots::new(0),
             quote_lot_collateral: SignedQuoteLots::new(0),
             cumulative_funding_snapshot: SignedQuoteLotsPerBaseLot::new(0),
