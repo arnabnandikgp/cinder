@@ -50,6 +50,11 @@ exposure. Cash reconciliation includes explicit debt and unsettled funding.
 Production interfaces must obtain complete, fresh authoritative observations;
 test fixtures are not a substitute for these observations in deployment.
 
+I/O implementations must call `recover_with_clock` with a current
+Unix-millisecond clock. Freshness is checked after reconciliation reads and
+again before venue dispatch or gate release; a backwards clock fails closed.
+The fixed-time `recover` helper is intended for deterministic fixtures.
+
 ## Journal handling
 
 SQLite WAL transactions persist operation identity, bounded intent, state, and
@@ -87,6 +92,26 @@ private ledger alive. They exercise the boundaries around submission, persisted
 venue outcomes, acknowledgement, and terminal confirmation. A subprocess test
 also exits without SQLite cleanup to verify committed WAL recovery and lock
 release.
+
+The local QFS privacy suite also exercises the integration contract needed by
+future production ports: the operator's authenticated program-account scan
+includes its private ledger, unrelated users' scans exclude it, and the operator
+can decode a confirmed private write's instruction arguments. An unrelated
+user may receive transaction status, but its instruction message, logs, and
+balances must be redacted. A non-null receipt is therefore not evidence that
+private arguments are visible, and status alone must never finalize a journal
+operation. These tests use synthetic local collateral; they do not submit a
+Phoenix order.
+
+These checks establish QFS capabilities, not a complete registry or an
+acknowledgement's placement identity. Production recovery still needs to join
+the exact user/ledger/nonce/client-ID tuple to placement and acknowledgement
+receipts. Likewise Phoenix REST order history alone does not provide the native
+client order ID: Rise transaction events must establish the pooled trader,
+market, exact packet identity, fills, fees, and terminal IOC outcome. Missing or
+redacted history must leave the operation unresolved.
+See the official Rise [order-history types](https://github.com/Ellipsis-Labs/rise-public/blob/9d46c02765c515d207aca4bd932a20d1b169df4e/rust/types/src/trader_http.rs)
+and [transaction events](https://github.com/Ellipsis-Labs/rise-public/blob/9d46c02765c515d207aca4bd932a20d1b169df4e/rust/events/src/market_events/orderbook.rs).
 
 The next integration slice supplies real QFS/Rise connections, private-user
 discovery, authoritative history recovery, and startup reconciliation. Subsequent

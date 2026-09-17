@@ -228,6 +228,47 @@ fn coordinator(path: &Path, shared: &Shared) -> RecoveryCoordinator<Venue, Ledge
 }
 
 #[test]
+fn recovery_checks_freshness_against_the_clock_after_io() {
+    let dir = tempdir();
+    let shared = world();
+    shared.borrow_mut().observed_at = 1500;
+    let mut runtime = coordinator(&dir.path().join("journal.sqlite"), &shared);
+    let mut times = [1000, 1500, 1500].into_iter();
+    let report = runtime
+        .recover_with_clock(|| times.next().unwrap())
+        .unwrap();
+    assert!(report.entries_enabled);
+    assert_eq!(shared.borrow().halt & cc::OPERATOR_DOWN, 0);
+}
+
+#[test]
+fn stale_or_backwards_clock_cannot_dispatch_or_release_the_gate() {
+    let stale_at = 1000 + cc::MARK_STALE_MS.max(cc::TRADER_STATE_STALE_MS) + 1;
+    for times in [
+        vec![1000, 999],
+        vec![1000, 1000, 999],
+        vec![1000, 1000, stale_at],
+    ] {
+        for prepared in [false, true] {
+            let dir = tempdir();
+            let shared = world();
+            let mut runtime = coordinator(&dir.path().join("journal.sqlite"), &shared);
+            if prepared {
+                runtime.prepare(intent(3, 0)).unwrap();
+            }
+            let mut clock = times.clone().into_iter();
+            let report = runtime
+                .recover_with_clock(|| clock.next().unwrap())
+                .unwrap();
+            assert_eq!(report.reason, Some(HaltReason::StaleOrIncomplete));
+            assert!(!report.entries_enabled);
+            assert_eq!(shared.borrow().venue_sends, 0);
+            assert_ne!(shared.borrow().halt & cc::OPERATOR_DOWN, 0);
+        }
+    }
+}
+
+#[test]
 fn crash_matrix_converges_without_duplicate_economic_effects() {
     for boundary in 0..8 {
         let dir = tempdir();

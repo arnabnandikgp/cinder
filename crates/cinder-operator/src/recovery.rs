@@ -158,8 +158,22 @@ where
 
     /// Starts gated on every pass, not just process startup. If a send returns
     /// an ambiguous error, its pre-send journal state survives for recovery.
+    /// This fixed observation clock is useful for deterministic fixtures.
+    /// I/O implementations must use `recover_with_clock` so freshness is
+    /// checked after reads, not against the instant before a network request.
     pub fn recover(&mut self, now_ms: u64) -> Result<ReconciliationReport, JournalError> {
+        self.recover_with_clock(|| now_ms)
+    }
+
+    /// Refresh the Unix-millisecond clock after reconciliation I/O and before
+    /// dispatch or gate release. A backwards clock leaves entries halted.
+    pub fn recover_with_clock(
+        &mut self,
+        mut clock: impl FnMut() -> u64,
+    ) -> Result<ReconciliationReport, JournalError> {
         self.entries_enabled = false;
+        let started_at_ms = clock();
+        let mut now_ms = started_at_ms;
         if self.ledger.set_operator_down(true).is_err() {
             return self.report(Some(HaltReason::PortUnavailable));
         }
@@ -281,7 +295,8 @@ where
             Ok(value) => value,
             Err(_) => return self.report(Some(HaltReason::PortUnavailable)),
         };
-        if !snapshot.is_fresh_complete(now_ms) {
+        now_ms = clock();
+        if now_ms < started_at_ms || !snapshot.is_fresh_complete(now_ms) {
             return self.report(Some(HaltReason::StaleOrIncomplete));
         }
         if !snapshot.invariants_hold() {
@@ -300,6 +315,11 @@ where
         {
             return self.report(Some(HaltReason::UnresolvedOperations));
         }
+        let gate_at_ms = clock();
+        if gate_at_ms < now_ms || !snapshot.is_fresh_complete(gate_at_ms) {
+            return self.report(Some(HaltReason::StaleOrIncomplete));
+        }
+        now_ms = gate_at_ms;
         // Only one submission against a reconciled snapshot per pass. Other
         // prepared operations wait for this outcome and a new risk observation.
         if let Some(id) = ready_to_submit.first() {
