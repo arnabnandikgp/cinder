@@ -15,6 +15,7 @@ import { join } from "path";
 import { execFileSync } from "child_process";
 import { verifyOperatorExecution } from "./support/operator-execution";
 import { refreshLocalMark } from "./support/native-oracle";
+import { activateLocalPhoenix } from "../scripts/fixtures/local-phoenix";
 type KitIx = {
     programAddress: string;
     data: ArrayLike<number>;
@@ -107,19 +108,7 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
         authority = PublicKey.findProgramAddressSync([Buffer.from("vault-authority")], vault.programId)[0];
         config = PublicKey.findProgramAddressSync([Buffer.from("config")], vault.programId)[0];
         trader = new PublicKey(await rise.getPhoenixTraderSubaccountAddress({ authority: authority.toBase58() as never, traderPdaIndex: 0, subaccountIndex: 0, phoenixProgramAddress: native.toBase58() as never }));
-        const info = await connection.getAccountInfo(global);
-        expect(info?.owner.equals(native)).to.equal(true);
-        const decoded = rise.decodeGlobalConfiguration(info!.data);
-        // A local fork has its own restart lifecycle and no venue admin crank.
-        // Bootstrap an active LOCAL venue using the official native prefix
-        // layout (SDK global_config.rs: status 504, restart acknowledgement
-        // 1096). Preserve every economic parameter and account binding.
-        // This tests native execution, not mainnet's current availability.
-        const localGlobal = Buffer.from(info!.data);
-        expect(localGlobal[504]).to.equal(decoded.exchangeStatus);
-        localGlobal[504] = (localGlobal[504] | 0x81) & ~0x04;
-        localGlobal.writeBigUInt64LE(0n, 1096);
-        await rpc("surfnet_setAccount", [global.toBase58(), { owner: native.toBase58(), data: localGlobal.toString("hex") }]);
+        const decoded = await activateLocalPhoenix(connection);
         quote = new PublicKey(decoded.canonicalTokenMintKey);
         nativeVault = new PublicKey(decoded.globalVaultKey);
         const lookup = { addresses: { globalConfigurationAddress: global.toBase58(), phoenixProgramAddress: native.toBase58() }, fetchAccount: async (address: string) => ({ data: (await connection.getAccountInfo(new PublicKey(address)))!.data }) };

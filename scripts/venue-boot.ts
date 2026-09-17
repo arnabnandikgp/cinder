@@ -14,10 +14,10 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import referralActivationPermissionFallback from "./fixtures/phoenix-referral-activation-permission.json";
+import { activateLocalPhoenix } from "./fixtures/local-phoenix";
 
 const FORK = process.env.PROVIDER_ENDPOINT || "http://127.0.0.1:8899";
 const API = process.env.PHOENIX_API_URL || "https://perp-api.phoenix.trade";
-const MAINNET_GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
 const WALLET_USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const DEFAULT_POST_USDC = BigInt("25000000");
 
@@ -119,6 +119,12 @@ export async function sendToFork(
       tx.addSignature(pk, Buffer.alloc(64));
     }
   }
+  const simulation = await connection.simulateTransaction(tx);
+  if (simulation.value.err) {
+    throw new Error(
+      `local Phoenix simulation failed: ${JSON.stringify(simulation.value.err)}\n${(simulation.value.logs ?? []).join("\n")}`
+    );
+  }
   const sig = await connection.sendRawTransaction(
     tx.serialize({ requireAllSignatures: true, verifySignatures: false }),
     { skipPreflight: true }
@@ -196,12 +202,7 @@ export async function bootVenue(opts: {
   const connection = opts.connection ?? new Connection(FORK, "confirmed");
   const rpcUrl = connection.rpcEndpoint;
   assertLocalRpc(rpcUrl);
-  const genesis = await connection.getGenesisHash();
-  if (genesis !== MAINNET_GENESIS) {
-    throw new Error(
-      `RPC genesis ${genesis} is not mainnet; expected a Surfpool mainnet fork`
-    );
-  }
+  await activateLocalPhoenix(connection);
 
   const rise = await import("@ellipsis-labs/rise");
   const client = rise.createPhoenixClient({

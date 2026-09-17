@@ -53,3 +53,9 @@ SURFPOOL_RPC_URL="https://your-mainnet-rpc.example" ./scripts/stack-fork.sh
 ```
 
 CI reads the URL from the `SURFPOOL_RPC_URL` GitHub Actions secret.
+
+The venue, funding and runtime fork tests share a localhost-only Phoenix
+fixture. It activates the local exchange and clears the copied mainnet restart
+acknowledgement, since Surfpool has a different restart lifecycle and no venue
+admin crank. Economic parameters and account bindings are preserved. This
+tests native integration, not the upstream exchange's current availability.
