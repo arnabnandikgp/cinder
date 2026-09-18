@@ -171,6 +171,10 @@ receipts are drained before subsequent maintenance. The service verifies the
 delegated SOL fee balance and validator-owned Magic fee vault before long-lived
 PER operation. Provisioning is separate from user USDC and native collateral.
 
+One-pass `recover`/`execute` also drain a daemon's outstanding maintenance
+receipt before discovering new orders. An unknown outcome keeps both gates
+closed and reports unresolved maintenance; it never authorizes a replacement.
+
 ## Bounded native execution
 
 Each native transaction is `[compute budget, before fence, Phoenix IOC, after
@@ -489,7 +493,9 @@ CINDER_R5_FORK=1 CINDER_R6_MAINTENANCE=1 bash scripts/test-runtime-fork.sh
 
 This runs the real `run` daemon through 24 accelerated observed hourly funding
 generations, all-user epoch alignment, native settlement and a crash during the
-private cash fold. A quiet-book funding shock triggers a bounded liquidation
+private cash fold. It also crashes after an accepted heartbeat to verify the
+daemon-to-one-shot handoff drains the exact receipt before a new order.
+A quiet-book funding shock triggers a bounded liquidation
 without a user order or manual liquidation call; the unaffected flat user's
 cash remains unchanged. The test also verifies delegated fee readiness,
 guarded root publication after liquidation, and OPERATOR_DOWN on shutdown.

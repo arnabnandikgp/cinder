@@ -607,6 +607,26 @@ impl OperatorRuntime {
     /// confirmed OPERATOR_DOWN gates, before any acknowledgement is sent.
     pub fn recover(&mut self) -> Result<ReconciliationReport> {
         crate::ledger::set_down(&mut self.context.borrow_mut(), true)?;
+        // A service shutdown can leave its last signed heartbeat/root receipt
+        // unresolved. Reconcile that exact write before discovering a new order;
+        // journal preparation must never overlap an uncertain maintenance write.
+        self.drain_maintenance_write()?;
+        if self
+            .journal()
+            .has_unresolved_maintenance()
+            .map_err(|_| RuntimeError::Journal)?
+        {
+            self.coordinator.maintenance_journal();
+            return Ok(ReconciliationReport {
+                entries_enabled: false,
+                reason: Some(crate::HaltReason::UnresolvedMaintenance),
+                unresolved_operations: self
+                    .journal()
+                    .nonterminal_operations()
+                    .map_err(|_| RuntimeError::Journal)?
+                    .len(),
+            });
+        }
         self.refresh_funding_inventory()?;
         let (_, ledgers, _) = self.context.borrow_mut().private_ledgers()?;
         let mut intents = Vec::new();

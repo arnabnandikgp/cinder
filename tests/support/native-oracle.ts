@@ -2,6 +2,25 @@
 import * as rise from "@ellipsis-labs/rise";
 import { Connection, PublicKey, SYSVAR_CLOCK_PUBKEY } from "@solana/web3.js";
 
+// Both fixtures rewrite the whole account. Serialize their complete
+// read/modify/write cycles, even across distinct Connection instances, so an
+// oracle refresh cannot restore a funding generation from its stale copy.
+const assetMapWrites = new Map<string, Promise<void>>();
+async function writeLocalAssetMap<T>(connection: Connection, assetMap: PublicKey, action: () => Promise<T>): Promise<T> {
+    const key = `${connection.rpcEndpoint}|${assetMap.toBase58()}`;
+    const previous = assetMapWrites.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => release = resolve);
+    assetMapWrites.set(key, pending);
+    await previous;
+    try {
+        return await action();
+    } finally {
+        release();
+        if (assetMapWrites.get(key) === pending) assetMapWrites.delete(key);
+    }
+}
+
 /** Solana Clock is in seconds; Phoenix oracle update timestamps are in ms. */
 export function localClockTimestampMs(clock: { owner: PublicKey; data: Buffer } | null): bigint {
     if (!clock || clock.data.length !== 40 || !clock.owner.equals(new PublicKey("Sysvar1111111111111111111111111111111111111"))) throw new Error("untrusted local clock sysvar");
@@ -38,6 +57,10 @@ export async function settleLocalClock(connection: Connection, rpc: (method: str
 export async function refreshLocalMark(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>, program: PublicKey, assetMap: PublicKey, symbol: string) {
     const endpoint = new URL(connection.rpcEndpoint);
     if (endpoint.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(endpoint.hostname)) throw new Error("oracle fixture refuses non-local RPC");
+    return writeLocalAssetMap(connection, assetMap, () => refreshMark(connection, rpc, program, assetMap, symbol));
+}
+
+async function refreshMark(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>, program: PublicKey, assetMap: PublicKey, symbol: string) {
     const account = await connection.getAccountInfo(assetMap);
     if (!account?.owner.equals(program) || account.executable) throw new Error("untrusted native asset map");
     const decoded = rise.decodePerpAssetMap(account.data);
@@ -87,6 +110,10 @@ export async function setLocalFundingGeneration(connection: Connection, rpc: (me
     const endpoint = new URL(connection.rpcEndpoint);
     if (endpoint.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(endpoint.hostname)) throw new Error("funding fixture refuses non-local RPC");
     if (updatedSeconds <= 0n || updatedSeconds * 1000n > BigInt(Date.now())) throw new Error("invalid funding fixture timestamp");
+    return writeLocalAssetMap(connection, assetMap, () => setFundingGeneration(connection, rpc, program, assetMap, symbol, rate, updatedSeconds));
+}
+
+async function setFundingGeneration(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>, program: PublicKey, assetMap: PublicKey, symbol: string, rate: bigint, updatedSeconds: bigint) {
     const account = await connection.getAccountInfo(assetMap);
     if (!account?.owner.equals(program) || account.executable) throw new Error("untrusted funding asset map");
     const matches = rise.decodePerpAssetMap(account.data).metadata.entries.filter(e => e.key === symbol);

@@ -142,10 +142,10 @@ export async function verifyOperatorExecution(ctx: {
         registryKeys.forEach((pubkey, i) => merged.set(pubkey, { pubkey, account: current.value[i]! }));
         return Array.from(merged.values()).filter(row => row.account.owner === params[0]);
     };
-    type Crash = "funding" | "native" | "ack" | "fundingEpoch" | "fold";
+    type Crash = "funding" | "native" | "ack" | "fundingEpoch" | "fold" | "heartbeat";
     let crashAt: Crash | undefined;
     let activeChild: ReturnType<typeof spawn> | undefined;
-    const sends = { funding: 0, native: 0, ack: 0, fundingEpoch: 0, fold: 0 };
+    const sends = { funding: 0, native: 0, ack: 0, fundingEpoch: 0, fold: 0, heartbeat: 0 };
     const vaultInstructions = new anchor.BorshInstructionCoder(ctx.vault.idl);
     const ledgerInstructions = new anchor.BorshInstructionCoder(ledger.idl);
     function sent(method: string, params: unknown[], privateRpc: boolean) {
@@ -161,6 +161,7 @@ export async function verifyOperatorExecution(ctx: {
                 const name = decoded?.name.replace(/_/g, "").toLowerCase();
                 if (name === "bumpfundingepoch") stage = "fundingEpoch";
                 if (name === "allocatefunding" && (decoded!.data as { fold: boolean }).fold) stage = "fold";
+                if (name === "heartbeatscan") stage = "heartbeat";
             }
         }
         if (!stage) return false;
@@ -182,7 +183,7 @@ export async function verifyOperatorExecution(ctx: {
             const started = performance.now();
             const result = await publicRpc(input.method, input.params);
             if (input.method === "simulateTransaction" && (result as {value:{err:unknown}}).value.err) {
-                lastNativeError = JSON.stringify((result as {value:{err:unknown}}).value.err) + " " + ((result as {value:{logs:string[]}}).value.logs || []).filter(line => /Error|Invalid|failed|Cannot|ORACLE|Funding|funding/.test(line)).slice(-25).join("\n");
+                lastNativeError = JSON.stringify((result as {value:{err:unknown}}).value.err) + " " + ((result as {value:{logs:string[]}}).value.logs || []).slice(-50).join("\n");
             }
             recentCalls.push(`L1:${input.method}:done:${Math.round(performance.now()-started)}ms`);
             if (recentCalls.length > 40) recentCalls.shift();
@@ -289,7 +290,7 @@ export async function verifyOperatorExecution(ctx: {
             let journalState = "";
             if (result.code !== 0) {
                 try {
-                    journalState = execFileSync("sqlite3", [journalPath, "SELECT state,last_error_code,count(*) FROM operations GROUP BY state,last_error_code; SELECT 'funding',count(*),count(signature),count(confirmed_slot),count(book_synced_slot),count(failed_slot) FROM funding_outbox;"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] });
+                    journalState = execFileSync("sqlite3", [journalPath, "SELECT state,last_error_code,count(*) FROM operations GROUP BY state,last_error_code; SELECT 'funding',count(*),count(signature),count(confirmed_slot),count(book_synced_slot),count(failed_slot) FROM funding_outbox; SELECT 'maintenance',state,count(*) FROM maintenance_writes GROUP BY state;"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] });
                 } catch {
                     journalState = "journal diagnostic unavailable (sqlite3 missing, failed or timed out)";
                 }
@@ -434,7 +435,12 @@ export async function verifyOperatorExecution(ctx: {
                 const epochBefore = BigInt(scanned.fundingEpoch.toString());
                 for (let hour = 1; hour <= 24; hour++) {
                     if (hour === 1) crashAt = "fundingEpoch";
-                    await setLocalFundingGeneration(connection, ctx.rpc, ctx.native, assetMap, "SOL", fundingRate + BigInt(hour * 100), fundingStart + BigInt(hour * 3600));
+                    // Exercise both whole-account fixture writers concurrently:
+                    // neither may overwrite the other's funding or clock fields.
+                    await Promise.all([
+                        setLocalFundingGeneration(connection, ctx.rpc, ctx.native, assetMap, "SOL", fundingRate + BigInt(hour * 100), fundingStart + BigInt(hour * 3600)),
+                        refreshMark(),
+                    ]);
                     const allocationDeadline = performance.now() + 30000;
                     for (;;) {
                         if (hour === 1 && child.signalCode === "SIGKILL") {
@@ -466,7 +472,17 @@ export async function verifyOperatorExecution(ctx: {
                 // A genuine user reduction makes Phoenix settle its funding.
                 // No private fold is sent by this harness. Restart the daemon
                 // and kill it after its fold is accepted to prove exact replay.
-                child.kill("SIGTERM");expect((await ended).code, output).to.equal(0);
+                // Force the daemon-to-one-shot handoff to leave a real signed
+                // heartbeat accepted by PER but not yet receipted in SQLite.
+                // execute must drain it before journaling the new user order.
+                crashAt = "heartbeat";
+                await Promise.race([ended, new Promise<never>((_, reject) => {
+                    const timer = setTimeout(() => reject(new Error(`heartbeat crash boundary did not occur: ${output}`)), 15000);
+                    timer.unref();
+                })]);
+                expect(child.signalCode, output).to.equal("SIGKILL");
+                expect(crashAt, "heartbeat handoff must occur").to.equal(undefined);
+                expect(Number(execFileSync("sqlite3", [journalPath, "SELECT count(*) FROM maintenance_writes WHERE state=1;"], { encoding: "utf8" })), "signed heartbeat must await its exact receipt").to.equal(1);
                 const current = BigInt(allocated.positions[0].lots.toString());
                 const delta = current > 0n ? -1n : 1n;
                 const remaining = current + delta;
