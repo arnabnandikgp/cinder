@@ -12,7 +12,7 @@ use solana_signer::Signer;
 impl OperatorRuntime {
     pub(crate) fn mirror_halts(&mut self, flags: u8) -> Result<bool> {
         let mut changed = false;
-        for _ in 0..4 {
+        for attempt in 0..=4 {
             {
                 let mut c = self.context.borrow_mut();
                 let c = &mut *c;
@@ -25,6 +25,11 @@ impl OperatorRuntime {
                 let union = cfg.paused | book.halt | flags;
                 if cfg.paused == union && book.halt == union {
                     return Ok(changed);
+                }
+                // The last round observes the fourth write without sending
+                // another transaction or reporting an unverified success.
+                if attempt == 4 {
+                    return Err(RuntimeError::Incomplete);
                 }
                 changed = true;
                 let adapter = c.signer.pubkey().to_bytes();

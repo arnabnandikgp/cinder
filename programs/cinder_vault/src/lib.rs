@@ -241,6 +241,8 @@ pub mod cinder_vault {
         Ok(())
     }
 
+    /// Retained for ABI compatibility only. Publications must use the guarded
+    /// instruction so epoch identity and aggregate bad debt cannot be omitted.
     pub fn write_reserve_root(
         ctx: Context<WriteReserveRoot>,
         root: [u8; 32],
@@ -254,19 +256,8 @@ pub mod cinder_vault {
             ctx.accounts.adapter.key(),
             VaultError::Unauthorized
         );
-        let rr = &mut ctx.accounts.reserve_root;
-        require!(
-            rr.schema_version == cc::ACCOUNT_SCHEMA_VERSION,
-            VaultError::UnsupportedAccountSchema
-        );
-        rr.epoch = rr.epoch.checked_add(1).ok_or(VaultError::Overflow)?;
-        rr.root = root;
-        rr.user_count = user_count;
-        rr.total_free = total_free;
-        rr.total_reserved = total_reserved;
-        rr.book_hash = book_hash;
-        rr.committed_at_base_slot = Clock::get()?.slot;
-        Ok(())
+        let _ = (root, user_count, total_free, total_reserved, book_hash);
+        err!(VaultError::ExecutionGuardFailed)
     }
 
     /// Publication is compare-and-set: an uncertain send cannot advance two

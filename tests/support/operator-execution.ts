@@ -462,6 +462,13 @@ export async function verifyOperatorExecution(ctx: {
                 return { child: worker, ended };
             }
             let {child, ended} = startService();
+            function journalQuery(sql: string): string {
+                try {
+                    return execFileSync("sqlite3", [journalPath, sql], { encoding: "utf8", timeout: 5000 });
+                } catch (error) {
+                    throw new Error(`required local journal query failed (sqlite3 must be installed): ${error}`);
+                }
+            }
             try {
                 const reserve=PublicKey.findProgramAddressSync([Buffer.from("reserve")],ctx.vault.programId)[0];
                 const deadline=performance.now()+60000;let root=await ctx.vault.account.reserveRoot.fetch(reserve);
@@ -497,7 +504,7 @@ export async function verifyOperatorExecution(ctx: {
                         }
                         const b = await privateLedger.account.book.fetch(book);
                         const l = await privateLedger.account.userLedger.fetch(userLedger);
-                        const completed = Number(execFileSync("sqlite3", [journalPath, "SELECT count(*) FROM funding_epochs WHERE completed=1;"], { encoding: "utf8" }));
+                        const completed = Number(journalQuery("SELECT count(*) FROM funding_epochs WHERE completed=1;"));
                         if (BigInt(b.fundingEpoch.toString()) === epochBefore + BigInt(hour)
                             && BigInt(l.lastFundingEpoch.toString()) === epochBefore + BigInt(hour) && completed === hour) {
                             expect(BigInt(l.positions[0].unsettledFunding.toString()), `hour ${hour}: signed native funding`).to.equal(-BigInt(hour * 100) * heldLots);
@@ -510,7 +517,10 @@ export async function verifyOperatorExecution(ctx: {
                         if (child.exitCode !== null || performance.now() > allocationDeadline) {
                             const nativeAccount = await connection.getAccountInfo(assetMap);
                             const accumulator = nativeAccount && rise.decodePerpAssetMap(nativeAccount.data).metadata.entries.find(e => e.key === "SOL")?.value.fundingAccumulator;
-                            const frozen = execFileSync("sqlite3", [journalPath, "SELECT 'source',CAST(payload AS TEXT) FROM funding_checkpoint; SELECT 'epoch',hex(epoch),completed,CAST(target AS TEXT) FROM funding_epochs ORDER BY epoch DESC LIMIT 1;"], { encoding: "utf8" });
+                            let frozen: string;
+                            try {
+                                frozen = journalQuery("SELECT 'source',CAST(payload AS TEXT) FROM funding_checkpoint; SELECT 'epoch',hex(epoch),completed,CAST(target AS TEXT) FROM funding_epochs ORDER BY epoch DESC LIMIT 1;");
+                            } catch (error) { frozen = `checkpoint diagnostics unavailable: ${error}`; }
                             throw new Error(`hour ${hour} allocation did not complete: ${output}\nNative funding: ${accumulator?.cumulativeFundingRate}/${accumulator?.lastFundingUpdateTimestamp}; frozen ${frozen}\nPrivate epochs: Book=${b.fundingEpoch}, user=${l.lastFundingEpoch}; Book invariant=${b.invariantOk}, halt=${b.halt}, pending=${l.pendingOidCount}\nNative observation: ${nativeProbe}, blockAgeMs=${lastBlockAgeMs}\nRecent RPCs: ${recentCalls.join(", ")}\nNative error: ${lastNativeError}`);
                         }
                         await new Promise(resolve => setTimeout(resolve, 100));
@@ -534,7 +544,7 @@ export async function verifyOperatorExecution(ctx: {
                 })]);
                 expect(child.signalCode, output).to.equal("SIGKILL");
                 expect(crashAt, "heartbeat handoff must occur").to.equal(undefined);
-                expect(Number(execFileSync("sqlite3", [journalPath, "SELECT count(*) FROM maintenance_writes WHERE state=1;"], { encoding: "utf8" })), "signed heartbeat must await its exact receipt").to.equal(1);
+                expect(Number(journalQuery("SELECT count(*) FROM maintenance_writes WHERE state=1;")), "signed heartbeat must await its exact receipt").to.equal(1);
                 const current = BigInt(allocated.positions[0].lots.toString());
                 const delta = current > 0n ? -1n : 1n;
                 const remaining = current + delta;
@@ -623,7 +633,15 @@ export async function verifyOperatorExecution(ctx: {
                     if (child.exitCode !== null || performance.now() > incidentDeadline) throw new Error(`liquidation root did not finalize: ${output}`);
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
-            } finally {child.kill("SIGTERM");const result=await ended;expect(result.code,output).to.equal(0);}
+                child.kill("SIGTERM");
+                const result = await ended;
+                expect(result.code, output).to.equal(0);
+            } finally {
+                child.kill("SIGTERM");
+                // Cleanup must not replace the original assertion/RPC error,
+                // including an intentional SIGKILL at a crash boundary.
+                await ended.catch(() => undefined);
+            }
         }
         expect((await ctx.vault.account.config.fetch(ctx.config)).paused & 32).to.equal(32);
         let anonymousVisible = false;

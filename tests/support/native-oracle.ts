@@ -34,12 +34,19 @@ export function localClockTimestampMs(clock: { owner: PublicKey; data: Buffer } 
  */
 export async function waitForLocalBlockTime(timestampSeconds: number, now = Date.now, wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))) {
     const target = timestampSeconds * 1000;
-    const wall = now();
+    let wall = now();
     if (!Number.isSafeInteger(timestampSeconds) || timestampSeconds <= 0 || !Number.isSafeInteger(target)
         || !Number.isSafeInteger(wall) || wall <= 0) throw new Error("invalid local block time");
-    const delay = target - wall;
-    if (delay > 5000) throw new Error("local fork clock is too far ahead");
-    if (delay > 0) await wait(delay + 1);
+    if (target - wall > 5000) throw new Error("local fork clock is too far ahead");
+    const deadline = performance.now() + 5001;
+    while (wall < target) {
+        const remaining = deadline - performance.now();
+        if (remaining <= 0) throw new Error("local fork clock catch-up timed out");
+        await wait(Math.min(target - wall + 1, remaining));
+        wall = now();
+        if (!Number.isSafeInteger(wall) || wall <= 0) throw new Error("invalid local block time");
+        if (target - wall > 5000) throw new Error("local fork clock is too far ahead");
+    }
 }
 
 /** Let wall time catch up with Surfpool's actual clock before a new process. */
@@ -59,9 +66,7 @@ export async function settleLocalClock(connection: Connection, rpc: (method: str
         // Surfpool 1.5 can produce extra blocks for blockhash expiration in
         // clock mode. Pause production until its real reported block time is
         // no longer in the future; never rewrite timestamps or RPC data.
-        const delay = await blockTime() - Date.now();
-        if (delay > 5000) throw new Error("local fork clock is too far ahead");
-        if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+        await waitForLocalBlockTime(await blockTime() / 1000);
     } finally {
         await rpc("surfnet_resumeClock", []);
     }

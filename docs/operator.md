@@ -164,6 +164,11 @@ collateral deposits alone are not settlement evidence. Fold and allocation
 attempts persist exact signatures before sending; absent/expired receipts stay
 unknown rather than being signed again. Completion alone cannot reopen entries.
 
+The legacy `write_reserve_root` instruction is retained for client ABI
+compatibility but always rejects writes. Use `write_reserve_root_guarded`,
+including the expected epoch and aggregate bad debt; no publisher may bypass
+these fields through the legacy path.
+
 Reserve publication is a guarded, finalized L1 aggregate write, independent of
 native orders and Magic Actions. Its WAL binds expected epoch, complete claim
 root, debt-aware totals, Book commitment and acknowledged-fill count. Root

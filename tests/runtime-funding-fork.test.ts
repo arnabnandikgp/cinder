@@ -219,9 +219,10 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
         expect(health.isLiquidatable).to.equal(false);
     });
     it("executes through the real operator and private PER/QFS ledger", async function () {
-        // Six scenarios may each need up to 60 seconds to converge after
-        // funding/native/ACK crash boundaries on a slower Linux runner.
-        this.timeout(process.env.CINDER_R6_MAINTENANCE === "1" ? 900000 : 420000);
+        // R6 adds 24 bounded funding-generation waits plus publication, fold,
+        // liquidation and crash recovery. The outer budget must cover those
+        // sequential waits; native freshness and individual deadlines stay strict.
+        this.timeout(process.env.CINDER_R6_MAINTENANCE === "1" ? 1920000 : 420000);
         if (process.env.CINDER_R5_PRIVATE !== "1") { this.skip(); return; }
         await verifyOperatorExecution({ endpoint, operator, vault, config, native, global, trader, quote, source, indexes, buffers, rpc, send,
             postCollateral: async value => { await send([await funding(Array(32).fill(96), value)]); } });

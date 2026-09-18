@@ -17,6 +17,16 @@ describe("local fork clock fixture", function () {
     it("does not delay current or past block timestamps", async () => {
         for (const timestamp of [9, 10]) await waitForLocalBlockTime(timestamp, () => 10000, async () => { throw new Error("unexpected wait"); });
     });
+    it("rechecks the wall clock when a timer wakes one millisecond early", async () => {
+        let wall = 10769;
+        const waits: number[] = [];
+        await waitForLocalBlockTime(11, () => wall, async delay => {
+            waits.push(delay);
+            wall += waits.length === 1 ? delay - 2 : delay;
+        });
+        expect(waits).to.deep.equal([232, 2]);
+        expect(wall).to.be.at.least(11000);
+    });
     it("rejects invalid and excessively future block timestamps before waiting", async () => {
         for (const timestamp of [NaN, 0, -1, 10.5, Number.MAX_SAFE_INTEGER, 16]) {
             let error: unknown;

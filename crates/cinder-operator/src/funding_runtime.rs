@@ -6,6 +6,7 @@ use crate::runtime::{book_key, config_key, ledger_id, text_signature};
 use crate::transaction::{anchor_ix, send, sign};
 use crate::{FundingEpochPlan, FundingStepObservation, MaintenanceOutcome, OperatorRuntime};
 use cinder_common as cc;
+use sha2::{Digest, Sha256};
 use solana_signer::Signer;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -300,6 +301,7 @@ impl OperatorRuntime {
                 .instruction(&step.scope)
                 .ok_or(RuntimeError::Identity)?
                 .to_vec();
+            verify_funding_body(&body, step.instruction_hash)?;
             let tx = {
                 let mut c = self.context.borrow_mut();
                 let c = &mut *c;
@@ -330,6 +332,30 @@ impl OperatorRuntime {
         Ok(FundingProgress::EpochCompleted {
             epoch: plan.epoch(),
         })
+    }
+}
+
+fn verify_funding_body(body: &[u8], expected: [u8; 32]) -> Result<()> {
+    let actual: [u8; 32] = Sha256::digest(body).into();
+    if actual != expected {
+        return Err(RuntimeError::Identity);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rebuilt_funding_body_must_match_persisted_identity() {
+        let body = b"funding instruction";
+        let expected = Sha256::digest(body).into();
+        assert!(verify_funding_body(body, expected).is_ok());
+        assert!(matches!(
+            verify_funding_body(b"different instruction", expected),
+            Err(RuntimeError::Identity)
+        ));
     }
 }
 fn funding_instruction(

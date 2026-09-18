@@ -87,7 +87,7 @@ fn unsigned_crash_can_cancel_but_signed_absence_and_expiry_cannot_resign() {
 
 #[test]
 fn exact_receipt_is_required_and_failed_history_is_retained() {
-    let (_, mut j, _) = setup();
+    let (_dir, mut j, _) = setup();
     let (w, body) = heartbeat();
     j.prepare_maintenance_write(&w).unwrap();
     j.sign_maintenance_write(w.id, [8; 64], 999).unwrap();
@@ -226,7 +226,7 @@ fn corrupted_metadata_and_invalid_scope_fail_closed_on_restart() {
 
 #[test]
 fn journal_never_stores_private_instruction_bodies_or_account_snapshots() {
-    let (_, mut j, f) = setup();
+    let (_dir, mut j, f) = setup();
     let body = cinder_ledger::instruction::AllocateFunding {
         epoch: 0,
         fold: true,
@@ -258,7 +258,7 @@ fn journal_never_stores_private_instruction_bodies_or_account_snapshots() {
 
 #[test]
 fn reserve_cadence_uses_durable_ack_counts_and_incidents_not_heartbeat_ticks() {
-    let (_, mut j, _) = setup();
+    let (_dir, mut j, _) = setup();
     assert!(!j.reserve_due(1000).unwrap());
     let (w, body) = heartbeat();
     j.prepare_maintenance_write(&w).unwrap();

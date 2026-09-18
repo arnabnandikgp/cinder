@@ -124,22 +124,7 @@ impl FundingCheckpoint {
         }
         bootstrap_safe &= native.is_empty()
             && cash == i128::from(view.vault_balance) + i128::from(view.collateral);
-        let rates = view
-            .markets
-            .iter()
-            .map(|(asset, m)| {
-                Ok((
-                    *asset,
-                    FundingRate {
-                        cumulative_quote_lots_per_base_lot: m.cumulative_funding_rate.as_inner(),
-                        last_update_seconds: *view
-                            .funding_updates_seconds
-                            .get(asset)
-                            .ok_or(RuntimeError::Incomplete)?,
-                    },
-                ))
-            })
-            .collect::<Result<BTreeMap<_, _>>>()?;
+        let rates = view.funding_rates()?;
         let out = Self {
             epoch: book.funding_epoch,
             native_slot: view.slot,

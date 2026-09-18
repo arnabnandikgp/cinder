@@ -1267,10 +1267,12 @@ describe("ledger accounts and order machine", () => {
     it("root epoch bumps and hash changes after a credit", async () => {
       const before = await vault.account.reserveRoot.fetch(reservePda);
       await vault.methods
-        .writeReserveRoot(
+        .writeReserveRootGuarded(
+          before.epoch,
           Array.from({ length: 32 }, (_, i) => i),
           1,
           new BN(CREDIT),
+          new BN(0),
           new BN(0),
           Array.from({ length: 32 }, () => 1)
         )
@@ -1296,10 +1298,12 @@ describe("ledger accounts and order machine", () => {
         .rpc();
 
       await vault.methods
-        .writeReserveRoot(
+        .writeReserveRootGuarded(
+          mid.epoch,
           Array.from({ length: 32 }, (_, i) => 32 - i),
           1,
           new BN(CREDIT + 1_000_000 - WITHDRAW),
+          new BN(0),
           new BN(0),
           Array.from({ length: 32 }, () => 2)
         )
@@ -1331,6 +1335,12 @@ describe("ledger accounts and order machine", () => {
       await vault.methods.writeReserveRootGuarded(before.epoch, Array(32).fill(45), 0, new BN(0), new BN(0), new BN(0), hash)
         .accountsPartial(accounts).signers([adapter]).rpc();
       expect.fail("old expected epoch must reject");
+    } catch (e: any) { expect(e.error?.errorCode?.code ?? e.toString()).to.match(/ExecutionGuardFailed/); }
+    expect(await vault.account.reserveRoot.fetch(reservePda)).to.deep.equal(published);
+    try {
+      await vault.methods.writeReserveRoot(Array(32).fill(46), 0, new BN(0), new BN(0), hash)
+        .accountsPartial(accounts).signers([adapter]).rpc();
+      expect.fail("legacy publication must reject even an authorized adapter");
     } catch (e: any) { expect(e.error?.errorCode?.code ?? e.toString()).to.match(/ExecutionGuardFailed/); }
     expect(await vault.account.reserveRoot.fetch(reservePda)).to.deep.equal(published);
   });
@@ -1558,7 +1568,7 @@ describe("ledger accounts and order machine", () => {
 
       await ledger.methods
         .allocateFunding(new BN(1), false, [
-          { assetId: ASSET_SOL, deltaUsdc: new BN(DELTA), postPositionImUsdc: new BN(IM_TEN_LOTS) },
+          { assetId: ASSET_SOL, deltaUsdc: new BN(DELTA), postPositionImUsdc: new BN(0) },
         ])
         .accountsPartial({
           adapter: adapter.publicKey,
@@ -1572,6 +1582,7 @@ describe("ledger accounts and order machine", () => {
       const accrued = await ledger.account.userLedger.fetch(fundLedger);
       expect(accrued.free.toNumber()).to.equal(freeBefore);
       expect(accrued.reserved.toNumber()).to.equal(reservedBefore);
+      expect(accrued.positions[0].reservedIm.toString()).to.equal(before.positions[0].reservedIm.toString());
       expect(accrued.positions[0].unsettledFunding.toNumber()).to.equal(DELTA);
       expect(accrued.lastFundingEpoch.toNumber()).to.equal(1);
 
