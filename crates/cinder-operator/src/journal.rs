@@ -17,10 +17,14 @@ use std::{
 use std::os::unix::{fs::MetadataExt, fs::OpenOptionsExt, fs::PermissionsExt};
 
 /// Refuse to open a newer journal rather than silently misinterpreting it.
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 
+#[path = "funding_barriers.rs"]
+mod funding_barriers;
 #[path = "maintenance_journal.rs"]
 mod maintenance_journal;
+#[path = "maintenance_writes.rs"]
+pub(crate) mod maintenance_writes;
 pub use maintenance_journal::{
     FundingEpochRecord, FundingEpochStep, MaintenanceAttempt, MaintenanceOutcome,
 };
@@ -1706,6 +1710,15 @@ impl Journal {
                 CREATE TABLE funding_epoch_attempts (sequence INTEGER PRIMARY KEY AUTOINCREMENT,signature BLOB UNIQUE NOT NULL CHECK(length(signature)=64),epoch BLOB NOT NULL,scope BLOB NOT NULL,expiry BLOB NOT NULL CHECK(length(expiry)=8),outcome INTEGER NOT NULL DEFAULT 0 CHECK(outcome IN (0,1,2)),slot BLOB CHECK(slot IS NULL OR length(slot)=8),FOREIGN KEY(epoch,scope) REFERENCES funding_epoch_steps(epoch,scope),CHECK((outcome=0)=(slot IS NULL)));
                 PRAGMA user_version=8; COMMIT;")?;
         }
+        if version < 9 {
+            self.connection.execute_batch("BEGIN IMMEDIATE;
+                CREATE TABLE maintenance_writes(id BLOB PRIMARY KEY CHECK(length(id)=32),kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 6),scope BLOB NOT NULL CHECK(length(scope)=32),body_hash BLOB NOT NULL CHECK(length(body_hash)=32),private_hash BLOB NOT NULL CHECK(length(private_hash)=32),evidence_hash BLOB NOT NULL CHECK(length(evidence_hash)=32),parameters BLOB NOT NULL CHECK(length(parameters) BETWEEN 1 AND 4096),signature BLOB CHECK(signature IS NULL OR length(signature)=64),expiry BLOB CHECK(expiry IS NULL OR length(expiry)=8),state INTEGER NOT NULL DEFAULT 0 CHECK(state BETWEEN 0 AND 4),slot BLOB CHECK(slot IS NULL OR length(slot)=8),CHECK((signature IS NULL)=(expiry IS NULL)),CHECK((state IN (0,4))=(signature IS NULL)),CHECK((state IN (2,3))=(slot IS NOT NULL)));
+                CREATE UNIQUE INDEX one_live_maintenance_write ON maintenance_writes((1)) WHERE state IN (0,1);
+                CREATE TABLE funding_inventory_anchor(singleton INTEGER PRIMARY KEY CHECK(singleton=1),checkpoint_hash BLOB NOT NULL CHECK(length(checkpoint_hash)=32),last_operation INTEGER NOT NULL CHECK(last_operation>=0));
+                CREATE TABLE order_funding_barriers(operation_id BLOB PRIMARY KEY REFERENCES operations(operation_id),rates BLOB NOT NULL CHECK(length(rates) BETWEEN 1 AND 8192));
+                CREATE TABLE funding_registry_barriers(source BLOB NOT NULL CHECK(length(source)=32),target BLOB NOT NULL CHECK(length(target)=32),epoch BLOB NOT NULL CHECK(length(epoch)=8),PRIMARY KEY(source,epoch),CHECK(source!=target));
+                PRAGMA user_version=9; COMMIT;")?;
+        }
         let integrity: String = self
             .connection
             .query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
@@ -1747,6 +1760,10 @@ impl Journal {
             "funding_epochs",
             "funding_epoch_steps",
             "funding_epoch_attempts",
+            "maintenance_writes",
+            "funding_inventory_anchor",
+            "order_funding_barriers",
+            "funding_registry_barriers",
         ] {
             let exists: Option<String> = self
                 .connection
@@ -1761,6 +1778,8 @@ impl Journal {
             }
         }
         self.validate_maintenance_journal()?;
+        self.validate_maintenance_writes()?;
+        self.validate_funding_barriers()?;
         let mut statement = self.connection.prepare(&operation_select_sql(""))?;
         for row in statement.query_map([], decode_operation)? {
             let operation = row?;

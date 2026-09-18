@@ -279,10 +279,12 @@ fn corrupt_checkpoint_plan_hash_or_completed_history_fail_closed() {
             _ => unreachable!(),
         }
         drop(j);
-        assert!(matches!(
-            Journal::open(&path),
-            Err(JournalError::CorruptState(_))
-        ));
+        let opened = Journal::open(&path);
+        assert!(
+            matches!(&opened, Err(JournalError::CorruptState(_))),
+            "mode {mode}: {:?}",
+            opened.err()
+        );
     }
 }
 

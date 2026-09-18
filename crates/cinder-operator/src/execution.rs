@@ -52,15 +52,24 @@ pub(crate) fn guarded_ioc(
     {
         accounts.push((bytes(account)?, false, false));
     }
+    let before = cinder_vault::instruction::GuardPhoenixExecution {
+        guard,
+        after: false,
+    }
+    .data();
     let fence = |after| {
         crate::transaction::anchor_ix(
             crate::runtime::vault_id(),
             accounts.clone(),
-            cinder_vault::instruction::GuardPhoenixExecution {
-                guard: guard.clone(),
-                after,
-            }
-            .data(),
+            if after {
+                use sha2::Digest;
+                cinder_vault::instruction::FinishPhoenixExecution {
+                    guard_hash: sha2::Sha256::digest(&before).into(),
+                }
+                .data()
+            } else {
+                before.clone()
+            },
         )
     };
     Ok(vec![fence(false), ioc, fence(true)])

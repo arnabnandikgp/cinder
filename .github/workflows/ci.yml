@@ -157,9 +157,10 @@ jobs:
       - uses: ./.github/actions/start-privacy-stack
         with:
           start: "false"
-      - name: Bounded execution and private crash recovery
+      - name: Bounded execution, autonomous maintenance and private crash recovery
         env:
           CINDER_R5_FORK: "1"
+          CINDER_R6_MAINTENANCE: "1"
           SURFPOOL_RPC_URL: ${{ secrets.SURFPOOL_RPC_URL }}
         run: |
           sudo prlimit --pid $$ --nofile=1048576:1048576 || true

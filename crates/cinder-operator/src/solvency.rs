@@ -353,6 +353,8 @@ pub(crate) mod tests {
             observed_ms: 1000,
             mark_ms: 1000,
             slot: 1,
+            risk_tier: 0,
+            mm_surplus: 0,
             positions: BTreeMap::new(),
             entry_quote_lots: BTreeMap::from([(1, 0)]),
             collateral: 0,

@@ -8,7 +8,7 @@ The `recover` command runs one startup/recovery pass. It can sign guarded
 private fill/failure acknowledgements and operator-down updates; it **does not
 submit new Phoenix orders**. Before exiting it confirms OPERATOR_DOWN on both
 L1 Config and private Book. Successful recovery is not permission to trade or a
-production-readiness claim. Autonomous execution and maintenance come later.
+production-readiness claim.
 
 `execute` explicitly opts into one serialized execution/recovery pass. It
 requires both `solvency_policy` and `execution_policy`; there are no trading
@@ -27,18 +27,20 @@ Every integer partial-fill quantity is admitted at the worst allowed price and
 full fee ceiling. The exhaustive evaluator refuses intents above its explicit
 quantity limit (maximum 4096) or 65,536 quantity/user/scenario evaluations;
 it does not sample or split them. Choose smaller intent sizes for this
-experimental runtime. Automatic scheduling/batching is outside this phase.
+experimental runtime. Resting orders and automatic order splitting are unsupported.
 
-New dispatch is refused across nonzero native/private unsettled funding until
-the authenticated funding-allocation loop is implemented. R5 does not invent
-a settlement distribution to keep an order moving.
+Nonzero funding permits dispatch only after the authenticated allocation epoch
+has completed for the entire registry and matches the current native generation.
+An accumulator change inside an IOC rolls back the whole transaction.
 
 ## Maintenance decision boundary
 
-The maintenance foundation is implemented, but **there is no autonomous `run`
-command yet**. `recover` and `execute` retain their one-pass semantics. Timer
-decisions, health assessments, and claim encodings do not grant entry permission
-or claim that liquidation/funding/publication has completed.
+`run` explicitly enables the single-writer autonomous service. It requires
+`maintenance_policy`, `execution_policy`, and `solvency_policy`; missing policy,
+fee provisioning, stale views, incomplete registry or unresolved financial
+receipts keep entries down. `maintain` performs one maintenance pass and exits
+with both gates closed. `recover` and `execute` retain their one-pass semantics.
+Timer decisions and feed notifications never grant financial permission.
 
 `MaintenanceProgress::plan` coalesces wakeups into a bounded priority list:
 order recovery first, followed by feed refresh and restrictive halt mirroring,
@@ -86,10 +88,28 @@ journal payloads. The publication intent is due after 20 acknowledged fills or
 when no prior publication exists), accelerated on liquidation/debt incidents.
 Neither counter completion nor elapsed time proves publication finality.
 
-Live feed supervision, authenticated funding allocation/fold I/O, liquidation
-submission, atomic halt mirroring, heartbeat writes, and guarded reserve
-publication still need to be wired through the single mutation coordinator
-before autonomous service can be enabled.
+Native public WebSocket subscriptions coalesce wake hints, reconnect after EOF,
+and fall back to authoritative HTTP replay. The service targets a best-effort
+50-ms whole-user scan, not a latency guarantee. Fresh scans authorize 1-second
+heartbeats; stale snapshots cannot manufacture liveness. Mutations close both
+gates, drain the sole outbox, then reobserve. Reconciled quiet read-only passes
+keep entries usable between mutations. SIGINT/SIGTERM drain the current pass
+and confirm both operator-down gates before releasing the pool lock.
+
+Private MM breaches trigger bounded liquidation even without a new user order.
+Unsafe native tiers prioritize MM failures, then under-IM users. Liquidations
+cannot increase or flip confirmed exposure, cancel uncertain native intents, or
+bypass invariant/venue-breach halts. Every integer partial fill is evaluated;
+native tier/MM-surplus fences bound closing-cost degradation. Existing deficits
+are not recapitalized, and confirmed fees/losses still become explicit debt.
+Administrative/debt halts are restrictive atomic ORs and are never automatically
+cleared. Unsafe-pool incident rearming remains an explicit operator decision.
+
+Periodic collateral repair moves existing vault cash through the native PDA
+bridge to Phoenix IM plus 20%, with a 50-USDC floor. It uses its own immutable
+receipt identity, never a fabricated user order. Unknown deposits block further
+mutations; Book changes only after confirmed native evidence. Automatic excess
+collateral pulls are deliberately disabled.
 
 ### Funding accumulator checkpoints and epoch journal
 
@@ -106,13 +126,12 @@ fully offset private long/short books.
 Initializing the durable baseline requires both ownership gates down, a
 complete registered inventory, a never-traded flat book, zero native/private
 funding, and matching backing. Existing exposure or trading history cannot
-silently adopt the latest accumulator as its baseline. Inventory can be
-rebound after authenticated ACK evidence only while both accumulator values
-and their update generations remain unchanged. A saved nonce/basis/Book
+silently adopt the latest accumulator as its baseline. A saved nonce/basis/Book
 inventory commitment detects position changes even if endpoint lots match.
-Position changes across funding updates require historical attribution or
-checkpoint barriers; charging today's position across that gap is refused.
-New-user incorporation also requires a future explicit registry barrier.
+ACK rebases preserve the old rates only when every intervening filled operation
+has its persisted atomic generation barrier. A later update is then allocated
+to the confirmed post-ACK inventory. Flat new-user incorporation has its own
+registry barrier. Unexplained changes and unfenced historical gaps are refused.
 
 `FundingEpochPlan` currently supports the quiet-inventory accrual path only.
 The journal freezes source/target checkpoints and hashes of the exact Book
@@ -135,11 +154,22 @@ dispatch, and registry expansion; recovery leaves entries down rather than
 misclassifying partial allocation as an I2 incident. Startup validates the
 checkpoint/history chain and unresolved-write ordering.
 
-These are checked planning/journal primitives, not a live funding crank. Native
-settlement evidence, private funding folds, position-changing ACK barriers,
-fresh pre-send gate checks, and authenticated write/recovery ports remain to
-be integrated. Completing an accrual epoch alone does not reconcile I2 or
-reopen entries. The existing nonzero-unsettled-funding dispatch guard stays.
+`accrue` performs one authenticated funding pass. Position-changing ACKs carry
+the old baseline only across persisted atomic generation fences; unexplained
+inventory changes fail closed. A new flat registered user joins through an
+explicit immutable registry barrier, never by resetting prior users' rates.
+Funding folds require exact allocated generations, observed native settlement
+on every asset, and fresh complete basis-aware I1/I2. Positive pool equity or
+collateral deposits alone are not settlement evidence. Fold and allocation
+attempts persist exact signatures before sending; absent/expired receipts stay
+unknown rather than being signed again. Completion alone cannot reopen entries.
+
+Reserve publication is a guarded, finalized L1 aggregate write, independent of
+native orders and Magic Actions. Its WAL binds expected epoch, complete claim
+root, debt-aware totals, Book commitment and acknowledged-fill count. Root
+receipts are drained before subsequent maintenance. The service verifies the
+delegated SOL fee balance and validator-owned Magic fee vault before long-lived
+PER operation. Provisioning is separate from user USDC and native collateral.
 
 ## Bounded native execution
 
@@ -147,7 +177,9 @@ Each native transaction is `[compute budget, before fence, Phoenix IOC, after
 fence]`, independent of PER commits/Magic Actions. The first fence hashes the
 public Config/native account snapshot, checks age and the orderbook fee counter,
 and binds the adjacent IOC. Both fences require an identical opposite-phase
-peer around that IOC; removing or changing the trailing guard is rejected.
+peer around that IOC; the compact trailing instruction commits the full preceding
+guard body. Removing or changing it is rejected. Both phases fence all active
+native funding generations, including membership changes.
 The trailing fence caps the actual native taker
 fee-counter increase and checks authoritative Hawkeye health plus confirmed
 posted cash (20% IM buffer / 50 USDC floor). A failing fence rolls the entire
@@ -208,7 +240,45 @@ target/debug/cinder-operator recover operator-config.json .cinder-operator/journ
 
 # Opt in to ONE bounded execution/recovery pass, only after configuring policies.
 target/debug/cinder-operator execute operator-config.json .cinder-operator/journal.sqlite
+
+# Funding/maintenance one-pass commands also close both gates on exit.
+target/debug/cinder-operator accrue operator-config.json .cinder-operator/journal.sqlite
+target/debug/cinder-operator maintain operator-config.json .cinder-operator/journal.sqlite
+
+# Explicit continuous operation, after fee provisioning and policy review.
+target/debug/cinder-operator run operator-config.json .cinder-operator/journal.sqlite
 ```
+
+For continuous operation, replace the example's null maintenance policy with
+explicit values (these are illustrative, not production recommendations):
+
+```json
+{
+  "liquidation_slippage_bps": 100,
+  "liquidation_deadline_slots": 32,
+  "native_ws_env": "CINDER_PHOENIX_WS",
+  "fee_balance_index": 0,
+  "minimum_fee_balance_lamports": 1000000,
+  "minimum_magic_vault_lamports": 1000000
+}
+```
+
+Set that WebSocket environment variable to a public native `wss://` endpoint
+(plaintext is accepted only for localhost). Never supply a user QFS token.
+Fee-balance index 255 is reserved for Magic Actions and is refused here.
+The fee provisioning script defaults to emitting **unsigned** instructions:
+
+```bash
+node -r ts-node/register/transpile-only scripts/provision-per-fees.ts --balance-lamports=10000000
+```
+
+Review the instructions first. `--send` explicitly submits once with the
+operator key named by `CINDER_OPERATOR_KEYPAIR`; an uncertain send must be
+reconciled by its printed signature before retrying. `--validator-vault` is only
+for a missing validator vault and requires its actual matching
+`CINDER_VALIDATOR_KEYPAIR`. Existing validator fee infrastructure belongs to
+the PER operator—do not initialize or redelegate it blindly. The service checks
+L1 delegation records and authenticated PER account ownership/balances.
 
 Recover exits 0 only when no operations remain unresolved and reconciliation
 succeeds; 3 means recovery remains gated, 1 means a runtime error, and 2 indicates
@@ -217,8 +287,8 @@ not credentials, private balances, user identities, or raw receipts.
 
 ## Durable causality and acknowledgements
 
-The journal uses schema version 8 and migrates older supported journals in
-place, preserving their recovery state. A journal upgraded to version 8 cannot
+The journal uses schema version 9 and migrates older supported journals in
+place, preserving their recovery state. A journal upgraded to version 9 cannot
 be reopened by an older binary. Back up the private journal with SQLite's
 WAL-aware procedure before upgrading; do not copy only the main database file.
 
@@ -411,7 +481,24 @@ Run the separate multi-price/native-rollback proof on another fresh stack:
 CINDER_R5_FORK=1 CINDER_R5_PRIVATE=0 bash scripts/test-runtime-fork.sh
 ```
 
-CI runs both modes in `Phoenix integration`, using the existing private
+For autonomous maintenance coverage, run:
+
+```bash
+CINDER_R5_FORK=1 CINDER_R6_MAINTENANCE=1 bash scripts/test-runtime-fork.sh
+```
+
+This runs the real `run` daemon through 24 accelerated observed hourly funding
+generations, all-user epoch alignment, native settlement and a crash during the
+private cash fold. A quiet-book funding shock triggers a bounded liquidation
+without a user order or manual liquidation call; the unaffected flat user's
+cash remains unchanged. The test also verifies delegated fee readiness,
+guarded root publication after liquidation, and OPERATOR_DOWN on shutdown.
+Funding-feed and oracle-clock changes are disclosed localhost-only native
+account fixtures, not mocked Hawkeye or private financial RPC results. This is
+an integration/restart test, not a 24-hour wall-clock soak or public deployment.
+
+CI runs the autonomous private mode and the native-only mode in
+`Phoenix integration`, using the existing private
 `SURFPOOL_RPC_URL` secret as a read-only datasource. Normal Rust unit tests do
 not contact Phoenix or a public RPC. Each mode intentionally skips the other's
 fixture because their private Book accounts share the protocol's canonical PDA.
@@ -530,7 +617,7 @@ This changes reconciliation, not user cash or the reserve-claim layout. Reserve
 root totals still describe signed cash claims, not immediate withdrawable venue
 cash or discounted risk equity; publication must use a successfully reconciled
 inventory snapshot. Flat, settled inventory reduces this identity to cash-only
-I2. Reserve scheduling and replay-safe withdrawals remain later runtime work.
+I2. Replay-safe user withdrawals remain R7 work.
 
 Current pooled exposure and collateral come from official Hawkeye simulations
 over global trader index/active-buffer state, **not only the cold trader account**.
@@ -617,9 +704,9 @@ a collateral submission/recovery port or permission to dispatch.
 
 OPERATOR_DOWN now blocks **new private withdrawal requests** on either Config
 or Book, in addition to entries. Previously authorized payment/completion
-recovery is separate; replay-safe money movement belongs to R7. Continuous
-liquidation/funding/freshness supervision in R6 and an explicit deficit policy
-remain prerequisites to real user funds.
+recovery is separate; replay-safe money movement belongs to R7. The autonomous
+supervisor remains experimental. Production operational hardening and an
+explicit deficit policy remain prerequisites to real user funds.
 
 ## Ownership, gates, and storage
 
@@ -637,13 +724,14 @@ in that directory. Separate directories/hosts are **not** fenced; replicas and
 manual/foreign activity on the pooled trader are unsupported. Abrupt process
 death is not a chain-level liveness watchdog; that belongs to later maintenance.
 
-SQLite uses schema 8. Supported schemas 1–7 upgrade through ordered,
+SQLite uses schema 9. Supported schemas 1–8 upgrade through ordered,
 transactional migrations: schema 2 adds runtime binding, durable users and
 prepared ACK attempts; 3 adds native submission attempts; 4 adds the funding
 outbox; 5 adds funding failure and Book synchronization evidence; 6 adds
 immutable execution budgets; 7 adds unsigned funding cancellation timestamps;
 and 8 adds funding-rate checkpoints, immutable epoch/write hashes, and exact
-signed maintenance attempts. Upgrades never invent a funding-rate baseline.
+signed maintenance attempts; 9 adds serialized maintenance writes, inventory
+anchors and order/registry funding barriers. Upgrades never invent a funding-rate baseline.
 Existing recovery state is preserved, and legacy operations do not acquire
 invented budgets or signatures. An unbound legacy journal with historical
 side effects cannot be adopted silently because its pre-send discipline was
@@ -694,7 +782,5 @@ The whole-account read brackets are deliberately conservative: unrelated venue
 activity or slow RPC reads can prevent a stable, fresh snapshot. Recovery stays
 gated in that case; do not override this check to enable live execution.
 
-Following completion of the native/private execution exit, the next phase is
-autonomous funding/liquidation/heartbeat/root/halt loops (R6), then replay-safe
-money movements and operational hardening (R7).
+Replay-safe money movements and further operational hardening remain R7 work.
 Do not use this prototype with real user funds.

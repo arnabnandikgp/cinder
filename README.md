@@ -33,8 +33,9 @@ The on-chain vault holds shared collateral and configuration on Solana L1. The
 ledger program maintains private user state on the ER. The adapter is the
 testable decision core for reconciling the net residual with Phoenix. The
 operator crate adds durable order tracking, authenticated QFS recovery, and
-authoritative Rise RPC reconciliation. It does not submit new Phoenix orders
-or run autonomous maintenance loops yet.
+authoritative Rise RPC reconciliation, bounded native IOC dispatch,
+and opt-in autonomous maintenance. It remains an experimental runtime with
+explicit policies and conservative fail-closed recovery, not a production service.
 
 Read [the architecture guide](docs/architecture.md) for the account model and
 execution lifecycle, and [the security model](docs/security-model.md) for the

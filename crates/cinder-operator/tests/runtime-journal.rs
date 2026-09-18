@@ -522,6 +522,7 @@ fn version_four_receipt_only_funding_remains_gated_until_book_synchronization() 
 }
 
 fn drop_maintenance_schema(connection: &rusqlite::Connection) {
+    connection.execute_batch("DROP TABLE maintenance_writes; DROP TABLE order_funding_barriers; DROP TABLE funding_inventory_anchor; DROP TABLE funding_registry_barriers;").unwrap();
     connection.execute_batch("DROP TABLE funding_epoch_attempts; DROP TABLE funding_epoch_steps; DROP TABLE funding_epochs; DROP TABLE funding_checkpoint;").unwrap();
 }
 

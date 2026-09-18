@@ -68,6 +68,10 @@ pub trait VenueSubmissionPort {
     ) -> Result<Option<crate::PreparedVenue>, ErrorCode> {
         Ok(None)
     }
+    /// Public accumulator generations bound by the prepared atomic IOC fences.
+    fn prepared_funding_rates(&self) -> Option<BTreeMap<u16, crate::FundingRate>> {
+        None
+    }
     /// Submit exactly the persisted venue ID, direction, integer bound and
     /// L1 deadline. Revalidate fresh risk and expiry before sending.
     fn submit(&mut self, operation: &Operation) -> Result<VenueSubmitResult, ErrorCode>;
@@ -302,6 +306,12 @@ where
     pub fn journal(&self) -> &Journal {
         &self.journal
     }
+    /// Only the serialized production maintenance coordinator may mutate WAL
+    /// state outside the order-state machine.
+    pub(crate) fn maintenance_journal(&mut self) -> &mut Journal {
+        self.entries_enabled = false;
+        &mut self.journal
+    }
     pub fn entries_enabled(&self) -> bool {
         self.entries_enabled
     }
@@ -519,13 +529,29 @@ where
         if self.journal.has_execution_budget_breach()? {
             return self.report(Some(HaltReason::ExecutionBudgetExceeded));
         }
-        if !snapshot.pool_safe || cc::entries_blocked(snapshot.halt_flags & !cc::OPERATOR_DOWN) {
+        // Unsafe entry health must not prevent a separately admitted reduction.
+        // Unknown outcomes and complete accounting checks still precede this.
+        let closing = ready_to_submit
+            .iter()
+            .find(|id| {
+                self.journal
+                    .operation(id)
+                    .is_ok_and(|op| op.intent.identity.kind == crate::OrderKind::Liquidation)
+            })
+            .copied();
+        let reducing = closing.is_some()
+            && snapshot.halt_flags & (cc::INVARIANT_BROKEN | cc::VENUE_BREACH) == 0;
+        if !reducing
+            && (!snapshot.pool_safe
+                || cc::entries_blocked(snapshot.halt_flags & !cc::OPERATOR_DOWN))
+        {
             return self.report(Some(HaltReason::ExternalHalt));
         }
-        if snapshot
-            .solvency
-            .as_ref()
-            .is_none_or(|s| !s.recovery_safe())
+        if !reducing
+            && snapshot
+                .solvency
+                .as_ref()
+                .is_none_or(|s| !s.recovery_safe())
         {
             return self.report(Some(HaltReason::SolvencyUnsafe));
         }
@@ -552,12 +578,13 @@ where
         now_ms = gate_at_ms;
         // Only one submission against a reconciled snapshot per pass. Other
         // prepared operations wait for this outcome and a new risk observation.
-        if let Some(id) = ready_to_submit.first() {
+        if let Some(id) = closing.as_ref().or_else(|| ready_to_submit.first()) {
             if self.venue.submission_enabled() {
-                if snapshot
-                    .solvency
-                    .as_ref()
-                    .is_none_or(|s| !s.configured_checks_pass())
+                if !reducing
+                    && snapshot
+                        .solvency
+                        .as_ref()
+                        .is_none_or(|s| !s.configured_checks_pass())
                 {
                     return self.report(Some(HaltReason::AdmissionUnsafe));
                 }
@@ -753,6 +780,9 @@ where
                 return Ok(());
             }
         };
+        if let Some(rates) = self.venue.prepared_funding_rates() {
+            self.journal.record_order_funding_barrier(id, &rates)?;
+        }
         let operation = if let Some(attempt) = &prepared {
             self.journal.record_prepared_venue(id, attempt, now_ms)?
         } else {
@@ -865,6 +895,9 @@ where
 }
 
 impl ReconciliationSnapshot {
+    pub(crate) fn accounting_holds(&self) -> bool {
+        self.is_fresh_complete(crate::unix_ms()) && self.invariants_hold()
+    }
     fn is_fresh_complete(&self, now_ms: u64) -> bool {
         self.complete
             && AdmissionObservation {

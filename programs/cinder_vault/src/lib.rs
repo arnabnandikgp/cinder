@@ -30,6 +30,13 @@ pub mod cinder_vault {
         execution::guard_execution(ctx, guard, after)
     }
 
+    pub fn finish_phoenix_execution<'info>(
+        ctx: Context<'info, GuardPhoenixExecution<'info>>,
+        guard_hash: [u8; 32],
+    ) -> Result<()> {
+        execution::finish_execution(ctx, guard_hash)
+    }
+
     pub fn initialize(
         ctx: Context<Initialize>,
         adapter: Pubkey,
@@ -259,6 +266,46 @@ pub mod cinder_vault {
         rr.total_reserved = total_reserved;
         rr.book_hash = book_hash;
         rr.committed_at_base_slot = Clock::get()?.slot;
+        Ok(())
+    }
+
+    /// Publication is compare-and-set: an uncertain send cannot advance two
+    /// epochs, and debt is part of the public aggregate cash commitment.
+    pub fn write_reserve_root_guarded(
+        ctx: Context<WriteReserveRoot>,
+        expected_epoch: u64,
+        root: [u8; 32],
+        user_count: u32,
+        total_free: u64,
+        total_reserved: u64,
+        total_bad_debt: u64,
+        book_hash: [u8; 32],
+    ) -> Result<()> {
+        require_keys_eq!(
+            ctx.accounts.config.adapter,
+            ctx.accounts.adapter.key(),
+            VaultError::Unauthorized
+        );
+        let rr = &mut ctx.accounts.reserve_root;
+        require!(
+            rr.schema_version == cc::ACCOUNT_SCHEMA_VERSION,
+            VaultError::UnsupportedAccountSchema
+        );
+        require!(rr.epoch == expected_epoch, VaultError::ExecutionGuardFailed);
+        rr.epoch = expected_epoch.checked_add(1).ok_or(VaultError::Overflow)?;
+        rr.root = root;
+        rr.user_count = user_count;
+        rr.total_free = total_free;
+        rr.total_reserved = total_reserved;
+        rr.total_bad_debt = total_bad_debt;
+        rr.book_hash = book_hash;
+        rr.committed_at_base_slot = Clock::get()?.slot;
+        Ok(())
+    }
+
+    /// Restrictive operator mirror. Administrative clearing remains separate.
+    pub fn add_operator_halt(ctx: Context<AdapterConfig>, flags: u8) -> Result<()> {
+        ctx.accounts.config.paused |= flags;
         Ok(())
     }
 

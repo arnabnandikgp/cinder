@@ -12,5 +12,6 @@
   "global_trader_index": ["HCrPXLByGqRh2szQi3gj7oRdRVBNi1gccAyn4CQCT3HK"],
   "active_trader_buffer": ["2U32rSzzrQS3eVmGHsnbw5kcqKF3wQXpHGd3hMq5YJok"],
   "solvency_policy": null,
-  "execution_policy": null
+  "execution_policy": null,
+  "maintenance_policy": null
 }

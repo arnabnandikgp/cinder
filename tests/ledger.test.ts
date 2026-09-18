@@ -318,6 +318,14 @@ describe("ledger accounts and order machine", () => {
           expect((await vault.account.config.fetch(configPda)).paused).to.equal(expected);
           expect((await ledger.account.book.fetch(bookPda)).halt).to.equal(expected);
         }
+        await expectRejected(vault.methods.addOperatorHalt(32).accountsPartial({ adapter: unauthorizedAdapter.publicKey, config: configPda }).signers([unauthorizedAdapter]).rpc(), /Unauthorized/);
+        await expectRejected(ledger.methods.addOperatorHalt(32).accountsPartial({ adapter: unauthorizedAdapter.publicKey, config: configPda, book: bookPda }).signers([unauthorizedAdapter]).rpc(), /Unauthorized/);
+        for (const addition of [32, 0, 32]) {
+          await vault.methods.addOperatorHalt(addition).accountsPartial({ adapter: adapter.publicKey, config: configPda }).signers([adapter]).rpc();
+          await ledger.methods.addOperatorHalt(addition).accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda }).signers([adapter]).rpc();
+          expect((await vault.account.config.fetch(configPda)).paused).to.equal(flags | 32);
+          expect((await ledger.account.book.fetch(bookPda)).halt).to.equal(flags | 32);
+        }
       } finally {
         await vault.methods.setHalt(configBefore).accountsPartial({ admin: payer.publicKey, config: configPda }).rpc();
         await ledger.methods.setBookHalt(bookBefore).accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda }).signers([adapter]).rpc();
@@ -672,6 +680,38 @@ describe("ledger accounts and order machine", () => {
         const code = e.error?.errorCode?.code ?? e.toString();
         expect(code).to.match(/ReduceOnlyIncrease/);
       }
+    });
+
+    it("bounded liquidation cannot flip or cancel an unresolved intent and restores on failure", async () => {
+      const before = await ledger.account.userLedger.fetch(userLedgerPda);
+      const beforeBook = await ledger.account.book.fetch(bookPda);
+      const liquidationAccounts = { adapter: adapter.publicKey, config: configPda, userLedger: userLedgerPda, book: bookPda };
+      for (const quantity of [0, LOTS + 1]) {
+        try {
+          await ledger.methods.liquidateUserBounded(ASSET_SOL, oid(88), LIMIT_TICKS, LAST_VALID_SLOT, new BN(quantity), new BN(0))
+            .accountsPartial(liquidationAccounts).signers([adapter]).rpc();
+          expect.fail("invalid bounded liquidation must reject");
+        } catch (e: any) { expect(e.error?.errorCode?.code ?? e.toString()).to.match(/Overflow/); }
+      }
+      const close = 4;
+      await ledger.methods.liquidateUserBounded(ASSET_SOL, oid(89), LIMIT_TICKS, LAST_VALID_SLOT, new BN(close), new BN((LOTS - close) * IM_PER_LOT))
+        .accountsPartial(liquidationAccounts).signers([adapter]).rpc();
+      const tentative = await ledger.account.userLedger.fetch(userLedgerPda);
+      expect(tentative.positions[0].lots.toNumber()).to.equal(LOTS - close);
+      expect(tentative.positions[0].entryQuoteLots.toString()).to.equal(before.positions[0].entryQuoteLots.toString());
+      expect(tentative.nonce.toString()).to.equal(before.nonce.toString());
+      expect((await ledger.account.book.fetch(bookPda)).residuals).to.deep.equal(beforeBook.residuals);
+      try {
+        await ledger.methods.liquidateUserBounded(ASSET_SOL, oid(88), LIMIT_TICKS, LAST_VALID_SLOT, new BN(1), new BN(0))
+          .accountsPartial(liquidationAccounts).signers([adapter]).rpc();
+        expect.fail("must not cancel the first unresolved liquidation");
+      } catch (e: any) { expect(e.error?.errorCode?.code ?? e.toString()).to.match(/OidCap/); }
+      await ledger.methods.ackPhoenixFail(oid(89), new BN(LOTS * IM_PER_LOT)).accountsPartial(liquidationAccounts).signers([adapter]).rpc();
+      const restored = await ledger.account.userLedger.fetch(userLedgerPda);
+      expect(restored.pendingOidCount).to.equal(0);
+      expect(restored.positions[0].lots.toString()).to.equal(before.positions[0].lots.toString());
+      expect(restored.positions[0].entryQuoteLots.toString()).to.equal(before.positions[0].entryQuoteLots.toString());
+      expect(restored.free.add(restored.reserved).toString()).to.equal(before.free.add(before.reserved).toString());
     });
 
     it("liquidate_user is adapter-signed, tentative, Book moves on ack", async () => {
@@ -1276,6 +1316,23 @@ describe("ledger accounts and order machine", () => {
         Buffer.from(mid.root).toString("hex")
       );
     });
+  });
+
+  it("guarded reserve publication commits debt and rejects an old epoch without mutation", async () => {
+    const before = await vault.account.reserveRoot.fetch(reservePda);
+    const accounts = { adapter: adapter.publicKey, config: configPda, reserveRoot: reservePda };
+    const root = Array(32).fill(43), hash = Array(32).fill(44);
+    await vault.methods.writeReserveRootGuarded(before.epoch, root, 2, new BN(12), new BN(13), new BN(14), hash)
+      .accountsPartial(accounts).signers([adapter]).rpc();
+    const published = await vault.account.reserveRoot.fetch(reservePda);
+    expect(published.epoch.toString()).to.equal(before.epoch.add(new BN(1)).toString());
+    expect(published.totalBadDebt.toNumber()).to.equal(14);
+    try {
+      await vault.methods.writeReserveRootGuarded(before.epoch, Array(32).fill(45), 0, new BN(0), new BN(0), new BN(0), hash)
+        .accountsPartial(accounts).signers([adapter]).rpc();
+      expect.fail("old expected epoch must reject");
+    } catch (e: any) { expect(e.error?.errorCode?.code ?? e.toString()).to.match(/ExecutionGuardFailed/); }
+    expect(await vault.account.reserveRoot.fetch(reservePda)).to.deep.equal(published);
   });
 
   describe("vault PDA and settlement action", () => {

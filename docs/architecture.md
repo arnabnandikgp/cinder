@@ -17,8 +17,9 @@ addresses for their long-lived accounts.
 `cinder-adapter` contains the testable decision logic, not a live daemon.
 `cinder-operator` owns the durable journal and serial recovery coordinator.
 Its injectable interfaces now include authenticated QFS and official Rise RPC
-recovery ports. Live venue dispatch and autonomous maintenance loops remain
-future work; the recovery-only command leaves entries halted before exit.
+recovery ports, bounded native IOC dispatch, and opt-in autonomous funding,
+liquidation, heartbeat, collateral and reserve maintenance. One-pass commands
+leave entries halted before exit; the continuous service is experimental.
 See [operator recovery](operator.md) for the implemented boundary.
 
 ## Privacy boundary

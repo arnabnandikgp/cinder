@@ -699,6 +699,18 @@ impl LedgerRecoveryPort for QfsLedger {
                 context.config.solvency_policy.as_ref(),
                 crate::unix_ms(),
             )?;
+            // An accounting identity can still hold for fully netted users
+            // while their gross funding charges have not been allocated yet.
+            // It must not reopen entries against an older accumulator.
+            let funding_current = if let Some(cp) = &context.funding_checkpoint {
+                cp.rates() == &view.funding_rates()?
+                    && book.funding_epoch == cp.epoch()
+                    && ledgers
+                        .iter()
+                        .all(|(_, l)| l.last_funding_epoch == cp.epoch())
+            } else {
+                true
+            };
             let (after, after_ledgers, _) = context.private_ledgers()?;
             if book_fingerprint(&book)? != book_fingerprint(&after)?
                 || fingerprints
@@ -725,7 +737,7 @@ impl LedgerRecoveryPort for QfsLedger {
                 pool_unsettled_funding_usdc: view.funding,
                 cash_in_flight_usdc: 0,
                 halt_flags: book.halt | view.halt,
-                pool_safe: view.safe,
+                pool_safe: view.safe && funding_current,
                 solvency: Some(solvency),
             })
         })()
@@ -739,8 +751,28 @@ fn admission(c: &mut Context, op: &Operation) -> Result<(crate::rise::RiseView, 
     let assets = c.config.markets.iter().map(|m| m.cinder_asset_id).collect();
     let view = crate::rise::load(c, &assets)?;
     let (after_book, after, _) = c.private_ledgers()?;
-    if cc::entries_blocked((book.halt | view.halt) & !cc::OPERATOR_DOWN)
-        || book.halt & cc::OPERATOR_DOWN == 0
+    let liquidation = op.intent.identity.kind == crate::OrderKind::Liquidation;
+    let funding_allocated = if let Some(cp) = &c.funding_checkpoint {
+        if cp.rates() != &view.funding_rates()?
+            || book.funding_epoch != cp.epoch()
+            || ledgers
+                .iter()
+                .any(|(_, l)| l.last_funding_epoch != cp.epoch())
+        {
+            return Err(RuntimeError::FundingAllocationRequired);
+        }
+        true
+    } else {
+        false
+    };
+    if liquidation && !funding_allocated {
+        return Err(RuntimeError::FundingAllocationRequired);
+    }
+    if (if liquidation {
+        (book.halt | view.halt) & (cc::INVARIANT_BROKEN | cc::VENUE_BREACH) != 0
+    } else {
+        cc::entries_blocked((book.halt | view.halt) & !cc::OPERATOR_DOWN)
+    }) || book.halt & cc::OPERATOR_DOWN == 0
         || view.halt & cc::OPERATOR_DOWN == 0
         || book_fingerprint(&book)? != book_fingerprint(&after_book)?
         || ledgers
@@ -771,12 +803,32 @@ fn admission(c: &mut Context, op: &Operation) -> Result<(crate::rise::RiseView, 
         .solvency_policy
         .as_ref()
         .ok_or(RuntimeError::Configuration)?;
-    let shortfall =
+    let shortfall = (if liquidation {
+        crate::liquidation_admission::assess(
+            &view,
+            &ledgers,
+            op,
+            execution,
+            solvency,
+            crate::unix_ms(),
+        )
+    } else if funding_allocated {
+        crate::admission::assess_with_funding(
+            &view,
+            &ledgers,
+            op,
+            execution,
+            solvency,
+            crate::unix_ms(),
+            true,
+        )
+    } else {
         crate::admission::assess(&view, &ledgers, op, execution, solvency, crate::unix_ms())
-            .map_err(|cause| {
-                eprintln!("Post-intent risk assessment failed: {cause}");
-                cause
-            })?;
+    })
+    .map_err(|cause| {
+        eprintln!("Post-intent risk assessment failed: {cause}");
+        cause
+    })?;
     Ok((view, shortfall, observed))
 }
 

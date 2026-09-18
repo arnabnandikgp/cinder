@@ -136,10 +136,13 @@ impl Journal {
                 Err(JournalError::IntentConflict)
             };
         }
-        self.connection.execute(
+        let tx = self.connection.transaction()?;
+        tx.execute(
             "INSERT INTO funding_checkpoint VALUES(1,?)",
             params![encode(c)?],
         )?;
+        Self::write_inventory_anchor(&tx, c)?;
+        tx.commit()?;
         Ok(())
     }
     /// After an authenticated inventory-changing ACK, rebind only if BOTH rate
@@ -158,15 +161,18 @@ impl Journal {
         {
             return Err(JournalError::IntentConflict);
         }
-        self.connection.execute(
+        let tx = self.connection.transaction()?;
+        tx.execute(
             "UPDATE funding_checkpoint SET payload=? WHERE singleton=1",
             params![encode(c)?],
         )?;
+        Self::write_inventory_anchor(&tx, c)?;
+        tx.commit()?;
         Ok(())
     }
     pub fn has_unresolved_maintenance(&self) -> Result<bool, JournalError> {
         Ok(self.connection.query_row(
-            "SELECT EXISTS(SELECT 1 FROM funding_epochs WHERE completed=0)",
+            "SELECT EXISTS(SELECT 1 FROM funding_epochs WHERE completed=0) OR EXISTS(SELECT 1 FROM maintenance_writes WHERE state IN (0,1))",
             [],
             |r| r.get(0),
         )?)
@@ -464,6 +470,7 @@ impl Journal {
             "UPDATE funding_epochs SET completed=1 WHERE epoch=?",
             params![u64_blob(observed.epoch).as_slice()],
         )?;
+        Self::write_inventory_anchor(&tx, &r.target)?;
         tx.commit()?;
         Ok(())
     }
@@ -492,7 +499,11 @@ impl Journal {
             if let Some(last) = &last_completed {
                 if last.epoch != r.previous.epoch
                     || last.rates != r.previous.rates
-                    || last.registry_hash != r.previous.registry_hash
+                    || !self.funding_registry_transition(
+                        last.registry_hash,
+                        r.previous.registry_hash,
+                        last.epoch,
+                    )?
                     || last.native_slot > r.previous.native_slot
                     || last.observed_ms > r.previous.observed_ms
                 {
@@ -517,10 +528,21 @@ impl Journal {
             }
         }
         if let Some(last) = &last_completed {
+            let registry_valid = cp
+                .as_ref()
+                .map(|c| {
+                    self.funding_registry_transition(
+                        last.registry_hash,
+                        c.registry_hash,
+                        last.epoch,
+                    )
+                })
+                .transpose()?
+                .unwrap_or(false);
             if cp.as_ref().is_none_or(|c| {
                 c.epoch != last.epoch
                     || c.rates != last.rates
-                    || c.registry_hash != last.registry_hash
+                    || !registry_valid
                     || c.native_slot < last.native_slot
                     || c.observed_ms < last.observed_ms
             }) {

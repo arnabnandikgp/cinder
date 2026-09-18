@@ -78,3 +78,35 @@ export async function refreshLocalMark(connection: Connection, rpc: (method: str
     await rpc("surfnet_setAccount", [assetMap.toBase58(), { owner: program.toBase58(), data: data.toString("hex") }]);
     return metadata;
 }
+
+/** Deterministic public funding-feed fixture on a disposable localhost fork.
+ * Only the pinned native accumulator changes; Hawkeye, native settlement and
+ * private allocation still execute their actual program code.
+ */
+export async function setLocalFundingGeneration(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>, program: PublicKey, assetMap: PublicKey, symbol: string, rate: bigint, updatedSeconds: bigint) {
+    const endpoint = new URL(connection.rpcEndpoint);
+    if (endpoint.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(endpoint.hostname)) throw new Error("funding fixture refuses non-local RPC");
+    if (updatedSeconds <= 0n || updatedSeconds * 1000n > BigInt(Date.now())) throw new Error("invalid funding fixture timestamp");
+    const account = await connection.getAccountInfo(assetMap);
+    if (!account?.owner.equals(program) || account.executable) throw new Error("untrusted funding asset map");
+    const matches = rise.decodePerpAssetMap(account.data).metadata.entries.filter(e => e.key === symbol);
+    if (matches.length !== 1) throw new Error("ambiguous funding fixture market");
+    const market = matches[0].value;
+    const markOffset = account.data.indexOf(new PublicKey(market.staticMarketParams.marketAccount).toBuffer()) - 888;
+    const offset = markOffset + 1264;
+    if (markOffset < 80 || (markOffset - 80) % 1584 !== 0 || offset + 96 > account.data.length
+        || account.data.readBigInt64LE(offset + 32) !== market.fundingAccumulator.cumulativeFundingRate
+        || account.data.readBigUInt64LE(offset + 48) !== market.fundingAccumulator.lastFundingUpdateTimestamp
+        || account.data.readBigUInt64LE(offset + 40) !== market.fundingAccumulator.startIntervalTimestamp
+        || market.fundingAccumulator.fundingIntervalSeconds <= 0n) throw new Error("native funding layout mismatch");
+    const data = Buffer.from(account.data);
+    data.writeBigInt64LE(rate, offset + 32);
+    // Keep the native interval clock coherent too. Rewinding only lastUpdate
+    // leaves it before startInterval and creates an invalid venue fixture.
+    data.writeBigUInt64LE(updatedSeconds - updatedSeconds % market.fundingAccumulator.fundingIntervalSeconds, offset + 40);
+    data.writeBigUInt64LE(updatedSeconds, offset + 48);
+    await rpc("surfnet_setAccount", [assetMap.toBase58(), { owner: program.toBase58(), data: data.toString("hex") }]);
+    const after = await connection.getAccountInfo(assetMap);
+    const observed = after && rise.decodePerpAssetMap(after.data).metadata.entries.find(e => e.key === symbol)?.value.fundingAccumulator;
+    if (!observed || observed.cumulativeFundingRate !== rate || observed.lastFundingUpdateTimestamp !== updatedSeconds) throw new Error("funding fixture did not persist");
+}
