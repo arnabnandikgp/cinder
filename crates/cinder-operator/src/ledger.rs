@@ -848,10 +848,10 @@ fn maps_equal(a: &BTreeMap<u16, i64>, b: &BTreeMap<u16, i64>) -> bool {
         .chain(b.keys())
         .all(|k| a.get(k).copied().unwrap_or(0) == b.get(k).copied().unwrap_or(0))
 }
-fn private_fingerprint(l: &cinder_ledger::UserLedger) -> Result<Vec<u8>> {
+pub(crate) fn private_fingerprint(l: &cinder_ledger::UserLedger) -> Result<Vec<u8>> {
     borsh::to_vec(l).map_err(|_| RuntimeError::Decode)
 }
-fn book_fingerprint(l: &cinder_ledger::Book) -> Result<Vec<u8>> {
+pub(crate) fn book_fingerprint(l: &cinder_ledger::Book) -> Result<Vec<u8>> {
     borsh::to_vec(l).map_err(|_| RuntimeError::Decode)
 }
 

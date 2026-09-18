@@ -432,6 +432,46 @@ pub struct OperatorRuntime {
     _pool_lock: File,
 }
 impl OperatorRuntime {
+    /// Read-only whole-book maintenance assessment. This does not complete a
+    /// liquidation or authorize a heartbeat/entry gate release. The outer
+    /// service must coordinate subsequent mutations and finality separately.
+    pub fn maintenance_health(&mut self) -> Result<crate::maintenance::MaintenanceHealth> {
+        let mut c = self.context.borrow_mut();
+        let (book, ledgers, _) = c.private_ledgers()?;
+        let assets = c.config.markets.iter().map(|m| m.cinder_asset_id).collect();
+        let view = crate::rise::load(&mut c, &assets)?;
+        let (after, after_ledgers, _) = c.private_ledgers()?;
+        if crate::ledger::book_fingerprint(&book)? != crate::ledger::book_fingerprint(&after)?
+            || ledgers
+                .iter()
+                .map(|(a, l)| Ok((*a, crate::ledger::private_fingerprint(l)?)))
+                .collect::<Result<Vec<_>>>()?
+                != after_ledgers
+                    .iter()
+                    .map(|(a, l)| Ok((*a, crate::ledger::private_fingerprint(l)?)))
+                    .collect::<Result<Vec<_>>>()?
+        {
+            return Err(RuntimeError::Stale);
+        }
+        let ranked = crate::maintenance::scan_user_health(&view, &ledgers, unix_ms())?;
+        Ok(crate::maintenance::MaintenanceHealth {
+            users_scanned: ranked.len(),
+            confirmed_positions_scanned: ranked
+                .iter()
+                .map(|h| {
+                    h.confirmed_positions
+                        .iter()
+                        .filter(|(_, lots)| *lots != 0)
+                        .count()
+                })
+                .sum(),
+            users_below_mm: ranked.iter().filter(|h| h.below_mm()).count(),
+            users_below_im: ranked
+                .iter()
+                .filter(|h| h.effective_equity_usdc < i128::from(h.initial_margin_usdc))
+                .count(),
+        })
+    }
     pub fn open(config: RuntimeConfig, journal_path: &Path) -> Result<Self> {
         Self::open_mode(config, journal_path, false)
     }

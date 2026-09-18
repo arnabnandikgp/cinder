@@ -19,7 +19,9 @@ mod execution;
 mod funding;
 mod journal;
 mod ledger;
+mod maintenance;
 mod recovery;
+mod reserve;
 mod rise;
 mod rpc;
 mod runtime;
@@ -30,6 +32,8 @@ mod venue;
 #[cfg(test)]
 #[path = "../tests/support/venue_fixture.rs"]
 mod venue_fixture;
+pub use maintenance::{MaintenanceHealth, MaintenancePlan, MaintenanceProgress, MaintenanceTask};
+pub use reserve::{build_reserve_snapshot, ReserveSnapshot};
 pub use rpc::{load_signer, unix_ms, RuntimeError};
 pub use runtime::{MarketMapping, OperatorRuntime, RuntimeConfig};
 pub use solvency::{SolvencyPolicy, SolvencyReport, StressScenario};

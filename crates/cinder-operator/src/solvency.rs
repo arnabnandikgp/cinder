@@ -119,10 +119,12 @@ impl SolvencyReport {
     }
 }
 
-struct UserValue {
+pub(crate) struct UserValue {
     raw_equity: i128,
-    effective_equity: i128,
-    initial_margin: u64,
+    pub effective_equity: i128,
+    pub initial_margin: u64,
+    pub maintenance_margin: u64,
+    pub confirmed_positions: Vec<(u16, i64)>,
     notional: u64,
     market_notional: BTreeMap<u16, u64>,
 }
@@ -135,7 +137,7 @@ fn notional(view: &RiseView, asset: u16, lots: i64) -> Result<u64> {
         .ok_or(RuntimeError::Decode)
 }
 
-fn value_user(view: &RiseView, ledger: &UserLedger, now_ms: u64) -> Result<UserValue> {
+pub(crate) fn value_user(view: &RiseView, ledger: &UserLedger, now_ms: u64) -> Result<UserValue> {
     if ledger.positions_len as usize > ledger.positions.len() || ledger.withdrawable != 0 {
         return Err(RuntimeError::Unsupported);
     }
@@ -145,6 +147,8 @@ fn value_user(view: &RiseView, ledger: &UserLedger, now_ms: u64) -> Result<UserV
         raw_equity: cash,
         effective_equity: cash,
         initial_margin: 0,
+        maintenance_margin: 0,
+        confirmed_positions: Vec::new(),
         notional: 0,
         market_notional: BTreeMap::new(),
     };
@@ -155,7 +159,22 @@ fn value_user(view: &RiseView, ledger: &UserLedger, now_ms: u64) -> Result<UserV
         if value.market_notional.insert(asset, n).is_some() {
             return Err(RuntimeError::Identity);
         }
-        let quote = position_risk(view, asset, lots, position.entry_quote_lots, n, 0, now_ms)?;
+        value.notional = value.notional.checked_add(n).ok_or(RuntimeError::Decode)?;
+        value.confirmed_positions.push((asset, lots));
+    }
+    for (position, &(asset, lots)) in ledger.positions[..ledger.positions_len as usize]
+        .iter()
+        .zip(&value.confirmed_positions)
+    {
+        let quote = position_risk(
+            view,
+            asset,
+            lots,
+            position.entry_quote_lots,
+            value.notional,
+            0,
+            now_ms,
+        )?;
         let market = &view.markets[&asset];
         let raw_upnl = i128::from(lots)
             .checked_mul(i128::from(market.mark_price.as_inner()))
@@ -177,7 +196,10 @@ fn value_user(view: &RiseView, ledger: &UserLedger, now_ms: u64) -> Result<UserV
             .initial_margin
             .checked_add(quote.post_position_im_usdc)
             .ok_or(RuntimeError::Decode)?;
-        value.notional = value.notional.checked_add(n).ok_or(RuntimeError::Decode)?;
+        value.maintenance_margin = value
+            .maintenance_margin
+            .checked_add(quote.post_position_mm_usdc)
+            .ok_or(RuntimeError::Decode)?;
     }
     Ok(value)
 }

@@ -33,6 +33,66 @@ New dispatch is refused across nonzero native/private unsettled funding until
 the authenticated funding-allocation loop is implemented. R5 does not invent
 a settlement distribution to keep an order moving.
 
+## Maintenance decision boundary
+
+The maintenance foundation is implemented, but **there is no autonomous `run`
+command yet**. `recover` and `execute` retain their one-pass semantics. Timer
+decisions, health assessments, and claim encodings do not grant entry permission
+or claim that liquidation/funding/publication has completed.
+
+`MaintenanceProgress::plan` coalesces wakeups into a bounded priority list:
+order recovery first, followed by feed refresh and restrictive halt mirroring,
+funding accrual/fold, liquidation scanning, expiry, collateral, heartbeat, and
+reserve publication. Process at most one mutating maintenance intent before
+reobserving/replanning. Completion timestamps advance only after successful
+work, not when a timer wakes. They are Unix milliseconds, never ER/L1 slots.
+Future/backwards clocks fail closed. Stale marks still wake liquidation queue
+draining, but cannot be used to classify a new queue. A timer alone cannot mint
+`Book.last_scan_ms`; heartbeat eligibility requires a completed live scan.
+Funding accrual and fold intents require authoritative venue observations;
+waiting 24 hours is not settlement evidence.
+
+`OperatorRuntime::maintenance_health` performs a coherent, authenticated private
+book read around the official Rise view. It returns aggregate counts only.
+The private scanner projects confirmed lots, sums IM/MM across the entire user
+book, counts cash/debt once, includes unsettled funding, discounts positive
+uPnL through the shared risk engine, and keeps losses in full. Users are ranked
+by signed MM deficit with deterministic identity tie-breaking. Pool safety or
+zero net venue exposure cannot hide an unhealthy private user. Assessment does
+not submit a liquidation, write a heartbeat, or clear either ownership gate.
+
+`build_reserve_snapshot` requires all registered ledgers, matching identities,
+aligned funding epochs, no pending OIDs, and matching private net lots/Book
+residuals. Outstanding withdrawals remain unsupported pending their outbox.
+Checked aggregate totals include bad debt. Publication must additionally prove
+fresh complete venue I1/I2, resolve financial outboxes, and recheck snapshot
+coherence; this encoding helper does not supply those proofs.
+
+The versioned canonical list is:
+
+```text
+ASCII("cinder:cash-claims:v1") || schema_version:u8 || user_count:u32LE
+then rows sorted by raw user pubkey bytes:
+  pubkey:32 || free:u64LE || reserved:u64LE || bad_debt:u64LE || n_pos:u8
+  then (asset_id:u16LE || confirmed_lots:i64LE), sorted by asset_id
+```
+
+`root = SHA256(list)`. This preserves the frozen claim-row fields; it is a cash
+claim commitment, not a Merkle escape proof or a raw-equity/solvency assertion.
+`book_hash = SHA256(ASCII("cinder:book:v1") || full Anchor Book account bytes)`,
+including the discriminator. Private claim rows are never public logs or
+journal payloads. The publication intent is due after 20 acknowledged fills or
+30 seconds of dirty state since the last publication (first unpublished ACK
+when no prior publication exists), accelerated on liquidation/debt incidents.
+Neither counter completion nor elapsed time proves publication finality.
+
+Live feed supervision, restart-safe funding allocation/fold, liquidation
+submission, atomic halt mirroring, heartbeat writes, and guarded reserve
+publication still need to be wired through the single mutation coordinator
+before autonomous service can be enabled.
+
+## Bounded native execution
+
 Each native transaction is `[compute budget, before fence, Phoenix IOC, after
 fence]`, independent of PER commits/Magic Actions. The first fence hashes the
 public Config/native account snapshot, checks age and the orderbook fee counter,
