@@ -29,6 +29,19 @@ export function localClockTimestampMs(clock: { owner: PublicKey; data: Buffer } 
     return timestamp;
 }
 
+/** Await a real local block timestamp, without substituting RPC or oracle data.
+ * Simulations can advance Surfpool's clock after the pre-read clock fixture.
+ */
+export async function waitForLocalBlockTime(timestampSeconds: number, now = Date.now, wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))) {
+    const target = timestampSeconds * 1000;
+    const wall = now();
+    if (!Number.isSafeInteger(timestampSeconds) || timestampSeconds <= 0 || !Number.isSafeInteger(target)
+        || !Number.isSafeInteger(wall) || wall <= 0) throw new Error("invalid local block time");
+    const delay = target - wall;
+    if (delay > 5000) throw new Error("local fork clock is too far ahead");
+    if (delay > 0) await wait(delay + 1);
+}
+
 /** Let wall time catch up with Surfpool's actual clock before a new process. */
 export async function settleLocalClock(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>) {
     const endpoint = new URL(connection.rpcEndpoint);

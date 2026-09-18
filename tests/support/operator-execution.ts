@@ -13,8 +13,9 @@ import { createServer } from "http";
 import type { AddressInfo } from "net";
 import type { CinderLedger } from "../../target/types/cinder_ledger";
 import type { CinderVault } from "../../target/types/cinder_vault";
-import { refreshLocalMark, settleLocalClock, setLocalFundingGeneration } from "./native-oracle";
+import { refreshLocalMark, settleLocalClock, setLocalFundingGeneration, waitForLocalBlockTime } from "./native-oracle";
 import {feeBalance,delegateFeeBalance,magicVaultInstructions} from "../../scripts/provision-per-fees";
+import { seedLocalLiquidity } from "./native-liquidity";
 
 export async function verifyOperatorExecution(ctx: {
     endpoint: string; operator: Keypair; vault: anchor.Program<CinderVault>; config: PublicKey;
@@ -116,7 +117,13 @@ export async function verifyOperatorExecution(ctx: {
         }
         if (method !== "getProgramAccounts" || !owners.includes(String(params[0]))) {
             const result = await ctx.rpc(method, params);
-            if (method === "getBlockTime" && typeof result === "number") lastBlockAgeMs = Date.now() - result * 1000;
+            if (method === "getBlockTime" && typeof result === "number") {
+                // Await the actual queried block, including slots produced by
+                // simulations AFTER the opening oracle fixture. Preserve its
+                // timestamp and the production future/staleness rejection.
+                await waitForLocalBlockTime(result);
+                lastBlockAgeMs = Date.now() - result * 1000;
+            }
             if (method === "getMultipleAccounts" && (params[0] as string[]).length >= 7 && (params[0] as string[]).includes(assetMap.toBase58())) {
                 const rows = JSON.stringify((result as { value: unknown }).value);
                 if (nativeReadOpen) { openingRows = rows; openingTime = Date.now(); }
@@ -187,6 +194,10 @@ export async function verifyOperatorExecution(ctx: {
             }
             recentCalls.push(`L1:${input.method}:done:${Math.round(performance.now()-started)}ms`);
             if (recentCalls.length > 40) recentCalls.shift();
+            if (input.method === "sendTransaction" && typeof result === "string"
+                && Transaction.from(Buffer.from(String(input.params[0]), "base64")).instructions.some(ix => ix.programId.equals(ctx.native))) {
+                lastNativeSignature = result;
+            }
             if (sent(input.method, input.params, false)) { response.destroy(); return; }
             response.end(JSON.stringify({ jsonrpc: "2.0", id: input.id, result }));
         } catch (error) {
@@ -201,6 +212,7 @@ export async function verifyOperatorExecution(ctx: {
     });
     const recentCalls: string[] = [];
     let lastNativeError = "none";
+    let lastNativeSignature: string | undefined;
     const qfsServer = createServer(async (request, response) => {
         try {
             const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(Buffer.from(chunk));
@@ -240,6 +252,7 @@ export async function verifyOperatorExecution(ctx: {
         }
         mkdirSync(join(directory, "locks"), { mode: 0o700 });
         writeFileSync(join(directory, "operator.json"), JSON.stringify(Array.from(ctx.operator.secretKey)), { mode: 0o600 });
+        const liquidity = await seedLocalLiquidity({ connection, operator: ctx.operator, native: ctx.native, quote: ctx.quote, assetMap, indexes: ctx.indexes, buffers: ctx.buffers, rpc: ctx.rpc, send: ctx.send });
         const metadata = await refreshMark();
         const unitQuote = metadata.oraclePrice.markPrice.price.ticks * metadata.staticMarketParams.tickSize;
         const settings = {
@@ -289,6 +302,10 @@ export async function verifyOperatorExecution(ctx: {
             while ((result.code === 3 || result.code === null || result.code === 1 && result.output.includes("operator runtime: Stale")) && performance.now() < deadline) { await new Promise(resolve => setTimeout(resolve, 250)); result = await run(); }
             let journalState = "";
             if (result.code !== 0) {
+                if (lastNativeSignature) {
+                    const receipt = await connection.getTransaction(lastNativeSignature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+                    lastNativeError += `\nActual native receipt ${lastNativeSignature}: ${JSON.stringify(receipt?.meta?.err)} ${(receipt?.meta?.logMessages || []).slice(-50).join("\n")}`;
+                }
                 try {
                     journalState = execFileSync("sqlite3", [journalPath, "SELECT state,last_error_code,count(*) FROM operations GROUP BY state,last_error_code; SELECT 'funding',count(*),count(signature),count(confirmed_slot),count(book_synced_slot),count(failed_slot) FROM funding_outbox; SELECT 'maintenance',state,count(*) FROM maintenance_writes GROUP BY state;"], { encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "pipe"] });
                 } catch {
@@ -297,12 +314,25 @@ export async function verifyOperatorExecution(ctx: {
             }
             expect(result.code, `case ${caseIndex}: ${result.output}\nJournal state/error counts: ${journalState}\nLast native error: ${lastNativeError}\nRecent RPC methods: ${recentCalls.join(", ")}`).to.equal(0);
         };
-        const fundingStart = BigInt(Math.floor(Date.now() / 1000) - 24 * 3600 - 60);
         const fundingRate = metadata.fundingAccumulator.cumulativeFundingRate;
-        if (process.env.CINDER_R6_MAINTENANCE === "1") {
-            await setLocalFundingGeneration(connection, ctx.rpc, ctx.native, assetMap, "SOL", fundingRate, fundingStart);
+        // Keep Phoenix's native funding clock intact while exercising trades.
+        // Funding generations below compress hourly rate changes into real,
+        // increasing wall-clock timestamps; they do not rewind venue time.
+        let fundingTimestamp = metadata.fundingAccumulator.lastFundingUpdateTimestamp;
+        const nextFundingTimestamp = async () => {
+            await waitForLocalBlockTime(Number(fundingTimestamp + 1n));
+            fundingTimestamp = BigInt(Math.floor(Date.now() / 1000));
+            return fundingTimestamp;
+        };
+        // Startup/JIT work can stale a read-only observation on the local fork.
+        // Retry only the explicit freshness rejection, using a new real snapshot;
+        // identity, journal and transaction failures must still fail immediately.
+        const bootstrapDeadline = performance.now() + 30000;
+        let bootstrap = await run("accrue");
+        while (bootstrap.code === 1 && bootstrap.output.includes("operator runtime: Stale") && performance.now() < bootstrapDeadline) {
+            await new Promise(resolve => setTimeout(resolve, 250));
+            bootstrap = await run("accrue");
         }
-        const bootstrap = await run("accrue");
         expect(bootstrap.code, bootstrap.output).to.equal(0);
         for (const [caseIndex, request] of [10, 100, -5, -25, 1, 1].entries()) {
             const previousSends = { ...sends };
@@ -318,7 +348,12 @@ export async function verifyOperatorExecution(ctx: {
             const current = before.positions[0]?.lots.toNumber() || 0;
             const post = current + request;
             const mark = metadata.oraclePrice.markPrice.price.ticks;
-            const limit = caseIndex === 4 ? 1n : request > 0 ? mark * 102n / 100n : mark * 98n / 100n;
+            // Cross the funded fixture maker, not a live best level that can
+            // expire or disappear when Phoenix validates its counterparty.
+            const markLimit = request > 0 ? mark * 102n / 100n : mark * 98n / 100n;
+            const limit = caseIndex === 4 ? 1n : request > 0
+                ? (liquidity.ask > markLimit ? liquidity.ask : markLimit)
+                : (liquidity.bid < markLimit ? liquidity.bid : markLimit);
             const expiry = caseIndex === 5 ? 1 : await connection.getSlot() + 5000;
             const notional = BigInt(Math.abs(post)) * unitQuote;
             // Perp notional is not collateral. Quote the user's own post-size
@@ -367,7 +402,19 @@ export async function verifyOperatorExecution(ctx: {
             expect(cash + BigInt(after.positions[0].unsettledFunding.toString()) + (healthyLedger ? 100000000n : 0n), "I2: basis-aware raw equity").to.equal(vaultCash + native.collateralQuoteLots + native.unsettledFundingQuoteLots + BigInt(after.positions[0].entryQuoteLots.toString()) + asset.virtualQuoteLots);
             const delta = after.positions[0].lots.toNumber() - current;
             if (caseIndex === 1) expect(delta > 0 && delta < request).to.equal(true);
-            else expect(delta).to.equal(caseIndex >= 4 ? 0 : request);
+            else {
+                const expectedDelta = caseIndex >= 4 ? 0 : request;
+                let nativeOutcome = "";
+                if (delta !== expectedDelta && lastNativeSignature) {
+                    const receipt = await connection.getTransaction(lastNativeSignature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+                    nativeOutcome = `signature=${lastNativeSignature}, error=${JSON.stringify(receipt?.meta?.err)}, logs=${(receipt?.meta?.logMessages || []).slice(-50).join("\n")}`;
+                    const actualBook = rise.decodeOrderbook((await connection.getAccountInfo(orderbook))!.data);
+                    const levels = request < 0 ? actualBook.bids : actualBook.asks;
+                    const sorted = levels.filter(level => level.order.numBaseLotsRemaining > 0n).sort((a, b) => a.orderId.priceInTicks === b.orderId.priceInTicks ? 0 : (a.orderId.priceInTicks > b.orderId.priceInTicks ? -1 : 1) * (request < 0 ? 1 : -1));
+                    nativeOutcome += `; bound=${limit}, slot=${await connection.getSlot()}, book=${JSON.stringify(sorted.slice(0, 3), (_, value) => typeof value === "bigint" ? value.toString() : value)}`;
+                }
+                expect(delta, `case ${caseIndex}: actual native outcome ${nativeOutcome}; preflight ${lastNativeError}`).to.equal(expectedDelta);
+            }
             if (caseIndex >= 4) {
                 expect(after.positions[0].entryQuoteLots.toString()).to.equal(before.positions[0].entryQuoteLots.toString());
                 expect(after.free.add(after.reserved).toString()).to.equal(before.free.add(before.reserved).toString());
@@ -438,7 +485,7 @@ export async function verifyOperatorExecution(ctx: {
                     // Exercise both whole-account fixture writers concurrently:
                     // neither may overwrite the other's funding or clock fields.
                     await Promise.all([
-                        setLocalFundingGeneration(connection, ctx.rpc, ctx.native, assetMap, "SOL", fundingRate + BigInt(hour * 100), fundingStart + BigInt(hour * 3600)),
+                        setLocalFundingGeneration(connection, ctx.rpc, ctx.native, assetMap, "SOL", fundingRate + BigInt(hour * 100), await nextFundingTimestamp()),
                         refreshMark(),
                     ]);
                     const allocationDeadline = performance.now() + 30000;
@@ -460,7 +507,12 @@ export async function verifyOperatorExecution(ctx: {
                             expect(flat.free.toString()).to.equal("100000000");
                             break;
                         }
-                        if (child.exitCode !== null || performance.now() > allocationDeadline) throw new Error(`hour ${hour} allocation did not complete: ${output}\nNative observation: ${nativeProbe}, blockAgeMs=${lastBlockAgeMs}\nRecent RPCs: ${recentCalls.join(", ")}\nNative error: ${lastNativeError}`);
+                        if (child.exitCode !== null || performance.now() > allocationDeadline) {
+                            const nativeAccount = await connection.getAccountInfo(assetMap);
+                            const accumulator = nativeAccount && rise.decodePerpAssetMap(nativeAccount.data).metadata.entries.find(e => e.key === "SOL")?.value.fundingAccumulator;
+                            const frozen = execFileSync("sqlite3", [journalPath, "SELECT 'source',CAST(payload AS TEXT) FROM funding_checkpoint; SELECT 'epoch',hex(epoch),completed,CAST(target AS TEXT) FROM funding_epochs ORDER BY epoch DESC LIMIT 1;"], { encoding: "utf8" });
+                            throw new Error(`hour ${hour} allocation did not complete: ${output}\nNative funding: ${accumulator?.cumulativeFundingRate}/${accumulator?.lastFundingUpdateTimestamp}; frozen ${frozen}\nPrivate epochs: Book=${b.fundingEpoch}, user=${l.lastFundingEpoch}; Book invariant=${b.invariantOk}, halt=${b.halt}, pending=${l.pendingOidCount}\nNative observation: ${nativeProbe}, blockAgeMs=${lastBlockAgeMs}\nRecent RPCs: ${recentCalls.join(", ")}\nNative error: ${lastNativeError}`);
+                        }
                         await new Promise(resolve => setTimeout(resolve, 100));
                     }
                 }
@@ -540,7 +592,7 @@ export async function verifyOperatorExecution(ctx: {
                 expect(chargePerLot > 0n).to.equal(true);
                 const nativeSends = sends.native;
                 const rootBeforeLiquidation = (await ctx.vault.account.reserveRoot.fetch(reserve)).epoch;
-                const publicTime = fundingStart + 24n * 3600n + 30n;
+                const publicTime = await nextFundingTimestamp();
                 await setLocalFundingGeneration(connection, ctx.rpc, ctx.native, assetMap, "SOL", fundingRate + 2400n - chargePerLot, publicTime);
                 const liquidationDeadline = performance.now() + 90000;
                 for (;;) {

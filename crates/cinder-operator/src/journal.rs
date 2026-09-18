@@ -728,6 +728,9 @@ impl Journal {
         // Precreate privately so SQLite also gives its sidecars private modes.
         let database_file = open_private_file(&path)?;
         database_file.sync_all()?;
+        // Closing any descriptor for this inode releases this process's POSIX
+        // locks, including SQLite's. Finish precreation before SQLite opens it.
+        drop(database_file);
         File::open(parent)?.sync_all()?;
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
             | OpenFlags::SQLITE_OPEN_CREATE
@@ -2475,6 +2478,54 @@ mod tests {
             Journal::open(&path),
             Err(JournalError::UnsafePath(_))
         ));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn open_preserves_sqlite_database_lock() {
+        let dir = tempdir();
+        let path = dir.path().join("journal.sqlite");
+        let _journal = Journal::open(&path).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--ignored",
+                "--exact",
+                "journal::tests::database_lock_child",
+            ])
+            .env("CINDER_JOURNAL_TEST_PATH", &path)
+            .status()
+            .unwrap();
+        assert!(
+            status.success(),
+            "SQLite must retain its database lock after open"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    #[ignore = "subprocess fixture, invoked by database lock test"]
+    fn database_lock_child() {
+        use std::os::fd::AsRawFd;
+        let path = std::env::var_os("CINDER_JOURNAL_TEST_PATH").expect("subprocess fixture path");
+        let file = File::open(path).unwrap();
+        // SQLite's POSIX shared-lock range (SHARED_FIRST, SHARED_SIZE).
+        // Query in another process: F_GETLK excludes the caller's own locks.
+        // SAFETY: zero is a valid initial representation for libc::flock.
+        let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+        lock.l_type = libc::F_WRLCK as _;
+        lock.l_whence = libc::SEEK_SET as _;
+        lock.l_start = 0x4000_0002;
+        lock.l_len = 510;
+        // SAFETY: the descriptor is live and lock points to a valid flock.
+        assert_eq!(
+            unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETLK, &mut lock) },
+            0
+        );
+        assert_eq!(
+            i32::from(lock.l_type),
+            libc::F_RDLCK,
+            "live WAL database lost its shared lock"
+        );
     }
 
     #[test]

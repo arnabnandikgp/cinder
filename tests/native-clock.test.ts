@@ -1,9 +1,29 @@
 import { expect } from "chai";
 import { Connection, PublicKey } from "@solana/web3.js";
 import * as rise from "@ellipsis-labs/rise";
-import { localClockTimestampMs, settleLocalClock, refreshLocalMark, setLocalFundingGeneration } from "./support/native-oracle";
+import { localClockTimestampMs, settleLocalClock, refreshLocalMark, setLocalFundingGeneration, waitForLocalBlockTime } from "./support/native-oracle";
 
-describe("local fork clock fixture", () => {
+describe("local fork clock fixture", function () {
+    // Real SDK decoding of the 1024-entry native layout can exceed Mocha's
+    // default 2-second budget on Linux CI; this is not an RPC freshness limit.
+    this.timeout(15000);
+    it("waits for a block produced after the pre-read clock check", async () => {
+        let wall = 10769;
+        const waits: number[] = [];
+        await waitForLocalBlockTime(11, () => wall, async delay => { waits.push(delay); wall += delay; });
+        expect(waits).to.deep.equal([232]);
+        expect(wall).to.be.greaterThan(11000);
+    });
+    it("does not delay current or past block timestamps", async () => {
+        for (const timestamp of [9, 10]) await waitForLocalBlockTime(timestamp, () => 10000, async () => { throw new Error("unexpected wait"); });
+    });
+    it("rejects invalid and excessively future block timestamps before waiting", async () => {
+        for (const timestamp of [NaN, 0, -1, 10.5, Number.MAX_SAFE_INTEGER, 16]) {
+            let error: unknown;
+            try { await waitForLocalBlockTime(timestamp, () => 10000, async () => { throw new Error("unexpected wait"); }); } catch (e) { error = e; }
+            expect((error as Error)?.message).to.equal(timestamp === 16 ? "local fork clock is too far ahead" : "invalid local block time");
+        }
+    });
     it("converts Clock seconds to Phoenix oracle milliseconds", () => {
         const data = Buffer.alloc(40);
         data.writeBigInt64LE(1789681805n, 32);

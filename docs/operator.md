@@ -502,6 +502,13 @@ guarded root publication after liquidation, and OPERATOR_DOWN on shutdown.
 Funding-feed and oracle-clock changes are disclosed localhost-only native
 account fixtures, not mocked Hawkeye or private financial RPC results. This is
 an integration/restart test, not a 24-hour wall-clock soak or public deployment.
+Hourly rate changes are replayed with increasing real-time generation stamps;
+the fixture does not rewind Phoenix's funding clock before executing trades.
+Private fill scenarios fund a disposable maker with genesis USDC, real Ember
+conversion and a real Phoenix deposit, then post non-expiring native orders.
+This maker is a venue counterparty, not an additional Cinder trader. Signed
+bounds cross those actual orders rather than assuming a mark-relative price
+bound guarantees liquidity on a frozen fork.
 
 CI runs the autonomous private mode and the native-only mode in
 `Phoenix integration`, using the existing private

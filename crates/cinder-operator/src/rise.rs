@@ -400,11 +400,13 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
     if rows != after {
         return Err(RuntimeError::Stale);
     }
-    let now = unix_ms();
     let trader_ms = slot_time(context, view_slot)?;
     if mark_ms == u64::MAX {
         mark_ms = trader_ms;
     }
+    // Validate at completion, not before the final block-time RPC: that lookup
+    // can take time (or a local fork can wait for its real clock to catch up).
+    let now = unix_ms();
     for time in [observed_ms, trader_ms, mark_ms] {
         if now
             .checked_sub(time)
