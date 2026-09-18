@@ -358,6 +358,7 @@ pub(crate) mod tests {
             collateral: 0,
             funding: 0,
             asset_funding: BTreeMap::from([(1, 0)]),
+            funding_updates_seconds: BTreeMap::from([(1, 1)]),
             snapshot_hash: [0; 32],
             vault_balance: cash * USDC,
             halt: 0,

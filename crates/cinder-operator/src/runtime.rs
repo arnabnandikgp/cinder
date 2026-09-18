@@ -431,11 +431,9 @@ pub struct OperatorRuntime {
     context: Shared,
     _pool_lock: File,
 }
+type MaintenanceSnapshot = (Book, Vec<([u8; 32], UserLedger)>, crate::rise::RiseView);
 impl OperatorRuntime {
-    /// Read-only whole-book maintenance assessment. This does not complete a
-    /// liquidation or authorize a heartbeat/entry gate release. The outer
-    /// service must coordinate subsequent mutations and finality separately.
-    pub fn maintenance_health(&mut self) -> Result<crate::maintenance::MaintenanceHealth> {
+    fn maintenance_snapshot(&mut self) -> Result<MaintenanceSnapshot> {
         let mut c = self.context.borrow_mut();
         let (book, ledgers, _) = c.private_ledgers()?;
         let assets = c.config.markets.iter().map(|m| m.cinder_asset_id).collect();
@@ -453,6 +451,12 @@ impl OperatorRuntime {
         {
             return Err(RuntimeError::Stale);
         }
+        Ok((book, ledgers, view))
+    }
+    /// Read-only whole-book assessment; does not complete a liquidation,
+    /// authorize a heartbeat, or release ownership/entry gates.
+    pub fn maintenance_health(&mut self) -> Result<crate::maintenance::MaintenanceHealth> {
+        let (_, ledgers, view) = self.maintenance_snapshot()?;
         let ranked = crate::maintenance::scan_user_health(&view, &ledgers, unix_ms())?;
         Ok(crate::maintenance::MaintenanceHealth {
             users_scanned: ranked.len(),
@@ -471,6 +475,12 @@ impl OperatorRuntime {
                 .filter(|h| h.effective_equity_usdc < i128::from(h.initial_margin_usdc))
                 .count(),
         })
+    }
+    /// Capture coherent rates/inventory for the maintenance WAL. Bootstrap and
+    /// advancement are separate checked journal actions, not snapshot side effects.
+    pub fn funding_checkpoint(&mut self) -> Result<crate::FundingCheckpoint> {
+        let (book, ledgers, view) = self.maintenance_snapshot()?;
+        crate::FundingCheckpoint::capture(&view, &book, &ledgers, unix_ms())
     }
     pub fn open(config: RuntimeConfig, journal_path: &Path) -> Result<Self> {
         Self::open_mode(config, journal_path, false)

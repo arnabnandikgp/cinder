@@ -29,6 +29,7 @@ pub(crate) struct RiseView {
     pub collateral: u64,
     pub funding: i128,
     pub asset_funding: BTreeMap<u16, i64>,
+    pub funding_updates_seconds: BTreeMap<u16, u64>,
     pub snapshot_hash: [u8; 32],
     pub vault_balance: u64,
     pub halt: u8,
@@ -200,6 +201,7 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
     let mut positions = BTreeMap::new();
     let mut entry_quote_lots = BTreeMap::new();
     let mut asset_funding = BTreeMap::new();
+    let mut funding_updates_seconds = BTreeMap::new();
     let mut count = 0u16;
     let mut mark_ms = u64::MAX;
     for asset in assets {
@@ -285,6 +287,17 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
             .map_err(|_| RuntimeError::Unsupported)?,
         );
         normalized.cumulative_funding_rate = metadata.funding_accumulator.cumulative_funding_rate;
+        let funding_updated = metadata
+            .funding_accumulator
+            .last_funding_update_timestamp
+            .as_inner();
+        if funding_updated
+            .checked_mul(1000)
+            .is_none_or(|t| t > observed_ms)
+        {
+            return Err(RuntimeError::Stale);
+        }
+        funding_updates_seconds.insert(asset, funding_updated);
         let mark_slot = metadata.oracle_price.mark_price.price.slot;
         if mark_slot > asset_slot
             || view.mark_price_ticks == 0
@@ -330,6 +343,7 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
         collateral,
         funding: i128::from(margin.unsettled_funding_quote_lots),
         asset_funding,
+        funding_updates_seconds,
         snapshot_hash: snapshot_hash(&keys, &rows)?,
         vault_balance,
         halt: cfg.paused,

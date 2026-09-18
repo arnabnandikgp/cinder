@@ -258,6 +258,7 @@ pub struct ReconciliationSnapshot {
 pub enum HaltReason {
     Recovering,
     UnresolvedOperations,
+    UnresolvedMaintenance,
     StaleOrIncomplete,
     InvariantMismatch,
     ExternalHalt,
@@ -490,6 +491,12 @@ where
         // Existing financial outcomes are acknowledged before custody recovery.
         // A timeout never re-signs a deposit or an absolute Book assignment.
         self.observe_funding(now_ms)?;
+        // An epoch may be partly allocated: transient I2 differences belong to
+        // the maintenance outbox, not a guessed invariant repair or gate release.
+        // Existing confirmed venue facts still win and are acknowledged above.
+        if self.journal.has_unresolved_maintenance()? {
+            return self.report(Some(HaltReason::UnresolvedMaintenance));
+        }
         ready_to_submit.retain(|id| {
             self.journal
                 .operation(id)

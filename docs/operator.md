@@ -86,10 +86,60 @@ journal payloads. The publication intent is due after 20 acknowledged fills or
 when no prior publication exists), accelerated on liquidation/debt incidents.
 Neither counter completion nor elapsed time proves publication finality.
 
-Live feed supervision, restart-safe funding allocation/fold, liquidation
+Live feed supervision, authenticated funding allocation/fold I/O, liquidation
 submission, atomic halt mirroring, heartbeat writes, and guarded reserve
 publication still need to be wired through the single mutation coordinator
 before autonomous service can be enabled.
+
+### Funding accumulator checkpoints and epoch journal
+
+Funding-rate maintenance is separate from the custody top-up outbox. The
+runtime can capture a coherent, read-only `FundingCheckpoint`, using official
+Phoenix cumulative quote-lots-per-base-lot rates and native update timestamps
+in **seconds**. For the supported six-decimal quote mint, one quote lot is one
+micro-USDC. With unchanged confirmed inventory, the private allocation is
+`-(new_accumulator - old_accumulator) * confirmed_base_lots`: positive rate
+deltas charge longs and credit shorts. Checked integer arithmetic has no
+rounding step. Gross user allocations sum to the pooled net funding, including
+fully offset private long/short books.
+
+Initializing the durable baseline requires both ownership gates down, a
+complete registered inventory, a never-traded flat book, zero native/private
+funding, and matching backing. Existing exposure or trading history cannot
+silently adopt the latest accumulator as its baseline. Inventory can be
+rebound after authenticated ACK evidence only while both accumulator values
+and their update generations remain unchanged. A saved nonce/basis/Book
+inventory commitment detects position changes even if endpoint lots match.
+Position changes across funding updates require historical attribution or
+checkpoint barriers; charging today's position across that gap is refused.
+New-user incorporation also requires a future explicit registry barrier.
+
+`FundingEpochPlan` currently supports the quiet-inventory accrual path only.
+The journal freezes source/target checkpoints and hashes of the exact Book
+bump and every user's allocation before signing. Actual private instruction
+bodies remain in memory. It permits one uncertain signed write at a time;
+the Book bump must have its matching successful receipt before any allocation
+attempt. A timeout, missing transaction, or expired blockhash cannot authorize
+another signature. Only the exact failed receipt permits a replacement.
+Receipt decoding joins the signer, program, Config, scope, epoch, instruction
+hash, signature, and positive slot; callers must obtain that receipt through
+authenticated QFS, not treat arbitrary JSON as chain proof.
+
+Restart reconstruction produces the same immutable instruction bodies, even
+when some users already reached the target epoch. The checkpoint advances
+atomically only after successful receipts for **all** users, including flat
+users, plus a coherent aligned private snapshot. A newer native update during
+this process does not skip the frozen target: it becomes the next funding
+epoch. Active maintenance blocks new order intents, custody top-ups, native
+dispatch, and registry expansion; recovery leaves entries down rather than
+misclassifying partial allocation as an I2 incident. Startup validates the
+checkpoint/history chain and unresolved-write ordering.
+
+These are checked planning/journal primitives, not a live funding crank. Native
+settlement evidence, private funding folds, position-changing ACK barriers,
+fresh pre-send gate checks, and authenticated write/recovery ports remain to
+be integrated. Completing an accrual epoch alone does not reconcile I2 or
+reopen entries. The existing nonzero-unsettled-funding dispatch guard stays.
 
 ## Bounded native execution
 
@@ -167,8 +217,8 @@ not credentials, private balances, user identities, or raw receipts.
 
 ## Durable causality and acknowledgements
 
-The journal uses schema version 7 and migrates older supported journals in
-place, preserving their recovery state. A journal upgraded to version 7 cannot
+The journal uses schema version 8 and migrates older supported journals in
+place, preserving their recovery state. A journal upgraded to version 8 cannot
 be reopened by an older binary. Back up the private journal with SQLite's
 WAL-aware procedure before upgrading; do not copy only the main database file.
 
@@ -587,11 +637,13 @@ in that directory. Separate directories/hosts are **not** fenced; replicas and
 manual/foreign activity on the pooled trader are unsupported. Abrupt process
 death is not a chain-level liveness watchdog; that belongs to later maintenance.
 
-SQLite uses schema 7. Supported schemas 1–6 upgrade through ordered,
+SQLite uses schema 8. Supported schemas 1–7 upgrade through ordered,
 transactional migrations: schema 2 adds runtime binding, durable users and
 prepared ACK attempts; 3 adds native submission attempts; 4 adds the funding
 outbox; 5 adds funding failure and Book synchronization evidence; 6 adds
-immutable execution budgets; and 7 adds unsigned funding cancellation timestamps.
+immutable execution budgets; 7 adds unsigned funding cancellation timestamps;
+and 8 adds funding-rate checkpoints, immutable epoch/write hashes, and exact
+signed maintenance attempts. Upgrades never invent a funding-rate baseline.
 Existing recovery state is preserved, and legacy operations do not acquire
 invented budgets or signatures. An unbound legacy journal with historical
 side effects cannot be adopted silently because its pre-send discipline was

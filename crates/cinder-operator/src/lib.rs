@@ -17,6 +17,7 @@ mod admission;
 mod collateral;
 mod execution;
 mod funding;
+mod funding_maintenance;
 mod journal;
 mod ledger;
 mod maintenance;
@@ -43,7 +44,13 @@ pub use cinder_adapter::{ClientOid, PubkeyBytes};
 pub use collateral::CollateralRequirement;
 pub use execution::{build_bounded_ioc, IocMarketAccounts};
 pub use funding::{build_phoenix_funding, decode_phoenix_funding_receipt, PhoenixFundingAccounts};
-pub use journal::{Journal, JournalError, JournalStatus, SCHEMA_VERSION};
+pub use funding_maintenance::{
+    FundingCheckpoint, FundingEpochPlan, FundingRate, FundingStepObservation,
+};
+pub use journal::{
+    FundingEpochRecord, FundingEpochStep, Journal, JournalError, JournalStatus, MaintenanceAttempt,
+    MaintenanceOutcome, SCHEMA_VERSION,
+};
 pub use recovery::{
     AckFinality, AckObservation, AdmissionObservation, BookSyncObservation, ErAckCommand,
     ErAckSubmissionPort, ErAckSubmitResult, FundingObservation, HaltReason, LedgerRecoveryPort,
