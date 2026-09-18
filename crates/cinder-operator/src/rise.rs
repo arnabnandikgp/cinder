@@ -19,13 +19,17 @@ use serde_json::{json, Value};
 use solana_signer::Signer;
 use std::collections::{BTreeMap, BTreeSet};
 
+#[derive(Clone)]
 pub(crate) struct RiseView {
     pub observed_ms: u64,
     pub mark_ms: u64,
     pub slot: u64,
     pub positions: BTreeMap<u16, i64>,
+    pub entry_quote_lots: BTreeMap<u16, i128>,
     pub collateral: u64,
     pub funding: i128,
+    pub asset_funding: BTreeMap<u16, i64>,
+    pub snapshot_hash: [u8; 32],
     pub vault_balance: u64,
     pub halt: u8,
     pub safe: bool,
@@ -96,6 +100,9 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
     }
     let mut assets = assets.clone();
     assets.extend(&cfg.allowlist_assets[..cfg.allowlist_len as usize]);
+    if context.config.solvency_policy.is_some() {
+        assets.extend(context.config.markets.iter().map(|m| m.cinder_asset_id));
+    }
     // The experimental runtime is bounded. Never silently truncate a market
     // or turn an unsupported account layout into an apparently empty pool.
     if assets.contains(&0) || assets.len() > 32 {
@@ -191,6 +198,8 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
     }
     let mut markets = BTreeMap::new();
     let mut positions = BTreeMap::new();
+    let mut entry_quote_lots = BTreeMap::new();
+    let mut asset_funding = BTreeMap::new();
     let mut count = 0u16;
     let mut mark_ms = u64::MAX;
     for asset in assets {
@@ -228,6 +237,15 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
         if view.base_lots != 0 {
             positions.insert(asset, view.base_lots);
         }
+        let entry = -i128::from(view.virtual_quote_lots);
+        if (view.base_lots == 0 && entry != 0)
+            || (view.base_lots != 0
+                && (entry == 0 || entry.signum() != i128::from(view.base_lots).signum()))
+        {
+            return Err(RuntimeError::Identity);
+        }
+        entry_quote_lots.insert(asset, entry);
+        asset_funding.insert(asset, view.unsettled_funding_quote_lots);
         let tiers = metadata
             .risk_params
             .leverage_tiers
@@ -308,8 +326,11 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
         mark_ms,
         slot: view_slot,
         positions,
+        entry_quote_lots,
         collateral,
         funding: i128::from(margin.unsettled_funding_quote_lots),
+        asset_funding,
+        snapshot_hash: snapshot_hash(&keys, &rows)?,
         vault_balance,
         halt: cfg.paused,
         safe: exchange_active
@@ -320,6 +341,27 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
                 .is_ok_and(|e| e >= margin.initial_margin_quote_lots),
         markets,
     })
+}
+
+pub(crate) fn snapshot_hash(keys: &[String], rows: &[Value]) -> Result<[u8; 32]> {
+    use sha2::{Digest, Sha256};
+    if keys.len() != rows.len() {
+        return Err(RuntimeError::Incomplete);
+    }
+    let mut digest: [u8; 32] = Sha256::digest(b"cinder:phoenix-snapshot:v1").into();
+    for (key, row) in keys.iter().zip(rows) {
+        if row["executable"] != Value::Bool(false) {
+            return Err(RuntimeError::Identity);
+        }
+        let owner = string(&row["owner"])?;
+        let mut hash = Sha256::new();
+        hash.update(digest);
+        hash.update(bytes(key)?);
+        hash.update(bytes(owner)?);
+        hash.update(Sha256::digest(data(row, owner)?));
+        digest = hash.finalize().into();
+    }
+    Ok(digest)
 }
 
 pub(crate) fn user_margin(
@@ -338,6 +380,46 @@ pub(crate) fn user_margin(
     let notional = post_lots
         .unsigned_abs()
         .checked_mul(price)
+        .ok_or(RuntimeError::Decode)?;
+    let mut total = notional;
+    for p in &ledger.positions[..ledger.positions_len as usize] {
+        if p.asset_id == asset {
+            continue;
+        }
+        let m = view
+            .markets
+            .get(&p.asset_id)
+            .ok_or(RuntimeError::Unsupported)?;
+        let n = p
+            .lots
+            .unsigned_abs()
+            .checked_mul(m.mark_price.as_inner())
+            .and_then(|v| v.checked_mul(m.tick_size.as_inner()))
+            .ok_or(RuntimeError::Decode)?;
+        total = total.checked_add(n).ok_or(RuntimeError::Decode)?;
+    }
+    let cash =
+        i128::from(ledger.free) + i128::from(ledger.reserved) - i128::from(ledger.bad_debt_usdc);
+    position_risk(view, asset, post_lots, entry, total, cash, unix_ms())
+        .map(|q| q.post_position_im_usdc)
+}
+
+/// Shared SDK-backed position quote for acknowledgement and whole-book health.
+/// Callers aggregate per-position gains conservatively, never haircut losses.
+pub(crate) fn position_risk(
+    view: &RiseView,
+    asset: u16,
+    post_lots: i64,
+    entry: i64,
+    total_notional: u64,
+    cash: i128,
+    now_ms: u64,
+) -> Result<cinder_adapter::UserRiskQuote> {
+    let metadata = view.markets.get(&asset).ok_or(RuntimeError::Unsupported)?;
+    let price = metadata
+        .mark_price
+        .as_inner()
+        .checked_mul(metadata.tick_size.as_inner())
         .ok_or(RuntimeError::Decode)?;
     // Rise wrappers use signed i64 quote values. Refuse clipping in its uPnL
     // helper or overflow in margin math before entering the SDK.
@@ -358,23 +440,6 @@ pub(crate) fn user_margin(
     )
     .map_err(|_| RuntimeError::Decode)?;
     let mm = math::position_maintenance_margin(metadata, im).map_err(|_| RuntimeError::Decode)?;
-    let mut total = notional;
-    for p in &ledger.positions[..ledger.positions_len as usize] {
-        if p.asset_id == asset {
-            continue;
-        }
-        let m = view
-            .markets
-            .get(&p.asset_id)
-            .ok_or(RuntimeError::Unsupported)?;
-        let n = p
-            .lots
-            .unsigned_abs()
-            .checked_mul(m.mark_price.as_inner())
-            .and_then(|v| v.checked_mul(m.tick_size.as_inner()))
-            .ok_or(RuntimeError::Decode)?;
-        total = total.checked_add(n).ok_or(RuntimeError::Decode)?;
-    }
     let snapshot = RiskSnapshot {
         asset_id: asset,
         position_lots: post_lots,
@@ -385,7 +450,7 @@ pub(crate) fn user_margin(
         units: UnitStatus::Verified,
         phoenix_initial_margin_usdc: im.as_inner(),
         phoenix_maintenance_margin_usdc: mm.as_inner(),
-        total_notional_usdc: total,
+        total_notional_usdc: total_notional,
         unrealized_pnl_usdc: upnl,
         first_tier_leverage: metadata
             .leverage_tiers
@@ -397,10 +462,7 @@ pub(crate) fn user_margin(
         quote_lot_to_usdc_denominator: 1,
         post_pool_health: None,
     };
-    let cash =
-        i128::from(ledger.free) + i128::from(ledger.reserved) - i128::from(ledger.bad_debt_usdc);
     RiseRiskEngine
-        .quote_user_health(&snapshot, post_lots, cash, unix_ms())
-        .map(|q| q.post_position_im_usdc)
+        .quote_user_health(&snapshot, post_lots, cash, now_ms)
         .map_err(|_| RuntimeError::Stale)
 }

@@ -10,5 +10,7 @@
   "phoenix_quote_mint": "PhUsd11YkbjSaWjFncfAAmatntsjx3MgDR9B6g1ks3A",
   "markets": [{ "cinder_asset_id": 1, "phoenix_asset_id": 0, "symbol": "SOL" }],
   "global_trader_index": ["HCrPXLByGqRh2szQi3gj7oRdRVBNi1gccAyn4CQCT3HK"],
-  "active_trader_buffer": ["2U32rSzzrQS3eVmGHsnbw5kcqKF3wQXpHGd3hMq5YJok"]
+  "active_trader_buffer": ["2U32rSzzrQS3eVmGHsnbw5kcqKF3wQXpHGd3hMq5YJok"],
+  "solvency_policy": null,
+  "execution_policy": null
 }

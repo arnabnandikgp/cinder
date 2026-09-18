@@ -23,7 +23,7 @@ fn administration_commands_do_not_simulate_live_trading_or_expose_operations() {
         "Journal schema: {}",
         cinder_operator::SCHEMA_VERSION
     )));
-    assert!(stdout.contains("Live trading: not implemented"));
+    assert!(stdout.contains("Trading: opt-in execute command"));
     assert!(!stdout.contains("user_pubkey"));
     assert!(!stdout.contains("client_oid"));
 }

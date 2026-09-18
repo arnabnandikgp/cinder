@@ -1147,6 +1147,40 @@ describe("ledger accounts and order machine", () => {
       }
     });
 
+    it("operator-down on either side rejects a new flat withdrawal without debiting cash", async () => {
+      const configBefore = (await vault.account.config.fetch(configPda)).paused;
+      const bookBefore = (await ledger.account.book.fetch(bookPda)).halt;
+      const before = await ledger.account.userLedger.fetch(withdrawLedger);
+      try {
+        for (const l1Down of [true, false]) {
+          await vault.methods.setOperatorDown(l1Down)
+            .accountsPartial({ adapter: adapter.publicKey, config: configPda })
+            .signers([adapter]).rpc();
+          await ledger.methods.setOperatorDown(!l1Down)
+            .accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda })
+            .signers([adapter]).rpc();
+          let rejected: any;
+          try {
+            await ledger.methods.requestWithdraw(new BN(WITHDRAW))
+              .accountsPartial({ user: withdrawUser.publicKey, config: configPda,
+                book: bookPda, userLedger: withdrawLedger })
+              .signers([withdrawUser]).rpc();
+          } catch (error) { rejected = error; }
+          expect(rejected, "an unresolved operator gate must block withdrawal").to.exist;
+          expect(rejected.error?.errorCode?.code ?? rejected.toString()).to.match(/Halted/);
+          const after = await ledger.account.userLedger.fetch(withdrawLedger);
+          expect(after.free.toString()).to.equal(before.free.toString());
+          expect(after.withdrawable.toString()).to.equal(before.withdrawable.toString());
+        }
+      } finally {
+        await vault.methods.setHalt(configBefore)
+          .accountsPartial({ admin: payer.publicKey, config: configPda }).rpc();
+        await ledger.methods.setBookHalt(bookBefore)
+          .accountsPartial({ adapter: adapter.publicKey, config: configPda, book: bookPda })
+          .signers([adapter]).rpc();
+      }
+    });
+
     it("flat withdraw credits user ATA and zeros withdrawable", async () => {
       await ledger.methods
         .requestWithdraw(new BN(WITHDRAW))

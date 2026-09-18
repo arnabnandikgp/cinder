@@ -123,7 +123,7 @@ pub fn entries_blocked(flags: u8) -> bool {
 }
 
 pub fn withdraw_blocked(flags: u8) -> bool {
-    flags & (HALT_WITHDRAW | INVARIANT_BROKEN | BAD_DEBT) != 0
+    flags & (HALT_WITHDRAW | INVARIANT_BROKEN | OPERATOR_DOWN | BAD_DEBT) != 0
 }
 
 pub fn deposit_blocked(flags: u8) -> bool {
@@ -178,8 +178,10 @@ pub struct RealizeFill {
     pub new_entry_quote: i64,
 }
 
-/// Open: add fill quote to entry. Reduce (opposite sign): take proportional
-/// basis, `realized = -(entry_closed + fill_quote)`. Fail-ack must not call this.
+/// Same-side fills add exact quote value to basis (a weighted-average entry,
+/// without rounding a stored average price). Opposite-side fills realize the
+/// proportional closed basis; a reversal starts a new opposite-side basis.
+/// Fail-ack must not call this.
 pub fn realize_on_fill(
     lots_before: i64,
     filled: i64,
@@ -271,11 +273,73 @@ mod realize_tests {
         assert_eq!(r.realized_usdc, 1_000_000);
         assert_eq!(r.new_entry_quote, -5_500_000);
     }
+
+    #[test]
+    fn scale_ins_preserve_weighted_basis_for_longs_and_shorts() {
+        for sign in [1i64, -1] {
+            let first = realize_on_fill(0, 2 * sign, 0, 200_000_000 * sign).unwrap();
+            let added =
+                realize_on_fill(2 * sign, sign, first.new_entry_quote, 120_000_000 * sign).unwrap();
+            assert_eq!(added.realized_usdc, 0);
+            assert_eq!(added.new_entry_quote, 320_000_000 * sign);
+            // Keep the exact total, not a rounded average price of 106.666667.
+            let reduced =
+                realize_on_fill(3 * sign, -sign, added.new_entry_quote, -110_000_000 * sign)
+                    .unwrap();
+            assert_eq!(reduced.realized_usdc, 3_333_334 * sign);
+            assert_eq!(reduced.new_entry_quote, 213_333_334 * sign);
+            let closed = realize_on_fill(
+                2 * sign,
+                -2 * sign,
+                reduced.new_entry_quote,
+                -220_000_000 * sign,
+            )
+            .unwrap();
+            assert_eq!(closed.new_entry_quote, 0);
+            assert_eq!(
+                reduced.realized_usdc + closed.realized_usdc,
+                10_000_000 * sign
+            );
+        }
+    }
+
+    #[test]
+    fn reversing_an_averaged_position_starts_a_new_opposite_basis() {
+        for sign in [1i64, -1] {
+            let result =
+                realize_on_fill(3 * sign, -5 * sign, 320_000_000 * sign, -550_000_000 * sign)
+                    .unwrap();
+            assert_eq!(result.realized_usdc, 10_000_000 * sign);
+            assert_eq!(result.new_entry_quote, -220_000_000 * sign);
+        }
+    }
+
+    #[test]
+    fn partial_basis_rounding_preserves_exact_cash_minus_basis() {
+        for sign in [1i64, -1] {
+            for filled in [sign, -sign, -2 * sign, -3 * sign, -5 * sign] {
+                let entry = 10 * sign; // Deliberately indivisible by 3 lots.
+                let quote = filled * 4;
+                let result = realize_on_fill(3 * sign, filled, entry, quote).unwrap();
+                assert_eq!(
+                    i128::from(result.realized_usdc) - i128::from(result.new_entry_quote),
+                    -i128::from(entry) - i128::from(quote)
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod halt_tests {
     use super::*;
+
+    #[test]
+    fn unresolved_operator_state_blocks_new_withdrawal_requests() {
+        assert!(entries_blocked(OPERATOR_DOWN));
+        assert!(withdraw_blocked(OPERATOR_DOWN));
+        assert!(!withdraw_blocked(0));
+    }
 
     #[test]
     fn bad_debt_blocks_entries_and_withdrawals_but_allows_deposits() {

@@ -673,6 +673,11 @@ dependencies = [
  "anchor-spl",
  "cinder-common",
  "ephemeral-rollups-sdk",
+ "phoenix-rise-accounts",
+ "phoenix-rise-ix",
+ "solana-instructions-sysvar 3.0.1",
+ "solana-pubkey 3.0.0",
+ "solana-sha256-hasher 3.1.0",
 ]
 
 [[package]]

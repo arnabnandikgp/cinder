@@ -4,8 +4,56 @@ import {
   bootVenue,
   getReferralActivationPermission,
 } from "../scripts/venue-boot";
+import { activateLocalPhoenix } from "../scripts/fixtures/local-phoenix";
 
 const FORK = process.env.PROVIDER_ENDPOINT || "http://127.0.0.1:8899";
+
+describe("Local Phoenix fixture safety", function () {
+  it("rejects non-local RPCs before reading or writing accounts", async function () {
+    for (const rpcEndpoint of [
+      "https://api.mainnet-beta.solana.com",
+      "http://127.0.0.1.example.com:8899",
+      "https://localhost:8899",
+    ]) {
+      let reads = 0;
+      const connection = {
+        rpcEndpoint,
+        getGenesisHash: async () => {
+          reads++;
+        },
+      } as unknown as Connection;
+      try {
+        await activateLocalPhoenix(connection);
+        expect.fail("expected local-only guard to reject RPC");
+      } catch (error) {
+        expect((error as Error).message).to.equal(
+          "Phoenix fixture refuses non-local RPC"
+        );
+      }
+      expect(reads).to.equal(0);
+    }
+  });
+
+  it("rejects a local non-mainnet fork before reading accounts", async function () {
+    let reads = 0;
+    const connection = {
+      rpcEndpoint: "http://127.0.0.1:8899",
+      getGenesisHash: async () => "devnet",
+      getAccountInfo: async () => {
+        reads++;
+      },
+    } as unknown as Connection;
+    try {
+      await activateLocalPhoenix(connection);
+      expect.fail("expected genesis guard to reject fork");
+    } catch (error) {
+      expect((error as Error).message).to.equal(
+        "Phoenix fixture requires a mainnet fork"
+      );
+    }
+    expect(reads).to.equal(0);
+  });
+});
 
 describe("Phoenix referral activation permission", function () {
   const livePermission = {

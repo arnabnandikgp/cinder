@@ -6,6 +6,10 @@ use ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer;
 
 mod migration;
 pub use migration::*;
+mod phoenix;
+pub use phoenix::*;
+mod execution;
+pub use execution::*;
 
 /// Magic Action default escrow index (`ActionArgs::new`).
 const ACTION_ESCROW_INDEX: u8 = 255;
@@ -15,6 +19,16 @@ declare_id!("9zhBFVgk13gnYT6iVuKPGfQiAvVfr6cYQq2bY2QUzXmg");
 #[program]
 pub mod cinder_vault {
     use super::*;
+
+    /// Sandwich one direct native IOC with a fresh-state fence and an atomic
+    /// actual-fee/post-collateral fence. This is not a Magic Action.
+    pub fn guard_phoenix_execution<'info>(
+        ctx: Context<'info, GuardPhoenixExecution<'info>>,
+        guard: PhoenixExecutionGuard,
+        after: bool,
+    ) -> Result<()> {
+        execution::guard_execution(ctx, guard, after)
+    }
 
     pub fn initialize(
         ctx: Context<Initialize>,
@@ -76,7 +90,10 @@ pub mod cinder_vault {
     }
 
     pub fn set_allowlist(ctx: Context<AdminConfig>, assets: Vec<u16>) -> Result<()> {
-        require!(assets.len() <= cc::MAX_ALLOWLIST, VaultError::AllowlistTooLong);
+        require!(
+            assets.len() <= cc::MAX_ALLOWLIST,
+            VaultError::AllowlistTooLong
+        );
         let config = &mut ctx.accounts.config;
         config.allowlist_len = assets.len() as u8;
         config.allowlist_assets = [0; cc::MAX_ALLOWLIST];
@@ -93,6 +110,21 @@ pub mod cinder_vault {
 
     pub fn escape_withdraw(_ctx: Context<EscapeWithdraw>) -> Result<()> {
         err!(VaultError::Unsupported)
+    }
+
+    /// Delegate trading only; custody stays with the vault-authority PDA.
+    pub fn delegate_phoenix_trader(ctx: Context<DelegatePhoenixTrader>) -> Result<()> {
+        phoenix::delegate(ctx)
+    }
+
+    /// Atomic USDC conversion and native deposit; each intent can fund once.
+    pub fn fund_phoenix<'info>(
+        ctx: Context<'info, FundPhoenix<'info>>,
+        funding_id: [u8; 32],
+        amount: u64,
+        global_trader_index_count: u8,
+    ) -> Result<()> {
+        phoenix::fund(ctx, funding_id, amount, global_trader_index_count)
     }
 
     /// Stand-in era: move USDC vault ATA → stand-in ATA. Adapter then Rise-deposits.
@@ -292,10 +324,8 @@ pub mod cinder_vault {
             ctx.accounts.vault_authority.key(),
             VaultError::BadEscrowAuth
         );
-        let expected = ephemeral_balance_pda_from_payer(
-            &ctx.accounts.escrow_auth.key(),
-            ACTION_ESCROW_INDEX,
-        );
+        let expected =
+            ephemeral_balance_pda_from_payer(&ctx.accounts.escrow_auth.key(), ACTION_ESCROW_INDEX);
         require_keys_eq!(ctx.accounts.escrow.key(), expected, VaultError::BadEscrow);
         require_keys_eq!(
             ctx.accounts.user_usdc_ata.mint,
@@ -618,4 +648,12 @@ pub enum VaultError {
     UnsupportedAccountSchema,
     #[msg("invalid legacy account data")]
     InvalidMigrationData,
+    #[msg("invalid Phoenix deployment or account binding")]
+    BadPhoenixAccount,
+    #[msg("unsupported Phoenix account state or layout")]
+    BadPhoenixState,
+    #[msg("invalid funding intent")]
+    BadFundingIntent,
+    #[msg("Phoenix execution snapshot, fee limit, or collateral fence failed")]
+    ExecutionGuardFailed,
 }
