@@ -5,7 +5,8 @@
 //! restricted key loading, operator QFS authentication, placement/ack receipt
 //! joins, official Rise recovery views, and fresh startup reconciliation.
 //! Bounded native IOC dispatch requires explicit execution policy and admission.
-//! Autonomous scheduling and resting-order cancellation are not implemented.
+//! Opt-in autonomous funding, liquidation and reserve maintenance shares the
+//! same durable single writer. Resting orders are not supported.
 //! The recovery-only command leaves both operator-down gates closed on exit.
 //!
 //! A production [`LedgerRecoveryPort`] must attest the full immutable
@@ -16,13 +17,23 @@
 mod admission;
 mod collateral;
 mod execution;
+mod feeds;
 mod funding;
+mod funding_maintenance;
+mod funding_runtime;
 mod journal;
 mod ledger;
+mod liquidation_admission;
+mod liquidation_runtime;
+mod maintenance;
+mod maintenance_runtime;
+mod per_fees;
 mod recovery;
+mod reserve;
 mod rise;
 mod rpc;
 mod runtime;
+mod service;
 mod solvency;
 mod transaction;
 mod types;
@@ -30,6 +41,8 @@ mod venue;
 #[cfg(test)]
 #[path = "../tests/support/venue_fixture.rs"]
 mod venue_fixture;
+pub use maintenance::{MaintenanceHealth, MaintenancePlan, MaintenanceProgress, MaintenanceTask};
+pub use reserve::{build_reserve_snapshot, ReserveSnapshot};
 pub use rpc::{load_signer, unix_ms, RuntimeError};
 pub use runtime::{MarketMapping, OperatorRuntime, RuntimeConfig};
 pub use solvency::{SolvencyPolicy, SolvencyReport, StressScenario};
@@ -39,13 +52,21 @@ pub use cinder_adapter::{ClientOid, PubkeyBytes};
 pub use collateral::CollateralRequirement;
 pub use execution::{build_bounded_ioc, IocMarketAccounts};
 pub use funding::{build_phoenix_funding, decode_phoenix_funding_receipt, PhoenixFundingAccounts};
-pub use journal::{Journal, JournalError, JournalStatus, SCHEMA_VERSION};
+pub use funding_maintenance::{
+    FundingCheckpoint, FundingEpochPlan, FundingRate, FundingStepObservation,
+};
+pub use funding_runtime::FundingProgress;
+pub use journal::{
+    FundingEpochRecord, FundingEpochStep, Journal, JournalError, JournalStatus, MaintenanceAttempt,
+    MaintenanceOutcome, SCHEMA_VERSION,
+};
 pub use recovery::{
     AckFinality, AckObservation, AdmissionObservation, BookSyncObservation, ErAckCommand,
     ErAckSubmissionPort, ErAckSubmitResult, FundingObservation, HaltReason, LedgerRecoveryPort,
     ReconciliationReport, ReconciliationSnapshot, RecoveryCoordinator, VenueRecoveryPort,
     VenueSubmissionPort, VenueSubmitResult,
 };
+pub use service::{MaintenancePass, MaintenancePolicy};
 pub use types::{
     derive_venue_identity, BookSyncAttempt, BoundedIntent, ErrorCode, ExecutionBudget, FillFact,
     FundingIntent, FundingRecord, Operation, OperationId, OrderIdentity, OrderKind, OrderState,

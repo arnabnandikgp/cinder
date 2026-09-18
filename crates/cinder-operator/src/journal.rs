@@ -17,7 +17,17 @@ use std::{
 use std::os::unix::{fs::MetadataExt, fs::OpenOptionsExt, fs::PermissionsExt};
 
 /// Refuse to open a newer journal rather than silently misinterpreting it.
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 9;
+
+#[path = "funding_barriers.rs"]
+mod funding_barriers;
+#[path = "maintenance_journal.rs"]
+mod maintenance_journal;
+#[path = "maintenance_writes.rs"]
+pub(crate) mod maintenance_writes;
+pub use maintenance_journal::{
+    FundingEpochRecord, FundingEpochStep, MaintenanceAttempt, MaintenanceOutcome,
+};
 
 /// SQLite journal errors are intentionally local and typed.  Remote error text
 /// belongs neither in this error type nor in persistent journal records.
@@ -140,7 +150,7 @@ impl Journal {
                 Err(JournalError::IntentConflict)
             };
         }
-        if self.has_unresolved_funding()? {
+        if self.has_unresolved_funding()? || self.has_unresolved_maintenance()? {
             return Err(JournalError::IntentConflict);
         }
         if self
@@ -469,7 +479,7 @@ impl Journal {
         attempt: &crate::PreparedVenue,
         now_ms: u64,
     ) -> Result<Operation, JournalError> {
-        if self.has_unresolved_funding()? {
+        if self.has_unresolved_funding()? || self.has_unresolved_maintenance()? {
             return Err(JournalError::IntentConflict);
         }
         let operation = self.operation(id)?;
@@ -575,6 +585,12 @@ impl Journal {
         &mut self,
         users: &[(crate::PubkeyBytes, crate::PubkeyBytes)],
     ) -> Result<(), JournalError> {
+        if self.has_unresolved_maintenance()? {
+            let known = self.known_users()?;
+            if users.iter().any(|user| !known.contains(user)) {
+                return Err(JournalError::IntentConflict);
+            }
+        }
         let tx = self.connection.transaction()?;
         for (ledger, user) in users {
             tx.execute(
@@ -712,6 +728,9 @@ impl Journal {
         // Precreate privately so SQLite also gives its sidecars private modes.
         let database_file = open_private_file(&path)?;
         database_file.sync_all()?;
+        // Closing any descriptor for this inode releases this process's POSIX
+        // locks, including SQLite's. Finish precreation before SQLite opens it.
+        drop(database_file);
         File::open(parent)?.sync_all()?;
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
             | OpenFlags::SQLITE_OPEN_CREATE
@@ -797,6 +816,9 @@ impl Journal {
             return Err(JournalError::IntentConflict);
         }
 
+        if self.has_unresolved_maintenance()? {
+            return Err(JournalError::IntentConflict);
+        }
         let tx = self.connection.transaction()?;
         let inserted = tx.execute(
             "INSERT INTO operations (
@@ -851,7 +873,7 @@ impl Journal {
         operation_id: &OperationId,
         now_ms: u64,
     ) -> Result<Operation, JournalError> {
-        if self.has_unresolved_funding()? {
+        if self.has_unresolved_funding()? || self.has_unresolved_maintenance()? {
             return Err(JournalError::IntentConflict);
         }
         self.transition(
@@ -1682,6 +1704,24 @@ impl Journal {
                 ALTER TABLE funding_outbox ADD COLUMN cancelled_ms BLOB CHECK(cancelled_ms IS NULL OR length(cancelled_ms)=8);
                 PRAGMA user_version=7; COMMIT;")?;
         }
+        if version < 8 {
+            self.connection.execute_batch("BEGIN IMMEDIATE;
+                CREATE TABLE funding_checkpoint (singleton INTEGER PRIMARY KEY CHECK(singleton=1),payload BLOB NOT NULL CHECK(length(payload) BETWEEN 1 AND 16384));
+                CREATE TABLE funding_epochs (epoch BLOB PRIMARY KEY CHECK(length(epoch)=8),source BLOB NOT NULL,target BLOB NOT NULL,plan_hash BLOB NOT NULL CHECK(length(plan_hash)=32),completed INTEGER NOT NULL DEFAULT 0 CHECK(completed IN (0,1)));
+                CREATE UNIQUE INDEX one_active_funding_epoch ON funding_epochs(completed) WHERE completed=0;
+                CREATE TABLE funding_epoch_steps (epoch BLOB NOT NULL REFERENCES funding_epochs(epoch),scope BLOB NOT NULL CHECK(length(scope)=32),body_hash BLOB NOT NULL CHECK(length(body_hash)=32),PRIMARY KEY(epoch,scope));
+                CREATE TABLE funding_epoch_attempts (sequence INTEGER PRIMARY KEY AUTOINCREMENT,signature BLOB UNIQUE NOT NULL CHECK(length(signature)=64),epoch BLOB NOT NULL,scope BLOB NOT NULL,expiry BLOB NOT NULL CHECK(length(expiry)=8),outcome INTEGER NOT NULL DEFAULT 0 CHECK(outcome IN (0,1,2)),slot BLOB CHECK(slot IS NULL OR length(slot)=8),FOREIGN KEY(epoch,scope) REFERENCES funding_epoch_steps(epoch,scope),CHECK((outcome=0)=(slot IS NULL)));
+                PRAGMA user_version=8; COMMIT;")?;
+        }
+        if version < 9 {
+            self.connection.execute_batch("BEGIN IMMEDIATE;
+                CREATE TABLE maintenance_writes(id BLOB PRIMARY KEY CHECK(length(id)=32),kind INTEGER NOT NULL CHECK(kind BETWEEN 1 AND 6),scope BLOB NOT NULL CHECK(length(scope)=32),body_hash BLOB NOT NULL CHECK(length(body_hash)=32),private_hash BLOB NOT NULL CHECK(length(private_hash)=32),evidence_hash BLOB NOT NULL CHECK(length(evidence_hash)=32),parameters BLOB NOT NULL CHECK(length(parameters) BETWEEN 1 AND 4096),signature BLOB CHECK(signature IS NULL OR length(signature)=64),expiry BLOB CHECK(expiry IS NULL OR length(expiry)=8),state INTEGER NOT NULL DEFAULT 0 CHECK(state BETWEEN 0 AND 4),slot BLOB CHECK(slot IS NULL OR length(slot)=8),CHECK((signature IS NULL)=(expiry IS NULL)),CHECK((state IN (0,4))=(signature IS NULL)),CHECK((state IN (2,3))=(slot IS NOT NULL)));
+                CREATE UNIQUE INDEX one_live_maintenance_write ON maintenance_writes((1)) WHERE state IN (0,1);
+                CREATE TABLE funding_inventory_anchor(singleton INTEGER PRIMARY KEY CHECK(singleton=1),checkpoint_hash BLOB NOT NULL CHECK(length(checkpoint_hash)=32),last_operation INTEGER NOT NULL CHECK(last_operation>=0));
+                CREATE TABLE order_funding_barriers(operation_id BLOB PRIMARY KEY REFERENCES operations(operation_id),rates BLOB NOT NULL CHECK(length(rates) BETWEEN 1 AND 8192));
+                CREATE TABLE funding_registry_barriers(source BLOB NOT NULL CHECK(length(source)=32),target BLOB NOT NULL CHECK(length(target)=32),epoch BLOB NOT NULL CHECK(length(epoch)=8),PRIMARY KEY(source,epoch),CHECK(source!=target));
+                PRAGMA user_version=9; COMMIT;")?;
+        }
         let integrity: String = self
             .connection
             .query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
@@ -1719,6 +1759,14 @@ impl Journal {
             "venue_attempts",
             "funding_outbox",
             "funding_book_sync",
+            "funding_checkpoint",
+            "funding_epochs",
+            "funding_epoch_steps",
+            "funding_epoch_attempts",
+            "maintenance_writes",
+            "funding_inventory_anchor",
+            "order_funding_barriers",
+            "funding_registry_barriers",
         ] {
             let exists: Option<String> = self
                 .connection
@@ -1732,6 +1780,9 @@ impl Journal {
                 return Err(JournalError::CorruptState("required table missing"));
             }
         }
+        self.validate_maintenance_journal()?;
+        self.validate_maintenance_writes()?;
+        self.validate_funding_barriers()?;
         let mut statement = self.connection.prepare(&operation_select_sql(""))?;
         for row in statement.query_map([], decode_operation)? {
             let operation = row?;
@@ -2427,6 +2478,54 @@ mod tests {
             Journal::open(&path),
             Err(JournalError::UnsafePath(_))
         ));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn open_preserves_sqlite_database_lock() {
+        let dir = tempdir();
+        let path = dir.path().join("journal.sqlite");
+        let _journal = Journal::open(&path).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--ignored",
+                "--exact",
+                "journal::tests::database_lock_child",
+            ])
+            .env("CINDER_JOURNAL_TEST_PATH", &path)
+            .status()
+            .unwrap();
+        assert!(
+            status.success(),
+            "SQLite must retain its database lock after open"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    #[ignore = "subprocess fixture, invoked by database lock test"]
+    fn database_lock_child() {
+        use std::os::fd::AsRawFd;
+        let path = std::env::var_os("CINDER_JOURNAL_TEST_PATH").expect("subprocess fixture path");
+        let file = File::open(path).unwrap();
+        // SQLite's POSIX shared-lock range (SHARED_FIRST, SHARED_SIZE).
+        // Query in another process: F_GETLK excludes the caller's own locks.
+        // SAFETY: zero is a valid initial representation for libc::flock.
+        let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+        lock.l_type = libc::F_WRLCK as _;
+        lock.l_whence = libc::SEEK_SET as _;
+        lock.l_start = 0x4000_0002;
+        lock.l_len = 510;
+        // SAFETY: the descriptor is live and lock points to a valid flock.
+        assert_eq!(
+            unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETLK, &mut lock) },
+            0
+        );
+        assert_eq!(
+            i32::from(lock.l_type),
+            libc::F_RDLCK,
+            "live WAL database lost its shared lock"
+        );
     }
 
     #[test]

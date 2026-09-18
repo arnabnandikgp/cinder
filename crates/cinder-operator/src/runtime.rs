@@ -47,6 +47,8 @@ pub struct RuntimeConfig {
     /// Explicit IOC cost/notional policy; absent in recovery-only deployments.
     #[serde(default)]
     pub execution_policy: Option<crate::ExecutionPolicy>,
+    #[serde(default)]
+    pub maintenance_policy: Option<crate::MaintenancePolicy>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -104,6 +106,9 @@ impl RuntimeConfig {
         if let Some(policy) = &self.execution_policy {
             policy.validate(&ids)?;
         }
+        if let Some(policy) = &self.maintenance_policy {
+            policy.validate()?;
+        }
         if self.global_trader_index.is_empty()
             || self.active_trader_buffer.is_empty()
             || self.global_trader_index.len() + self.active_trader_buffer.len() > 64
@@ -143,6 +148,7 @@ pub(crate) struct Context {
     pub qfs: Rpc,
     pub users: BTreeMap<[u8; 32], [u8; 32]>,
     pub execution_admission: Option<([u8; 32], crate::ExecutionBudget, crate::rise::RiseView)>,
+    pub funding_checkpoint: Option<crate::FundingCheckpoint>,
 }
 pub(crate) type Shared = Rc<RefCell<Context>>;
 pub(crate) type PrivateSnapshot = (Book, Vec<([u8; 32], UserLedger)>, u64);
@@ -305,6 +311,15 @@ impl Context {
                 let raw = instruction_data(ix)?;
                 let placed = decode_ix::<cinder_ledger::instruction::PlaceOrder>(&raw)?;
                 let liquidated = decode_ix::<cinder_ledger::instruction::LiquidateUser>(&raw)?;
+                let bounded = decode_ix::<cinder_ledger::instruction::LiquidateUserBounded>(&raw)?;
+                let liquidated = liquidated.or_else(|| {
+                    bounded.map(|p| cinder_ledger::instruction::LiquidateUser {
+                        asset_id: p.asset_id,
+                        client_oid: p.client_oid,
+                        limit_price_ticks: p.limit_price_ticks,
+                        last_valid_slot: p.last_valid_slot,
+                    })
+                });
                 if placed.is_none() && liquidated.is_none() {
                     continue;
                 }
@@ -427,11 +442,63 @@ pub(crate) fn same_intent(a: &BoundedIntent, b: &BoundedIntent) -> bool {
 /// Pool-scoped lease is independent of the SQLite path. All local operators
 /// MUST use the same private lock directory; cross-host fencing is not claimed.
 pub struct OperatorRuntime {
-    coordinator: RecoveryCoordinator<crate::venue::RiseRecovery, crate::ledger::QfsLedger>,
-    context: Shared,
+    pub(crate) coordinator:
+        RecoveryCoordinator<crate::venue::RiseRecovery, crate::ledger::QfsLedger>,
+    pub(crate) context: Shared,
     _pool_lock: File,
+    pub(crate) maintenance_snapshot_cache: Option<MaintenanceSnapshot>,
 }
+pub(crate) type MaintenanceSnapshot = (Book, Vec<([u8; 32], UserLedger)>, crate::rise::RiseView);
 impl OperatorRuntime {
+    pub(crate) fn maintenance_snapshot(&mut self) -> Result<MaintenanceSnapshot> {
+        let mut c = self.context.borrow_mut();
+        let (book, ledgers, _) = c.private_ledgers()?;
+        let assets = c.config.markets.iter().map(|m| m.cinder_asset_id).collect();
+        let view = crate::rise::load(&mut c, &assets)?;
+        let (after, after_ledgers, _) = c.private_ledgers()?;
+        if crate::ledger::book_fingerprint(&book)? != crate::ledger::book_fingerprint(&after)?
+            || ledgers
+                .iter()
+                .map(|(a, l)| Ok((*a, crate::ledger::private_fingerprint(l)?)))
+                .collect::<Result<Vec<_>>>()?
+                != after_ledgers
+                    .iter()
+                    .map(|(a, l)| Ok((*a, crate::ledger::private_fingerprint(l)?)))
+                    .collect::<Result<Vec<_>>>()?
+        {
+            return Err(RuntimeError::Stale);
+        }
+        Ok((book, ledgers, view))
+    }
+    /// Read-only whole-book assessment; does not complete a liquidation,
+    /// authorize a heartbeat, or release ownership/entry gates.
+    pub fn maintenance_health(&mut self) -> Result<crate::maintenance::MaintenanceHealth> {
+        let (_, ledgers, view) = self.maintenance_snapshot()?;
+        let ranked = crate::maintenance::scan_user_health(&view, &ledgers, unix_ms())?;
+        Ok(crate::maintenance::MaintenanceHealth {
+            users_scanned: ranked.len(),
+            confirmed_positions_scanned: ranked
+                .iter()
+                .map(|h| {
+                    h.confirmed_positions
+                        .iter()
+                        .filter(|(_, lots)| *lots != 0)
+                        .count()
+                })
+                .sum(),
+            users_below_mm: ranked.iter().filter(|h| h.below_mm()).count(),
+            users_below_im: ranked
+                .iter()
+                .filter(|h| h.effective_equity_usdc < i128::from(h.initial_margin_usdc))
+                .count(),
+        })
+    }
+    /// Capture coherent rates/inventory for the maintenance WAL. Bootstrap and
+    /// advancement are separate checked journal actions, not snapshot side effects.
+    pub fn funding_checkpoint(&mut self) -> Result<crate::FundingCheckpoint> {
+        let (book, ledgers, view) = self.maintenance_snapshot()?;
+        crate::FundingCheckpoint::capture(&view, &book, &ledgers, unix_ms())
+    }
     pub fn open(config: RuntimeConfig, journal_path: &Path) -> Result<Self> {
         Self::open_mode(config, journal_path, false)
     }
@@ -491,6 +558,7 @@ impl OperatorRuntime {
             qfs,
             users: BTreeMap::new(),
             execution_admission: None,
+            funding_checkpoint: None,
         };
         context.vault_config()?;
         let mut journal = Journal::open(journal_path).map_err(|_| RuntimeError::Journal)?;
@@ -498,34 +566,68 @@ impl OperatorRuntime {
             .bind_runtime(binding)
             .map_err(|_| RuntimeError::Journal)?;
         let users = context.registry()?;
-        if journal
+        let old_users: BTreeMap<_, _> = journal
             .known_users()
             .map_err(|_| RuntimeError::Journal)?
-            .iter()
-            .any(|(l, u)| users.get(l) != Some(u))
-        {
+            .into_iter()
+            .collect();
+        if old_users.iter().any(|(l, u)| users.get(l) != Some(u)) {
             return Err(RuntimeError::Incomplete);
         }
-        journal
-            .remember_users(&users.iter().map(|(l, u)| (*l, *u)).collect::<Vec<_>>())
-            .map_err(|_| RuntimeError::Journal)?;
+        if journal
+            .funding_checkpoint()
+            .map_err(|_| RuntimeError::Journal)?
+            .is_none()
+            || users == old_users
+        {
+            journal
+                .remember_users(&users.iter().map(|(l, u)| (*l, *u)).collect::<Vec<_>>())
+                .map_err(|_| RuntimeError::Journal)?;
+        }
         context.users = users;
+        context.funding_checkpoint = journal
+            .funding_checkpoint()
+            .map_err(|_| RuntimeError::Journal)?;
         let context = Rc::new(RefCell::new(context));
         let mut venue = crate::venue::RiseRecovery::new(context.clone());
         if execution {
             venue.enable_execution();
         }
         let ledger = crate::ledger::QfsLedger::new(context.clone());
-        Ok(Self {
+        let mut runtime = Self {
             coordinator: RecoveryCoordinator::new(journal, venue, ledger),
             context,
             _pool_lock: pool_lock,
-        })
+            maintenance_snapshot_cache: None,
+        };
+        runtime.incorporate_registry(&old_users)?;
+        Ok(runtime)
     }
     /// One serialized startup/recovery pass. Discovery happens under both
     /// confirmed OPERATOR_DOWN gates, before any acknowledgement is sent.
     pub fn recover(&mut self) -> Result<ReconciliationReport> {
         crate::ledger::set_down(&mut self.context.borrow_mut(), true)?;
+        // A service shutdown can leave its last signed heartbeat/root receipt
+        // unresolved. Reconcile that exact write before discovering a new order;
+        // journal preparation must never overlap an uncertain maintenance write.
+        self.drain_maintenance_write()?;
+        if self
+            .journal()
+            .has_unresolved_maintenance()
+            .map_err(|_| RuntimeError::Journal)?
+        {
+            self.coordinator.maintenance_journal();
+            return Ok(ReconciliationReport {
+                entries_enabled: false,
+                reason: Some(crate::HaltReason::UnresolvedMaintenance),
+                unresolved_operations: self
+                    .journal()
+                    .nonterminal_operations()
+                    .map_err(|_| RuntimeError::Journal)?
+                    .len(),
+            });
+        }
+        self.refresh_funding_inventory()?;
         let (_, ledgers, _) = self.context.borrow_mut().private_ledgers()?;
         let mut intents = Vec::new();
         for (address, ledger) in ledgers {
@@ -573,7 +675,7 @@ impl OperatorRuntime {
             .recover_with_clock(unix_ms)
             .map_err(|_| RuntimeError::Journal)
     }
-    /// Call before releasing ownership. There is no background execution service;
+    /// Call before releasing ownership, including autonomous service shutdown;
     /// stopping the process must leave the entry/deposit gates closed.
     pub fn halt(&mut self) -> Result<()> {
         crate::ledger::set_down(&mut self.context.borrow_mut(), true)

@@ -59,3 +59,22 @@ fixture. It activates the local exchange and clears the copied mainnet restart
 acknowledgement, since Surfpool has a different restart lifecycle and no venue
 admin crank. Economic parameters and account bindings are preserved. This
 tests native integration, not the upstream exchange's current availability.
+
+The extended runtime acceptance test starts a separate disposable Phoenix fork
+and a real PER/QFS stack, then runs the autonomous operator:
+
+```bash
+CINDER_R5_FORK=1 CINDER_R6_MAINTENANCE=1 ./scripts/test-runtime-fork.sh
+```
+
+It exercises private trading and exact-signature crash recovery, 24 observed
+hourly funding generations, all-user allocation, actual native settlement,
+restart during a private cash fold, quiet-book liquidation, guarded reserve
+publication, delegated fee readiness, and graceful shutdown. The 24 generations
+are replayed in an accelerated test; this is not a 24-hour soak test.
+
+The fork has no live oracle/funding cranks. Local-only fixtures refresh frozen
+native price-component clocks and update the native funding accumulator. All
+Hawkeye reads, order execution, settlement, private allocation and custody
+transfers use actual programs and accounts, not financial RPC stubs. Disposable
+accounts receive local genesis funding. No transactions go to public networks.

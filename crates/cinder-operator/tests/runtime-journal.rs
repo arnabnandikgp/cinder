@@ -116,6 +116,7 @@ fn version_five_migration_does_not_invent_budgets_for_legacy_native_attempts() {
         .unwrap();
     drop(journal);
     let connection = rusqlite::Connection::open(&path).unwrap();
+    drop_maintenance_schema(&connection);
     connection.execute_batch("ALTER TABLE operations DROP COLUMN max_quote_lots; ALTER TABLE operations DROP COLUMN max_execution_fee; ALTER TABLE funding_outbox DROP COLUMN cancelled_ms; PRAGMA user_version=5;").unwrap();
     drop(connection);
     let journal = Journal::open(&path).unwrap();
@@ -301,6 +302,7 @@ fn version_two_journal_migrates_without_losing_recovery_state() {
         .unwrap();
     drop(journal);
     let connection = rusqlite::Connection::open(&path).unwrap();
+    drop_maintenance_schema(&connection);
     connection
         .execute_batch(
             "DROP TABLE funding_book_sync; DROP TABLE funding_outbox; DROP TABLE venue_attempts; ALTER TABLE operations DROP COLUMN max_quote_lots; ALTER TABLE operations DROP COLUMN max_execution_fee; PRAGMA user_version=2;",
@@ -507,6 +509,7 @@ fn version_four_receipt_only_funding_remains_gated_until_book_synchronization() 
         .unwrap();
     drop(journal);
     let connection = rusqlite::Connection::open(&path).unwrap();
+    drop_maintenance_schema(&connection);
     connection.execute_batch("DROP TABLE funding_book_sync; ALTER TABLE funding_outbox DROP COLUMN failed_slot; ALTER TABLE funding_outbox DROP COLUMN book_synced_slot; ALTER TABLE funding_outbox DROP COLUMN cancelled_ms; ALTER TABLE operations DROP COLUMN max_quote_lots; ALTER TABLE operations DROP COLUMN max_execution_fee; PRAGMA user_version=4;").unwrap();
     drop(connection);
     let mut journal = Journal::open(&path).unwrap();
@@ -516,4 +519,26 @@ fn version_four_receipt_only_funding_remains_gated_until_book_synchronization() 
     assert_eq!(record.book_synced_at_slot, None);
     assert!(journal.has_unresolved_funding().unwrap());
     assert!(journal.begin_venue_submission(&op.operation_id, 0).is_err());
+}
+
+fn drop_maintenance_schema(connection: &rusqlite::Connection) {
+    connection.execute_batch("DROP TABLE maintenance_writes; DROP TABLE order_funding_barriers; DROP TABLE funding_inventory_anchor; DROP TABLE funding_registry_barriers;").unwrap();
+    connection.execute_batch("DROP TABLE funding_epoch_attempts; DROP TABLE funding_epoch_steps; DROP TABLE funding_epochs; DROP TABLE funding_checkpoint;").unwrap();
+}
+
+#[test]
+fn version_seven_migration_preserves_orders_without_inventing_funding_checkpoint() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("private/journal.sqlite");
+    let mut journal = Journal::open(&path).unwrap();
+    let op = journal.prepare_intent(intent()).unwrap();
+    drop(journal);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    drop_maintenance_schema(&connection);
+    connection.execute_batch("PRAGMA user_version=7;").unwrap();
+    drop(connection);
+    let journal = Journal::open(&path).unwrap();
+    assert_eq!(journal.status().unwrap().schema_version, SCHEMA_VERSION);
+    assert_eq!(journal.operation(&op.operation_id).unwrap(), op);
+    assert!(journal.funding_checkpoint().unwrap().is_none());
 }

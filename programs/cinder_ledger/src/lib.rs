@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use cinder_common as cc;
 use ephemeral_rollups_sdk::anchor::ephemeral;
 
+mod liquidation;
 mod migration;
 mod privacy;
 pub use migration::*;
@@ -515,6 +516,18 @@ pub mod cinder_ledger {
         Ok(())
     }
 
+    pub fn add_operator_halt(ctx: Context<AdapterBook>, flags: u8) -> Result<()> {
+        let cfg = load_vault_config(&ctx.accounts.config)?;
+        require_keys_eq!(
+            cfg.adapter,
+            ctx.accounts.adapter.key(),
+            LedgerError::Unauthorized
+        );
+        require_book_schema(&ctx.accounts.book)?;
+        ctx.accounts.book.halt |= flags;
+        Ok(())
+    }
+
     pub fn bump_funding_epoch(ctx: Context<AdapterBook>, epoch: u64) -> Result<()> {
         let cfg = load_vault_config(&ctx.accounts.config)?;
         require_keys_eq!(
@@ -652,71 +665,37 @@ pub mod cinder_ledger {
         limit_price_ticks: u64,
         last_valid_slot: u64,
     ) -> Result<()> {
-        let cfg = load_vault_config(&ctx.accounts.config)?;
-        require_keys_eq!(
-            cfg.adapter,
-            ctx.accounts.adapter.key(),
-            LedgerError::Unauthorized
-        );
-        require_book_schema(&ctx.accounts.book)?;
-        require_user_schema(&ctx.accounts.user_ledger)?;
-        require!(limit_price_ticks != 0, LedgerError::ZeroLimitPrice);
-        require!(last_valid_slot != 0, LedgerError::ZeroDeadline);
-        // This is an L1 Phoenix deadline, not an ER slot.
-
-        let ledger = &mut ctx.accounts.user_ledger;
-        revert_pending_on_asset(ledger, asset_id)?;
-        if let Some(idx) = find_position_index(ledger, asset_id) {
-            let delta = ledger.positions[idx].unsettled_funding;
-            apply_signed_cash(ledger, delta)?;
-            ledger.positions[idx].unsettled_funding = 0;
-        }
-
-        let lots = position_lots(ledger, asset_id);
-        if lots == 0 {
-            compact_positions(ledger);
-            let under_margined = rebalance_stored_margins(ledger)?;
-            apply_cash_halt(
-                &mut ctx.accounts.book,
-                ledger.bad_debt_usdc > 0,
-                under_margined,
-            );
-            return Ok(());
-        }
-
-        require!(
-            (ledger.pending_oid_count as usize) < cc::MAX_OPEN_OIDS_PER_USER,
-            LedgerError::OidCap
-        );
-        require!(
-            !oid_duplicate(ledger, &client_oid),
-            LedgerError::DuplicateOid
-        );
-        let slot = find_free_oid_slot(ledger).ok_or(LedgerError::OidCap)?;
-
-        let lots_delta = lots.checked_neg().ok_or(LedgerError::Overflow)?;
-        set_position_lots(ledger, asset_id, 0, 0)?;
-        compact_positions(ledger);
-        let under_margined = rebalance_stored_margins(ledger)?;
-
-        ledger.open_oids[slot] = OpenOid {
-            client_oid,
+        liquidation::liquidate(
+            ctx,
             asset_id,
-            lots_delta,
-            state: cc::OID_LIQUIDATING,
+            client_oid,
             limit_price_ticks,
             last_valid_slot,
-        };
-        ledger.pending_oid_count = ledger
-            .pending_oid_count
-            .checked_add(1)
-            .ok_or(LedgerError::Overflow)?;
-        apply_cash_halt(
-            &mut ctx.accounts.book,
-            ledger.bad_debt_usdc > 0,
-            under_margined,
-        );
-        Ok(())
+            None,
+            0,
+        )
+    }
+
+    /// Resource-bounded partial close. No unknown pending order may be restored
+    /// by this autonomous path; recovery must drain it before a new close.
+    pub fn liquidate_user_bounded(
+        ctx: Context<LiquidateUser>,
+        asset_id: u16,
+        client_oid: [u8; 16],
+        limit_price_ticks: u64,
+        last_valid_slot: u64,
+        close_lots: u64,
+        post_position_im_usdc: u64,
+    ) -> Result<()> {
+        liquidation::liquidate(
+            ctx,
+            asset_id,
+            client_oid,
+            limit_price_ticks,
+            last_valid_slot,
+            Some(close_lots),
+            post_position_im_usdc,
+        )
     }
 
     pub fn delegate_user(ctx: Context<DelegateUser>) -> Result<()> {

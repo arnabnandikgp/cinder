@@ -86,6 +86,18 @@ pub(crate) fn assess(
     solvency: &crate::SolvencyPolicy,
     now: u64,
 ) -> Result<u64> {
+    assess_with_funding(view, ledgers, op, execution, solvency, now, false)
+}
+
+pub(crate) fn assess_with_funding(
+    view: &RiseView,
+    ledgers: &[([u8; 32], UserLedger)],
+    op: &Operation,
+    execution: &ExecutionPolicy,
+    solvency: &crate::SolvencyPolicy,
+    now: u64,
+    funding_allocated: bool,
+) -> Result<u64> {
     if ledgers.is_empty()
         || ledgers
             .iter()
@@ -116,16 +128,17 @@ pub(crate) fn assess(
                 && l.user.to_bytes() == op.intent.identity.user_pubkey
         })
         .ok_or(RuntimeError::Identity)?;
-    // Funding allocation/folds are R6. Until that authenticated loop exists,
-    // refuse new execution across a funding boundary rather than guessing how
-    // native hot-state settlement will distribute it to private users.
-    if view.funding != 0
-        || view.asset_funding.values().any(|n| *n != 0)
-        || ledgers.iter().any(|(_, l)| {
-            l.positions[..usize::from(l.positions_len)]
-                .iter()
-                .any(|p| p.unsettled_funding != 0)
-        })
+    // Only an authenticated, generation-aligned checkpoint permits execution
+    // with unsettled funding. Without one, refuse rather than guessing how
+    // native settlement will distribute it to private users.
+    if !funding_allocated
+        && (view.funding != 0
+            || view.asset_funding.values().any(|n| *n != 0)
+            || ledgers.iter().any(|(_, l)| {
+                l.positions[..usize::from(l.positions_len)]
+                    .iter()
+                    .any(|p| p.unsettled_funding != 0)
+            }))
     {
         return Err(RuntimeError::FundingAllocationRequired);
     }
@@ -200,13 +213,16 @@ pub(crate) fn assess(
         native_view
             .entry_quote_lots
             .insert(asset, i128::from(native.new_entry_quote));
+        let observed_funding = *view
+            .asset_funding
+            .get(&asset)
+            .ok_or(RuntimeError::Incomplete)?;
+        // A zero-fill interaction may still settle funding. Reserve the worse
+        // posted-cash outcome; signed backing stays conserved in either case.
         let funding = if fill_abs == 0 {
-            0
+            observed_funding.min(0)
         } else {
-            *view
-                .asset_funding
-                .get(&asset)
-                .ok_or(RuntimeError::Incomplete)?
+            observed_funding
         };
         let post_cash =
             i128::from(view.collateral) + i128::from(native.realized_usdc) + i128::from(funding)
@@ -446,5 +462,22 @@ mod tests {
         op.intent.requested_lots = 33;
         assert!(execution.budget(&v, &op).is_err());
         assert!(assess(&v, &users, &op, &execution, &policy(11000, 9000, 10), 1000).is_err());
+    }
+    #[test]
+    fn allocated_signed_funding_is_projected_without_changing_total_backing() {
+        for funding in [-(USDC as i64), USDC as i64] {
+            let (_dir, op, mut v, mut users, e) = setup(1, 100, 3, 1000);
+            v.collateral = 600 * USDC;
+            v.vault_balance -= 600 * USDC;
+            v.funding = i128::from(funding);
+            v.asset_funding.insert(1, funding);
+            users[0].1.positions[0].unsettled_funding = funding;
+            assert!(assess(&v, &users, &op, &e, &policy(11000, 9000, 10), 1000).is_err());
+            assert_eq!(
+                assess_with_funding(&v, &users, &op, &e, &policy(11000, 9000, 10), 1000, true)
+                    .unwrap(),
+                0
+            );
+        }
     }
 }

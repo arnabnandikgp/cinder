@@ -16,6 +16,7 @@ use phoenix_rise_math::{
     SignedBaseLots, SignedQuoteLots, TraderPosition,
 };
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use solana_signer::Signer;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,11 +30,94 @@ pub(crate) struct RiseView {
     pub collateral: u64,
     pub funding: i128,
     pub asset_funding: BTreeMap<u16, i64>,
+    pub funding_updates_seconds: BTreeMap<u16, u64>,
     pub snapshot_hash: [u8; 32],
     pub vault_balance: u64,
     pub halt: u8,
     pub safe: bool,
+    pub risk_tier: u8,
+    pub mm_surplus: i64,
     pub markets: BTreeMap<u16, PerpAssetMetadata>,
+}
+impl RiseView {
+    pub(crate) fn funding_rates(&self) -> Result<BTreeMap<u16, crate::FundingRate>> {
+        self.markets
+            .iter()
+            .map(|(asset, m)| {
+                Ok((
+                    *asset,
+                    crate::FundingRate {
+                        cumulative_quote_lots_per_base_lot: m.cumulative_funding_rate.as_inner(),
+                        last_update_seconds: *self
+                            .funding_updates_seconds
+                            .get(asset)
+                            .ok_or(RuntimeError::Incomplete)?,
+                    },
+                ))
+            })
+            .collect()
+    }
+    /// Financial evidence is stable across ordinary oracle refreshes. Marks
+    /// remain independently fresh inputs to health/margin calculations.
+    pub(crate) fn financial_fingerprint(&self) -> [u8; 32] {
+        let mut h = Sha256::new();
+        h.update(b"cinder:maintenance-native:v1");
+        h.update(self.collateral.to_le_bytes());
+        h.update(self.vault_balance.to_le_bytes());
+        h.update(self.funding.to_le_bytes());
+        h.update([self.halt]);
+        h.update([u8::from(self.safe), self.risk_tier]);
+        h.update(self.mm_surplus.to_le_bytes());
+        h.update((self.markets.len() as u32).to_le_bytes());
+        for (asset, m) in &self.markets {
+            h.update(asset.to_le_bytes());
+            h.update(m.mark_price.as_inner().to_le_bytes());
+            h.update(m.tick_size.as_inner().to_le_bytes());
+            h.update(m.asset_id.to_le_bytes());
+            h.update(m.base_lot_decimals.to_le_bytes());
+            for tier in m.leverage_tiers.iter() {
+                h.update(tier.upper_bound_size.as_inner().to_le_bytes());
+                h.update(tier.max_leverage.as_inner().to_le_bytes());
+                h.update(tier.limit_order_risk_factor.as_inner().to_le_bytes());
+            }
+            for factor in m.risk_factors {
+                h.update(factor.to_le_bytes());
+            }
+            h.update(m.cancel_order_risk_factor.to_le_bytes());
+            h.update(m.upnl_risk_factor.to_le_bytes());
+            h.update(m.upnl_risk_factor_for_withdrawals.to_le_bytes());
+            h.update(
+                self.positions
+                    .get(asset)
+                    .copied()
+                    .unwrap_or(0)
+                    .to_le_bytes(),
+            );
+            h.update(
+                self.entry_quote_lots
+                    .get(asset)
+                    .copied()
+                    .unwrap_or(0)
+                    .to_le_bytes(),
+            );
+            h.update(
+                self.asset_funding
+                    .get(asset)
+                    .copied()
+                    .unwrap_or(0)
+                    .to_le_bytes(),
+            );
+            h.update(m.cumulative_funding_rate.as_inner().to_le_bytes());
+            h.update(
+                self.funding_updates_seconds
+                    .get(asset)
+                    .copied()
+                    .unwrap_or(0)
+                    .to_le_bytes(),
+            );
+        }
+        h.finalize().into()
+    }
 }
 fn token_balance(row: &Value, mint: &[u8; 32], authority: &[u8; 32]) -> Result<u64> {
     let bytes = data(row, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")?;
@@ -200,6 +284,7 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
     let mut positions = BTreeMap::new();
     let mut entry_quote_lots = BTreeMap::new();
     let mut asset_funding = BTreeMap::new();
+    let mut funding_updates_seconds = BTreeMap::new();
     let mut count = 0u16;
     let mut mark_ms = u64::MAX;
     for asset in assets {
@@ -285,6 +370,17 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
             .map_err(|_| RuntimeError::Unsupported)?,
         );
         normalized.cumulative_funding_rate = metadata.funding_accumulator.cumulative_funding_rate;
+        let funding_updated = metadata
+            .funding_accumulator
+            .last_funding_update_timestamp
+            .as_inner();
+        if funding_updated
+            .checked_mul(1000)
+            .is_none_or(|t| t > observed_ms)
+        {
+            return Err(RuntimeError::Stale);
+        }
+        funding_updates_seconds.insert(asset, funding_updated);
         let mark_slot = metadata.oracle_price.mark_price.price.slot;
         if mark_slot > asset_slot
             || view.mark_price_ticks == 0
@@ -304,11 +400,13 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
     if rows != after {
         return Err(RuntimeError::Stale);
     }
-    let now = unix_ms();
     let trader_ms = slot_time(context, view_slot)?;
     if mark_ms == u64::MAX {
         mark_ms = trader_ms;
     }
+    // Validate at completion, not before the final block-time RPC: that lookup
+    // can take time (or a local fork can wait for its real clock to catch up).
+    let now = unix_ms();
     for time in [observed_ms, trader_ms, mark_ms] {
         if now
             .checked_sub(time)
@@ -330,6 +428,7 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
         collateral,
         funding: i128::from(margin.unsettled_funding_quote_lots),
         asset_funding,
+        funding_updates_seconds,
         snapshot_hash: snapshot_hash(&keys, &rows)?,
         vault_balance,
         halt: cfg.paused,
@@ -339,6 +438,14 @@ pub(crate) fn load(context: &mut Context, assets: &BTreeSet<u16>) -> Result<Rise
             && margin.effective_collateral_quote_lots >= 0
             && u64::try_from(margin.effective_collateral_quote_lots)
                 .is_ok_and(|e| e >= margin.initial_margin_quote_lots),
+        risk_tier: margin.risk_tier,
+        mm_surplus: margin
+            .effective_collateral_quote_lots
+            .checked_sub(
+                i64::try_from(margin.maintenance_margin_quote_lots)
+                    .map_err(|_| RuntimeError::Decode)?,
+            )
+            .ok_or(RuntimeError::Decode)?,
         markets,
     })
 }
@@ -465,4 +572,43 @@ pub(crate) fn position_risk(
     RiseRiskEngine
         .quote_user_health(&snapshot, post_lots, cash, now_ms)
         .map_err(|_| RuntimeError::Stale)
+}
+
+#[cfg(test)]
+mod maintenance_evidence_tests {
+    use super::*;
+
+    #[test]
+    fn oracle_refresh_is_not_a_financial_change_but_risk_cash_and_funding_are() {
+        let view = crate::solvency::tests::view(100, 200);
+        let expected = view.financial_fingerprint();
+        let mut refreshed = view.clone();
+        refreshed.slot += 1;
+        refreshed.observed_ms += 1;
+        refreshed.mark_ms += 1;
+        refreshed.snapshot_hash = [7; 32];
+        assert_eq!(refreshed.financial_fingerprint(), expected);
+        for field in 0..9 {
+            let mut changed = view.clone();
+            match field {
+                0 => changed.collateral += 1,
+                1 => changed.vault_balance += 1,
+                2 => changed.funding += 1,
+                3 => changed.asset_funding.insert(1, 1).map(|_| ()).unwrap_or(()),
+                4 => changed
+                    .funding_updates_seconds
+                    .insert(1, 2)
+                    .map(|_| ())
+                    .unwrap_or(()),
+                5 => changed.risk_tier += 1,
+                6 => changed.mm_surplus += 1,
+                7 => changed.positions.insert(1, 1).map(|_| ()).unwrap_or(()),
+                _ => {
+                    changed.markets.get_mut(&1).unwrap().cumulative_funding_rate =
+                        math::SignedQuoteLotsPerBaseLot::new(1)
+                }
+            }
+            assert_ne!(changed.financial_fingerprint(), expected, "field {field}");
+        }
+    }
 }

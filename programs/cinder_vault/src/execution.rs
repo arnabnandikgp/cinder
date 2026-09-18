@@ -13,14 +13,26 @@ use solana_instructions_sysvar::{load_current_index_checked, load_instruction_at
 use solana_sha256_hasher::{hash, hashv};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct PhoenixClosingGuard {
+    pub max_risk_tier: u8,
+    pub minimum_mm_surplus: i64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub struct PhoenixExecutionGuard {
     pub snapshot_hash: [u8; 32],
+    /// Both fences bind the accumulator generations. An IOC must not silently
+    /// settle a newly advanced funding interval across private inventory.
+    pub funding_hash: [u8; 32],
     pub ioc_data_hash: [u8; 32],
     pub observed_slot: u64,
     pub oldest_observed_ms: u64,
     pub taker_fee_counter: u64,
     pub max_fee_usdc: u64,
     pub gti_count: u8,
+    /// Only the operator's authenticated liquidation path may select closing
+    /// mode. The ordinary path continues to require safe IM plus cash buffer.
+    pub closing: Option<PhoenixClosingGuard>,
 }
 
 #[derive(Accounts)]
@@ -49,6 +61,38 @@ pub struct GuardPhoenixExecution<'info> {
 
 fn failed() -> anchor_lang::error::Error {
     error!(VaultError::ExecutionGuardFailed)
+}
+
+/// Shared streaming commitment over active map slots. Oracle refreshes and
+/// trade-driven open interest do not change this commitment; accumulator
+/// changes, membership changes and slot reuse do. No large owned map on SBF.
+pub fn funding_generation_hash(data: &[u8]) -> Result<[u8; 32]> {
+    let map = phoenix_rise_accounts::perp_asset_map::PerpAssetMap::try_from_account_bytes(data)
+        .map_err(|_| failed())?;
+    let mut digest = hashv(&[
+        b"cinder:funding-generations:v1",
+        &map.num_assets().to_le_bytes(),
+    ])
+    .to_bytes();
+    let mut count = 0u16;
+    for entry in map.iter() {
+        let entry = entry.map_err(|_| failed())?;
+        let f = entry.metadata.funding_accumulator();
+        digest = hashv(&[
+            &digest,
+            &entry
+                .metadata
+                .static_market_params()
+                .asset_id()
+                .to_le_bytes(),
+            &f.cumulative_funding_rate.as_inner().to_le_bytes(),
+            &f.last_funding_update_timestamp.as_inner().to_le_bytes(),
+        ])
+        .to_bytes();
+        count = count.checked_add(1).ok_or_else(failed)?;
+    }
+    require!(count == map.num_assets(), VaultError::ExecutionGuardFailed);
+    Ok(digest)
 }
 
 /// Streaming hash: no copy of the large native asset map or active buffers.
@@ -153,6 +197,10 @@ pub fn guard_execution<'info>(
     let a = &ctx.accounts;
     let split = usize::from(guard.gti_count);
     validate_native(a, ctx.remaining_accounts, split)?;
+    require!(
+        funding_generation_hash(&a.phoenix_asset_map.try_borrow_data()?)? == guard.funding_hash,
+        VaultError::ExecutionGuardFailed
+    );
     let clock = Clock::get()?;
     let now_ms = u64::try_from(clock.unix_timestamp)
         .map_err(|_| failed())?
@@ -163,7 +211,11 @@ pub fn guard_execution<'info>(
             && now_ms
                 .checked_sub(guard.oldest_observed_ms)
                 .is_some_and(|age| age <= cc::MARK_STALE_MS)
-            && !cc::entries_blocked(a.config.paused & !cc::OPERATOR_DOWN),
+            && if guard.closing.is_some() {
+                a.config.paused & (cc::INVARIANT_BROKEN | cc::VENUE_BREACH) == 0
+            } else {
+                !cc::entries_blocked(a.config.paused & !cc::OPERATOR_DOWN)
+            },
         VaultError::ExecutionGuardFailed
     );
     let index = usize::from(load_current_index_checked(&a.instructions)?);
@@ -181,11 +233,19 @@ pub fn guard_execution<'info>(
     }
     .ok_or_else(failed)?;
     let peer = load_instruction_at_checked(peer_index, &a.instructions)?;
-    let expected_peer = crate::instruction::GuardPhoenixExecution {
+    let before_data = crate::instruction::GuardPhoenixExecution {
         guard: guard.clone(),
-        after: !after,
+        after: false,
     }
     .data();
+    let expected_peer = if after {
+        before_data.clone()
+    } else {
+        crate::instruction::FinishPhoenixExecution {
+            guard_hash: hash(&before_data).to_bytes(),
+        }
+        .data()
+    };
     require!(
         peer.program_id == crate::ID
             && peer.data == expected_peer
@@ -250,9 +310,38 @@ pub fn guard_execution<'info>(
                 .is_some_and(|fee| fee <= guard.max_fee_usdc),
             VaultError::ExecutionGuardFailed
         );
-        check_post_collateral(a, ctx.remaining_accounts, split)?;
+        check_post_collateral(a, ctx.remaining_accounts, split, guard.closing.as_ref())?;
     }
     Ok(())
+}
+
+/// Compact trailing fence: the authenticated preceding instruction carries the
+/// immutable guard once. Saves packet bytes without dropping any risk evidence.
+pub fn finish_execution<'info>(
+    ctx: Context<'info, GuardPhoenixExecution<'info>>,
+    guard_hash: [u8; 32],
+) -> Result<()> {
+    let index = usize::from(load_current_index_checked(&ctx.accounts.instructions)?);
+    let before = load_instruction_at_checked(
+        index.checked_sub(2).ok_or_else(failed)?,
+        &ctx.accounts.instructions,
+    )?;
+    require!(
+        before.program_id == crate::ID
+            && hash(&before.data).to_bytes() == guard_hash
+            && before
+                .data
+                .starts_with(crate::instruction::GuardPhoenixExecution::DISCRIMINATOR),
+        VaultError::ExecutionGuardFailed
+    );
+    let mut body = &before.data[crate::instruction::GuardPhoenixExecution::DISCRIMINATOR.len()..];
+    let args =
+        crate::instruction::GuardPhoenixExecution::deserialize(&mut body).map_err(|_| failed())?;
+    require!(
+        !args.after && body.is_empty(),
+        VaultError::ExecutionGuardFailed
+    );
+    guard_execution(ctx, args.guard, true)
 }
 
 #[inline(never)]
@@ -260,6 +349,7 @@ fn check_post_collateral<'info>(
     a: &GuardPhoenixExecution<'info>,
     remaining: &[AccountInfo<'info>],
     split: usize,
+    closing: Option<&PhoenixClosingGuard>,
 ) -> Result<()> {
     let key = |p: Pubkey| solana_pubkey::Pubkey::new_from_array(p.to_bytes());
     let accounts = HawkeyeTraderViewAccounts {
@@ -292,6 +382,22 @@ fn check_post_collateral<'info>(
         HawkeyeReturnData::Margin(m) if m.version == hawkeye::HAWKEYE_RETURN_VERSION => m,
         _ => return Err(failed()),
     };
+    if let Some(c) = closing {
+        require!(
+            c.max_risk_tier <= 5
+                && margin.risk_tier <= c.max_risk_tier
+                && margin
+                    .effective_collateral_quote_lots
+                    .checked_sub(
+                        i64::try_from(margin.maintenance_margin_quote_lots).map_err(|_| failed())?
+                    )
+                    .is_some_and(|s| s >= c.minimum_mm_surplus),
+            VaultError::ExecutionGuardFailed
+        );
+        if c.max_risk_tier != 0 {
+            return Ok(());
+        }
+    }
     let required = u128::from(margin.initial_margin_quote_lots)
         .checked_mul(u128::from(cc::BPS_DENOM) + u128::from(cc::BUFFER_MIN_BPS))
         .ok_or_else(failed)?

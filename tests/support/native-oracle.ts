@@ -2,12 +2,51 @@
 import * as rise from "@ellipsis-labs/rise";
 import { Connection, PublicKey, SYSVAR_CLOCK_PUBKEY } from "@solana/web3.js";
 
+// Both fixtures rewrite the whole account. Serialize their complete
+// read/modify/write cycles, even across distinct Connection instances, so an
+// oracle refresh cannot restore a funding generation from its stale copy.
+const assetMapWrites = new Map<string, Promise<void>>();
+async function writeLocalAssetMap<T>(connection: Connection, assetMap: PublicKey, action: () => Promise<T>): Promise<T> {
+    const key = `${connection.rpcEndpoint}|${assetMap.toBase58()}`;
+    const previous = assetMapWrites.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => release = resolve);
+    assetMapWrites.set(key, pending);
+    await previous;
+    try {
+        return await action();
+    } finally {
+        release();
+        if (assetMapWrites.get(key) === pending) assetMapWrites.delete(key);
+    }
+}
+
 /** Solana Clock is in seconds; Phoenix oracle update timestamps are in ms. */
 export function localClockTimestampMs(clock: { owner: PublicKey; data: Buffer } | null): bigint {
     if (!clock || clock.data.length !== 40 || !clock.owner.equals(new PublicKey("Sysvar1111111111111111111111111111111111111"))) throw new Error("untrusted local clock sysvar");
     const timestamp = clock.data.readBigInt64LE(32) * 1000n;
     if (timestamp <= 0n) throw new Error("invalid local clock timestamp");
     return timestamp;
+}
+
+/** Await a real local block timestamp, without substituting RPC or oracle data.
+ * Simulations can advance Surfpool's clock after the pre-read clock fixture.
+ */
+export async function waitForLocalBlockTime(timestampSeconds: number, now = Date.now, wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))) {
+    const target = timestampSeconds * 1000;
+    let wall = now();
+    if (!Number.isSafeInteger(timestampSeconds) || timestampSeconds <= 0 || !Number.isSafeInteger(target)
+        || !Number.isSafeInteger(wall) || wall <= 0) throw new Error("invalid local block time");
+    if (target - wall > 5000) throw new Error("local fork clock is too far ahead");
+    const deadline = performance.now() + 5001;
+    while (wall < target) {
+        const remaining = deadline - performance.now();
+        if (remaining <= 0) throw new Error("local fork clock catch-up timed out");
+        await wait(Math.min(target - wall + 1, remaining));
+        wall = now();
+        if (!Number.isSafeInteger(wall) || wall <= 0) throw new Error("invalid local block time");
+        if (target - wall > 5000) throw new Error("local fork clock is too far ahead");
+    }
 }
 
 /** Let wall time catch up with Surfpool's actual clock before a new process. */
@@ -27,9 +66,7 @@ export async function settleLocalClock(connection: Connection, rpc: (method: str
         // Surfpool 1.5 can produce extra blocks for blockhash expiration in
         // clock mode. Pause production until its real reported block time is
         // no longer in the future; never rewrite timestamps or RPC data.
-        const delay = await blockTime() - Date.now();
-        if (delay > 5000) throw new Error("local fork clock is too far ahead");
-        if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
+        await waitForLocalBlockTime(await blockTime() / 1000);
     } finally {
         await rpc("surfnet_resumeClock", []);
     }
@@ -38,6 +75,10 @@ export async function settleLocalClock(connection: Connection, rpc: (method: str
 export async function refreshLocalMark(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>, program: PublicKey, assetMap: PublicKey, symbol: string) {
     const endpoint = new URL(connection.rpcEndpoint);
     if (endpoint.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(endpoint.hostname)) throw new Error("oracle fixture refuses non-local RPC");
+    return writeLocalAssetMap(connection, assetMap, () => refreshMark(connection, rpc, program, assetMap, symbol));
+}
+
+async function refreshMark(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>, program: PublicKey, assetMap: PublicKey, symbol: string) {
     const account = await connection.getAccountInfo(assetMap);
     if (!account?.owner.equals(program) || account.executable) throw new Error("untrusted native asset map");
     const decoded = rise.decodePerpAssetMap(account.data);
@@ -77,4 +118,40 @@ export async function refreshLocalMark(connection: Connection, rpc: (method: str
     }
     await rpc("surfnet_setAccount", [assetMap.toBase58(), { owner: program.toBase58(), data: data.toString("hex") }]);
     return metadata;
+}
+
+/** Deterministic public funding-feed fixture on a disposable localhost fork.
+ * Only the pinned native accumulator changes; Hawkeye, native settlement and
+ * private allocation still execute their actual program code.
+ */
+export async function setLocalFundingGeneration(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>, program: PublicKey, assetMap: PublicKey, symbol: string, rate: bigint, updatedSeconds: bigint) {
+    const endpoint = new URL(connection.rpcEndpoint);
+    if (endpoint.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(endpoint.hostname)) throw new Error("funding fixture refuses non-local RPC");
+    if (updatedSeconds <= 0n || updatedSeconds * 1000n > BigInt(Date.now())) throw new Error("invalid funding fixture timestamp");
+    return writeLocalAssetMap(connection, assetMap, () => setFundingGeneration(connection, rpc, program, assetMap, symbol, rate, updatedSeconds));
+}
+
+async function setFundingGeneration(connection: Connection, rpc: (method: string, params: unknown[]) => Promise<unknown>, program: PublicKey, assetMap: PublicKey, symbol: string, rate: bigint, updatedSeconds: bigint) {
+    const account = await connection.getAccountInfo(assetMap);
+    if (!account?.owner.equals(program) || account.executable) throw new Error("untrusted funding asset map");
+    const matches = rise.decodePerpAssetMap(account.data).metadata.entries.filter(e => e.key === symbol);
+    if (matches.length !== 1) throw new Error("ambiguous funding fixture market");
+    const market = matches[0].value;
+    const markOffset = account.data.indexOf(new PublicKey(market.staticMarketParams.marketAccount).toBuffer()) - 888;
+    const offset = markOffset + 1264;
+    if (markOffset < 80 || (markOffset - 80) % 1584 !== 0 || offset + 96 > account.data.length
+        || account.data.readBigInt64LE(offset + 32) !== market.fundingAccumulator.cumulativeFundingRate
+        || account.data.readBigUInt64LE(offset + 48) !== market.fundingAccumulator.lastFundingUpdateTimestamp
+        || account.data.readBigUInt64LE(offset + 40) !== market.fundingAccumulator.startIntervalTimestamp
+        || market.fundingAccumulator.fundingIntervalSeconds <= 0n) throw new Error("native funding layout mismatch");
+    const data = Buffer.from(account.data);
+    data.writeBigInt64LE(rate, offset + 32);
+    // Keep the native interval clock coherent too. Rewinding only lastUpdate
+    // leaves it before startInterval and creates an invalid venue fixture.
+    data.writeBigUInt64LE(updatedSeconds - updatedSeconds % market.fundingAccumulator.fundingIntervalSeconds, offset + 40);
+    data.writeBigUInt64LE(updatedSeconds, offset + 48);
+    await rpc("surfnet_setAccount", [assetMap.toBase58(), { owner: program.toBase58(), data: data.toString("hex") }]);
+    const after = await connection.getAccountInfo(assetMap);
+    const observed = after && rise.decodePerpAssetMap(after.data).metadata.entries.find(e => e.key === symbol)?.value.fundingAccumulator;
+    if (!observed || observed.cumulativeFundingRate !== rate || observed.lastFundingUpdateTimestamp !== updatedSeconds) throw new Error("funding fixture did not persist");
 }

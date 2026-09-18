@@ -219,11 +219,13 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
         expect(health.isLiquidatable).to.equal(false);
     });
     it("executes through the real operator and private PER/QFS ledger", async function () {
-        // Six scenarios may each need up to 60 seconds to converge after
-        // funding/native/ACK crash boundaries on a slower Linux runner.
-        this.timeout(420000);
+        // R6 adds 24 bounded funding-generation waits plus publication, fold,
+        // liquidation and crash recovery. The outer budget must cover those
+        // sequential waits; native freshness and individual deadlines stay strict.
+        this.timeout(process.env.CINDER_R6_MAINTENANCE === "1" ? 1920000 : 420000);
         if (process.env.CINDER_R5_PRIVATE !== "1") { this.skip(); return; }
-        await verifyOperatorExecution({ endpoint, operator, vault, config, native, global, trader, quote, source, indexes, buffers, rpc, send });
+        await verifyOperatorExecution({ endpoint, operator, vault, config, native, global, trader, quote, source, indexes, buffers, rpc, send,
+            postCollateral: async value => { await send([await funding(Array(32).fill(96), value)]); } });
     });
     it("verifies native multi-price reversal math through the Rust recovery decoder", async function () {
         if (process.env.CINDER_R5_PRIVATE === "1") { this.skip(); return; }
@@ -413,8 +415,24 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
                 const header = rise.decodeOrderbook((await connection.getAccountInfo(marketBook))!.data).header;
                 const clockTime = await connection.getBlockTime(snapshot.context.slot);
                 if (clockTime === null) throw new Error("missing local block time");
-                const guard = { snapshotHash: Array.from(digest), iocDataHash: Array.from(createHash("sha256").update(bounded.data).digest()), observedSlot: new anchor.BN(snapshot.context.slot), oldestObservedMs: new anchor.BN(clockTime * 1000), takerFeeCounter: new anchor.BN(header.totalTakerQuoteLotFees.toString()), maxFeeUsdc: new anchor.BN(1000000), gtiCount: indexes.length };
-                const fence = (after: boolean, value = guard) => vault.methods.guardPhoenixExecution(value, after).accountsPartial({ adapter: operator.publicKey, config, phoenixProgram: native, phoenixGlobalConfig: global, phoenixAssetMap: assetMap, phoenixTrader: trader, orderbook: marketBook, hawkeyeProgram: new PublicKey(String(rise.HAWKEYE_PROGRAM_ADDRESS)), instructions: SYSVAR_INSTRUCTIONS_PUBKEY }).remainingAccounts(snapshotKeys.slice(4).map(pubkey => ({ pubkey, isSigner: false, isWritable: false }))).instruction();
+                const map = rise.decodePerpAssetMap(snapshot.value[2]!.data);
+                const active = map.metadata.entries;
+                const count = Buffer.alloc(2); count.writeUInt16LE(active.length);
+                let fundingHash = createHash("sha256").update("cinder:funding-generations:v1").update(count).digest();
+                for (const { value } of active) {
+                    const fields = Buffer.alloc(20);
+                    fields.writeUInt32LE(value.staticMarketParams.assetId);
+                    fields.writeBigInt64LE(value.fundingAccumulator.cumulativeFundingRate, 4);
+                    fields.writeBigUInt64LE(value.fundingAccumulator.lastFundingUpdateTimestamp, 12);
+                    fundingHash = createHash("sha256").update(fundingHash).update(fields).digest();
+                }
+                const guard = { snapshotHash: Array.from(digest), fundingHash: Array.from(fundingHash), closing: null, iocDataHash: Array.from(createHash("sha256").update(bounded.data).digest()), observedSlot: new anchor.BN(snapshot.context.slot), oldestObservedMs: new anchor.BN(clockTime * 1000), takerFeeCounter: new anchor.BN(header.totalTakerQuoteLotFees.toString()), maxFeeUsdc: new anchor.BN(1000000), gtiCount: indexes.length };
+                const fenceAccounts = { adapter: operator.publicKey, config, phoenixProgram: native, phoenixGlobalConfig: global, phoenixAssetMap: assetMap, phoenixTrader: trader, orderbook: marketBook, hawkeyeProgram: new PublicKey(String(rise.HAWKEYE_PROGRAM_ADDRESS)), instructions: SYSVAR_INSTRUCTIONS_PUBKEY };
+                const remaining = snapshotKeys.slice(4).map(pubkey => ({ pubkey, isSigner: false, isWritable: false }));
+                const fence = async (after: boolean, value = guard) => {
+                    const before = await vault.methods.guardPhoenixExecution(value, false).accountsPartial(fenceAccounts).remainingAccounts(remaining).instruction();
+                    return after ? vault.methods.finishPhoenixExecution(Array.from(createHash("sha256").update(before.data).digest())).accountsPartial(fenceAccounts).remainingAccounts(remaining).instruction() : before;
+                };
                 const fenced = new Transaction({ feePayer: operator.publicKey, recentBlockhash: latest.blockhash }).add(ComputeBudgetProgram.setComputeUnitLimit({ units: 1400000 }), await fence(false), bounded, await fence(true));
                 fenced.sign(operator);
                 expect(fenced.serialize().length).to.be.at.most(1232);
@@ -424,6 +442,7 @@ describe("runtime atomic PDA funding (native Phoenix fork)", function () {
                     [await fence(false), bounded],
                     [await fence(false), bounded, await fence(true, { ...guard, maxFeeUsdc: new anchor.BN(999999) })],
                     [await fence(false, { ...guard, snapshotHash: Array(32).fill(0) }), bounded, await fence(true, { ...guard, snapshotHash: Array(32).fill(0) })],
+                    [await fence(false, { ...guard, fundingHash: Array(32).fill(0) }), bounded, await fence(true, { ...guard, fundingHash: Array(32).fill(0) })],
                 ]) {
                     const malformed = new Transaction({ feePayer: operator.publicKey, recentBlockhash: latest.blockhash }).add(ComputeBudgetProgram.setComputeUnitLimit({ units: 1400000 }), ...instructions);
                     malformed.sign(operator);

@@ -58,6 +58,7 @@ pub(crate) struct RiseRecovery {
     prepared_funding: Option<(crate::FundingIntent, crate::transaction::SignedTransaction)>,
     enabled: bool,
     prepared_execution: Option<([u8; 32], crate::transaction::SignedTransaction)>,
+    prepared_rates: Option<BTreeMap<u16, crate::FundingRate>>,
 }
 impl RiseRecovery {
     pub fn new(context: Shared) -> Self {
@@ -67,6 +68,7 @@ impl RiseRecovery {
             prepared_funding: None,
             enabled: false,
             prepared_execution: None,
+            prepared_rates: None,
         }
     }
     pub fn enable_execution(&mut self) {
@@ -84,6 +86,7 @@ impl VenueSubmissionPort for RiseRecovery {
         if !self.enabled {
             return Err(ErrorCode::VenueUnavailable);
         }
+        self.prepared_rates = None;
         let result = (|| {
             let mut c = self.context.borrow_mut();
             let c = &mut *c;
@@ -93,6 +96,13 @@ impl VenueSubmissionPort for RiseRecovery {
                 .ok_or(RuntimeError::Incomplete)?;
             if id != op.operation_id || Some(budget) != op.execution_budget {
                 return Err(RuntimeError::Identity);
+            }
+            if let Some(cp) = &c.funding_checkpoint {
+                let rates = view.funding_rates()?;
+                if cp.rates() != &rates {
+                    return Err(RuntimeError::FundingAllocationRequired);
+                }
+                self.prepared_rates = Some(rates);
             }
             let cfg = c.vault_config()?;
             let map_key = c.config.phoenix_asset_map.clone();
@@ -118,6 +128,11 @@ impl VenueSubmissionPort for RiseRecovery {
                 .map_err(|_| RuntimeError::Decode)?;
             let guard = cinder_vault::PhoenixExecutionGuard {
                 snapshot_hash: view.snapshot_hash,
+                funding_hash: cinder_vault::funding_generation_hash(&crate::rpc::data(
+                    &rows[0],
+                    &c.config.phoenix_program,
+                )?)
+                .map_err(|_| RuntimeError::Decode)?,
                 ioc_data_hash: Sha256::digest(&ioc.data).into(),
                 observed_slot: view.slot,
                 oldest_observed_ms: view.mark_ms.min(view.observed_ms),
@@ -125,6 +140,22 @@ impl VenueSubmissionPort for RiseRecovery {
                 max_fee_usdc: budget.max_fee_usdc,
                 gti_count: u8::try_from(c.config.global_trader_index.len())
                     .map_err(|_| RuntimeError::Configuration)?,
+                closing: if op.intent.identity.kind == crate::OrderKind::Liquidation {
+                    Some(cinder_vault::PhoenixClosingGuard {
+                        max_risk_tier: view.risk_tier,
+                        minimum_mm_surplus: if view.safe {
+                            0
+                        } else {
+                            i64::try_from(
+                                i128::from(view.mm_surplus)
+                                    - crate::liquidation_admission::close_cost(&view, op)?,
+                            )
+                            .map_err(|_| RuntimeError::Decode)?
+                        },
+                    })
+                } else {
+                    None
+                },
             };
             let instructions = crate::execution::guarded_ioc(
                 &c.config,
@@ -145,6 +176,9 @@ impl VenueSubmissionPort for RiseRecovery {
             Ok(Some(prepared))
         })();
         result.map_err(|_| ErrorCode::VenueUnavailable)
+    }
+    fn prepared_funding_rates(&self) -> Option<BTreeMap<u16, crate::FundingRate>> {
+        self.prepared_rates.clone()
     }
     fn submit(&mut self, op: &Operation) -> std::result::Result<VenueSubmitResult, ErrorCode> {
         let (id, tx) = self
@@ -175,9 +209,13 @@ impl VenueSubmissionPort for RiseRecovery {
             let view = crate::rise::load(c, &assets)?;
             if operation.operation_id != intent.operation_id
                 || view.slot > operation.intent.last_valid_slot
-                || !view.safe
+                || (!view.safe && operation.intent.identity.kind != crate::OrderKind::Liquidation)
                 || view.vault_balance < intent.amount
-                || cinder_common::entries_blocked(view.halt & !cinder_common::OPERATOR_DOWN)
+                || (if operation.intent.identity.kind == crate::OrderKind::Liquidation {
+                    view.halt & (cinder_common::INVARIANT_BROKEN | cinder_common::VENUE_BREACH) != 0
+                } else {
+                    cinder_common::entries_blocked(view.halt & !cinder_common::OPERATOR_DOWN)
+                })
                 || crate::rpc::unix_ms().saturating_sub(view.observed_ms)
                     > cinder_common::TRADER_STATE_STALE_MS
             {
@@ -237,6 +275,19 @@ impl VenueRecoveryPort for RiseRecovery {
         }
         let mut c = self.context.borrow_mut();
         let c = &mut *c;
+        if let Some(cp) = c.funding_checkpoint.clone() {
+            let assets = c.config.markets.iter().map(|m| m.cinder_asset_id).collect();
+            let view = crate::rise::load(c, &assets).map_err(|_| ErrorCode::VenueUnavailable)?;
+            if view
+                .funding_rates()
+                .map_err(|_| ErrorCode::VenueUnavailable)?
+                != *cp.rates()
+            {
+                // Authoritative never-submitted evidence was established by the
+                // caller. Free tentative inventory before processing funding.
+                return Ok(true);
+            }
+        }
         c.l1.call(
             "getSlot",
             serde_json::json!([{"commitment":"confirmed"}]),

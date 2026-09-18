@@ -32,6 +32,8 @@ solana-message = { version = "=3.1.0", features = ["bincode"] }
 solana-transaction = { version = "=3.1.0", features = ["bincode", "serde"] }
 solana-instruction = "=3.5.1"
 solana-pubkey = "=3.0.0"
+tungstenite = { version = "=0.28.0", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
+magicblock-delegation-program-api = { version = "=3.1.0", default-features = false, features = ["instruction"] }
 
 [dev-dependencies]
 tempfile = "=3.27.0"
