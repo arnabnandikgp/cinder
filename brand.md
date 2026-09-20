@@ -1,11 +1,14 @@
-# Brand — Cinder
+# Cinder brand
 
 ## Direction
 
-Cinder is a private perpetual-futures prime broker for Phoenix on Solana. Its
-visual language is forged, precise, and quiet: dense charcoal surfaces, clean
-editorial typography, and molten-orange light used only to signal energy,
-focus, and meaningful state.
+Cinder's visual language is forged, precise, and quiet: dense charcoal
+surfaces, clean editorial typography, and molten-orange light used only to
+signal energy, focus, and meaningful state.
+
+The brand is venue-neutral. Product copy should describe only privacy,
+execution, custody, and fee properties that the implemented system can actually
+support and demonstrate.
 
 ## Palette
 
@@ -22,7 +25,7 @@ focus, and meaningful state.
 
 ## Typography and voice
 
-Use a clean, compact sans serif for product UI and a monospace face for
-numbers, order-state, and protocol labels. Copy is direct and technically
-honest: Cinder offers position-attribution privacy, not anonymity; it is an
-experimental protocol prototype, not a deployed trading venue.
+Use a clean, compact sans serif for product UI and a monospace face for market
+data, order state, and technical labels. Copy should be direct, restrained, and
+technically honest. Avoid claims that exceed the verified privacy boundary,
+venue behavior, or production readiness of the current system.

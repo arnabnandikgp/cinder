@@ -1,25 +1,21 @@
 .DS_Store
-.anchor
-.idea
-.vscode
-.yarn
-.yarnrc.yml
+.idea/
+.vscode/
 
-target
-!keys/
+.env
+.env.*
+!.env.example
 
-test-ledger
-.sbf
-.solana
+node_modules/
+target/
+dist/
+build/
+.next/
+coverage/
 
-node_modules
-yarn-error.log
-package-lock.json
-mb-stack.log
-magicblock-test-storage
-.cinder-adapter.json
-.cinder-operator/
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
 work/
-
-**/*.rs.bk
-**/Xargo.toml
