@@ -50,7 +50,20 @@ wallet directories, cloud credentials or unrelated `stays/` into test containers
 Production durable journal, financial IDs/math, application API and native clients
 are intentionally still future phases.
 
-## Linux parity on Apple silicon
+## Routine PR verification
+
+Run the pinned checks on macOS before opening a routine PR; hosted Linux CI
+provides the normal Linux verification. Do not duplicate every PR run in a local
+container. After a CI failure, inspect the failed job and logs, make a justified
+fix, verify it locally, and push. Allow two such fix-and-push attempts before
+falling back to local Linux reproduction if the failure persists. This is room
+for evidence-based iteration, not a requirement to guess twice or weaken tests.
+
+This policy does not waive explicitly planned Linux, SBF or actual Nitro
+qualification. Those tests run in their owning phases. P01's completed local
+Linux run established the harness baseline; it is not a recurring pre-PR gate.
+
+## Local Linux reproduction on Apple silicon
 
 Use the repository's Apple `container` skill, not Docker Desktop. Native Linux
 checks are relevant to the eventual enclave runtime; they do not qualify Nitro.

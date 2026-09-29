@@ -79,6 +79,13 @@ The full runner already includes the property tests; the focused command is for
 iteration, not an additional proof. Cargo commands are locked/offline after
 toolchain installation. Financial conformance remains P02/P03 onward.
 
+Routine PRs use pinned local macOS checks and hosted Linux CI; a local Linux
+container run is not a pre-PR requirement. If CI fails, inspect its logs, test
+the proposed fix locally and allow two evidence-based fix-and-push attempts
+before falling back to local Linux reproduction if the failure persists. Do not
+make speculative pushes just to consume that allowance. Explicit Linux/SBF/Nitro
+qualification required by an owning phase remains a separate acceptance gate.
+
 Keep the kernel dependency-free and `no_std`; no I/O, clocks, venue SDKs or test
 doubles may leak into it. Extend the dependency guard only with an explicit
 architecture decision. Test-support is not a production service or durable store.
