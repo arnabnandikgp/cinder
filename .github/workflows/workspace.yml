@@ -1,0 +1,31 @@
+name: TEE workspace
+
+on:
+  pull_request:
+    branches: [product/tee-v1, 'tee/**']
+  push:
+    branches: [product/tee-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workspace-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-workspace:
+    name: Offline Rust workspace
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - name: Install pinned build tools
+        run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+      - name: Offline build, lint and tests
+        run: node scripts/check.mjs

@@ -2,8 +2,8 @@
 
 | Phase | Progress | Invariant / deliverable | PR / merge |
 | --- | --- | --- | --- |
-| [P00 — Foundation](PLAN.md#p00) | in progress | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), awaiting merge |
-| [P01 — Workspace and harness](PLAN.md#p01) | open | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | — |
+| [P00 — Foundation](PLAN.md#p00) | closed | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), merged `587a8ca` |
+| [P01 — Workspace and harness](PLAN.md#p01) | in progress | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | Preparing PR |
 | [P02 — Financial types and identities](PLAN.md#p02) | open | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | — |
 | [P03 — Unified ledger](PLAN.md#p03) | open | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | — |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
@@ -35,9 +35,10 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Worktree: `cinder-tee`. Trunk: `product/tee-v1` at initial clean baseline `0376eb5`.
-Current branch: `tee/p00-implementation-foundation`. Preserve unrelated `stays/`
-and local ignored `work/`. No production program/service/adapter has been built.
+Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged foundation `587a8ca`.
+Current branch: `tee/p01-workspace-harness`. Preserve unrelated `stays/` and local
+ignored `work/`. The workspace/harness exists; no financial implementation,
+production program, service or native adapter has been built.
 
 Repository integration follow-up before routine stack merges: the new TEE trunk
 has no classic branch protection or applicable rulesets; CodeRabbit skipped review
@@ -47,7 +48,7 @@ in P01, with approval for repository/deployment-setting changes. The Vercel chec
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-Next implementation is P01, then exact types/ledger/journal. Native execution and
+Current implementation is P01, then exact types/ledger/journal. Native execution and
 customer-funds deployment are not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
 
@@ -71,9 +72,10 @@ passed in an exact staged-file export without `work/` or `stays/`.
 `git diff --cached --check` passed. Financial reference rerun passed 233 groups /
 11 suites offline. Commit `b8e1c1ed08e7956210c59b1dd362a2e9bc1ebf8b` passed
 [Linux/Node 24 documentation CI](https://github.com/arnabnandikgp/cinder/actions/runs/36626591840).
-This handoff/acceptance follow-up needs its own CI run; do not transfer the earlier
-result to a later commit. Local Node 26 is not asserted to be the identical
-environment. Historical M1 81/81 and M2 23/23
+Subsequent head `cb986b1c270142f7a3c03deeeb0051fc156c1ecf` passed documentation CI;
+final tracker-column head `e3eca304123ded0fcaca7e8471818798f8b34152` passed 12/12
+local script tests and documentation CI before merge. Local Node 26 is not
+asserted to be the identical environment. Historical M1 81/81 and M2 23/23
 were not rerun or claimed as production evidence. Validation checks structure,
 not the truth of a claimed merge, audit or financial proof.
 
@@ -85,19 +87,50 @@ GitHub reported no TEE trunk protection/rulesets. CodeRabbit success means
 **review skipped**, not approval. Vercel failure remains the integration follow-up
 above, not a reason to import a website into this worktree.
 
-Next: review PR #23 and confirm checks on its final head; then begin P01 with the
-toolchain/layout ADR and the minimal offline workspace on the reviewed/tested
-foundation. Keep P00 in progress until merge; do not merge or deploy without permission.
+Next: complete P01 on the merged foundation. User approved P00 and explicitly
+authorized merge; no submitted CodeRabbit review was present at closeout. The
+existing Vercel failure and hosted settings were not changed or represented as green.
 
 PR: https://github.com/arnabnandikgp/cinder/pull/23
-Merge: pending.
+Merge: 587a8ca801ccc656c41ee352213b32f6d8b6abf8.
 
 ## P01 — Workspace and harness
 
-Work: not started.
-Verification: not run; acceptance in PLAN P01.
-Unexpected: none yet.
-Next: read P01/BASELINE, record toolchain/layout ADR, then add the minimal offline workspace and real check commands.
+Work: 2026-09-30 — implemented the three-crate Rust workspace, exact local lockfile,
+Rust/Node pins, deterministic clock/journal/venue doubles, dependency guard,
+common offline runner, Linux CI and ADR 0001/development instructions. The kernel
+contains only a transition boundary, not financial behavior. The required
+repository integration changes are proposed in ADR 0001; hosted settings remain
+unchanged pending authorization.
+Verification: 2026-09-30 — `node scripts/check.mjs` passed from the worktree and
+a clean staged-file export on macOS arm64, using Rust 1.97.1 / Node 24.21.0.
+The same export passed on Linux 6.18.35 aarch64 using Apple container 1.4.1,
+with network disabled (only loopback), source/tools read-only, and temporary
+container-local build output. Each full run passed 19 script tests, 7 Rust tests
+in both debug/release, formatting, Clippy and build. Toy properties cover all
+65,536 u8 state/event pairs and 243 five-step fault schedules. The tested export
+tree was `affa243f453afbf877b513ddce72006f920855ac`; only documentation closeout
+follows that snapshot. The export excluded `work/`, `stays/` and Git metadata.
+Linux base: `rust:1.97.1-slim-bookworm`, OCI index
+`sha256:2775a09d208ff0d7c1f50490c45b62db929e87ba1dcbc3f2132ac71a704bcdd3`.
+Node Linux archive SHA-256:
+`6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2`.
+Clippy/rustfmt were prehydrated from verified official component archives; no
+network access was needed during the successful run. Linux x86-64 CI is separate
+evidence; no production financial, SBF or Nitro qualification is claimed.
+Unexpected: the first compile caught missing crate-level docs in a test, fixed
+before the successful pass. Apple container had no Linux kernel/image installed;
+prepared the recommended local kernel and official Rust image. Downloaded
+checksum-verified Node binaries into a task directory, leaving global Node intact.
+The slim Rust image lacked rustfmt/Clippy; its builder could not resolve the
+download host. A subsequent custom image unpack hit host disk exhaustion and
+could not bootstrap even without a source mount. Removed only this session's
+disposable builder/cache and successfully ran against the original official image
+with cached components instead. These were local tooling failures, not test passes.
+Next: publish P01 and review actual CI/review findings. Leave in progress until
+the PR is reviewed and merged; P02 adds canonical financial units/identities and
+V02 precision/overflow vectors, not live venue execution. Hosted integration
+settings remain the separately authorized follow-up in ADR 0001.
 PR: none.
 Merge: none.
 

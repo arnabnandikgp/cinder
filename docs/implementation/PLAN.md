@@ -118,9 +118,9 @@ Address the repository integration follow-up recorded in TRACKER: propose scoped
 TEE review/protection and legacy-preview separation, obtaining any required
 repository/deployment-setting authority. Do not reintroduce web code as a CI fix.
 
-- [ ] Fresh checkout builds/tests with pinned dependencies and no venue/RPC secrets.
-- [ ] Kernel cannot import I/O/venue packages; fake clock/venue/store ports support fault injection.
-- [ ] Linux/SBF/enclave checks are mapped to owning phases, not falsely reported as already qualified.
+- [x] Fresh checkout builds/tests with pinned dependencies and no venue/RPC secrets.
+- [x] Kernel cannot import I/O/venue packages; fake clock/venue/store ports support fault injection.
+- [x] Linux/SBF/enclave checks are mapped to owning phases, not falsely reported as already qualified.
 
 <a id="p02"></a>
 ## P02 — Canonical financial types and event identities

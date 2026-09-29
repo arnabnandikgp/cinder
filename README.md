@@ -13,8 +13,9 @@ It is not an architectural template for this branch.
 
 Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
-without operator assistance. The implementation foundation is the first PR;
-production components are still to be built.
+without operator assistance. The planning foundation is merged. P01 adds the
+pinned Rust workspace, explicit I/O boundaries and offline fault-test harness;
+financial accounting, native adapters and deployed services are still to be built.
 
 ## Start here
 
@@ -23,6 +24,8 @@ production components are still to be built.
 3. [Approved architecture and financial baseline](docs/implementation/BASELINE.md)
 4. [Research, prototype evidence, and promotion map](docs/implementation/EVIDENCE.md)
 5. [Contributor instructions](AGENTS.md)
+6. [Development setup and checks](docs/development.md)
+7. [Workspace decision](docs/architecture/0001-workspace.md)
 
 These tracked documents are sufficient to start the first implementation phase.
 Ignored `work/` contains the original local research; it is not a CI dependency.
@@ -30,12 +33,13 @@ Later phases must promote their needed sanitized specifications and fixtures bef
 relying on them. No wallets, credentials, signed live requests or private customer
 data belong in the repository.
 
-Check this foundation offline with Node 24:
+After installing Rust 1.97.1 with rustfmt/Clippy and Node 24.21.0, run all checks
+offline with the same command used in CI:
 
 ```sh
-node scripts/check-implementation-plan.mjs
-node --test scripts/check-implementation-plan.test.mjs
+node scripts/check.mjs
 ```
 
-The product language, package layout and pinned toolchain are a P01 deliverable;
-Node here runs documentation checks, not a selected financial runtime.
+The three local crates are `cinder-kernel`, `cinder-ports` and
+`cinder-test-support`. There are no registry dependencies or live endpoints in
+this scaffold. Node runs repository checks, not the financial runtime.

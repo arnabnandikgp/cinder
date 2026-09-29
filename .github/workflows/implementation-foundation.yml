@@ -2,6 +2,7 @@ name: Implementation foundation
 
 on:
   pull_request:
+    branches: [product/tee-v1, 'tee/**']
   push:
     branches: [product/tee-v1]
 
@@ -19,6 +20,6 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '24'
+          node-version-file: .node-version
       - run: node scripts/check-implementation-plan.mjs
       - run: node --test scripts/check-implementation-plan.test.mjs
