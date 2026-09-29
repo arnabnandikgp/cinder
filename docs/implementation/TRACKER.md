@@ -4,7 +4,7 @@
 | --- | --- | --- | --- |
 | [P00 — Foundation](PLAN.md#p00) | closed | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), merged `587a8ca` |
 | [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
-| [P02 — Financial types and identities](PLAN.md#p02) | in progress | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | — |
+| [P02 — Financial types and identities](PLAN.md#p02) | in progress | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), ready for review |
 | [P03 — Unified ledger](PLAN.md#p03) | open | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | — |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
 | [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
@@ -49,9 +49,9 @@ for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-P01 is merged; P02 is active, followed by the ledger/journal.
-Native execution and
-customer-funds deployment are not implied by this foundation. P19/P21/P22 support
+P01 is merged; P02 is implemented in PR #25, awaiting review/merge before closure.
+The ledger/journal follows. Native execution and customer-funds deployment are
+not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
 
 Each session appends dated work/evidence/deviations and replaces the next action
@@ -164,7 +164,10 @@ minimum magnitudes, remainder ownership, framing bounds and scope completeness.
 The full runner also passed from clean staged export tree
 `900caec255f4dffaf2cb238d609372c01ed298f5`, without `work/`, `stays/` or Git metadata;
 only this documentation closeout follows that snapshot. The focused property
-command passed 6 tests. Hosted CI and independent PR review remain pending.
+command passed 6 tests. Implementation commit:
+`c4aa534c2dceba6c313d350d2d3a2a6b4fb27d31`. Only tracker closeout follows it.
+Hosted CI and independent PR review remain pending; inspect the final PR head
+before merge. The first documentation CI passed; existing Vercel preview failed.
 No container, live venue, wallet, chain, AWS, formal proof or complete ledger
 qualification claimed.
 Unexpected: full-width differential testing caught inconsistent error precedence
@@ -172,10 +175,10 @@ when Exact division was both fractional and out of range; exactness now rejects
 first in every case. No incorrect numeric result was accepted. Checked i128
 product-first division would unnecessarily reject representable partial basis;
 used quotient/remainder decomposition with an explicit range argument instead.
-Next: publish P02 and review actual CI/findings. P03 must
+Next: review PR #25 CI/findings and obtain merge authorization. P03 must
 implement the joined ledger/fill transition (the V02 driver is test-only), qualified
 tick-to-basis conversion, ownership projections and wrong-owner/default cases.
-PR: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/25
 Merge: none.
 
 ## P03 — Unified ledger
