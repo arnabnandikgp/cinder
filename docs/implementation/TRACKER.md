@@ -1,32 +1,32 @@
 # Implementation tracker
 
-| Phase | Progress | PR / merge |
-| --- | --- | --- |
-| [P00 — Foundation](PLAN.md#p00) | in progress | [#23](https://github.com/arnabnandikgp/cinder/pull/23), awaiting review/merge |
-| [P01 — Workspace and harness](PLAN.md#p01) | open | — |
-| [P02 — Financial types and identities](PLAN.md#p02) | open | — |
-| [P03 — Unified ledger](PLAN.md#p03) | open | — |
-| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | — |
-| [P05 — Durable journal](PLAN.md#p05) | open | — |
-| [P06 — Encrypted durability](PLAN.md#p06) | open | — |
-| [P07 — Order intents and reservations](PLAN.md#p07) | open | — |
-| [P08 — Funds and payouts](PLAN.md#p08) | open | — |
-| [P09 — Joined risk admission](PLAN.md#p09) | open | — |
-| [P10 — Protection claims](PLAN.md#p10) | open | — |
-| [P11 — Liquidation and exceptions](PLAN.md#p11) | open | — |
-| [P12 — ADL and restoration](PLAN.md#p12) | open | — |
-| [P13 — Pacifica observations](PLAN.md#p13) | open | — |
-| [P14 — Pacifica execution](PLAN.md#p14) | open | — |
-| [P15 — Solana vault](PLAN.md#p15) | open | — |
-| [P16 — Funding coordinator](PLAN.md#p16) | open | — |
-| [P17 — Recovery program](PLAN.md#p17) | open | — |
-| [P18 — Private API and SDK](PLAN.md#p18) | open | — |
-| [P19 — Attested transport](PLAN.md#p19) | open | — |
-| [P20 — Nitro qualification](PLAN.md#p20) | open | — |
-| [P21 — Recovery integration](PLAN.md#p21) | open | — |
-| [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | — |
-| [P23 — Live integration qualification](PLAN.md#p23) | open | — |
-| [P24 — Release safety case](PLAN.md#p24) | open | — |
+| Phase | Progress | Invariant / deliverable | PR / merge |
+| --- | --- | --- | --- |
+| [P00 — Foundation](PLAN.md#p00) | in progress | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), awaiting merge |
+| [P01 — Workspace and harness](PLAN.md#p01) | open | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | — |
+| [P02 — Financial types and identities](PLAN.md#p02) | open | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | — |
+| [P03 — Unified ledger](PLAN.md#p03) | open | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | — |
+| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
+| [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
+| [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
+| [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
+| [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
+| [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
+| [P10 — Protection claims](PLAN.md#p10) | open | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | — |
+| [P11 — Liquidation and exceptions](PLAN.md#p11) | open | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | — |
+| [P12 — ADL and restoration](PLAN.md#p12) | open | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | — |
+| [P13 — Pacifica observations](PLAN.md#p13) | open | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | — |
+| [P14 — Pacifica execution](PLAN.md#p14) | open | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | — |
+| [P15 — Solana vault](PLAN.md#p15) | open | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | — |
+| [P16 — Funding coordinator](PLAN.md#p16) | open | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | — |
+| [P17 — Recovery program](PLAN.md#p17) | open | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | — |
+| [P18 — Private API and SDK](PLAN.md#p18) | open | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | — |
+| [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
+| [P20 — Nitro qualification](PLAN.md#p20) | open | Actual enclave, key-release, egress and storage/fencing behavior is qualified; mocks cannot stand in for hardware evidence. | — |
+| [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
+| [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | Joined production components preserve accounting and authority under reproducible faults, races and adverse financial paths. | — |
+| [P23 — Live integration qualification](PLAN.md#p23) | open | Approved bounded live runs verify the actual implementation and fully reconcile test positions, orders and funds. | — |
+| [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-09-30. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
@@ -61,6 +61,8 @@ Work: 2026-09-30 — extracted approved architecture, financial/RF terms and ope
 gates into BASELINE; created PLAN, this tracker, EVIDENCE, portable CONFORMANCE
 cases, root contributor guide and README entry points. Added a documentation-only
 validator, self-tests and CI. No original research or legacy files were changed.
+Follow-up: added the requested invariant/deliverable column for every phase and
+made its presence/non-empty content part of the documentation checks.
 
 Verification: 2026-09-30, macOS arm64 / Node v26.8.2: `node
 scripts/check-implementation-plan.mjs` passed (25 phases, 7 documents); `node

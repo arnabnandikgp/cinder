@@ -16,7 +16,8 @@ export function validatePlan(plan, tracker) {
   const errors = [];
   const phases = sections(plan);
   const logs = sections(tracker);
-  const rows = [...tracker.matchAll(/^\| \[(P\d{2,})[^\n]*?\]\(PLAN\.md#(p\d{2,})\) \| ([^|]+) \|[^\n]*$/gm)];
+  const rows = [...tracker.matchAll(/^\| \[(P\d{2,})[^\n]*?\]\(PLAN\.md#(p\d{2,})\) \| ([^|]+) \| ([^|]*) \|[^|\n]*\|$/gm)];
+  if (!tracker.includes('| Phase | Progress | Invariant / deliverable | PR / merge |')) errors.push('tracker: missing invariant/deliverable column');
   const unique = (ids, name) => {
     if (!ids.length) errors.push(`${name}: no phases found`);
     if (new Set(ids).size !== ids.length) errors.push(`${name}: duplicate phase`);
@@ -31,6 +32,7 @@ export function validatePlan(plan, tracker) {
   for (const row of rows) {
     if (row[2] !== row[1].toLowerCase()) errors.push(`${row[1]}: wrong plan anchor`);
     if (!['open', 'in progress', 'closed'].includes(row[3].trim())) errors.push(`${row[1]}: invalid progress`);
+    if (!row[4].trim() || /^(?:—|-|TBD)$/i.test(row[4].trim())) errors.push(`${row[1]}: missing invariant/deliverable`);
   }
   const dependencies = new Map();
   for (const phase of phases) {

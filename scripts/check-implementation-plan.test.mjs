@@ -10,7 +10,7 @@ Deliver: something.
 Evidence: test result.
 ${[1, 2, 3].map(n => `- [${closed ? 'x' : ' '}] criterion ${n}`).join('\n')}
 `).join('\n');
-  const tracker = ['P00', 'P01'].map(id => `| [${id} — Test](PLAN.md#${id.toLowerCase()}) | ${closed ? 'closed' : 'open'} | — |`).join('\n') + '\n' + ['P00', 'P01'].map(id => `## ${id} — Test
+  const tracker = '| Phase | Progress | Invariant / deliverable | PR / merge |\n' + ['P00', 'P01'].map(id => `| [${id} — Test](PLAN.md#${id.toLowerCase()}) | ${closed ? 'closed' : 'open'} | Explicit phase outcome. | — |`).join('\n') + '\n' + ['P00', 'P01'].map(id => `## ${id} — Test
 Work: test.
 Verification: command/result recorded.
 Unexpected: none.
@@ -32,6 +32,12 @@ test('complete closed foundation validates structurally', () => {
 test('unsupported progress cannot pass', () => {
   const { plan, tracker } = fixture();
   assert.match(validatePlan(plan, tracker.replace('| open |', '| ready |')).join('\n'), /invalid progress/);
+});
+test('phase outcomes are required rather than placeholders', () => {
+  const { plan, tracker } = fixture();
+  assert.match(validatePlan(plan, tracker.replace('Explicit phase outcome.', '—')).join('\n'), /missing invariant\/deliverable/);
+  assert.match(validatePlan(plan, tracker.replace('Explicit phase outcome.', '')).join('\n'), /missing invariant\/deliverable/);
+  assert.match(validatePlan(plan, tracker.replace('Invariant / deliverable', 'Notes')).join('\n'), /missing invariant\/deliverable column/);
 });
 test('phase sets and duplicate handoffs are checked', () => {
   const { plan, tracker } = fixture();
