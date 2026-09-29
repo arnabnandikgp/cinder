@@ -3,7 +3,7 @@
 | Phase | Progress | Invariant / deliverable | PR / merge |
 | --- | --- | --- | --- |
 | [P00 — Foundation](PLAN.md#p00) | closed | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), merged `587a8ca` |
-| [P01 — Workspace and harness](PLAN.md#p01) | in progress | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | Preparing PR |
+| [P01 — Workspace and harness](PLAN.md#p01) | in progress | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), ready for review |
 | [P02 — Financial types and identities](PLAN.md#p02) | open | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | — |
 | [P03 — Unified ledger](PLAN.md#p03) | open | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | — |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
@@ -48,7 +48,8 @@ in P01, with approval for repository/deployment-setting changes. The Vercel chec
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-Current implementation is P01, then exact types/ledger/journal. Native execution and
+P01 is implemented in PR #24 and awaiting review/merge, then exact types/ledger/journal.
+Native execution and
 customer-funds deployment are not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
 
@@ -118,6 +119,12 @@ Node Linux archive SHA-256:
 Clippy/rustfmt were prehydrated from verified official component archives; no
 network access was needed during the successful run. Linux x86-64 CI is separate
 evidence; no production financial, SBF or Nitro qualification is claimed.
+Commit `2bd82b93ed1b166f059ee8a399a3c9b67d1945e2` passed hosted Ubuntu x86-64
+[workspace CI](https://github.com/arnabnandikgp/cinder/actions/runs/36633338076)
+and [documentation CI](https://github.com/arnabnandikgp/cinder/actions/runs/36633337972).
+Documentation closeout passed all 19 local script tests and the plan validator.
+At that check, CodeRabbit was pending and the existing Vercel preview failed;
+neither is represented as approval/success. Recheck the final head before merge.
 Unexpected: the first compile caught missing crate-level docs in a test, fixed
 before the successful pass. Apple container had no Linux kernel/image installed;
 prepared the recommended local kernel and official Rust image. Downloaded
@@ -125,13 +132,14 @@ checksum-verified Node binaries into a task directory, leaving global Node intac
 The slim Rust image lacked rustfmt/Clippy; its builder could not resolve the
 download host. A subsequent custom image unpack hit host disk exhaustion and
 could not bootstrap even without a source mount. Removed only this session's
-disposable builder/cache and successfully ran against the original official image
-with cached components instead. These were local tooling failures, not test passes.
-Next: publish P01 and review actual CI/review findings. Leave in progress until
+disposable builder/cache and failed custom image; successfully ran against the
+original official image with cached components instead. These were local tooling
+failures, not test passes; the removed artifacts are reproducible, not user data.
+Next: review actual PR #24 CI/review findings. Leave in progress until
 the PR is reviewed and merged; P02 adds canonical financial units/identities and
 V02 precision/overflow vectors, not live venue execution. Hosted integration
 settings remain the separately authorized follow-up in ADR 0001.
-PR: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/24
 Merge: none.
 
 ## P02 — Financial types and identities
