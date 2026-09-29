@@ -20,10 +20,10 @@ function run(command, arguments_) {
 }
 
 if (args[0] === '--properties') {
-  run('cargo', ['test', '-p', 'cinder-test-support', '--test', 'properties', '--locked', '--offline']);
+  run('cargo', ['test', '--workspace', '--locked', '--offline', 'property_']);
 } else {
   run(process.execPath, ['scripts/check-implementation-plan.mjs']);
-  run(process.execPath, ['--test', 'scripts/check-implementation-plan.test.mjs', 'scripts/check-workspace.test.mjs']);
+  run(process.execPath, ['--test', 'scripts/check-implementation-plan.test.mjs', 'scripts/check-workspace.test.mjs', 'scripts/check-financial-fixtures.test.mjs']);
   run(process.execPath, ['scripts/check-workspace.mjs']);
   run('cargo', ['fmt', '--all', '--', '--check']);
   run('cargo', ['clippy', '--workspace', '--all-targets', '--all-features', '--locked', '--offline', '--', '-D', 'warnings']);

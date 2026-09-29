@@ -49,3 +49,7 @@ test('obvious std escapes and missing boundary reject', () => {
   assert.equal(validateKernelSource('#![no_std]\nextern crate std;').length, 1);
   assert.equal(validateKernelSource('#![no_std]\nuse std::fs;').length, 1);
 });
+test('submodules need no root attribute but cannot explicitly escape to std', () => {
+  assert.deepEqual(validateKernelSource('use alloc::vec::Vec;', false), []);
+  assert.equal(validateKernelSource('use std::net;', false).length, 1);
+});

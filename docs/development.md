@@ -32,9 +32,9 @@ node scripts/check.mjs --properties
 cargo fmt --all
 ```
 
-No check sends venue requests. Current Rust tests use a toy counter and explicit
-fault doubles, not a funded account, real process crash or implemented financial
-engine. Do not count debug/release executions as independent mathematical proofs.
+No check sends venue requests. Rust tests cover exact financial primitives and
+canonical identities plus toy-counter/fault harnesses, not a funded account,
+real process crash or complete ledger. Do not count debug/release executions as independent mathematical proofs.
 The original 233 research groups remain separate evidence, not production coverage.
 
 ## Files and packages
@@ -47,8 +47,9 @@ Add future packages only with documented ownership and an updated dependency gua
 
 Ordinary tests must use tracked sanitized fixtures. Never mount ignored `work/`,
 wallet directories, cloud credentials or unrelated `stays/` into test containers.
-Production durable journal, financial IDs/math, application API and native clients
-are intentionally still future phases.
+The exact types and codecs are described in [ADR 0002](architecture/0002-financial-primitives.md).
+The production ledger/durable journal, application API and native clients are still
+future phases. `--properties` selects workspace tests prefixed `property_`.
 
 ## Routine PR verification
 

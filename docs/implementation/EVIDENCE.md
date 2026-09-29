@@ -43,6 +43,13 @@ upload the entire local research tree to make links work.
 
 ## Verified evidence versus new work
 
+### P02: initial production primitive promotion
+
+[ADR 0002](../architecture/0002-financial-primitives.md) records exact source
+fingerprints, signed-basis/identity requirements, tracked golden vectors and their
+limits. Primitive tests no longer depend on ignored research. V02's joined ledger
+transition remains P03; native precision/causal qualification remains P13.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:
