@@ -2,7 +2,7 @@
 
 | Phase | Progress | PR / merge |
 | --- | --- | --- |
-| [P00 — Foundation](PLAN.md#p00) | in progress | Preparing foundation PR |
+| [P00 — Foundation](PLAN.md#p00) | in progress | [#23](https://github.com/arnabnandikgp/cinder/pull/23), awaiting review/merge |
 | [P01 — Workspace and harness](PLAN.md#p01) | open | — |
 | [P02 — Financial types and identities](PLAN.md#p02) | open | — |
 | [P03 — Unified ledger](PLAN.md#p03) | open | — |
@@ -39,6 +39,14 @@ Worktree: `cinder-tee`. Trunk: `product/tee-v1` at initial clean baseline `0376e
 Current branch: `tee/p00-implementation-foundation`. Preserve unrelated `stays/`
 and local ignored `work/`. No production program/service/adapter has been built.
 
+Repository integration follow-up before routine stack merges: the new TEE trunk
+has no classic branch protection or applicable rulesets; CodeRabbit skipped review
+because non-default-base reviews are disabled; the existing Vercel preview failed.
+Propose scoped TEE protections/review configuration and legacy-preview separation
+in P01, with approval for repository/deployment-setting changes. The Vercel check
+reports deployment failure, but its build logs were not inspected; do not infer a
+specific build error from that status alone. These integrations were left unchanged.
+
 Next implementation is P01, then exact types/ledger/journal. Native execution and
 customer-funds deployment are not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
@@ -59,21 +67,27 @@ scripts/check-implementation-plan.mjs` passed (25 phases, 7 documents); `node
 --test scripts/check-implementation-plan.test.mjs` passed 11/11 tests. Both also
 passed in an exact staged-file export without `work/` or `stays/`.
 `git diff --cached --check` passed. Financial reference rerun passed 233 groups /
-11 suites offline. Linux/Node 24 CI remains pending publication; local Node 26
-is not asserted to be the identical environment. Historical M1 81/81 and M2 23/23
+11 suites offline. Commit `b8e1c1ed08e7956210c59b1dd362a2e9bc1ebf8b` passed
+[Linux/Node 24 documentation CI](https://github.com/arnabnandikgp/cinder/actions/runs/36626591840).
+This handoff/acceptance follow-up needs its own CI run; do not transfer the earlier
+result to a later commit. Local Node 26 is not asserted to be the identical
+environment. Historical M1 81/81 and M2 23/23
 were not rerun or claimed as production evidence. Validation checks structure,
 not the truth of a claimed merge, audit or financial proof.
 
 Unexpected: clean TEE branch had only README/.gitignore and no tracked research.
 Added a sanitized baseline and initial cases so P01 is not dependent on ignored
 files. Native stack extension is installed; initialized a local stack with explicit
-TEE trunk. New remote trunk/check protection must be verified during publication.
+TEE trunk. Published only the TEE trunk and P00 branch; legacy main is unchanged.
+GitHub reported no TEE trunk protection/rulesets. CodeRabbit success means
+**review skipped**, not approval. Vercel failure remains the integration follow-up
+above, not a reason to import a website into this worktree.
 
-Next: publish P00 for review and inspect its actual CI; then begin P01 on the
-reviewed/tested foundation. Keep P00 in progress until merge; do not merge or
-deploy without permission.
+Next: review PR #23 and confirm checks on its final head; then begin P01 with the
+toolchain/layout ADR and the minimal offline workspace on the reviewed/tested
+foundation. Keep P00 in progress until merge; do not merge or deploy without permission.
 
-PR: pending.
+PR: https://github.com/arnabnandikgp/cinder/pull/23
 Merge: pending.
 
 ## P01 — Workspace and harness

@@ -99,9 +99,9 @@ Deliver: this plan, tracker, contributor guide, sanitized baseline, research reu
 map and offline documentation checks. Keep local research and legacy code intact.
 Evidence: W01–W09; documentation validator/self-tests and fresh offline study run.
 
-- [ ] Plan/tracker phase IDs, dependencies and status vocabulary agree; tracked links resolve.
-- [ ] Approved versus open policy and prototype versus production evidence are explicit.
-- [ ] Fresh checkout checks need no `work/`; P01 has a concrete handoff; PR targets TEE trunk.
+- [x] Plan/tracker phase IDs, dependencies and status vocabulary agree; tracked links resolve.
+- [x] Approved versus open policy and prototype versus production evidence are explicit.
+- [x] Fresh checkout checks need no `work/`; P01 has a concrete handoff; PR targets TEE trunk.
 
 <a id="p01"></a>
 ## P01 — Production workspace and test harness
@@ -114,6 +114,9 @@ memory-safe enclave-suitable kernel, but compare existing evidence before select
 libraries. Add lockfiles, formatting/lint/unit/property-test commands and offline CI.
 Do not scaffold a website or deploy programs. Evidence: W01, W06, W08; reproducible
 clean build and documented local/CI parity, including Linux target requirements.
+Address the repository integration follow-up recorded in TRACKER: propose scoped
+TEE review/protection and legacy-preview separation, obtaining any required
+repository/deployment-setting authority. Do not reintroduce web code as a CI fix.
 
 - [ ] Fresh checkout builds/tests with pinned dependencies and no venue/RPC secrets.
 - [ ] Kernel cannot import I/O/venue packages; fake clock/venue/store ports support fault injection.
