@@ -5,6 +5,21 @@
 //! signing library or venue. Owning phases refine them with actual admission,
 //! receipt identity, atomic commits and authority epochs before dispatch exists.
 
+/// Pure native-observation normalization seam. Implementations qualify units,
+/// PnL/fee conventions, economic IDs and causal coverage; they do not post balances.
+/// The same execution from REST/WS must yield equal semantic output. Raw transport
+/// evidence and observation time remain separate and must be retained by ingestion.
+pub trait NormalizeObservation {
+    /// Lossless native input, before any floating-point conversion.
+    type Raw;
+    /// Typed normalized event, or explicit missing/unknown evidence representation.
+    type Normalized;
+    /// Unsupported/corrupt/ambiguous data; never substitute an invented zero.
+    type Error;
+    /// Normalize only; no signing, network access or ledger mutation.
+    fn normalize(&self, raw: &Self::Raw) -> Result<Self::Normalized, Self::Error>;
+}
+
 /// An injected local scheduling clock, never native execution/finality evidence.
 pub trait Clock {
     /// Caller-defined origin and units; not interchangeable with venue time.

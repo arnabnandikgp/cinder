@@ -57,8 +57,19 @@ source hashes, attribution boundary and promoted implementation tests. V01/V03
 and the winner/loser/default cases run against the Rust ledger; V02 now invokes
 the production fill transition. The [system architecture](../architecture.md)
 maps approved W01–W09 requirements to their future components without treating
-prototypes as deployed services. P04 onward still owns funding/fees, durable
-consumption, admission, full transfer lifecycle and native qualification.
+prototypes as deployed services. Later phases own durable consumption, admission,
+full transfer lifecycle and native qualification.
+
+### P04: funding, costs and discrepancy containment
+
+[ADR 0004](../architecture/0004-funding-reconciliation.md) promotes W01/W03 and the
+relevant W02 reconciliation cases onto the same Rust ledger. V04 and delayed
+funding-cut, fee-inclusive PnL, source mismatch, aging, correction and replay tests
+run without local research or endpoints. A synthetic normalization-port fixture
+checks REST/WS semantic equality and lossless/unknown fields; it is not native
+qualification. Exact source hashes and the still-unexplained Pacifica precision
+gap are recorded in the ADR. Durable raw evidence remains P05/P13, not the
+in-memory retained normalized observations delivered here.
 
 ### Financial studies: rerun at P00
 

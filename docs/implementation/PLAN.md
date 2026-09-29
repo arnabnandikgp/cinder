@@ -163,9 +163,14 @@ source normalization ports, explicit mismatch aging and restricted modes. Ingest
 actual losses despite limit breaches. Evidence: W01, W03; V04, gross/net funding,
 entry-time/partial-close/rounding and REST/WS duplicate vectors.
 
-- [ ] Funding and fees post once with per-user attribution; inclusive native PnL cannot double-charge fees.
-- [ ] Missing/corrupt sources create a named unresolved condition, never fabricated zero or house profit.
-- [ ] Stale marks and unexplained precision differences block dependent admission, not raw evidence retention.
+- [x] Funding and fees post once with per-user attribution; inclusive native PnL cannot double-charge fees.
+- [x] Missing/corrupt sources create a named unresolved condition, never fabricated zero or house profit.
+- [x] Stale marks and unexplained precision differences block dependent admission, not raw evidence retention.
+
+Implemented in-memory evidence gate and retained normalized observations are
+specified in [ADR 0004](../architecture/0004-funding-reconciliation.md). P09 composes
+the gate into full admission; P05/P13 own durable/raw-wire retention and native
+qualification. These checked technical criteria are not PR review/merge closure.
 
 <a id="p05"></a>
 ## P05 — Durable atomic journal and replay

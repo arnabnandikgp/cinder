@@ -24,8 +24,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Component | In this PR / implementation status | Owning phase |
 | --- | --- | --- |
 | Build, typed amounts, IDs, canonical primitive encoding | Implemented and previously merged | P01–P02 |
-| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Implemented in this PR; pure in-memory proposals | P03 |
-| Funding, fees, source discrepancies | Planned next | P04 |
+| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Implemented in base PR; pure in-memory proposals | P03 |
+| Funding, fees, source discrepancies | Implemented in this stack layer; qualified normalized inputs, no live adapter | P04 |
 | Durable journal, encrypted replicas, current-head witness | Planned; no production store yet | P05–P06 |
 | Intent/funds controllers, joined risk, protection, liquidation, ADL | Planned; no execution service yet | P07–P12 |
 | Pacifica observation and signing adapters | Planned; research evidence is not an implemented adapter | P13–P14 |
@@ -33,7 +33,7 @@ implementation is a separate workstream, not the template for this architecture.
 | Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
-The P03 implementation is deliberately a single configured quote pool with one
+The P03/P04 implementation is deliberately a single configured quote pool with one
 native account, multiple linear-perp markets, private customer books, house and
 suspense. It is not a multi-venue clearing engine. It introduces no new native
 account topology or fee/insurance promise.
@@ -132,8 +132,9 @@ HyperLink's contract count is not a requirement for Cinder.
 The complete target state includes private and native books, physical locations,
 transfers, unsettled funding, reservations, claims/protection, operation/attempt
 identities, source cutoffs, policy revisions, writer epochs and recovery counters.
-They form one event-driven financial state. P03 implements only its position,
-cash/location, attribution and in-memory provenance foundation.
+They form one event-driven financial state. P03 implements its position,
+cash/location, attribution and in-memory provenance foundation. P04 adds unsettled
+funding, native/broker costs, frozen funding inventory and evidence containment.
 
 Customer and house cash can be negative: they are signed ledger quantities, not
 token-account balances. A native signed cash balance also excludes its unrealized
@@ -154,13 +155,14 @@ q_Vm = Σ_i q_im + q_Hm + q_Sm
 N = Σ_i e_i + h + s
 ```
 
-This P03 form represents unattributed obligations in suspense, not also as a
+This implemented form represents unattributed obligations in suspense, not also as a
 second subtraction from assets. Later third-party liabilities must have a named
 representation and be subtracted exactly once. No generic balancing adjustment
 is allowed to hide a broken bridge.
 
-P03 checks exposure and a price-independent cash-minus-basis identity after every
-distinct accepted event. Consequently the equity bridge holds at any common
+P03 checks exposure and a price-independent cash-minus-basis identity; P04 extends
+the intercept to include recognized funding after every distinct accepted event.
+Consequently the equity bridge holds at any common
 exactly representable mark. This is a hand-derived identity with implementation
 tests, not proof of authentic venue evidence or correctly supplied ownership.
 
@@ -211,6 +213,26 @@ conversion rather than guessing a venue rounding rule. See
 [ADR 0003](architecture/0003-unified-ledger.md) for implemented boundaries,
 transition algebra, test coverage and limitations.
 
+### Funding, costs and source evidence
+
+[ADR 0004](architecture/0004-funding-reconciliation.md) details the implemented
+P04 transitions. Funding uses positions frozen at a qualified boundary, not their
+values when a delayed message arrives. Known native funding waits in suspense
+until private allocation inputs qualify. Recognition adds unsettled funding;
+settlement moves that boundary's accrual to cash once. Derived rounding and
+unexplained native differences are separate; only the former may go to house.
+
+Actual signed fees/rebates follow the stored execution owner. Fee-inclusive native
+PnL normalizes once and is compared with native, not private, basis. Separate
+authorized broker fees move customer cash to house without a second venue debit.
+Named source corrections preserve history; they do not repeat fills or funding.
+
+Matching native snapshots compare components and cannot set balances. Resolving
+an old discrepancy requires named effects explaining all its known components,
+not just a later matching total. Missing/stale evidence restricts dependent views;
+aged issues and conflicts freeze that evidence gate. Qualified diagnostics still
+need current marks and do not replace P09 risk, capital or liquidity admission.
+
 ## 5. Events, persistence and execution ordering
 
 There are three different identities: customer request, exposed signed attempt,
@@ -221,7 +243,8 @@ can contain distinct native execution legs.
 The target normalized envelope binds network/deployment, native source account,
 semantic namespace, economic event/leg, operation/attempt, units/precision, source
 cut/observation time, authority, payload and policy versions. P02 defines the
-primitive keys; P03 compares exact normalized events in memory; P05/P13 complete
+primitive keys; P03 compares exact normalized events in memory; P04 ingestion also
+retains rejected/duplicate observations and injected arrival times. P05/P13 complete
 the durable/source-qualified envelope. A matching identifier with changed payload
 is a conflict, not an update to silently overwrite.
 
@@ -244,7 +267,9 @@ contain it until normalization is possible. Real adverse fills remain recordable
 when new orders would fail risk admission. A correction is an explicit auditable
 event, not mutation of history or a general-purpose admin balance setter.
 
-P03 clones state to propose a transition and exposes read-only projections. That
+P03/P04 clone state to propose transitions and expose read-only projections. P04's
+ingestion path preserves named evidence even when an economic transition rejects;
+complete replay uses observation history, not only accepted financial events. This
 is failure atomicity inside a pure function, not process-crash durability, a
 concurrent compare-and-swap, authentication, or a permission to send money.
 

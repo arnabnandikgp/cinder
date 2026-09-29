@@ -5,6 +5,11 @@
 use crate::{Error, Transition, amounts::*, identity::*, position::*};
 use alloc::vec::Vec;
 
+pub mod economics;
+pub mod evidence;
+use economics::*;
+use evidence::*;
+
 /// An entitlement owner, not a physical custody location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Owner {
@@ -87,6 +92,10 @@ pub enum FillTarget {
 /// Phase-local transition schema. No outbound actions or risk admission are exposed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
+    /// Qualified funding/fee economics, sharing this ledger and its replay keys.
+    Economics(EconomicChange),
+    /// Source reconciliation; never an external-equity balance setter.
+    Reconcile(NativeCheck),
     /// Record an already authorized route under an Attempt record key. P07 adds
     /// reservations/lifecycle; this records no fill and grants no signing authority.
     BindExecution {
@@ -144,6 +153,14 @@ pub struct Event {
 /// Ledger rejection. A failed proposal leaves the input state unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LedgerError {
+    /// The observation's inventory cut is not this exact ledger version.
+    StaleCut,
+    /// Funding boundary/recognition/settlement state is incompatible with the event.
+    FundingState,
+    /// Evidence time, qualification or required evidence is invalid/missing.
+    Evidence,
+    /// Dependent actions require resolved evidence and fresh qualified marks.
+    Restricted,
     /// Checked arithmetic or primitive scope/precision failure.
     Primitive(Error),
     /// Duplicate configuration identity, missing scope or impossible configuration.
@@ -173,12 +190,17 @@ impl From<Error> for LedgerError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Book {
     cash: QuoteAtoms,
+    funding: QuoteAtoms,
     positions: Vec<Position>,
 }
 impl Book {
     /// Settled signed cash, not physical tokens or withdrawable collateral.
     pub fn cash(&self) -> QuoteAtoms {
         self.cash
+    }
+    /// Recognized unsettled funding; not cash and not an additional earning at settlement.
+    pub fn funding(&self) -> QuoteAtoms {
+        self.funding
     }
     /// Immutable position projection.
     pub fn positions(&self) -> &[Position] {
@@ -187,6 +209,7 @@ impl Book {
     fn empty(config: &Config) -> Self {
         Self {
             cash: QuoteAtoms::new(config.quote, 0),
+            funding: QuoteAtoms::new(config.quote, 0),
             positions: config
                 .markets
                 .iter()
@@ -200,11 +223,11 @@ impl Book {
         market: Market,
         q: QuantityLots,
         p: PriceTicks,
-    ) -> Result<(), LedgerError> {
+    ) -> Result<QuoteAtoms, LedgerError> {
         let fill = self.positions[index].fill(market, q, p)?;
         self.cash = self.cash.checked_add(fill.realized)?;
         self.positions[index] = fill.position;
-        Ok(())
+        Ok(fill.realized)
     }
 }
 
@@ -237,13 +260,16 @@ pub struct Ledger {
     events: Vec<Event>,
     unresolved: Vec<EventKey>,
     version: u64,
+    funding_records: Vec<FundingRecord>,
+    execution_reports: Vec<ExecutionReport>,
+    evidence: EvidenceState,
 }
 
 /// Read-only diagnostic at caller-supplied qualified marks. Not an admission verdict,
 /// a proof of authentic assets, a liquidity report, or a claim of future solvency.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostics {
-    /// Signed external value: vault + transit + native cash + native marked PnL.
+    /// Signed external value: vault + transit + native cash/funding + marked PnL.
     pub net_assets: QuoteAtoms,
     /// Individually positive customer entitlements only.
     pub customer_claims: QuoteAtoms,
@@ -306,10 +332,14 @@ impl Ledger {
             events: Vec::new(),
             unresolved: Vec::new(),
             version: 0,
+            funding_records: Vec::new(),
+            execution_reports: Vec::new(),
+            evidence: EvidenceState::default(),
             config,
         })
     }
-    /// Monotone successful distinct transition count, not a durable CAS by itself.
+    /// Monotone proposal version, not a durable CAS by itself. Ingestion also
+    /// advances it for retained duplicates/rejections; pure apply counts successes.
     pub fn version(&self) -> u64 {
         self.version
     }
@@ -355,7 +385,8 @@ impl Ledger {
                 Ok(a.checked_add(t.amount)?)
             })
     }
-    /// Accepted normalized provenance; raw/rejected evidence retention belongs to P05.
+    /// Accepted normalized provenance. Ingest retains rejected observations too;
+    /// durable/raw-wire retention belongs to P05/P13.
     pub fn events(&self) -> &[Event] {
         &self.events
     }
@@ -411,12 +442,24 @@ impl Ledger {
         let mut next = self.clone();
         next.apply_distinct(event)?;
         next.check_bridge()?;
+        if next.venue != self.venue {
+            let RecordKey::Economic(key) = &event.key else {
+                return Err(LedgerError::Attribution);
+            };
+            next.evidence.effects.push(NativeEffect {
+                key: key.clone(),
+                before: self.venue.clone(),
+                after: next.venue.clone(),
+            });
+        }
         next.version = self.version.checked_add(1).ok_or(Error::Overflow)?;
         next.events.push(event.clone());
         Ok(next)
     }
     fn apply_distinct(&mut self, event: &Event) -> Result<(), LedgerError> {
         match &event.change {
+            Change::Economics(change) => self.apply_economics(&event.key, change)?,
+            Change::Reconcile(check) => self.apply_check(&event.key, check)?,
             Change::BindExecution { market, side } => {
                 let RecordKey::Attempt(attempt) = event.key else {
                     return Err(LedgerError::Attribution);
@@ -451,32 +494,7 @@ impl Ledger {
                 quantity,
                 price,
             } => {
-                let source = self.source(&event.key, Location::Venue)?;
-                let index = self.market_index(quantity.unit())?;
-                let market = self.config.markets[index];
-                let owner = match target {
-                    FillTarget::Customer(attempt) => {
-                        let binding = self
-                            .bindings
-                            .iter()
-                            .find(|b| b.attempt == *attempt)
-                            .ok_or(LedgerError::UnknownIdentity)?;
-                        if binding.market != quantity.unit()
-                            || !binding.side.matches(quantity.lots())
-                        {
-                            return Err(LedgerError::Attribution);
-                        }
-                        Owner::Customer(binding.attempt.request.account)
-                    }
-                    FillTarget::House => Owner::House,
-                    FillTarget::Unattributed => Owner::Suspense,
-                };
-                self.book_mut(owner)?
-                    .execute(index, market, *quantity, *price)?;
-                self.venue.execute(index, market, *quantity, *price)?;
-                if owner == Owner::Suspense {
-                    self.unresolved.push(source);
-                }
+                self.execute_fill(&event.key, *target, *quantity, *price)?;
             }
             Change::TransferDebit {
                 source,
@@ -513,6 +531,39 @@ impl Ledger {
         }
         Ok(())
     }
+    fn execute_fill(
+        &mut self,
+        key: &RecordKey,
+        target: FillTarget,
+        quantity: QuantityLots,
+        price: PriceTicks,
+    ) -> Result<(Owner, QuoteAtoms), LedgerError> {
+        let source = self.source(key, Location::Venue)?;
+        let index = self.market_index(quantity.unit())?;
+        let market = self.config.markets[index];
+        let owner = match target {
+            FillTarget::Customer(attempt) => {
+                let binding = self
+                    .bindings
+                    .iter()
+                    .find(|b| b.attempt == attempt)
+                    .ok_or(LedgerError::UnknownIdentity)?;
+                if binding.market != quantity.unit() || !binding.side.matches(quantity.lots()) {
+                    return Err(LedgerError::Attribution);
+                }
+                Owner::Customer(binding.attempt.request.account)
+            }
+            FillTarget::House => Owner::House,
+            FillTarget::Unattributed => Owner::Suspense,
+        };
+        self.book_mut(owner)?
+            .execute(index, market, quantity, price)?;
+        let realized = self.venue.execute(index, market, quantity, price)?;
+        if owner == Owner::Suspense {
+            self.unresolved.push(source);
+        }
+        Ok((owner, realized))
+    }
     /// Exact structural identities, independent of any mark or positive backing.
     /// Signed native cash minus native basis equals total private cash minus basis
     /// after including the vault and transit exactly once.
@@ -533,15 +584,18 @@ impl Ledger {
             }
         }
         let intercept = |book: &Book| -> Result<i128, Error> {
-            book.positions.iter().try_fold(book.cash.atoms(), |sum, p| {
-                sum.checked_sub(p.basis().atoms()).ok_or(Error::Overflow)
-            })
+            book.positions
+                .iter()
+                .try_fold(book.cash.checked_add(book.funding)?.atoms(), |sum, p| {
+                    sum.checked_sub(p.basis().atoms()).ok_or(Error::Overflow)
+                })
         };
         let native = self
             .vault
             .atoms()
             .checked_add(self.in_transit()?.atoms())
             .and_then(|n| n.checked_add(self.venue.cash.atoms()))
+            .and_then(|n| n.checked_add(self.venue.funding.atoms()))
             .ok_or(Error::Overflow)?;
         let external = self.venue.positions.iter().try_fold(native, |n, p| {
             n.checked_sub(p.basis().atoms()).ok_or(Error::Overflow)
@@ -554,8 +608,9 @@ impl Ledger {
         }
         Ok(())
     }
-    /// Marked equity for one owner. Marks must be complete, unique and correctly
-    /// versioned; freshness/authenticity remain caller obligations until P04/P13.
+    /// Analytical marked equity for one owner. Marks must be complete, unique and
+    /// versioned; this bypasses evidence gating. Use qualified_diagnostics for
+    /// dependent views; source authenticity remains an adapter obligation.
     pub fn equity(&self, owner: Owner, marks: &[PriceTicks]) -> Result<QuoteAtoms, LedgerError> {
         self.validate_marks(marks)?;
         self.book_equity(self.book(owner)?, marks)
@@ -576,12 +631,14 @@ impl Ledger {
         Ok(())
     }
     fn book_equity(&self, book: &Book, marks: &[PriceTicks]) -> Result<QuoteAtoms, LedgerError> {
-        marks.iter().try_fold(book.cash, |equity, mark| {
-            let index = self.market_index(mark.unit())?;
-            Ok(equity.checked_add(
-                book.positions[index].unrealized(self.config.markets[index], *mark)?,
-            )?)
-        })
+        marks
+            .iter()
+            .try_fold(book.cash.checked_add(book.funding)?, |equity, mark| {
+                let index = self.market_index(mark.unit())?;
+                Ok(equity.checked_add(
+                    book.positions[index].unrealized(self.config.markets[index], *mark)?,
+                )?)
+            })
     }
     /// Claims and shortfall at a common valuation cut; no negative debt collectibility.
     pub fn diagnostics(&self, marks: &[PriceTicks]) -> Result<Diagnostics, LedgerError> {
@@ -626,7 +683,8 @@ impl Ledger {
     }
 }
 
-/// Pure transition adapter for generic controllers; does not commit or dispatch.
+/// Metadata-free algebra adapter; does not retain rejected observations, commit
+/// or dispatch. Production ingestion must use Ledger::ingest, not this shortcut.
 pub struct LedgerTransition;
 impl Transition for LedgerTransition {
     type State = Ledger;

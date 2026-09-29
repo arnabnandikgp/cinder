@@ -15,8 +15,9 @@ Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
 without operator assistance. The planning foundation and pinned workspace are
 merged, including exact financial primitives and canonical event identities.
-P03 adds the joined in-memory accounting ledger and full-system architecture;
-durable storage, native adapters and deployed services remain later phases.
+The open P03/P04 stack adds the joined in-memory ledger, full-system architecture,
+funding/fee accounting and evidence containment. Durable storage, native adapters
+and deployed services remain later phases.
 
 ## Start here
 
@@ -30,6 +31,7 @@ durable storage, native adapters and deployed services remain later phases.
 8. [Financial primitives and encoding](docs/architecture/0002-financial-primitives.md)
 9. [Full system architecture and operating flows](docs/architecture.md)
 10. [Unified ledger decision and invariants](docs/architecture/0003-unified-ledger.md)
+11. [Funding, fees and evidence reconciliation](docs/architecture/0004-funding-reconciliation.md)
 
 These tracked documents are sufficient to start the first implementation phase.
 Ignored `work/` contains the original local research; it is not a CI dependency.

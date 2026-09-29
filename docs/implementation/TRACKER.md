@@ -6,7 +6,7 @@
 | [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
 | [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
 | [P03 — Unified ledger](PLAN.md#p03) | in progress | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), ready for review |
-| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
+| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | Stacked above #26; publication pending |
 | [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
 | [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
 | [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
@@ -36,10 +36,13 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P02 `17a29e2`.
-Current branch: `tee/p03-unified-ledger`. Preserve unrelated `stays/` and local
-ignored `work/`. P03 implements the pure in-memory ledger/position foundation and
-the requested [full architecture](../architecture.md). No durable store, program,
-service, live native adapter or Nitro runtime has been implemented.
+Current branch: `tee/p04-funding-reconciliation`, created with `gh stack add` above
+`tee/p03-unified-ledger` at `e165eca78f34d696303084d2134110c686953186` (PR #26).
+The user explicitly authorized P04 while reviewing P03; neither PR is authorized
+to merge. Preserve unrelated `stays/` and ignored `work/`. P04 extends P03's one
+in-memory ledger with funding, fees and source-evidence containment, and updates
+the [full architecture](../architecture.md). No durable store, program, service,
+live native adapter or Nitro runtime has been implemented.
 
 Repository integration follow-up: the TEE trunk had no classic branch protection
 or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
@@ -50,9 +53,10 @@ for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-P02 is merged with user authorization; P03 passes local verification and is open as PR #26.
-Funding/fees and the durable journal follow. Native execution and customer-funds deployment are
-not implied by this foundation. P19/P21/P22 support
+P02 is merged with user authorization; P03 is open as PR #26. P04 passes local
+verification; clean-export verification/publication follows. Next implementation
+phase is P05's durable journal, after separate authorization. Native execution and
+customer-funds deployment are not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
 
 Each session appends dated work/evidence/deviations and replaces the next action
@@ -237,18 +241,47 @@ to the pinned toolchain idiom. Native cash and private realized cash intentional
 differ when external netting realizes PnL, so the structural check uses cash minus
 basis rather than demanding identical cash/basis sums. Normalized causal evidence
 remains a trusted caller obligation until P13, not inferred from passing aggregate checks.
-Next: review PR #26 CI/findings and obtain merge authorization. P04 then adds
-qualified funding/fees and discrepancy containment on this same ledger, not a second
-book. Do not merge P03 or start P04 without subsequent authorization.
+Subsequent direction: user authorized P04 as a dependent stack layer while reviewing
+P03. Its base remains exactly `e165eca78f34d696303084d2134110c686953186`; no P03 branch
+rewrite or merge occurred.
+Next: review PR #26 CI/findings and obtain separate merge authorization; dependent
+P04 must be kept based on the reviewed P03 result.
 PR: https://github.com/arnabnandikgp/cinder/pull/26
 Merge: none.
 
 ## P04 — Funding, fees and reconciliation
 
-Work: not started.
-Verification: not run; acceptance in PLAN P04.
-Unexpected: none yet.
-Next: port gross/net funding and inclusive-fee cases, then add named mismatch containment.
+Work: 2026-09-30 — added frozen funding inventory cuts, explicit missing rate/native
+inputs, per-boundary recognition/settlement, signed rounding and named source
+corrections on the same ledger. Actual execution fees/rebates follow stored owner
+routes; inclusive native PnL normalizes once against native basis. Separate broker
+fees move customer-to-house cash only. Unknown/unexplained economics remain in
+suspense, not house profit. Ingestion retains normalized duplicates/rejections,
+injected times and dispositions; named issues retain age. Complete component
+checks and qualified marks gate dependent views without blocking actual losses.
+Added a pure normalization port and offline fixture, ADR 0004, source fingerprints,
+architecture updates and technical acceptance checks. No live adapter or fee policy.
+Verification: pinned macOS arm64 Rust 1.97.1 / Node 24.21.0 `node scripts/check.mjs`
+passed 21 script tests, 60 Rust tests and 2 compile-fail doctests in debug/release,
+formatting, strict Clippy and build. P04 adds 19 economic/evidence tests and 2
+normalization-port tests. The funding property includes 500 signed rounding cases;
+replay preserves all observation dispositions and retained conflicts. Source
+qualification is still a trusted input, not proved by those tests. The focused
+`node scripts/check.mjs --properties` passed 9 tests. Clean-export verification
+is pending. No container, live venue, wallet,
+chain, AWS, machine proof or independent audit was used/claimed.
+Unexpected: self-review tightened snapshot resolution to require named effects
+to explain every originally known component exactly; a later matching snapshot
+or unrelated transaction cannot clear it. Audit effects retain before/after books
+so an extreme signed value need not form an overflowing delta merely for ingestion.
+A compile-time module-visibility error and Clippy's manual-contains warning were
+fixed locally before the successful full run. The first clean-export doc check
+flagged an inline rather than line-start `Next:` handoff; corrected the formatting.
+Skill guidance informed checked
+math/adversarial testing without adding a runtime dependency or live test.
+Next: clean-export verification, commit and publish with `gh stack submit --auto
+--open`; keep P03 unchanged and set P04 base to `tee/p03-unified-ledger`. Record
+actual PR/commit/test snapshot after publication. Review/CI/merge remain open.
 PR: none.
 Merge: none.
 
