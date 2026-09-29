@@ -3,8 +3,8 @@
 | Phase | Progress | Invariant / deliverable | PR / merge |
 | --- | --- | --- | --- |
 | [P00 — Foundation](PLAN.md#p00) | closed | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), merged `587a8ca` |
-| [P01 — Workspace and harness](PLAN.md#p01) | in progress | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), ready for review |
-| [P02 — Financial types and identities](PLAN.md#p02) | open | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | — |
+| [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
+| [P02 — Financial types and identities](PLAN.md#p02) | in progress | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | — |
 | [P03 — Unified ledger](PLAN.md#p03) | open | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | — |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
 | [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
@@ -35,20 +35,21 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged foundation `587a8ca`.
-Current branch: `tee/p01-workspace-harness`. Preserve unrelated `stays/` and local
-ignored `work/`. The workspace/harness exists; no financial implementation,
-production program, service or native adapter has been built.
+Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged workspace `5aea02e`.
+Current branch: `tee/p02-financial-types`. Preserve unrelated `stays/` and local
+ignored `work/`. P02 implements pure financial types/identities; no production
+ledger, program, service or native adapter has been built.
 
-Repository integration follow-up before routine stack merges: the new TEE trunk
-has no classic branch protection or applicable rulesets; CodeRabbit skipped review
-because non-default-base reviews are disabled; the existing Vercel preview failed.
-Propose scoped TEE protections/review configuration and legacy-preview separation
-in P01, with approval for repository/deployment-setting changes. The Vercel check
+Repository integration follow-up: the TEE trunk had no classic branch protection
+or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
+it later showed processing on P01, but no submitted review was present at merge.
+Recheck current settings before claiming a review gate. ADR 0001 proposes scoped
+TEE protections/review configuration and legacy-preview separation, with approval
+for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-P01 is implemented in PR #24 and awaiting review/merge, then exact types/ledger/journal.
+P01 is merged; P02 is active, followed by the ledger/journal.
 Native execution and
 customer-funds deployment are not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
@@ -135,19 +136,45 @@ could not bootstrap even without a source mount. Removed only this session's
 disposable builder/cache and failed custom image; successfully ran against the
 original official image with cached components instead. These were local tooling
 failures, not test passes; the removed artifacts are reproducible, not user data.
-Next: review actual PR #24 CI/review findings. Leave in progress until
-the PR is reviewed and merged; P02 adds canonical financial units/identities and
-V02 precision/overflow vectors, not live venue execution. Hosted integration
-settings remain the separately authorized follow-up in ADR 0001.
+Follow-up: user approved local macOS checks plus hosted Linux CI for routine PRs,
+with two evidence-based fix/push attempts before container reproduction. This is
+recorded in AGENTS/development docs. Final head `87c28c4812e182d750c2ac092899d49fd6c96e38`
+passed both Cinder CI jobs before the explicitly authorized squash merge. No
+submitted review or inline findings were present; CodeRabbit was not an approval.
+The legacy Vercel failure and hosted integration settings were left unchanged.
+Next: implement P02; hosted integration changes remain separately authorized.
 PR: https://github.com/arnabnandikgp/cinder/pull/24
-Merge: none.
+Merge: 5aea02ec13cd5bd8834a30ee2aa260efe3d4369d.
 
 ## P02 — Financial types and identities
 
-Work: not started.
-Verification: not run; acceptance in PLAN P02.
-Unexpected: none yet.
-Next: after P01, implement canonical units/identities and port V02 precision/overflow vectors.
+Work: 2026-09-30 — implemented unit-tagged quote/basis/lot/tick types, lossless
+decimal/grid parsing, full-range checked signed rounding and basis splitting.
+Added distinct network/deployment/account/request/attempt/economic IDs, scoped
+canonical frames, versioned payload framing and pure duplicate/conflict comparison.
+Promoted V02 and independent BigInt vectors; ADR 0002 records wire layout, source
+hashes and bounds. Kernel remains dependency-free/no_std with bounded alloc use;
+guard now checks submodules, and the focused property runner includes kernel tests.
+Verification: pinned macOS Rust 1.97.1 / Node 24.21.0 `node scripts/check.mjs`
+passed 21 script tests, 25 Rust tests and 2 compile-fail doctests in debug/release,
+formatting, Clippy and build. New cases cover 69,632 small arithmetic triples in
+four rounding modes, 64 full-width BigInt vectors, 10,000 byte mutations, exact
+canonical golden layouts and truncation boundaries. Focused self-review checked signed
+minimum magnitudes, remainder ownership, framing bounds and scope completeness.
+The full runner also passed from clean staged export tree
+`900caec255f4dffaf2cb238d609372c01ed298f5`, without `work/`, `stays/` or Git metadata;
+only this documentation closeout follows that snapshot. The focused property
+command passed 6 tests. Hosted CI and independent PR review remain pending.
+No container, live venue, wallet, chain, AWS, formal proof or complete ledger
+qualification claimed.
+Unexpected: full-width differential testing caught inconsistent error precedence
+when Exact division was both fractional and out of range; exactness now rejects
+first in every case. No incorrect numeric result was accepted. Checked i128
+product-first division would unnecessarily reject representable partial basis;
+used quotient/remainder decomposition with an explicit range argument instead.
+Next: publish P02 and review actual CI/findings. P03 must
+implement the joined ledger/fill transition (the V02 driver is test-only), qualified
+tick-to-basis conversion, ownership projections and wrong-owner/default cases.
 PR: none.
 Merge: none.
 

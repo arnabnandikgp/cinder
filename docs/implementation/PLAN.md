@@ -132,9 +132,9 @@ checked arithmetic, domain-separated canonical bytes and policy/schema versions.
 Keep user request, signed attempt and economic event IDs distinct. Evidence: W01,
 W03; port fixture V02 and boundary/fuzz vectors to the chosen production language.
 
-- [ ] Overflow, overprecision, bad signs/units, unknown versions and ambiguous encodings reject without side effects.
-- [ ] Negative basis/division/remainders round as specified; no float parsing path exists.
-- [ ] Same ID/different payload conflicts; domains and source namespaces cannot replay into one another.
+- [x] Overflow, overprecision, bad signs/units, unknown versions and ambiguous encodings reject without side effects.
+- [x] Negative basis/division/remainders round as specified; no float parsing path exists.
+- [x] Same ID/different payload conflicts; domains and source namespaces cannot replay into one another.
 
 <a id="p03"></a>
 ## P03 — Unified ledger, positions and ownership

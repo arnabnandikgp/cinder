@@ -1,10 +1,45 @@
 #![no_std]
-//! Deterministic transition boundary; no financial implementation yet.
+//! Exact financial primitives and deterministic transition boundary.
 //!
-//! Inputs must contain all required observations. Implementations cannot reach
-//! a clock, store, signer or network through this dependency-free crate.
-//! P02/P03 add concrete domain types and accounting transitions. This trait is
-//! neither a serialization format nor a persistent transaction protocol.
+//! Inputs must contain all required observations. Kernel code must not access
+//! clocks, stores, signers or networks. Canonical codecs use bounded heap buffers
+//! through `alloc`, without third-party dependencies. No ledger or dispatch exists.
+
+extern crate alloc;
+
+pub mod amounts;
+pub mod codec;
+pub mod identity;
+pub mod math;
+
+/// Explicit primitive rejection; none of these errors mutates a ledger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Error {
+    /// The exact result is outside the destination integer's range.
+    Overflow,
+    /// Division by zero is not a rounding choice.
+    DivisionByZero,
+    /// A signed/zero value was used where a positive value was required.
+    InvalidSign,
+    /// The decimal text is not in the accepted canonical grammar.
+    InvalidDecimal,
+    /// More fractional digits than the explicitly configured scale.
+    Overprecision,
+    /// An exact conversion would discard a nonzero remainder.
+    Inexact,
+    /// Asset, market or precision revision does not match.
+    UnitMismatch,
+    /// A zero/oversized/empty identifier is not valid.
+    InvalidId,
+    /// Schema is unsupported or configured policy/precision revision differs.
+    UnknownVersion,
+    /// Framing, length, kind or trailing bytes are invalid.
+    InvalidEncoding,
+    /// Deployment, account or semantic source scope does not match.
+    ScopeMismatch,
+    /// An allocation fraction is outside zero through one.
+    InvalidRatio,
+}
 
 /// Computes a proposed next state without mutating the supplied state.
 ///

@@ -1,6 +1,6 @@
 # ADR 0001: deterministic Rust kernel and explicit I/O boundaries
 
-Date: 2026-09-30. Status: implemented in P01, pending PR review.
+Date: 2026-09-30. Status: merged in P01 ([PR #24](https://github.com/arnabnandikgp/cinder/pull/24)).
 Scope: workspace/tooling, not financial policy, runtime crypto selection or deployment.
 [Plan](../implementation/PLAN.md#p01), [baseline](../implementation/BASELINE.md),
 [development checks](../development.md).

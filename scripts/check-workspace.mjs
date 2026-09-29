@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Dependency/layout guard, not a proof that arbitrary future source is pure.
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,9 +31,9 @@ export function validateWorkspace(metadata) {
   return errors;
 }
 
-export function validateKernelSource(source) {
+export function validateKernelSource(source, isRoot = true) {
   const errors = [];
-  if (!/^#!\[no_std\]$/m.test(source)) errors.push('kernel: no_std boundary missing');
+  if (isRoot && !/^#!\[no_std\]$/m.test(source)) errors.push('kernel: no_std boundary missing');
   if (/\bextern\s+crate\s+std\b|\bstd\s*::/.test(source)) errors.push('kernel: explicit std escape requires architecture review');
   return errors;
 }
@@ -42,7 +42,16 @@ const script = fileURLToPath(import.meta.url);
 if (process.argv[1] && resolve(process.argv[1]) === script) {
   const root = resolve(dirname(script), '..');
   const metadata = JSON.parse(execFileSync('cargo', ['metadata', '--format-version', '1', '--locked', '--offline'], { cwd: root, encoding: 'utf8' }));
-  const errors = [...validateWorkspace(metadata), ...validateKernelSource(readFileSync(resolve(root, 'crates/kernel/src/lib.rs'), 'utf8'))];
+  const sourceRoot = resolve(root, 'crates/kernel/src');
+  function sources(directory) {
+    return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+      const path = resolve(directory, entry.name);
+      return entry.isDirectory() ? sources(path) : entry.name.endsWith('.rs') ? [path] : [];
+    });
+  }
+  const errors = [...validateWorkspace(metadata), ...sources(sourceRoot).flatMap(path =>
+    validateKernelSource(readFileSync(path, 'utf8'), path === resolve(sourceRoot, 'lib.rs'))
+      .map(error => `${path}: ${error}`))];
   if (errors.length) {
     for (const error of errors) process.stderr.write(`${error}\n`);
     process.exitCode = 1;

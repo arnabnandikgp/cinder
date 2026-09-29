@@ -13,9 +13,9 @@ It is not an architectural template for this branch.
 
 Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
-without operator assistance. The planning foundation is merged. P01 adds the
-pinned Rust workspace, explicit I/O boundaries and offline fault-test harness;
-financial accounting, native adapters and deployed services are still to be built.
+without operator assistance. The planning foundation and pinned workspace are
+merged. P02 adds exact financial primitives and canonical event identities;
+the joined accounting ledger, native adapters and deployed services are still to be built.
 
 ## Start here
 
@@ -26,6 +26,7 @@ financial accounting, native adapters and deployed services are still to be buil
 5. [Contributor instructions](AGENTS.md)
 6. [Development setup and checks](docs/development.md)
 7. [Workspace decision](docs/architecture/0001-workspace.md)
+8. [Financial primitives and encoding](docs/architecture/0002-financial-primitives.md)
 
 These tracked documents are sufficient to start the first implementation phase.
 Ignored `work/` contains the original local research; it is not a CI dependency.

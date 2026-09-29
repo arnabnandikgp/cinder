@@ -1,0 +1,10 @@
+# V02 normalized synthetic linear-perp vectors. One price unit = quote atom/lot.
+# q,b,c,x,price,q_after,b_after,c_after (tab-separated). No fees or funding.
+3	100	0	-1	40	2	67	7
+2	67	7	-4	35	-2	-70	10
+-3	-100	0	1	40	-2	-67	-7
+-2	-67	-7	4	35	2	70	-10
+2	70	-10	-2	40	0	0	0
+-2	-70	10	2	40	0	0	0
+0	0	0	1	32	1	32	0
+1	32	0	2	34	3	100	0
