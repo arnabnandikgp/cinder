@@ -14,8 +14,9 @@ It is not an architectural template for this branch.
 Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
 without operator assistance. The planning foundation and pinned workspace are
-merged. P02 adds exact financial primitives and canonical event identities;
-the joined accounting ledger, native adapters and deployed services are still to be built.
+merged, including exact financial primitives and canonical event identities.
+P03 adds the joined in-memory accounting ledger and full-system architecture;
+durable storage, native adapters and deployed services remain later phases.
 
 ## Start here
 
@@ -27,6 +28,8 @@ the joined accounting ledger, native adapters and deployed services are still to
 6. [Development setup and checks](docs/development.md)
 7. [Workspace decision](docs/architecture/0001-workspace.md)
 8. [Financial primitives and encoding](docs/architecture/0002-financial-primitives.md)
+9. [Full system architecture and operating flows](docs/architecture.md)
+10. [Unified ledger decision and invariants](docs/architecture/0003-unified-ledger.md)
 
 These tracked documents are sufficient to start the first implementation phase.
 Ignored `work/` contains the original local research; it is not a CI dependency.
