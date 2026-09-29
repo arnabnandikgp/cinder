@@ -6,7 +6,7 @@
 | [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
 | [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
 | [P03 — Unified ledger](PLAN.md#p03) | in progress | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), ready for review |
-| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | Stacked above #26; publication pending |
+| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), stacked above #26 |
 | [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
 | [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
 | [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
@@ -53,9 +53,10 @@ for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-P02 is merged with user authorization; P03 is open as PR #26. P04 passes local
-verification; clean-export verification/publication follows. Next implementation
-phase is P05's durable journal, after separate authorization. Native execution and
+P02 is merged with user authorization; P03 is open as PR #26. P04 passed local and
+clean-export verification and is ready for review as PR #27, linked with P03 in
+GitHub stack #28 using `gh stack submit --auto --open`. Next implementation phase
+is P05's durable journal, after separate authorization. Native execution and
 customer-funds deployment are not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
 
@@ -267,9 +268,13 @@ formatting, strict Clippy and build. P04 adds 19 economic/evidence tests and 2
 normalization-port tests. The funding property includes 500 signed rounding cases;
 replay preserves all observation dispositions and retained conflicts. Source
 qualification is still a trusted input, not proved by those tests. The focused
-`node scripts/check.mjs --properties` passed 9 tests. Clean-export verification
-is pending. No container, live venue, wallet,
-chain, AWS, machine proof or independent audit was used/claimed.
+`node scripts/check.mjs --properties` passed 9 tests. The full runner also passed
+from clean staged export tree `0a2293f0981d8620bc637feab3a9407339635062`, excluding
+`work/`, `stays/` and Git metadata. Implementation commit:
+`a5f1755995110563ed0981cb41a3f36f84c0273b`; only this documentation handoff follows it.
+No container, live venue, wallet, chain, AWS, machine proof or independent audit
+was used/claimed. Hosted CI and PR review remain separate pending evidence;
+inspect the final PR head before any authorized merge.
 Unexpected: self-review tightened snapshot resolution to require named effects
 to explain every originally known component exactly; a later matching snapshot
 or unrelated transaction cannot clear it. Audit effects retain before/after books
@@ -279,10 +284,14 @@ fixed locally before the successful full run. The first clean-export doc check
 flagged an inline rather than line-start `Next:` handoff; corrected the formatting.
 Skill guidance informed checked
 math/adversarial testing without adding a runtime dependency or live test.
-Next: clean-export verification, commit and publish with `gh stack submit --auto
---open`; keep P03 unchanged and set P04 base to `tee/p03-unified-ledger`. Record
-actual PR/commit/test snapshot after publication. Review/CI/merge remain open.
-PR: none.
+Next: review #26 and #27 bottom-up; inspect their final CI/findings and obtain merge
+authorization. P03's branch/head is unchanged; P04 bases on `tee/p03-unified-ledger`,
+not legacy `main`. If P03 changes, restack/retest P04 and update this evidence.
+Once authorized, P05 must persist complete normalized observations (including
+duplicates/rejections, times and dispositions) and outer raw evidence atomically
+with postings/consumption. Do not replay only the accepted event list, bypass the
+ingestion gate, or treat this in-memory evidence as crash durability.
+PR: https://github.com/arnabnandikgp/cinder/pull/27
 Merge: none.
 
 ## P05 — Durable journal
