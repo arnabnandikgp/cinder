@@ -62,13 +62,34 @@ legacy code, account invariants, toolchain pins or website work by default.
 - Default TEE trunk: `product/tee-v1`; never target legacy `main` accidentally.
   Follow the shallow, bottom-up stack process in PLAN. No automatic merges.
 
-## Foundation checks
+## Workspace checks
+
+Use Rust 1.97.1 from `rust-toolchain.toml` and Node 24.21.0 from `.node-version`.
+See [development setup](docs/development.md) and
+[ADR 0001](docs/architecture/0001-workspace.md). Do not install/replace global
+toolchains implicitly or inherit the legacy Phoenix versions.
 
 ```sh
-node scripts/check-implementation-plan.mjs
-node --test scripts/check-implementation-plan.test.mjs
+node scripts/check.mjs
+node scripts/check.mjs --properties
 git diff --check
 ```
 
-P01 adds production build/test commands. Until then, do not report nonexistent
-commands as passing or impose the old Phoenix toolchain.
+The full runner already includes the property tests; the focused command is for
+iteration, not an additional proof. Cargo commands are locked/offline after
+toolchain installation. Financial conformance remains P02/P03 onward.
+
+Routine PRs use pinned local macOS checks and hosted Linux CI; a local Linux
+container run is not a pre-PR requirement. If CI fails, inspect its logs, test
+the proposed fix locally and allow two evidence-based fix-and-push attempts
+before falling back to local Linux reproduction if the failure persists. Do not
+make speculative pushes just to consume that allowance. Explicit Linux/SBF/Nitro
+qualification required by an owning phase remains a separate acceptance gate.
+
+Keep the kernel dependency-free and `no_std`; no I/O, clocks, venue SDKs or test
+doubles may leak into it. Extend the dependency guard only with an explicit
+architecture decision. Test-support is not a production service or durable store.
+For Linux checks, export only intended tracked/staged source, mount it read-only
+with networking disabled, and write build outputs to container-local temporary
+storage. Never mount ignored research or wallet/cloud directories. Use Apple
+containers if a Linux test is needed; follow the available container skill.

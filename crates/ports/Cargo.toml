@@ -1,0 +1,11 @@
+[package]
+name = "cinder-ports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = false
+description = "Explicit external-effect boundaries for Cinder controllers"
+
+[lints]
+workspace = true

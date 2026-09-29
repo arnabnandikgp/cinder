@@ -1,0 +1,11 @@
+[package]
+name = "cinder-kernel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = false
+description = "Pure deterministic transition boundary for Cinder accounting"
+
+[lints]
+workspace = true
