@@ -5,7 +5,7 @@
 | [P00 — Foundation](PLAN.md#p00) | closed | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), merged `587a8ca` |
 | [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
 | [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
-| [P03 — Unified ledger](PLAN.md#p03) | in progress | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | Local verification |
+| [P03 — Unified ledger](PLAN.md#p03) | in progress | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), ready for review |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
 | [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
 | [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
@@ -50,7 +50,7 @@ for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-P02 is merged with user authorization; P03 passes local verification and awaits PR publication.
+P02 is merged with user authorization; P03 passes local verification and is open as PR #26.
 Funding/fees and the durable journal follow. Native execution and customer-funds deployment are
 not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
@@ -206,14 +206,18 @@ chain/AWS run; no machine proof or independent audit. The full runner also passe
 from clean staged export tree `3b4e21e374c02abf72327e13ac98d3915352fc6d`, excluding
 `work/`, `stays/` and Git metadata; only documentation closeout follows that snapshot.
 `node scripts/check.mjs --properties` passed all 8 discovered property tests.
+Implementation commit: `2dfa0e89cc9da6d348f240bf099e484a09363f94`; only this tracker
+closeout follows it. Hosted CI and independent review are pending; inspect the
+final PR head before merge, rather than carrying local results into a CI claim.
 Unexpected: the first strict Clippy run flagged a test's modulo parity check; fixed
 to the pinned toolchain idiom. Native cash and private realized cash intentionally
 differ when external netting realizes PnL, so the structural check uses cash minus
 basis rather than demanding identical cash/basis sums. Normalized causal evidence
 remains a trusted caller obligation until P13, not inferred from passing aggregate checks.
-Next: complete pinned offline verification, focused review and publish only P03
-against `product/tee-v1`; do not merge it or start P04 without subsequent authorization.
-PR: none.
+Next: review PR #26 CI/findings and obtain merge authorization. P04 then adds
+qualified funding/fees and discrepancy containment on this same ledger, not a second
+book. Do not merge P03 or start P04 without subsequent authorization.
+PR: https://github.com/arnabnandikgp/cinder/pull/26
 Merge: none.
 
 ## P04 — Funding, fees and reconciliation
