@@ -5,6 +5,7 @@
 use crate::{Error, Transition, amounts::*, identity::*, position::*};
 use alloc::vec::Vec;
 
+pub mod close;
 pub mod economics;
 pub mod evidence;
 pub mod funds;
@@ -94,6 +95,8 @@ pub enum FillTarget {
 /// Phase-local transition schema. No outbound actions or risk admission are exposed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
+    /// Qualified bounded-close allocation and actual exceptional house execution.
+    Close(close::CloseChange),
     /// House protection recognition and reclassification, not separate fund assets.
     Protection(protection::ProtectionChange),
     /// Partial transfers and beneficiary settlement, sharing the same asset bridge.
@@ -264,6 +267,7 @@ pub struct Ledger {
     transfers: Vec<Transfer>,
     movements: Vec<funds::Movement>,
     protection: protection::Protection,
+    closes: Vec<close::Binding>,
     bindings: Vec<Binding>,
     events: Vec<Event>,
     unresolved: Vec<EventKey>,
@@ -339,6 +343,7 @@ impl Ledger {
             transfers: Vec::new(),
             movements: Vec::new(),
             protection: protection::Protection::new(config.quote),
+            closes: Vec::new(),
             bindings: Vec::new(),
             events: Vec::new(),
             unresolved: Vec::new(),
@@ -477,6 +482,7 @@ impl Ledger {
     }
     fn apply_distinct(&mut self, event: &Event) -> Result<(), LedgerError> {
         match &event.change {
+            Change::Close(change) => self.apply_close(&event.key, change)?,
             Change::Protection(change) => self.apply_protection(&event.key, change)?,
             Change::Funds(change) => self.apply_funds(&event.key, change)?,
             Change::Economics(change) => self.apply_economics(&event.key, change)?,

@@ -113,6 +113,19 @@ impl Position {
         self.quantity.unit().require(market.unit)?;
         delta.unit().require(market.unit)?;
         price.unit().require(market.unit)?;
+        self.fill_value(market, delta, market.notional(delta, price)?)
+    }
+    // Only trusted ledger splitting of a single exact native fill may supply a
+    // portion of its notional. Residue stays in the complementary owner leg.
+    pub(crate) fn fill_value(
+        self,
+        market: Market,
+        delta: QuantityLots,
+        total: QuoteAtoms,
+    ) -> Result<FillResult, Error> {
+        self.quantity.unit().require(market.unit)?;
+        delta.unit().require(market.unit)?;
+        total.unit().require(market.unit.quote)?;
         if delta.lots() == 0 {
             return Err(Error::InvalidSign);
         }
@@ -124,7 +137,6 @@ impl Position {
             let (allocated, remaining) = self.basis.split(closed, self.quantity.magnitude())?;
             // Only the whole actual fill must be exact. Split its signed value
             // toward zero; retain any conversion residue in the opening basis.
-            let total = market.notional(delta, price)?;
             let (closing, opening) =
                 BasisAtoms::new(market.unit, total.atoms()).split(closed, delta.magnitude())?;
             let realized = QuoteAtoms::new(market.unit.quote, closing.atoms())
@@ -133,10 +145,8 @@ impl Position {
             (remaining.checked_add(opening)?, realized)
         } else {
             (
-                self.basis.checked_add(BasisAtoms::new(
-                    market.unit,
-                    market.notional(delta, price)?.atoms(),
-                ))?,
+                self.basis
+                    .checked_add(BasisAtoms::new(market.unit, total.atoms()))?,
                 QuoteAtoms::new(market.unit.quote, 0),
             )
         };

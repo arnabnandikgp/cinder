@@ -209,7 +209,7 @@ impl State {
         if self
             .orders
             .iter()
-            .any(|o| o.intent.request.account == id && o.terminal.is_none())
+            .any(|o| o.intent.request.account == id && !o.complete())
             || self
                 .funds
                 .iter()

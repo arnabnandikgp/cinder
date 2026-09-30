@@ -130,6 +130,8 @@ pub struct Attempt {
 /// Durable semantic scope for a one-shot exposure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttemptKind {
+    /// Policy-qualified liquidation or existing house-exception unwind.
+    Emergency,
     /// Exact admitted transfer/payout capability.
     Funds,
     /// P05 abstract port, unavailable for an accepted order's request.
@@ -148,6 +150,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Funded bounded liquidation and exceptional house cleanup.
+    Liquidation(crate::liquidation::Action),
     /// Explicit house coverage policy and authenticated allocation decisions.
     Protection(crate::protection::Action),
     /// Joined policy installation and authenticated private leverage selection.
@@ -264,6 +268,8 @@ pub struct State {
     pub(crate) collateral: Option<crate::collateral::Cut>,
     pub(crate) risk: Option<crate::risk::Policy>,
     pub(crate) protection_policy: Option<crate::protection::Policy>,
+    pub(crate) liquidation: Option<crate::liquidation::Policy>,
+    pub(crate) closes: Vec<crate::liquidation::Close>,
     pub(crate) selections: Vec<crate::risk::Selection>,
     pub(crate) funds: Vec<crate::funds::Operation>,
     pub(crate) funds_observations: Vec<crate::funds::Observation>,
@@ -299,6 +305,8 @@ impl State {
             collateral: None,
             risk: None,
             protection_policy: None,
+            liquidation: None,
+            closes: Vec::new(),
             selections: Vec::new(),
             funds: Vec::new(),
             funds_observations: Vec::new(),
@@ -368,6 +376,9 @@ impl State {
         }
     }
     pub(crate) fn all_capacity(&self) -> Result<(), ControlError> {
+        if self.close_contained() {
+            return Err(ControlError::Unqualified);
+        }
         self.protection_ready()?;
         if self.risk.is_some() {
             return self.risk_gate();
@@ -391,6 +402,7 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Liquidation(action) => self.liquidation_action(action)?,
             Control::Protection(action) => self.protection_action(action)?,
             Control::Risk(action) => self.risk_action(action)?,
             Control::Funds(action) => self.funds_action(action)?,
@@ -434,12 +446,8 @@ impl State {
                 if self.funds.iter().any(|o| o.intent.request == *request) {
                     return Err(ControlError::Unqualified);
                 }
-                if self
-                    .orders
-                    .iter()
-                    .any(|o| o.intent.request == *request && o.attempt.is_some())
-                {
-                    return Err(ControlError::Unqualified);
+                if self.orders.iter().any(|o| o.intent.request == *request) {
+                    return self.abandon_order(*request);
                 }
                 if self
                     .attempts
@@ -482,6 +490,7 @@ impl State {
                     .find(|a| a.key == *key)
                     .ok_or(ControlError::Invalid)?;
                 self.order_exposure(attempt)?;
+                self.close_exposure(attempt)?;
                 self.funds_exposure(attempt)?;
                 // Attributed cancellation grants no additional exposure. Permit
                 // cleanup even when a late fact/funding gap blocks new risk.
@@ -491,12 +500,18 @@ impl State {
                         || self.ledger.issues().iter().any(|i| i.open)
                         || self.ledger.unresolved_attribution() != 0
                         || self.ledger.unresolved_funds() != 0
-                        || self.orders.iter().any(|o| o.faulted)
+                        || (attempt.kind != AttemptKind::Emergency
+                            && self.orders.iter().any(|o| o.faulted))
+                        || self.unexplained_order_fault()
                         || self.funds.iter().any(|o| o.faulted)
                     {
                         return Err(ControlError::Unqualified);
                     }
-                    self.all_capacity()?;
+                    if attempt.kind == AttemptKind::Emergency {
+                        self.emergency_gate()?;
+                    } else {
+                        self.all_capacity()?;
+                    }
                 }
                 let a = self
                     .attempts
@@ -551,6 +566,7 @@ impl State {
         let mut inputs = Vec::new();
         for input in &tx.inputs {
             let valid = input.authority_epoch != 0
+                && !input.event.as_ref().is_some_and(|e|matches!(&e.change,Change::Close(_)))
                 && !input.event.as_ref().is_some_and(|e| matches!(&e.change,
                     Change::Protection(c) if !matches!(c, cinder_kernel::ledger::protection::ProtectionChange::Recognize{..})))
                 && input.observed_at <= tx.at
@@ -615,6 +631,27 @@ impl State {
                 if let Err(e) = candidate.control(c) {
                     controls = Some(e);
                     break;
+                }
+            }
+            if controls.is_none() {
+                // Authority/policy changes later in the same atomic proposal
+                // cannot validate exposure under an earlier, now-revoked cut.
+                for control in &tx.controls {
+                    if let Control::Expose(key) = control {
+                        let a = candidate
+                            .attempts
+                            .iter()
+                            .find(|a| a.key == *key)
+                            .ok_or(Error::Invalid)?;
+                        controls = candidate
+                            .order_exposure(a)
+                            .and_then(|()| candidate.close_exposure(a))
+                            .and_then(|()| candidate.funds_exposure(a))
+                            .err();
+                        if controls.is_some() {
+                            break;
+                        }
+                    }
                 }
             }
             if controls.is_none() {

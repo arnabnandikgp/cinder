@@ -126,6 +126,15 @@ reconciliation is not extraction resistance; global lifetime caps remain consume
 across recoveries, account changes and policy revisions. G02 allocation approval,
 actual authentication and live insurance calibration are not simulated into truth.
 
+### P11: bounded liquidation and close exceptions
+
+[ADR 0011](../architecture/0011-liquidation-exceptions.md) promotes W01/W03/W09
+close/unwind economics into the existing lifecycle and ledger. Its 432 bounded
+long/short allocation cases include exact whole-fill conservation; dedicated
+fractional conversion tests retain split-owner residue. Actual adverse execution
+is not capped at a prior reserve. Synthetic depth, prices and support budgets
+are qualification inputs, not live calibration or an execution guarantee.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:

@@ -420,6 +420,13 @@ impl State {
                     // hoped-for rebates, fees earned from customers or rewritten snapshots.
                     let key_ok = match &e.change {
                         Change::Fill { .. } => matches!(e.key, RecordKey::Economic(_)),
+                        Change::Close(cinder_kernel::ledger::close::CloseChange::Bind {
+                            ..
+                        }) => matches!(e.key, RecordKey::Attempt(_)),
+                        Change::Close(cinder_kernel::ledger::close::CloseChange::Execution {
+                            fee,
+                            ..
+                        }) if fee.atoms() >= 0 => matches!(e.key, RecordKey::Economic(_)),
                         Change::Protection(
                             cinder_kernel::ledger::protection::ProtectionChange::Recognize {
                                 ..
@@ -464,7 +471,13 @@ impl State {
         let (mut buys, mut sells, mut cost) = (0, 0, 0);
         for o in active.orders.iter().filter(|o| {
             o.intent.quantity.unit() == market.unit()
-                && owner.is_none_or(|id| id == o.intent.request.account)
+                && owner.is_none_or(|id| {
+                    id == o.intent.request.account
+                        && !self.closes.iter().any(|c| {
+                            c.request == o.intent.request
+                                && c.kind == crate::liquidation::Kind::HouseUnwind
+                        })
+                })
         }) {
             let q = i128::from(o.remaining());
             if q == 0 {
@@ -740,7 +753,7 @@ impl State {
         self.validate_risk(policy)?;
         let c = self.collateral.as_ref().ok_or(ControlError::Unqualified)?;
         if self.raw_unresolved > 0
-            || self.orders.iter().any(|o| o.faulted)
+            || self.unexplained_order_fault()
             || self.funds.iter().any(|o| o.faulted)
         {
             return Err(ControlError::Unqualified);
@@ -757,7 +770,7 @@ impl State {
         let work = (self.config.customers.len() + 3)
             .saturating_mul(self.config.markets.len())
             .saturating_mul(
-                active.orders.len()
+                active.orders.len().saturating_mul(self.closes.len() + 1)
                     + 4 * reservations
                     + 2 * self.selections.len()
                     + 4 * self.config.markets.len()
@@ -783,6 +796,7 @@ impl State {
         let mut minimum = current.free_capital.atoms();
         let f = &current.flags;
         let mut admissible = !self.frozen
+            && !self.close_contained()
             && self.protection_ready().is_ok()
             && !f.insolvent
             && !f.illiquid
@@ -851,6 +865,16 @@ impl State {
         })
     }
     pub(crate) fn risk_gate(&self) -> Result<()> {
+        if self
+            .liquidation
+            .as_ref()
+            .is_some_and(|p| p.valid_until <= self.now)
+        {
+            return Err(ControlError::Expired);
+        }
+        if self.close_contained() {
+            return Err(ControlError::Unqualified);
+        }
         self.protection_ready()?;
         if self.risk_report()?.admissible {
             Ok(())
@@ -864,32 +888,50 @@ impl State {
         if self.risk.is_none() {
             return Ok(());
         }
-        let admission = controls.iter().any(|c| match c {
-            Control::Collateral(_)
-            | Control::Risk(Action::Install { .. })
-            | Control::Release(_) => false,
-            Control::Protection(crate::protection::Action::Apply{decision,..}) => matches!(
-                decision.change, cinder_kernel::ledger::protection::ProtectionChange::Designate{delta} if delta.atoms()<0),
-            Control::Protection(_) => false,
-            Control::Order(orders) => !matches!(
-                orders,
-                crate::orders::Action::AdvanceAuthority { .. }
-                    | crate::orders::Action::PrepareCancel { .. }
-                    | crate::orders::Action::Release { .. }
-            ),
-            Control::Funds(f) => matches!(
-                f,
-                crate::funds::Action::Accept { .. } | crate::funds::Action::Prepare { .. }
-            ),
+        let admission =
+            controls.iter().any(|c| match c {
+                Control::Collateral(_)
+                | Control::Risk(Action::Install { .. })
+                | Control::Release(_) => false,
+                Control::Protection(crate::protection::Action::Apply { decision, .. }) => {
+                    matches!(
+                        decision.change,
+                        cinder_kernel::ledger::protection::ProtectionChange::Designate { delta }
+                            if delta.atoms() < 0
+                    )
+                }
+                Control::Protection(_) => false,
+                Control::Liquidation(_) => false,
+                Control::Order(orders) => !matches!(
+                    orders,
+                    crate::orders::Action::AdvanceAuthority { .. }
+                        | crate::orders::Action::PrepareCancel { .. }
+                        | crate::orders::Action::Release { .. }
+                ),
+                Control::Funds(f) => matches!(
+                    f,
+                    crate::funds::Action::Accept { .. } | crate::funds::Action::Prepare { .. }
+                ),
+                Control::Expose(k) => self.attempts.iter().find(|a| a.key == *k).is_none_or(|a| {
+                    !matches!(a.kind, AttemptKind::Cancel | AttemptKind::Emergency)
+                }),
+                _ => true,
+            });
+        if admission {
+            self.risk_gate()?;
+        }
+        let emergency = controls.iter().any(|c| match c {
+            Control::Liquidation(crate::liquidation::Action::Prepare { .. }) => true,
             Control::Expose(k) => self
                 .attempts
                 .iter()
-                .find(|a| a.key == *k)
-                .is_none_or(|a| a.kind != AttemptKind::Cancel),
-            _ => true,
+                .any(|a| a.key == *k && a.kind == AttemptKind::Emergency),
+            _ => false,
         });
-        if admission {
-            self.risk_gate()?;
+        if emergency {
+            // Recheck the final joined state/policy. Ordinary mutations in the
+            // same proposal still must pass the ordinary gate above.
+            self.emergency_gate()?;
         }
         Ok(())
     }

@@ -27,7 +27,7 @@ impl Writer {
             valid: true,
         };
         s.raw(b"CINDER-J\0");
-        s.raw(&5_u16.to_be_bytes());
+        s.raw(&6_u16.to_be_bytes());
         s.byte(tag);
         s
     }
@@ -80,6 +80,13 @@ pub(crate) struct Reader<'a> {
     offset: usize,
 }
 impl<'a> Reader<'a> {
+    pub(crate) fn bool(&mut self) -> Result<bool, Error> {
+        match self.byte()? {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(Error::Codec),
+        }
+    }
     pub(crate) fn new(bytes: &'a [u8], tag: u8) -> Result<Self, Error> {
         if bytes.len() > MAX_RECORD {
             return Err(Error::Limit);
@@ -88,7 +95,7 @@ impl<'a> Reader<'a> {
         if r.take(9)? != b"CINDER-J\0" {
             return Err(Error::Codec);
         }
-        if r.array::<2>()? != 5_u16.to_be_bytes() {
+        if r.array::<2>()? != 6_u16.to_be_bytes() {
             return Err(Error::Version);
         }
         if r.byte()? != tag {
@@ -326,6 +333,32 @@ pub fn encode_event(e: &Event) -> Result<Vec<u8>, Error> {
     w.item(&e.key);
     w.raw(&e.policy.get().to_be_bytes());
     match &e.change {
+        Change::Close(change) => {
+            w.byte(9);
+            match change {
+                close::CloseChange::Bind { house, quantity } => {
+                    w.byte(0);
+                    w.byte(u8::from(*house));
+                    w.item(quantity);
+                }
+                close::CloseChange::Execution {
+                    attempt,
+                    quantity,
+                    price,
+                    fee,
+                    pnl: p,
+                    customer_allowed,
+                } => {
+                    w.byte(1);
+                    w.item(attempt);
+                    w.item(quantity);
+                    w.item(price);
+                    w.item(fee);
+                    w.option(p, |w, p| pnl(w, *p));
+                    w.byte(u8::from(*customer_allowed));
+                }
+            }
+        }
         Change::Protection(change) => {
             w.byte(8);
             encode_protection(&mut w, change);
@@ -473,6 +506,21 @@ pub fn decode_event(bytes: &[u8]) -> Result<Event, Error> {
     let key = r.item()?;
     let policy = PolicyVersion::new(u32::from_be_bytes(r.array()?)).map_err(|_| Error::Codec)?;
     let change = match r.byte()? {
+        9 => Change::Close(match r.byte()? {
+            0 => close::CloseChange::Bind {
+                house: r.bool()?,
+                quantity: r.item()?,
+            },
+            1 => close::CloseChange::Execution {
+                attempt: r.item()?,
+                quantity: r.item()?,
+                price: r.item()?,
+                fee: r.item()?,
+                pnl: r.option(read_pnl)?,
+                customer_allowed: r.bool()?,
+            },
+            _ => return Err(Error::Codec),
+        }),
         8 => Change::Protection(decode_protection(&mut r)?),
         7 => Change::Funds(decode_funds(&mut r)?),
         0 => Change::BindExecution {
@@ -852,6 +900,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Liquidation(action) => {
+                w.byte(9);
+                crate::liquidation::encode_action(&mut w, action);
+            }
             Control::Protection(action) => {
                 w.byte(8);
                 crate::protection::encode_action(&mut w, action);
@@ -962,6 +1014,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             6 => Control::Funds(crate::funds::decode_action(&mut r)?),
             7 => Control::Risk(crate::risk::decode_action(&mut r)?),
             8 => Control::Protection(crate::protection::decode_action(&mut r)?),
+            9 => Control::Liquidation(crate::liquidation::decode_action(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -1068,11 +1121,26 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.option(&s.collateral, crate::collateral::encode);
     w.option(&s.risk, crate::risk::encode_policy);
     w.option(&s.protection_policy, crate::protection::encode_policy);
+    w.option(&s.liquidation, crate::liquidation::encode_policy);
+    w.count(s.closes.len());
+    for c in &s.closes {
+        crate::liquidation::encode_close(&mut w, c);
+    }
     w.count(s.selections.len());
     for selection in &s.selections {
         crate::risk::encode_selection(&mut w, selection);
     }
     w.u64(s.ledger.version());
+    w.count(s.ledger.closes().len());
+    for c in s.ledger.closes() {
+        w.item(&c.attempt);
+        w.byte(u8::from(c.house));
+        w.item(&c.quantity);
+        w.u64(c.received);
+        w.u64(c.customer_filled);
+        w.u64(c.excess);
+        w.item(&c.spent);
+    }
     let protection = s.ledger.protection();
     w.byte(u8::from(protection.active));
     w.item(&protection.reserve);
@@ -1155,6 +1223,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.count(s.attempts.len());
     for a in &s.attempts {
         w.byte(match a.kind {
+            AttemptKind::Emergency => 4,
             AttemptKind::Funds => 3,
             AttemptKind::Generic => 0,
             AttemptKind::Order => 1,
@@ -1173,6 +1242,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     }
     w.count(s.orders.len());
     for o in &s.orders {
+        w.byte(u8::from(o.abandoned));
         crate::orders::encode_intent(&mut w, &o.intent);
         w.option(&o.attempt, |w, a| w.item(a));
         w.item(&o.filled);

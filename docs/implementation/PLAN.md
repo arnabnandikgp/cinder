@@ -287,9 +287,12 @@ partial execution and exception-house ownership/unwind. Distinguish private clos
 from native pooled reduce-only. No real market calibration or speculative trades.
 Evidence: W01, W03, W09; gaps, reduced depth, late private close after forced reduction.
 
-- [ ] Underfilled liquidation retains residual risk and obligations; timeout never manufactures a flat account.
-- [ ] Excess late close goes only to approved funded exception accounting, never silently reverses the customer.
-- [ ] House unwind failures, fees and repeated losses feed admission/claims; exhausted budget does not erase actual fills.
+- [x] Underfilled liquidation retains residual risk and obligations; timeout never manufactures a flat account.
+- [x] Excess late close goes only to approved funded exception accounting, never silently reverses the customer.
+- [x] House unwind failures, fees and repeated losses feed admission/claims; exhausted budget does not erase actual fills.
+
+[ADR 0011](../architecture/0011-liquidation-exceptions.md) defines the funded
+exit envelope, split-fill residue, local abandonment and containment limits.
 
 <a id="p12"></a>
 ## P12 — Native ADL and bounded RF1/RF2 restoration

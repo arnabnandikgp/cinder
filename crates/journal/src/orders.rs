@@ -162,6 +162,9 @@ pub enum Action {
 /// Immutable ownership plus lifecycle; no separate cash/position ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Order {
+    /// Durable local abandonment before any possible exposure. Not a venue ACK
+    /// or manufactured terminal-history certificate.
+    pub abandoned: bool,
     /// Bound instruction.
     pub intent: Intent,
     /// Original place attempt, if prepared.
@@ -196,17 +199,49 @@ impl Order {
     /// Complete identity set and exact quantity at the certified causal cut.
     pub fn complete(&self) -> bool {
         !self.faulted
-            && self.terminal.as_ref().is_some_and(|t| {
-                t.filled == self.filled
-                    && t.executions.len() == self.executions.len()
-                    && self.executions.iter().all(|(k, cut)| {
-                        t.executions.contains(k) && cut.is_some_and(|c| c <= t.through)
-                    })
-            })
+            && (self.abandoned
+                || self.terminal.as_ref().is_some_and(|t| {
+                    t.filled == self.filled
+                        && t.executions.len() == self.executions.len()
+                        && self.executions.iter().all(|(k, cut)| {
+                            t.executions.contains(k) && cut.is_some_and(|c| c <= t.through)
+                        })
+                }))
     }
 }
 
 impl State {
+    pub(crate) fn abandon_order(&mut self, request: RequestKey) -> Result<(), ControlError> {
+        let index = self
+            .orders
+            .iter()
+            .position(|o| o.intent.request == request)
+            .ok_or(ControlError::Invalid)?;
+        let o = &self.orders[index];
+        if o.abandoned
+            || o.faulted
+            || o.filled.lots() != 0
+            || !o.executions.is_empty()
+            || self
+                .order_observations
+                .iter()
+                .any(|o| o.attempt.request == request)
+            || self
+                .attempts
+                .iter()
+                .any(|a| a.key.request == request && a.possibly_exposed)
+        {
+            return Err(ControlError::Exposed);
+        }
+        let hold = self
+            .holds
+            .iter_mut()
+            .find(|h| h.request == request && h.active)
+            .ok_or(ControlError::Invalid)?;
+        hold.active = false;
+        self.orders[index].abandoned = true;
+        Ok(())
+    }
     /// Bound private order history. Reading does not grant dispatch authority.
     pub fn orders(&self) -> &[Order] {
         &self.orders
@@ -239,6 +274,9 @@ impl State {
                 approval,
                 reservations,
             } => {
+                if self.liquidation.is_some() {
+                    self.close_limit(i.quantity.unit())?;
+                }
                 if self.frozen {
                     return Err(ControlError::Unqualified);
                 }
@@ -280,6 +318,7 @@ impl State {
                 // an order hold and include its pending outcomes in that same cut.
                 // A rejected control rolls back both the order and reservation.
                 self.orders.push(Order {
+                    abandoned: false,
                     intent: (**i).clone(),
                     attempt: None,
                     filled: QuantityLots::new(i.quantity.unit(), 0),
@@ -297,13 +336,14 @@ impl State {
                 })?;
             }
             Action::Prepare { attempt } => {
+                self.attach_private_close(attempt.request)?;
                 let index = self
                     .orders
                     .iter()
                     .position(|o| o.intent.request == attempt.request)
                     .ok_or(ControlError::Invalid)?;
                 let order = &self.orders[index];
-                if order.attempt.is_some() || order.faulted {
+                if order.attempt.is_some() || order.faulted || order.abandoned {
                     return Err(ControlError::Invalid);
                 }
                 let intent = order.intent.clone();
@@ -322,13 +362,20 @@ impl State {
                 let e = Event {
                     key: RecordKey::Attempt(*attempt),
                     policy: self.config.policy,
-                    change: Change::BindExecution {
-                        market: intent.quantity.unit(),
-                        side: if intent.quantity.lots() > 0 {
-                            Side::Buy
-                        } else {
-                            Side::Sell
-                        },
+                    change: if self.closes.iter().any(|c| c.request == attempt.request) {
+                        Change::Close(cinder_kernel::ledger::close::CloseChange::Bind {
+                            house: false,
+                            quantity: intent.quantity,
+                        })
+                    } else {
+                        Change::BindExecution {
+                            market: intent.quantity.unit(),
+                            side: if intent.quantity.lots() > 0 {
+                                Side::Buy
+                            } else {
+                                Side::Sell
+                            },
+                        }
                     },
                 };
                 let proposal = self
@@ -357,7 +404,7 @@ impl State {
                     .iter()
                     .any(|a| a.key == original && a.possibly_exposed)
                     || order.complete()
-                    || self.authority(attempt.request.account) != Some(*authority_epoch)
+                    || !self.order_authority(attempt.request, *authority_epoch)
                     || self
                         .attempts
                         .iter()
@@ -447,11 +494,12 @@ impl State {
             .iter()
             .find(|o| o.intent.request == attempt.key.request)
             .ok_or(ControlError::Invalid)?;
-        if self.authority(attempt.key.request.account) != Some(attempt.authority_epoch) {
+        if !self.order_authority(attempt.key.request, attempt.authority_epoch) {
             return Err(ControlError::Invalid);
         }
-        if attempt.kind == AttemptKind::Order
+        if matches!(attempt.kind, AttemptKind::Order | AttemptKind::Emergency)
             && (order.faulted
+                || order.abandoned
                 || order.terminal.is_some()
                 || self
                     .order_observations
@@ -552,6 +600,13 @@ impl State {
     }
 
     fn fault_order(&mut self, index: usize) {
+        if let Some(c) = self
+            .closes
+            .iter_mut()
+            .find(|c| c.request == self.orders[index].intent.request)
+        {
+            c.contained = true;
+        }
         self.orders[index].faulted = true;
         // A contradictory late fact re-encumbers even a previously released hold.
         // This can exceed capacity; actual events are not rejected as new admission.
@@ -648,6 +703,69 @@ impl State {
             || (current.signum() != q.lots().signum()
                 && current.unsigned_abs() >= q.lots().unsigned_abs());
         let mut classified = e.clone();
+        if let Some(close_index) = self
+            .closes
+            .iter()
+            .position(|c| c.request == attempt.request)
+        {
+            // Keep the whole real venue fill; the kernel independently caps the
+            // customer slice at original remaining intent and current position.
+            let qualified = e.policy == order.intent.policy
+                && q.unit() == order.intent.quantity.unit()
+                && price.unit() == q.unit()
+                && fee.unit() == self.config.quote
+                && q.lots() != 0
+                && price.ticks() >= order.intent.minimum.ticks()
+                && price.ticks() <= order.intent.maximum.ticks()
+                && order
+                    .intent
+                    .maximum_fee_per_lot
+                    .atoms()
+                    .checked_mul(i128::from(q.lots().unsigned_abs()))
+                    .is_some_and(|n| fee.atoms() <= n)
+                && self
+                    .attempts
+                    .iter()
+                    .any(|a| a.key == attempt && a.possibly_exposed);
+            let house = self.closes[close_index].kind == crate::liquidation::Kind::HouseUnwind;
+            let house_current = self
+                .ledger
+                .book(Owner::House)
+                .map_err(|_| Error::Invalid)?
+                .positions()
+                .iter()
+                .find(|p| p.quantity().unit() == q.unit())
+                .map(|p| p.quantity().lots());
+            let house_valid = house_current.is_some_and(|current| {
+                current.signum() != q.lots().signum()
+                    && current.unsigned_abs() >= q.lots().unsigned_abs()
+            });
+            let violation = !valid
+                || terminal_contradiction
+                || (!house && !reduce_valid)
+                || (house && !house_valid);
+            if violation {
+                self.closes[close_index].contained = true;
+            }
+            if terminal_contradiction || self.orders[index].abandoned {
+                self.fault_order(index);
+            }
+            let pnl = match &e.change {
+                Change::Economics(EconomicChange::Execution { pnl, .. }) => *pnl,
+                _ => None,
+            };
+            classified.change =
+                Change::Close(cinder_kernel::ledger::close::CloseChange::Execution {
+                    attempt,
+                    quantity: q,
+                    price,
+                    fee,
+                    pnl,
+                    customer_allowed: qualified && !terminal_contradiction,
+                });
+            self.order_fills.push((e.clone(), classified.clone()));
+            return Ok(classified);
+        }
         if terminal_contradiction {
             self.fault_order(index);
         }
@@ -671,6 +789,14 @@ impl State {
         original: &Event,
         cut: Option<u64>,
     ) -> Result<(), Error> {
+        for close in &mut self.closes {
+            if self.ledger.closes().iter().any(|b| {
+                b.attempt.request == close.request
+                    && (b.spent.atoms() > close.budget.atoms() || b.excess > 0)
+            }) {
+                close.contained = true;
+            }
+        }
         let (attempt, q) = match &original.change {
             Change::Fill {
                 target: FillTarget::Customer(a),

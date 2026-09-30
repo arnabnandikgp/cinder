@@ -144,10 +144,10 @@ pub(super) struct FundingRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ExecutionReport {
-    key: EventKey,
-    expected: QuoteAtoms,
-    reported: QuoteAtoms,
-    fee: QuoteAtoms,
+    pub(super) key: EventKey,
+    pub(super) expected: QuoteAtoms,
+    pub(super) reported: QuoteAtoms,
+    pub(super) fee: QuoteAtoms,
 }
 
 impl Ledger {
