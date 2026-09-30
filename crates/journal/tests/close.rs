@@ -262,6 +262,45 @@ fn private(s: &mut Store, n: u8) {
 }
 
 #[test]
+fn restoration_receipt_cannot_be_reclassified_as_a_private_close() {
+    let t = Temp::new();
+    let mut s = live(&t, 5, 100);
+    private(&mut s, 20);
+    let before = s.state().unwrap().ledger().venue().clone();
+    let e = event(
+        100,
+        Change::Restoration(
+            cinder_kernel::ledger::restoration::RestorationChange::Receipt {
+                attempt: attempt(20),
+                quantity: q(-1),
+                price: p(100),
+                fee: cash(1),
+                pnl: None,
+                executed_at: 10,
+            },
+        ),
+    );
+    let result = run(&mut s, vec![e], vec![]);
+    assert_eq!(
+        result.receipt.inputs,
+        vec![InputResult::Normalized(
+            cinder_kernel::ledger::evidence::Disposition::Rejected(LedgerError::Attribution)
+        )]
+    );
+    assert_eq!(s.state().unwrap().ledger().venue(), &before);
+    assert!(
+        s.state()
+            .unwrap()
+            .orders()
+            .iter()
+            .find(|o| o.intent.request == request(20))
+            .unwrap()
+            .faulted
+    );
+    assert_eq!(t.open().state().unwrap(), s.state().unwrap());
+}
+
+#[test]
 fn liquidation_requires_maintenance_breach_caps_depth_and_rechecks_before_exposure() {
     let t = Temp::new();
     let mut s = live(&t, 5, 100);

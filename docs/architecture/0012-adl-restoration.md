@@ -111,6 +111,14 @@ become contained house inventory. P11's funded existing-house unwind recognizes
 these incidents. This is provisional exception accounting, not erasure of an
 independently owed remediation claim.
 
+A single void does not block preparation or exposure for the other fixed awards.
+The same quantity/cost caps still cover void slots' possible house inventory, and
+the other customers' quotas are never increased. If every row is void, a new
+exposure remains forbidden: restoration is not authority for a house-only trade.
+A house-unwind incident label does not void the labeled customer's restoration.
+Misrouted source receipts retain their evidence and fail attribution; they cannot
+become ordinary/private-close fills.
+
 Source execution time must be within the exposed attempt's deadline and not before
 its durable exposure or after receipt. The adapter must qualify a common time
 domain; receive time alone is not execution time. An in-time fill received after
@@ -125,7 +133,7 @@ available during known containment. A never-exposed action may be abandoned; thi
 is not fabricated venue finality. There is no automatic retry or incident-resume
 permission, and there is no future funding on unrestored quantities.
 
-Wire 7 / engine 9 explicitly fence prior history; no silent migration. Raw observe
+Wire 7 / engine 16 explicitly fence prior history; no silent migration. Raw observe
 and source receipts are admitted inputs, but direct allocation/execution-eligibility
 controls cannot enter via raw adapter observations. State/event replay includes all
 row progress, voids, costs, policy revisions, held resources and exposure time.

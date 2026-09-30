@@ -212,7 +212,7 @@ impl State {
                     .clone();
                 if r.plan.is_none()
                     || r.attempt.is_some()
-                    || r.rows.iter().any(|r| r.void)
+                    || r.rows.iter().all(|r| r.void)
                     || p.target == 0
                     || p.target > r.quantity.lots().unsigned_abs()
                     || self
@@ -366,7 +366,7 @@ impl State {
             || policy.authority_epoch != a.authority_epoch
             || policy.valid_until <= self.now
             || m.contained
-            || r.rows.iter().any(|r| r.void)
+            || r.rows.iter().all(|r| r.void)
         {
             return Err(ControlError::Unqualified);
         }

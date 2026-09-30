@@ -575,6 +575,16 @@ Merge: none.
 
 ## P12 — ADL and restoration
 
+Review follow-up (2026-09-30): CodeRabbit #4142163504/#4142163522/#4142163544
+addressed. Wrong-route restoration receipts fault the matched order and preserve
+the unchanged rejected evidence instead of panicking/reclassifying. A single void
+no longer vetoes other fixed awards at prepare/bind/expose; all-void incidents
+still cannot authorize speculative house-only exposure. House-unwind labels do
+not void private awards. Engine 16 rejects previous interpretation. Targeted close,
+orders, restoration and risk suites pass 75 groups; strict all-feature Clippy passes.
+Regressions cover ordinary/close misrouting, both void timings, unchanged quotas,
+all-void containment, house versus private close, and durable replay.
+
 Work: 2026-09-30 — implemented qualified ADL observation/declaration, fixed
 proportional reduction and bounded exact-EDF quota compilation; joined funded
 RF1 replacement, original basis/refunds, private-intent voids, source-time bounds,

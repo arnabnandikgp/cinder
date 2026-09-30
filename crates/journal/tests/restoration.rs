@@ -244,6 +244,17 @@ fn prepared(t: &Temp) -> Store {
     prepared_with(t, true)
 }
 fn prepared_with(t: &Temp, expose: bool) -> Store {
+    prepared_void(t, expose, None)
+}
+fn void_control() -> Control {
+    Control::Restoration(rc::Action::Void {
+        request: request(23),
+        market: q(0).unit(),
+        authority_epoch: 1,
+        authenticated_digest: rc::void_digest(request(23), q(0).unit(), 1).unwrap(),
+    })
+}
+fn prepared_void(t: &Temp, expose: bool, void_after_prepare: Option<bool>) -> Store {
     let mut s = t.create();
     let l = initial(1);
     run(
@@ -385,15 +396,27 @@ fn prepared_with(t: &Temp, expose: bool) -> Store {
         authority_epoch: 1,
         expires_at: 100,
     };
+    if void_after_prepare == Some(false) {
+        assert_eq!(
+            run(&mut s, vec![], vec![void_control()]).receipt.controls,
+            None
+        );
+    }
+    let p = rc::Proposal {
+        expected_version: s.state().unwrap().ledger().version(),
+        ..p
+    };
     let c = Control::Restoration(rc::Action::Prepare {
         authenticated_digest: p.digest().unwrap(),
         proposal: Box::new(p),
     });
-    let controls = if expose {
-        vec![c, Control::Expose(attempt(22))]
-    } else {
-        vec![c]
-    };
+    let mut controls = vec![c];
+    if void_after_prepare == Some(true) {
+        controls.push(void_control());
+    }
+    if expose {
+        controls.push(Control::Expose(attempt(22)));
+    }
     assert_eq!(run(&mut s, vec![], controls).receipt.controls, None);
     s
 }
@@ -409,6 +432,146 @@ fn receipt_restore(id: u64, qty: i64, price: u64, time: u64) -> Event {
             executed_at: time,
         }),
     )
+}
+
+#[test]
+fn one_void_before_prepare_or_expose_does_not_block_other_fixed_awards() {
+    for after_prepare in [false, true] {
+        let t = Temp::new();
+        let mut s = prepared_void(&t, true, Some(after_prepare));
+        assert_eq!(
+            run(&mut s, vec![receipt_restore(30, 10, 10100, 10)], vec![])
+                .receipt
+                .inputs,
+            vec![InputResult::Normalized(Disposition::Applied)]
+        );
+        let l = s.state().unwrap().ledger();
+        assert_eq!(
+            l.book(Owner::Customer(user(1))).unwrap().positions()[0].quantity(),
+            q(0)
+        );
+        assert_eq!(
+            l.book(Owner::Customer(user(2))).unwrap().positions()[0].quantity(),
+            q(4)
+        );
+        assert_eq!(
+            l.book(Owner::House).unwrap().positions()[0].quantity(),
+            q(6)
+        );
+        assert_eq!(l.reductions()[0].consumed, 10);
+        assert_eq!(l.reductions()[0].rows[1].amount, 4);
+        assert!(s.state().unwrap().restorations()[0].contained);
+        assert_eq!(t.open().state().unwrap(), s.state().unwrap());
+    }
+}
+
+#[test]
+fn fully_void_incident_cannot_authorize_a_house_only_replacement() {
+    let mut l = declared(1);
+    for id in [1, 2] {
+        let mut r = request(40 + id);
+        r.account = user(id);
+        l = apply(
+            &l,
+            RecordKey::Request(r),
+            R::Void {
+                market: q(0).unit(),
+            },
+        );
+    }
+    assert_eq!(
+        l.apply(&Event {
+            key: RecordKey::Attempt(attempt(22)),
+            policy: config().policy,
+            change: Change::Restoration(R::Bind {
+                incident: key(20),
+                target: 10
+            }),
+        }),
+        Err(LedgerError::Attribution)
+    );
+    let t = Temp::new();
+    let mut s = prepared_void(&t, false, Some(false));
+    let mut r = request(24);
+    r.account = user(2);
+    assert_eq!(
+        run(
+            &mut s,
+            vec![],
+            vec![
+                Control::Order(orders::Action::AdvanceAuthority {
+                    account: user(2),
+                    epoch: 1
+                }),
+                Control::Restoration(rc::Action::Void {
+                    request: r,
+                    market: q(0).unit(),
+                    authority_epoch: 1,
+                    authenticated_digest: rc::void_digest(r, q(0).unit(), 1).unwrap(),
+                }),
+            ]
+        )
+        .receipt
+        .controls,
+        None
+    );
+    let result = run(&mut s, vec![], vec![Control::Expose(attempt(22))]);
+    assert_eq!(result.receipt.controls, Some(ControlError::Unqualified));
+    assert!(result.exposures.is_empty());
+}
+
+#[test]
+fn house_close_label_does_not_void_customer_awards_but_private_close_does() {
+    use cinder_kernel::ledger::close::CloseChange;
+    for house in [false, true] {
+        let mut l = bound(1);
+        // Establish real inventory for a bounded house unwind / private close.
+        l = fill(&l, 30, 2, 10100, true);
+        if house {
+            l = l
+                .apply(&event(
+                    31,
+                    Change::Fill {
+                        target: FillTarget::House,
+                        quantity: q(1),
+                        price: p(10000),
+                    },
+                ))
+                .unwrap();
+        }
+        l = l
+            .apply(&Event {
+                key: RecordKey::Attempt(attempt(40)),
+                policy: config().policy,
+                change: Change::Close(CloseChange::Bind {
+                    house,
+                    quantity: q(-1),
+                }),
+            })
+            .unwrap();
+        l = l
+            .apply(&event(
+                41,
+                Change::Close(CloseChange::Execution {
+                    attempt: attempt(40),
+                    quantity: q(-1),
+                    price: p(10000),
+                    fee: cash(0),
+                    pnl: None,
+                    customer_allowed: true,
+                }),
+            ))
+            .unwrap();
+        assert_eq!(l.reductions()[0].rows[0].void, !house);
+        assert!(!l.reductions()[0].rows[1].void);
+        l.check_bridge().unwrap();
+        let full = fill(&l, 42, 8, 10100, true);
+        assert_eq!(
+            full.reductions()[0].rows[0].restored,
+            if house { 6 } else { 1 }
+        );
+        assert_eq!(full.reductions()[0].rows[1].restored, 4);
+    }
 }
 #[test]
 fn durable_funded_replacement_follows_frozen_quota_and_replays() {

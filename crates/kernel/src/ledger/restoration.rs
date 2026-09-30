@@ -309,7 +309,7 @@ impl Ledger {
                     || r.plan.is_none()
                     || *target == 0
                     || *target > r.quantity.lots().unsigned_abs()
-                    || r.rows.iter().any(|r| r.void)
+                    || r.rows.iter().all(|r| r.void)
                 {
                     return Err(LedgerError::Attribution);
                 }

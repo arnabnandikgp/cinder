@@ -677,6 +677,21 @@ impl State {
         let Some(index) = self.orders.iter().position(|o| o.attempt == Some(attempt)) else {
             return Ok(e.clone());
         };
+        if matches!(
+            &e.change,
+            Change::Restoration(
+                cinder_kernel::ledger::restoration::RestorationChange::Receipt { .. }
+            )
+        ) && !self
+            .restorations
+            .iter()
+            .any(|r| r.request == attempt.request)
+        {
+            // Preserve wrong-route evidence for kernel attribution rejection.
+            // Never reinterpret a restoration receipt as an ordinary/close fill.
+            self.fault_order(index);
+            return Ok(e.clone());
+        }
         if let Some((original, classified)) =
             self.order_fills.iter().find(|(old, _)| old.key == e.key)
         {

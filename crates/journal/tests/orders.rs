@@ -129,6 +129,46 @@ fn release(n: u8) -> Control {
 }
 
 #[test]
+fn restoration_receipt_for_ordinary_order_is_retained_and_rejected_without_panic() {
+    for exposed in [false, true] {
+        for price in [100, 111] {
+            let t = Temp::new();
+            let mut s = setup(&t);
+            place(&mut s, 2, 4, exposed);
+            let before = s.state().unwrap().ledger().venue().clone();
+            let e = event(
+                80,
+                Change::Restoration(
+                    cinder_kernel::ledger::restoration::RestorationChange::Receipt {
+                        attempt: attempt(2),
+                        quantity: q(1),
+                        price: p(price),
+                        fee: cash(0),
+                        pnl: None,
+                        executed_at: 10,
+                    },
+                ),
+            );
+            let tx = transaction(s.head(), 80, vec![e], vec![]);
+            let id = tx.id;
+            let retained = tx.inputs.clone();
+            let result = s.commit(tx).unwrap();
+            assert_eq!(
+                result.receipt.inputs,
+                vec![InputResult::Normalized(Disposition::Rejected(
+                    LedgerError::Attribution
+                ))]
+            );
+            assert_eq!(s.transaction(id).unwrap().inputs, retained);
+            assert_eq!(s.state().unwrap().ledger().venue(), &before);
+            assert!(s.state().unwrap().orders()[0].faulted);
+            assert!(s.state().unwrap().holds()[0].active);
+            assert_eq!(t.open().state().unwrap(), s.state().unwrap());
+        }
+    }
+}
+
+#[test]
 fn authorized_intent_precedes_one_shot_exposure_and_replays_exactly() {
     let temp = Temp::new();
     let mut s = setup(&temp);

@@ -117,6 +117,7 @@ fn replay_rejects_corrupt_bytes_versions_and_recomputed_wrong_projection() {
         (0, 13, 8),
         (0, 13, 9),
         (0, 13, 13),
+        (0, 13, 14),
         (0, 10, 6),
         (0, 10, 5),
         (0, 10, 4),
@@ -137,6 +138,7 @@ fn replay_rejects_corrupt_bytes_versions_and_recomputed_wrong_projection() {
         (1, 13, 8),
         (1, 13, 9),
         (1, 13, 13),
+        (1, 13, 14),
         (1, 10, 6),
         (1, 10, 5),
         (1, 10, 4),
@@ -156,7 +158,7 @@ fn replay_rejects_corrupt_bytes_versions_and_recomputed_wrong_projection() {
             .unwrap()
             .as_bytes()
             .to_vec();
-        assert_eq!(&bytes[12..14], &14_u16.to_be_bytes());
+        assert_eq!(&bytes[12..14], &16_u16.to_be_bytes());
         bytes[index] = revision;
         f.opaque = FixtureProtection.seal(context, &bytes).unwrap();
         rehash(f);
