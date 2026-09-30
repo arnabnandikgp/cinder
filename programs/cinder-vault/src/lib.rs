@@ -2,6 +2,9 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 
+mod recovery;
+pub use recovery::*;
+
 // Local development identity only. G03/G05 must approve a fresh deployment identity.
 declare_id!("FMu4FVg4kWABgsPg8Q5Q8Z3wieTtVgtG2gapCSdGT7RX");
 
@@ -236,12 +239,38 @@ pub mod cinder_vault {
         Ok(())
     }
 
-    /// Emergency fence only. No heartbeat, root publication, recovery payout or resume path.
+    /// Emergency fence only. It does not publish or activate any payable root.
     pub fn freeze(ctx: Context<Freeze>, domain: [u8; 32], expected_epoch: u64) -> Result<()> {
         ctx.accounts.config.normal(domain, expected_epoch)?;
         ctx.accounts.config.mode = FROZEN;
         ctx.accounts.config.epoch = add(expected_epoch, 1)?;
         Ok(())
+    }
+
+    /// Publish one final, qualified recovery statement after ordinary paths are fenced.
+    pub fn stage_recovery(ctx: Context<StageRecovery>, statement: RecoveryStatement) -> Result<()> {
+        recovery::stage(ctx, statement)
+    }
+
+    /// A separate recovery operator activates the immutable statement against actual custody.
+    pub fn activate_recovery(
+        ctx: Context<ActivateRecovery>,
+        domain: [u8; 32],
+        epoch: u64,
+        expected_root: [u8; 32],
+    ) -> Result<()> {
+        recovery::activate(ctx, domain, epoch, expected_root)
+    }
+
+    /// Owner-signed full claim; ordinary and recovery payments share lifetime counters.
+    pub fn claim_recovery(
+        ctx: Context<ClaimRecovery>,
+        domain: [u8; 32],
+        epoch: u64,
+        claim: RecoveryClaim,
+        proof: Vec<[u8; 32]>,
+    ) -> Result<()> {
+        recovery::claim(ctx, domain, epoch, claim, proof)
     }
 }
 
@@ -567,4 +596,12 @@ pub enum VaultError {
     Recipient,
     #[msg("Integer overflow")]
     Arithmetic,
+    #[msg("Recovery statement is not qualified, complete or final")]
+    RecoveryQualification,
+    #[msg("Recovery claim does not match the immutable ordered root")]
+    RecoveryProof,
+    #[msg("Recovery custody cannot back all remaining claims")]
+    RecoveryBacking,
+    #[msg("Final recovery claim count and declared total disagree")]
+    RecoveryTotal,
 }

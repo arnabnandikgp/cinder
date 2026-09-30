@@ -15,7 +15,8 @@ Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
 without operator assistance. The planning foundation and pinned workspace are
 merged, including exact financial primitives and canonical event identities.
-P03's joined ledger is merged. The P04–P14 stack adds funding/fee accounting,
+P03's joined ledger and the reviewed P04–P16 stack are merged into `product/tee-v1`.
+P04–P14 add funding/fee accounting,
 evidence containment, atomic replay, AEAD ciphertext replication and writer fencing
 against a trusted witness port, plus bound order intents and terminal-history
 reconciliation, partial funds movements, queued collateral-aware payouts and
@@ -27,6 +28,10 @@ Independent witness/Nitro qualification, live native qualification and deployed
 services remain later phases.
 P15/P16 add the Anchor 1.2 custody vault and a durable vault/broker/venue funding
 coordinator with original-attempt reconciliation and offline signed SBF tests.
+P17 extends the same vault with immutable final recovery statements, separate
+operator activation, owner-signed claims and shared lifetime payout counters.
+Its joined finalization/private delivery workflow remains P21; passing membership
+checks is not evidence of complete liabilities or full solvency.
 
 ## Start here
 

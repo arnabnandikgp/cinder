@@ -381,9 +381,16 @@ authority and shared normal/recovery paid-counter semantics in the justified
 program topology. Ordinary snapshots are not active recovery roots.
 Evidence: W05, W07; V08 plus local SBF adversarial claim tests.
 
-- [ ] Heartbeat alone cannot activate; wrong recipient/epoch/domain/mint, duplicate proof and root reset attacks reject.
-- [ ] Prior ordinary payments and reservations cannot be paid again; failed downstream payout rolls back claim consumption.
-- [ ] Underfunded/uncertain activation fails; late deposits and post-activation impairment retain claims with safe containment.
+- [x] Heartbeat alone cannot activate; wrong recipient/epoch/domain/mint, duplicate proof and root reset attacks reject.
+- [x] Prior ordinary payments and reservations cannot be paid again; failed downstream payout rolls back claim consumption.
+- [x] Underfunded/uncertain activation fails; late deposits and post-activation impairment retain claims with safe containment.
+
+P17 evidence: [ADR 0017](../architecture/0017-recovery-claims.md), pure recovery
+codec tests and actual signed offline SBF tests, including V08. The program rejects
+explicitly unresolved qualification assertions and shares actual lifetime payout
+counters. P21 still owns deriving/independently qualifying those assertions from
+the authoritative ledger and venue history; membership/zero fields are not a
+complete-liability or solvency proof. No live integration/deployment is implied.
 
 <a id="p18"></a>
 ## P18 — Private API and client operation semantics

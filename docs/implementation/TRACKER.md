@@ -6,20 +6,20 @@
 | [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
 | [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
 | [P03 — Unified ledger](PLAN.md#p03) | closed | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), merged `3bd8c12` |
-| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
-| [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
-| [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
-| [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), stacked above #30 |
-| [P08 — Funds and payouts](PLAN.md#p08) | in progress | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | [#32](https://github.com/arnabnandikgp/cinder/pull/32), stacked above #31 |
-| [P09 — Joined risk admission](PLAN.md#p09) | in progress | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | [#33](https://github.com/arnabnandikgp/cinder/pull/33), stacked above #32 |
-| [P10 — Protection claims](PLAN.md#p10) | in progress | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | [#34](https://github.com/arnabnandikgp/cinder/pull/34), stacked above #33 |
-| [P11 — Liquidation and exceptions](PLAN.md#p11) | in progress | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | [#35](https://github.com/arnabnandikgp/cinder/pull/35), stacked above #34 |
-| [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | [#36](https://github.com/arnabnandikgp/cinder/pull/36), stacked above #35 |
-| [P13 — Pacifica observations](PLAN.md#p13) | in progress | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | [#37](https://github.com/arnabnandikgp/cinder/pull/37), stacked above #36 |
-| [P14 — Pacifica execution](PLAN.md#p14) | in progress | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), stacked above #37 |
-| [P15 — Solana vault](PLAN.md#p15) | in progress | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), stacked above #38 |
-| [P16 — Funding coordinator](PLAN.md#p16) | in progress | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), stacked above #39 |
-| [P17 — Recovery program](PLAN.md#p17) | open | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | — |
+| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | closed | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), merged `95fe3b7` |
+| [P05 — Durable journal](PLAN.md#p05) | closed | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), merged `95fe3b7` |
+| [P06 — Encrypted durability](PLAN.md#p06) | closed | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), merged `95fe3b7` |
+| [P07 — Order intents and reservations](PLAN.md#p07) | closed | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), merged `95fe3b7` |
+| [P08 — Funds and payouts](PLAN.md#p08) | closed | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | [#32](https://github.com/arnabnandikgp/cinder/pull/32), merged `95fe3b7` |
+| [P09 — Joined risk admission](PLAN.md#p09) | closed | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | [#33](https://github.com/arnabnandikgp/cinder/pull/33), merged `95fe3b7` |
+| [P10 — Protection claims](PLAN.md#p10) | closed | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | [#34](https://github.com/arnabnandikgp/cinder/pull/34), merged `95fe3b7` |
+| [P11 — Liquidation and exceptions](PLAN.md#p11) | closed | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | [#35](https://github.com/arnabnandikgp/cinder/pull/35), merged `95fe3b7` |
+| [P12 — ADL and restoration](PLAN.md#p12) | closed | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | [#36](https://github.com/arnabnandikgp/cinder/pull/36), merged `95fe3b7` |
+| [P13 — Pacifica observations](PLAN.md#p13) | closed | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | [#37](https://github.com/arnabnandikgp/cinder/pull/37), merged `95fe3b7` |
+| [P14 — Pacifica execution](PLAN.md#p14) | closed | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), merged `95fe3b7` |
+| [P15 — Solana vault](PLAN.md#p15) | closed | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), merged `95fe3b7` |
+| [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
+| [P17 — Recovery program](PLAN.md#p17) | in progress | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | `tee/p17-recovery-claims`, from merged trunk |
 | [P18 — Private API and SDK](PLAN.md#p18) | open | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | — |
 | [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
 | [P20 — Nitro qualification](PLAN.md#p20) | open | Actual enclave, key-release, egress and storage/fencing behavior is qualified; mocks cannot stand in for hardware evidence. | — |
@@ -28,45 +28,42 @@
 | [P23 — Live integration qualification](PLAN.md#p23) | open | Approved bounded live runs verify the actual implementation and fully reconcile test positions, orders and funds. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-09-30. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-01. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p16-funding-coordinator`, ready PR #40 above P15 #39. The user's
-latest request authorizes stack-wide review fixes including P15/P16, not a merge,
-deployment, external transaction or P17. Preserve unrelated `stays/` and ignored
-`work/`. Four relevant findings are fixed on their owning branches and locally
-restacked: P05's acceptance contract/P13 exact-input resolution, P08 cancellation,
-P13 rejected-page diagnostics, and P16 emergency exits. Focused regression checks
-pass. Clean tracked export `1c3bd09` at `/private/tmp/cinder-review-fixes.AoqmUu`
-passes the complete pinned runner: 275 Rust tests and two compile-fail doctests
-per debug/release profile, 24 repository tests, formatting, both strict Clippy
-configurations and all-target build. All 30 client/offline Surfpool/SBF tests,
-TypeScript checks and generated-IDL equality pass as well. Build/package caches
-were reused explicitly; `work/`, `stays/` and Git metadata were excluded.
-The fixes are published across the native stack (13 branches, P04 unchanged).
-Inline threads #4147277655/#4148900279 are resolved with verified-fix replies;
-P08/P13 summary dispositions are recorded on their PRs. Hosted checks restarted
-and were still running at the post-push snapshot; they are not claimed green.
-Only documentation evidence follows the tested source. Production
-source qualification, identity and key governance remain G01/G03/G05 gates.
-Prior stack-wide CodeRabbit triage confirmed eight
-unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
-branches (with P13's cumulative byte-budget fix in P05) and locally restacked.
-Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14/P15=19, P16=20; older revisions
-fail closed. Final clean-export verification of code head `dc0ee4b` at
-`/private/tmp/cinder-stack-review.3fhk3G` passed the complete pinned offline runner:
-245 Rust tests per debug/release profile, two compile-fail doctests per profile,
-24 repository tests, formatting, both strict Clippy configurations and all-target
-build. The export excluded `work/`, `stays/` and Git metadata. Final changes after
-that run only record this evidence. PR threads carry the remote fix disposition;
-do not confuse successful local tests with a newly completed hosted review.
-Private authentication, native completeness, hardware attestation and deployment
-remain their own gates; this is an offline-qualified implementation stack.
+Worktree: `cinder-tee`. Trunk: `product/tee-v1` at `95fe3b7395ac62d8c91554e27fa9a3032d3d26b9`.
+Current branch: `tee/p17-recovery-claims`, a new shallow native stack based on
+that merged trunk. The user authorized merging the reviewed stack and continuing
+implementation. P04–P16 merged atomically through `gh stack merge --yes --merge`
+on 2026-10-01; all 13 PR receipts report that exact commit. Local trunk was
+fast-forwarded and its tree was checked identical to tested P16 head
+`ce91dd1c319c4c831de03190b0d546b10b663a8f` (also an ancestor of the merge).
+Protocol CI passed at the reviewed heads; no unresolved review threads remained.
+The existing P04 Vercel preview failure was disclosed and is not protocol CI.
+No branch protections/deployment settings were changed; legacy main is untouched.
+
+P17 extends the existing custody program with immutable final claims, explicit
+publisher/operator authority, funded activation and shared payout counters.
+Offline fixtures only: no live venue/RPC, devnet deployment/funding, AWS or customer
+funds are authorized by this continuation. Preserve unrelated `stays/` and ignored
+`work/`. Source qualification, release governance and deployment remain G01/G03/G05.
+The prior final source verification passed 275 Rust tests plus two compile-fail
+doctests per debug/release profile, 24 repository tests, strict Clippy/format/build
+and 30 offline client/SBF tests with generated-IDL equality. This is evidence for
+the merged stack, not a green result for future P17 changes.
+
+P17 implementation now passes both pinned offline runners in this working tree:
+the same 275 Rust tests/two compile-fail doctests per profile, 24 repository tests,
+and **51/51** client/SBF checks including 17 new recovery transaction groups and
+four pure codec groups. Strict Rust/TypeScript checks, generated-IDL equality and
+SBF stack diagnostics pass. Preparing the PR; no hosted CI/review result is claimed.
+Next: publish/review P17, then begin P18 private grants/API/SDK on the shallow stack.
+Actual ledger-to-claim finalization/independent delivery remains P21; source/hardware
+and live release gates remain explicit. No new economic policy was adopted.
 
 ### CodeRabbit coverage snapshot (2026-09-30)
 
@@ -109,6 +106,7 @@ for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
+Historical pre-merge handoff (superseded by the current handoff above):
 P03 is merged with user authorization. P04 is open as PR #27 on the TEE trunk;
 P05 is open as PR #29 above #27 in GitHub stack #28, with its handoff below.
 P04's full local checks passed again with the reviewed arithmetic fix. Review
@@ -355,7 +353,7 @@ duplicates/rejections, times and dispositions) and outer raw evidence atomically
 with postings/consumption. Do not replay only the accepted event list, bypass the
 ingestion gate, or treat this in-memory evidence as crash durability.
 PR: https://github.com/arnabnandikgp/cinder/pull/27
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P05 — Durable journal
 
@@ -416,7 +414,7 @@ the stack shallow before starting another layer. P06 must close the valid-histor
 with AEAD, independent authenticated freshness and writer fencing; do not expose
 private data or real native actions using the test-only protector.
 PR: https://github.com/arnabnandikgp/cinder/pull/29
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P06 — Encrypted durability
 
@@ -454,7 +452,7 @@ and build. No new live or container tests. CodeRabbit comments 4139804671 and
 Next: proceed to P07 under the user's continuous P06–P14 authorization, checking
 P06 CI/reviews at phase boundaries. Do not start P15 or merge PRs.
 PR: https://github.com/arnabnandikgp/cinder/pull/30
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P07 — Order intents and reservations
 
@@ -481,7 +479,7 @@ P06 review fixes were made and tested in the owning layer, then P07 was restacke
 Next: P07 is ready as #31. Continue P08 under the user's P06–P14 authorization;
 inspect hosted checks/reviews at phase boundaries. Do not merge or start P15.
 PR: https://github.com/arnabnandikgp/cinder/pull/31
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P08 — Funds and payouts
 
@@ -519,7 +517,7 @@ P09 supplies their bounded outcomes. Wire 3 / engine 4 reject old semantics.
 Next: P08 is ready as #32. Continue P09; inspect hosted checks/reviews at phase
 boundaries. No new live tests, merge or P15 authority is implied.
 PR: https://github.com/arnabnandikgp/cinder/pull/32
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P09 — Joined risk admission
 
@@ -556,7 +554,7 @@ for wire 4 / engine 5. No actual live policy or independent solvency proof claim
 Next: P09 is ready as #33. Continue P10 protection claims; inspect hosted checks
 and reviews at phase boundaries. Do not merge or enter P15.
 PR: https://github.com/arnabnandikgp/cinder/pull/33
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P10 — Protection claims
 
@@ -591,7 +589,7 @@ Next: P10 is ready as #34. Implement P11 bounded liquidation and
 late-close house exceptions. Native house capital payout remains disabled pending
 qualified custody integration; a designation release is not an external payout.
 PR: https://github.com/arnabnandikgp/cinder/pull/34
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P11 — Liquidation and exceptions
 
@@ -626,8 +624,8 @@ explicitly rejects pre-correction history rather than reinterpreting it.
 
 Next: P11 is ready as #35; continue P12
 RF1/RF2 and bounded-resource quota scheduling. Do not merge or enter P15.
-PR: [#35](https://github.com/arnabnandikgp/cinder/pull/35).
-Merge: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/35.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P12 — ADL and restoration
 
@@ -658,8 +656,8 @@ Source time, immutable cap/depth revisions and cumulative positive-cost limits
 are explicit. No live ADL source or margin-isolated subaccount claim was added.
 Next: implement P13 sanitized Pacifica observations using current primary docs.
 Do not enter P15. P12 is ready for review, not merged or live-qualified.
-PR: [#36](https://github.com/arnabnandikgp/cinder/pull/36), above #35.
-Merge: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/36.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P13 — Pacifica observations
 
@@ -702,8 +700,8 @@ golden assertion also needed the explicit version bump. P12's two hosted checks
 and CodeRabbit are green; no inline findings were present at this phase boundary.
 Next: P13 is ready for review; continue P14 bounded signing
 and shared API-credit admission. Stop before P15; preserve all open G01/G02 gates.
-PR: [#37](https://github.com/arnabnandikgp/cinder/pull/37), above #36.
-Merge: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/37.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P14 — Pacifica execution
 
@@ -743,8 +741,8 @@ Next: STOP BEFORE P15. Review the open stack bottom-up; await user authorization
 before merging or starting the Solana vault. Hosted checks for the final restack
 must be inspected separately; local success is not a claim that hosted CI is green.
 No merges, live calls, Solana vault work or new permissions in this run.
-PR: [#38](https://github.com/arnabnandikgp/cinder/pull/38), above #37.
-Merge: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/38.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P15 — Solana vault
 
@@ -784,7 +782,7 @@ P16 joins finalized custody receipts/native funding to
 the existing authoritative journal; P17 adds funded final claims sharing these
 paid counters, not an independent payout program.
 PR: https://github.com/arnabnandikgp/cinder/pull/39.
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P16 — Funding coordinator
 
@@ -841,14 +839,50 @@ Next: review ready PR #40 above #39 and its hosted checks/review. P17 adds final
 recovery claims/activation with preserved paid counters; stop before it until
 requested and do not merge the stack automatically.
 PR: https://github.com/arnabnandikgp/cinder/pull/40.
-Merge: none.
+Merge: 95fe3b7395ac62d8c91554e27fa9a3032d3d26b9.
 
 ## P17 — Recovery program
 
-Work: not started.
-Verification: not run; acceptance in PLAN P17.
-Unexpected: none yet.
-Next: implement final domain-bound claims and shared counters; port M2 wrong-domain/replay/atomic-failure tests.
+Work: 2026-10-01 — implemented immutable final recovery statements and owner-signed
+full claims in the same custody program. Governance publishes after freeze; a
+separate recovery operator activates exactly that funded root. Canonical permanent
+epoch/owner receipts prevent root resets and duplicate-owner payouts. Salted
+program/domain/pool/asset/cutoff/counter-bound ordered membership, zero unresolved
+qualification assertions, checked shared lifetime counters, all-remaining backing
+containment, actual CPI rollback and terminal count/total consistency are enforced.
+Added pure exact-unit packaging, generated IDL/errors/types and ADR 0017. Existing
+config/customer layouts and authoritative financial journal semantics are unchanged.
+Recorded actual P04–P16 atomic merge receipts and closed those reviewed phases.
+
+Verification: pinned macOS offline workspace runner passes 275 Rust tests plus two
+compile-fail doctests in each debug/release profile, 24 repository tests, formatting,
+both strict Clippy configurations and all-target build. Pinned vault runner passes
+**51/51** client/SBF checks, locked SBF/IDL and TypeScript checks. V08 executes real
+ordinary payout 20, an explicitly synthetic external settled loss 35, and recovery
+claims 45/200 with lifetime payments 65/200. Maximum 65,536-leaf membership executes
+with 16 siblings: **1,124 bytes** without the optional compute instruction and
+**34,433 CU** for the actual signed test transaction. Tests cover malformed paths,
+wrong identities/roles/counters, unresolved reservations, frozen custody/destination,
+impairment/repair, late arrivals, root/receipt replay, odd trees, over/understated
+totals, malicious duplicate owners and integer overflow. No ignored research,
+configured wallet, external RPC/venue call, container, deployment or agent is used.
+This verification ran in the working tree; it is not mislabeled a fresh clean-export
+run, independent audit or complete solvency proof. `git diff --check` passes.
+
+Unexpected: first vault run passed 49/50; the alternate-recipient test tried to
+create an already-existing ATA. Fixed the test to create a distinct token account,
+then added funded-but-frozen activation containment; final full rerun passes 51/51.
+The initial documentation validator rejected older Markdown/trailing-text PR receipt
+formats once phases became closed; normalized four URLs, then the complete runner
+passed. Added only the exact 3.1.0 Solana SHA-256 hasher already present transitively;
+no transitive version or kernel dependency changed. Source qualification and private
+claim delivery remain P21, not invented on-chain facts. One-time full recovery and
+no new fee follow the bounded research contract; production terms stay G02-gated.
+
+Next: publish the ready P17 PR against merged `product/tee-v1`; review its hosted
+checks/findings before any merge. P18 adds private owner/agent API/SDK grants and
+operation semantics above P17, with confidential transport ports pending P19.
+Do not deploy, call live venues or activate a real recovery estate from this handoff.
 PR: none.
 Merge: none.
 

@@ -1,6 +1,6 @@
 # Cinder architecture
 
-Architecture baseline: 2026-09-30. This document describes the intended product
+Architecture baseline: 2026-10-01. This document describes the intended product
 and maps it to the implementation sequence; it is not a deployment claim.
 [BASELINE](implementation/BASELINE.md) controls approved economic/security policy;
 [PLAN](implementation/PLAN.md) controls phase scope; [TRACKER](implementation/TRACKER.md)
@@ -24,9 +24,9 @@ implementation is a separate workstream, not the template for this architecture.
 | Component | In this PR / implementation status | Owning phase |
 | --- | --- | --- |
 | Build, typed amounts, IDs, canonical primitive encoding | Implemented and previously merged | P01–P02 |
-| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Implemented in base PR; pure in-memory proposals | P03 |
-| Funding, fees, source discrepancies | Implemented in base stack; qualified normalized inputs, no live adapter | P04 |
-| Local atomic journal and replay | Implemented in base stack; opaque storage and mandatory protection interface | P05 |
+| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Merged; pure in-memory proposals | P03 |
+| Funding, fees, source discrepancies | Merged; qualified normalized inputs, no live adapter | P04 |
+| Local atomic journal and replay | Merged; opaque storage and mandatory protection interface | P05 |
 | Encrypted replicas, current-head witness and writer fencing | Implemented against a trusted witness port; no independently deployed witness or Nitro qualification | P06 |
 | Bound order intents, partial/terminal lifecycle and shared holds | Implemented against trusted authentication/source ports; no live execution | P07 |
 | Partial funds and FIFO payouts | Implemented with marked collateral and qualified receipt ports; no native sends | P08 |
@@ -38,7 +38,7 @@ implementation is a separate workstream, not the template for this architecture.
 | Pacifica signing adapter | Durable native preimages, scoped Ed25519 signer, shared credit reservation and fake transport implemented; no live-qualified deployment | P14 |
 | Solana custody vault and normal authorization | Anchor 1.2 program, public receipts/shared paid counters and offline signed SBF tests implemented; deployment gated | P15 |
 | Funding round trip | Durable three-location coordinator, original-wire/attempt reconciliation and shared credit budget tested offline; source/live qualification gated | P16 |
-| Recovery claims | Planned; bounded prototypes remain evidence only | P17 |
+| Recovery claims | Implemented for offline review in the same vault; immutable statements, funded activation, owner claims/shared counters; actual joined preparation/delivery remains P21 | P17 |
 | Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
@@ -511,7 +511,8 @@ membership path, domain/epoch/asset/recipient, amount and counter/cutoff data, n
 other customers' private statements. The approved recovery runtime prepares it,
 encrypts it to the customer's wallet-authorized encryption key, and makes it
 retrievable without the ordinary API. A root cannot reconstruct missing packages.
-P17/P21 qualify exact encoding, construction, delivery and lost-key procedures.
+P17 defines [exact encoding and the immutable payout contract](architecture/0017-recovery-claims.md).
+P21 integrates authoritative finalization, private delivery and lost-key procedures.
 
 Normal and recovery payout paths share claim capacity and paid-counter semantics.
 Prior settled payouts are subtracted once; exposed unknown payouts remain held.
