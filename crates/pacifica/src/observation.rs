@@ -218,6 +218,25 @@ impl View {
         message: &Message,
         state: &State,
     ) -> Result<Vec<Event>, Error> {
+        let mut candidate = self.clone();
+        match candidate.inspect_page(profile, message, state) {
+            Ok(events) => {
+                *self = candidate;
+                Ok(events)
+            }
+            Err(error) => {
+                self.gaps.extend(candidate.gaps);
+                self.gaps.insert(Gap::Unnormalized);
+                Err(error)
+            }
+        }
+    }
+    fn inspect_page(
+        &mut self,
+        profile: &Profile,
+        message: &Message,
+        state: &State,
+    ) -> Result<Vec<Event>, Error> {
         if message.account != profile.account {
             return Err(Error::Qualification);
         }

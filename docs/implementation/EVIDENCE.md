@@ -246,6 +246,13 @@ the protected journal transaction; independent diagnostic views replay that hist
 See [ADR 0013](../architecture/0013-pacifica-observations.md). Current primary docs
 were checked; historical observations were not rerun or upgraded into live evidence.
 
+2026-10-01 review correction: malformed multi-row/pagination pages were reproduced
+as partially mutating replayed diagnostics; transactional inspection now retains
+only prior accepted progress plus named gaps. The exact-input raw-resolution port
+is offline-tested with seven synthetic groups and immutable evidence bindings.
+It does not supply a live authenticated complete-history/no-effect provider;
+that capability remains disabled pending G01/P23 qualification. See ADR 0013.
+
 ## Requirement-to-phase traceability
 
 | Contract | Owning implementation | Mandatory evidence |

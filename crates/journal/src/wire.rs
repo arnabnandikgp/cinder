@@ -863,6 +863,24 @@ pub(crate) fn read_reservations(r: &mut Reader<'_>) -> Result<Vec<Reservation>, 
     Ok(values)
 }
 
+/// Full input fingerprint, including exact body, source, time, epoch, cut and proposal.
+/// This identifies evidence; it proves neither source authenticity nor no effect.
+pub fn input_fingerprint(input: &Input) -> Result<[u8; 32], Error> {
+    use sha2::{Digest, Sha256};
+    let mut w = Writer::new(79);
+    scope(&mut w, input.source);
+    w.option(&input.source_cut, |w, cut| w.u64(*cut));
+    w.u64(input.authority_epoch);
+    w.u64(input.observed_at);
+    w.blob(input.raw.as_bytes());
+    w.option(&input.event, |w, event| match encode_event(event) {
+        Ok(bytes) => w.blob(&bytes),
+        Err(_) => w.invalid(),
+    });
+    let bytes = PrivateBytes::new(w.finish()?)?;
+    Ok(Sha256::digest(bytes.as_bytes()).into())
+}
+
 /// Complete immutable transaction bytes, including exact raw evidence/action material.
 /// Returned bytes are private and must pass through Protection before external storage.
 pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
@@ -909,6 +927,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::ResolveRaw(resolution) => {
+                w.byte(11);
+                crate::raw::encode_resolution(&mut w, resolution);
+            }
             Control::Restoration(a) => {
                 w.byte(10);
                 crate::restoration::encode_action(&mut w, a);
@@ -1033,6 +1055,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             8 => Control::Protection(crate::protection::decode_action(&mut r)?),
             9 => Control::Liquidation(crate::liquidation::decode_action(&mut r)?),
             10 => Control::Restoration(crate::restoration::decode_action(&mut r)?),
+            11 => Control::ResolveRaw(crate::raw::decode_resolution(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -1137,6 +1160,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     let mut w = Writer::new(5);
     w.u64(s.now);
     w.u64(s.raw_unresolved);
+    crate::raw::encode_entries(&mut w, &s.raw_inputs);
     w.option(&s.collateral, crate::collateral::encode);
     w.option(&s.risk, crate::risk::encode_policy);
     w.option(&s.protection_policy, crate::protection::encode_policy);

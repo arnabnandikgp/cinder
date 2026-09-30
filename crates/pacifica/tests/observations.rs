@@ -112,6 +112,59 @@ fn setup(t: &Temp) -> Store {
 }
 
 #[test]
+fn rejected_pages_preserve_prior_views_cursors_and_scan_identity_on_replay() {
+    let order = |id, filled: &str| {
+        json!({"order_id":id,"symbol":"BTC","side":"bid",
+        "amount":"10","filled_amount":filled,"order_status":"open","updated_at":90})
+    };
+    for kind in [Kind::Orders, Kind::Trades] {
+        let t = Temp::new();
+        let mut s = setup(&t);
+        put(&mut s, 3, msg(Kind::Orders, rest(json!([order(10, "2")]))));
+        let before = replay(&mut s, &profile()).unwrap();
+        let data = if kind == Kind::Orders {
+            json!([order(20, "2"), order(21, "11")])
+        } else {
+            json!(
+                (100..133)
+                    .map(|id| row(id, "open_long"))
+                    .collect::<Vec<_>>()
+            )
+        };
+        let rejected = msg(
+            kind,
+            json!({"success":true,"data":data,
+            "has_more":true,"next_cursor":"same-next-cursor"}),
+        );
+        assert_eq!(
+            put(&mut s, 4, rejected).receipt.inputs,
+            [InputResult::Unnormalized]
+        );
+        let after = replay(&mut s, &profile()).unwrap();
+        assert_eq!(after.orders, before.orders);
+        assert_eq!(after.cursors, before.cursors);
+        assert!(after.gaps.contains(&Gap::Unnormalized));
+        drop(s);
+        let mut reopened = t.open();
+        let rebuilt = replay(&mut reopened, &profile()).unwrap();
+        assert_eq!(rebuilt.orders, before.orders);
+        assert_eq!(rebuilt.cursors, before.cursors);
+        put(
+            &mut reopened,
+            5,
+            msg(
+                kind,
+                json!({"success":true,"data":[],
+            "has_more":true,"next_cursor":"same-next-cursor"}),
+            ),
+        );
+        let accepted = replay(&mut reopened, &profile()).unwrap();
+        assert_eq!(accepted.cursors[&kind], Some("same-next-cursor".into()));
+        assert!(!accepted.gaps.contains(&Gap::Pagination));
+    }
+}
+
+#[test]
 fn full_page_and_gap_inputs_reference_one_exact_archive_and_replay() {
     use sha2::{Digest, Sha256};
     let t = Temp::new();

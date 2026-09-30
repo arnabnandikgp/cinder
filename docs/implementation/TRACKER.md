@@ -607,6 +607,19 @@ Merge: none.
 
 ## P13 — Pacifica observations
 
+Review follow-up (2026-10-01): addressed the remaining summary finding in #37:
+rejected pages now preserve accepted view/cursor/scan state on ingestion and replay,
+while retaining conservative gaps. Reproduced the failure before the change.
+Completed #29's P13 dependency with exact-input qualified resolution, not a reset:
+original commit/ordinal/fingerprint, source/epoch/cut/time, retained evidence and
+same-transaction effects bind one permanent result. Actual facts survive refused
+controls; retries never repost cash or clear unrelated faults. Seven journal
+resolution groups and all 14 observation groups pass locally, including restart,
+conflicts, duplicate-effect/hold isolation, restored exposure gating and work bounds.
+The new semantics/state commitment fence old histories with engine 19 (wire 8).
+Full assembled-stack checks are pending. Live authentication/completeness remain
+G01/P23 obligations; synthetic evidence hashes do not prove them.
+
 Review follow-up (2026-09-30): CodeRabbit #4141545400 addressed in two owning
 layers. P05 enforces the replay byte limit before append/exposure; P13 stores one
 exact response archive with compact hash/ordinal references in normalized and gap

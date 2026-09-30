@@ -154,6 +154,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Trusted source qualification for one exact retained input; not an admin reset.
+    ResolveRaw(crate::raw::Resolution),
     /// Fixed ADL declaration and funded RF1/RF2 replacement lifecycle.
     Restoration(crate::restoration::Action),
     /// Funded bounded liquidation and exceptional house cleanup.
@@ -287,6 +289,7 @@ pub struct State {
     pub(crate) funds_receipts: Vec<(EventKey, Option<u64>)>,
     pub(crate) frozen: bool,
     pub(crate) raw_unresolved: u64,
+    pub(crate) raw_inputs: Vec<crate::raw::Entry>,
     pub(crate) now: u64,
 }
 impl fmt::Debug for State {
@@ -326,6 +329,7 @@ impl State {
             funds_receipts: Vec::new(),
             frozen: false,
             raw_unresolved: 0,
+            raw_inputs: Vec::new(),
             now: 0,
         })
     }
@@ -415,6 +419,7 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::ResolveRaw(resolution) => self.resolve_raw(resolution)?,
             Control::Restoration(action) => self.restoration_action(action)?,
             Control::Liquidation(action) => self.liquidation_action(action)?,
             Control::Protection(action) => self.protection_action(action)?,
@@ -556,6 +561,26 @@ impl State {
         }
     }
     pub(crate) fn advance(&self, tx: &Transaction) -> Result<(Self, Receipt), Error> {
+        let resolution_work = tx.controls.iter().fold(0_usize, |work, control| {
+            if let Control::ResolveRaw(r) = control {
+                work.saturating_add(self.raw_inputs.len().saturating_add(tx.inputs.len()))
+                    .saturating_add(
+                        r.effects.len().saturating_mul(
+                            self.ledger
+                                .observations()
+                                .len()
+                                .saturating_add(tx.inputs.len())
+                                .saturating_add(r.effects.len())
+                                .saturating_add(1),
+                        ),
+                    )
+            } else {
+                work
+            }
+        });
+        if resolution_work > 1_000_000 {
+            return Err(Error::Limit);
+        }
         let observations = self
             .ledger
             .observations()
@@ -584,7 +609,7 @@ impl State {
         let mut s = self.clone();
         s.now = tx.at;
         let mut inputs = Vec::new();
-        for input in &tx.inputs {
+        for (ordinal, input) in tx.inputs.iter().enumerate() {
             let valid = input.authority_epoch != 0
                 && !input.event.as_ref().is_some_and(|e| matches!(&e.change,Change::Restoration(c) if !matches!(c,
                     cinder_kernel::ledger::restoration::RestorationChange::Observe{..}|cinder_kernel::ledger::restoration::RestorationChange::Receipt{..})))
@@ -624,6 +649,14 @@ impl State {
                 InputResult::Unnormalized | InputResult::EnvelopeRejected
             ) {
                 s.raw_unresolved = s.raw_unresolved.checked_add(1).ok_or(Error::Limit)?;
+                s.retain_raw(
+                    crate::raw::InputKey {
+                        transaction: tx.id,
+                        ordinal: u64::try_from(ordinal).map_err(|_| Error::Limit)?,
+                    },
+                    input,
+                    valid,
+                )?;
             }
             inputs.push(result);
         }
@@ -638,18 +671,73 @@ impl State {
         s.sync_funds()?;
         let mut candidate = s.clone();
         let mut controls = None;
+        // Hash bounded attachments once, not once per proposed resolution.
+        let evidence_hashes: Vec<[u8; 32]> = if tx
+            .controls
+            .iter()
+            .any(|c| matches!(c, Control::ResolveRaw(_)))
+        {
+            use sha2::{Digest, Sha256};
+            tx.evidence
+                .iter()
+                .map(|bytes| Sha256::digest(bytes.as_bytes()).into())
+                .collect()
+        } else {
+            vec![]
+        };
+        let resolution_only = !tx.controls.is_empty()
+            && tx
+                .controls
+                .iter()
+                .all(|c| matches!(c, Control::ResolveRaw(_)));
         // A duplicate/conflicting fact cannot be reused to release new commitments.
         if !tx.controls.is_empty()
             && (funds_observations.iter().any(|ok| !ok)
                 || order_observations.iter().any(|ok| !ok)
-                || inputs
-                    .iter()
-                    .any(|i| !matches!(i, InputResult::Normalized(Disposition::Applied))))
+                || inputs.iter().any(|i| {
+                    !matches!(i, InputResult::Normalized(Disposition::Applied))
+                        && !(resolution_only
+                            && matches!(i, InputResult::Normalized(Disposition::Duplicate)))
+                }))
         {
             controls = Some(ControlError::Unqualified);
         }
         if controls.is_none() {
             for c in &tx.controls {
+                if let Control::ResolveRaw(resolution) = c {
+                    if !evidence_hashes.contains(&resolution.evidence) {
+                        controls = Some(ControlError::Unqualified);
+                        break;
+                    }
+                    let first_resolution = candidate
+                        .raw_inputs
+                        .iter()
+                        .any(|entry| entry.key == resolution.key && entry.resolved.is_none());
+                    if first_resolution
+                        && resolution.effects.iter().any(|effect| {
+                            !tx.inputs.iter().zip(&inputs).any(|(input, result)| {
+                                input.source == resolution.source
+                                    && input.authority_epoch == resolution.authority_epoch
+                                    && input.observed_at <= resolution.observed_at
+                                    && input
+                                        .source_cut
+                                        .is_some_and(|cut| cut <= resolution.through)
+                                    && input.event.as_ref().is_some_and(|event| {
+                                        event.key == RecordKey::Economic(effect.clone())
+                                    })
+                                    && matches!(
+                                        result,
+                                        InputResult::Normalized(
+                                            Disposition::Applied | Disposition::Duplicate
+                                        )
+                                    )
+                            })
+                        })
+                    {
+                        controls = Some(ControlError::Unqualified);
+                        break;
+                    }
+                }
                 if let Err(e) = candidate.control(c) {
                     controls = Some(e);
                     break;
