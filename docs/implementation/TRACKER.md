@@ -412,13 +412,17 @@ Verification: before restacking, full offline runner passed: 109 Rust tests in
 debug/release, two compile-fail doctests, 23 repository tests, fmt, strict Clippy
 and build. The 13-test order suite includes all 24 additive delivery/terminal
 permutations with real SQLite reloads. First full run correctly caught an obsolete
-wire-v1 golden header, updated explicitly for wire v2. Final restacked clean-export
-evidence follows below. No live venue calls or signatures.
+wire-v1 golden header, updated explicitly for wire v2. Final restacked clean export
+of commit `7f47ea3` passed the same full runner: 112 Rust tests in debug/release,
+two compile-fail doctests and 23 repository tests, including the three added P06
+regressions. Export `/private/tmp/cinder-p07-export.OA9rLI` contained no `work/`,
+`stays/` or Git metadata. Only verification/publication notes follow that source.
+No live venue calls or signatures.
 Unexpected: internal binding time exposed an old-receive-time rejection: financial
 projection now uses monotone commit time while retaining the original input time.
 Journal wire is explicitly revision 2 / engine 3; updated old-revision fixtures.
 P06 review fixes were made and tested in the owning layer, then P07 was restacked.
-Next: publish P07 after final restacked clean-export verification, then continue P08.
+Next: publish P07, then continue P08 under the user's P06–P14 authorization.
 PR: none.
 Merge: none.
 
