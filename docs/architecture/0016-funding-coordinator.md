@@ -23,7 +23,7 @@ dimension. Policies for configured broker routes must include all three location
 a policy that omits the third location is invalid. Inaccessibility affects deadline
 liquidity independently of aggregate economic backing.
 
-The journal revision is 18. Older semantic histories fail closed; there is no
+The journal engine revision is 20. Older semantic histories fail closed; there is no
 implicit migration that reinterprets historical transfers. Funding records are
 encrypted evidence/projections in the common journal, never independent assets.
 
@@ -131,7 +131,11 @@ cause a duplicate allocation in that gap. This forecast is not available venue
 cash, liquidity, margin or permission to trade. P09 still owns joined risk and
 P08 still owns entitlement/capacity reservation. The journal's credit-readiness
 fence blocks order admission/exposure while native credit is incomplete; it does
-not erase real adverse observations or prevent funds reconciliation.
+not erase real adverse observations or prevent funds reconciliation. Qualified
+emergency liquidation/house cleanup and attributed cancellation remain available
+without credit-readiness, but retain their existing freeze, authority, evidence,
+close bounds and funded-resource checks. Ordinary orders, generic exposure and
+restoration replacements remain fenced; restoration is not an emergency exemption.
 
 Native internal-transfer fees follow P08's **house-owned cost** policy. A fee
 overrun records the actual cost and retained fault, not the maximum expected fee.

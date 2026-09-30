@@ -594,7 +594,13 @@ impl State {
         if attempt.kind == AttemptKind::Cancel {
             return Ok(());
         }
-        if attempt.kind != AttemptKind::Funds && !self.native_funding_ready {
+        // Incomplete funding fences new/replacement risk, not qualified emergency
+        // exits. Emergency authority, freeze, evidence and funded-close gates remain.
+        if matches!(
+            attempt.kind,
+            AttemptKind::Order | AttemptKind::Generic | AttemptKind::Restoration
+        ) && !self.native_funding_ready
+        {
             return Err(ControlError::Unqualified);
         }
         if self.frozen

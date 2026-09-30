@@ -500,6 +500,51 @@ fn final_policy_and_authority_cut_cannot_be_changed_after_exposure_in_same_commi
 }
 
 #[test]
+fn incomplete_native_funding_does_not_block_qualified_emergency_liquidation() {
+    for fence_first in [false, true] {
+        let t = Temp::new();
+        let mut s = live(&t, 5, 81);
+        let c = proposal(&s, 20, lc::Kind::Liquidation);
+        assert_eq!(run(&mut s, vec![], vec![c]).receipt.controls, None);
+        let fence = Control::Funds(cinder_journal::funds::Action::NativeCreditReady(false));
+        let mut controls = vec![Control::Expose(attempt(20)), fence];
+        if fence_first {
+            controls.reverse();
+        }
+        let result = run(&mut s, vec![], controls);
+        assert_eq!(result.receipt.controls, None);
+        assert_eq!(result.exposures.len(), 1);
+        assert!(!s.state().unwrap().native_funding_ready());
+        let state = s.state().unwrap().clone();
+        drop(s);
+        assert_eq!(t.open().state().unwrap(), &state);
+    }
+}
+
+#[test]
+fn incomplete_native_funding_still_blocks_generic_exposure() {
+    let t = Temp::new();
+    let mut s = t.create();
+    seed(&mut s);
+    hold(&mut s);
+    assert_eq!(
+        run(
+            &mut s,
+            vec![],
+            vec![Control::Funds(
+                cinder_journal::funds::Action::NativeCreditReady(false)
+            )]
+        )
+        .receipt
+        .controls,
+        None
+    );
+    let result = run(&mut s, vec![], vec![Control::Expose(attempt(2))]);
+    assert_eq!(result.receipt.controls, Some(ControlError::Unqualified));
+    assert!(result.exposures.is_empty());
+}
+
+#[test]
 fn freeze_at_either_control_cut_blocks_generic_and_emergency_exposure() {
     for emergency in [false, true] {
         for freeze_first in [false, true] {
@@ -517,6 +562,21 @@ fn freeze_at_either_control_cut_blocks_generic_and_emergency_exposure() {
                 vec![reserve(20, 1), prepare(20)]
             };
             assert_eq!(run(&mut s, vec![], controls).receipt.controls, None);
+            // Exemption from the credit-readiness fence is not a freeze bypass.
+            if emergency {
+                assert_eq!(
+                    run(
+                        &mut s,
+                        vec![],
+                        vec![Control::Funds(
+                            cinder_journal::funds::Action::NativeCreditReady(false)
+                        )]
+                    )
+                    .receipt
+                    .controls,
+                    None
+                );
+            }
             let mut controls = vec![
                 Control::Expose(attempt(20)),
                 Control::Funds(cinder_journal::funds::Action::Freeze),

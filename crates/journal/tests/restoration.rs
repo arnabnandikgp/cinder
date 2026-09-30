@@ -101,6 +101,36 @@ fn fill(l: &Ledger, n: u64, count: i64, price: u64, eligible: bool) -> Ledger {
     )
 }
 #[test]
+fn incomplete_native_funding_still_blocks_restoration_replacement_exposure() {
+    let t = Temp::new();
+    let mut s = prepared_with(&t, false);
+    assert_eq!(
+        run(
+            &mut s,
+            vec![],
+            vec![Control::Funds(
+                cinder_journal::funds::Action::NativeCreditReady(false)
+            )]
+        )
+        .receipt
+        .controls,
+        None
+    );
+    let result = run(&mut s, vec![], vec![Control::Expose(attempt(22))]);
+    assert_eq!(result.receipt.controls, Some(ControlError::Unqualified));
+    assert!(result.exposures.is_empty());
+    assert!(
+        !s.state()
+            .unwrap()
+            .attempts()
+            .iter()
+            .find(|a| a.key == attempt(22))
+            .unwrap()
+            .possibly_exposed
+    );
+}
+
+#[test]
 fn rf1_both_sides_refund_basis_cash_chunking_and_every_prefix() {
     for side in [1, -1] {
         let start = bound(side);

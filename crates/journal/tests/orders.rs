@@ -129,6 +129,30 @@ fn release(n: u8) -> Control {
 }
 
 #[test]
+fn incomplete_native_funding_still_blocks_ordinary_order_exposure() {
+    let t = Temp::new();
+    let mut s = setup(&t);
+    place(&mut s, 3, 2, false);
+    assert_eq!(
+        commit(
+            &mut s,
+            4,
+            vec![],
+            vec![Control::Funds(
+                cinder_journal::funds::Action::NativeCreditReady(false)
+            )]
+        )
+        .receipt
+        .controls,
+        None
+    );
+    let result = commit(&mut s, 5, vec![], vec![Control::Expose(attempt(3))]);
+    assert_eq!(result.receipt.controls, Some(ControlError::Unqualified));
+    assert!(result.exposures.is_empty());
+    assert!(!s.state().unwrap().attempts()[0].possibly_exposed);
+}
+
+#[test]
 fn restoration_receipt_for_ordinary_order_is_retained_and_rejected_without_panic() {
     for exposed in [false, true] {
         for price in [100, 111] {

@@ -763,6 +763,16 @@ Merge: none.
 
 ## P16 — Funding coordinator
 
+Review follow-up (2026-10-01): #4148900279 is relevant and reproduced locally:
+incomplete native funding incorrectly blocked a qualified emergency liquidation.
+Narrowed the readiness fence to Order/Generic/Restoration, preserving all existing
+emergency authority, freeze, evidence and funded-close checks. Added regressions
+for both control orderings, restart, ordinary/generic/restoration refusal and
+freeze under an incomplete-credit cut. Engine 20 fences changed replay semantics
+and incorporates P13's engine-19 exact-input resolution when restacked. Full
+assembled-stack verification and publication are pending. P15's latest review has
+no concrete defect; its signer/deployment trust qualifications remain documented.
+
 Work: implemented the three-location funding controller, native credit-readiness
 fence, immutable original plans/UUIDs, exact signed-wire persistence, separate
 broker-owner signer with shared Gateway credits, causal receipt qualification,
