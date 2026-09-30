@@ -37,7 +37,7 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
 Current branch: `tee/p14-pacifica-execution`, PR #38 above P13 #37. The authorized
-continuous P06–P14 run is at its final verification/handoff boundary. STOP BEFORE
+continuous P06–P14 run has finished its implementation and offline verification. STOP BEFORE
 P15: resume only after the user asks. Nine new phase PRs (#30–#38) are stacked;
 none was merged and no new external test/deployment was performed. Preserve
 unrelated `stays/` and ignored `work/`. P11's late review corrections are propagated
@@ -669,9 +669,14 @@ hosted CI/CodeRabbit are green, no inline comments at this boundary.
 Follow-up: final stack review found two P11 issues; both were reproduced, fixed and
 verified in their owning branch (`9f1d2f8`), then restacked into this branch. Added
 three regressions and advanced distinct P11/P12/P13 engine revisions to 8/9/10.
-The assembled post-review clean-export check is pending; do not reuse the earlier
-230-test result as evidence of the changed head.
-Next: finish post-review verification, mark #38 ready and STOP BEFORE P15.
+Final post-review clean export `2d15c16` at
+`/private/tmp/cinder-p14-reviewed.DLjQgv` passed the full pinned runner: 233 Rust
+tests per debug/release profile, two doctests, 24 repository tests, formatting,
+strict Clippy and build. No ignored research or wallets were included. This
+supersedes the earlier 230-test result for the assembled stack.
+Next: STOP BEFORE P15. Review the open stack bottom-up; await user authorization
+before merging or starting the Solana vault. Hosted checks for the final restack
+must be inspected separately; local success is not a claim that hosted CI is green.
 No merges, live calls, Solana vault work or new permissions in this run.
 PR: [#38](https://github.com/arnabnandikgp/cinder/pull/38), above #37.
 Merge: none.
