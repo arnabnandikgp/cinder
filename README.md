@@ -15,7 +15,7 @@ Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
 without operator assistance. The planning foundation and pinned workspace are
 merged, including exact financial primitives and canonical event identities.
-P03's joined ledger is merged. The P04–P09 stack adds funding/fee accounting,
+P03's joined ledger is merged. The P04–P10 stack adds funding/fee accounting,
 evidence containment, atomic replay, AEAD ciphertext replication and writer fencing
 against a trusted witness port, plus bound order intents and terminal-history
 reconciliation, partial funds movements, queued collateral-aware payouts and
@@ -41,6 +41,7 @@ adapters and deployed services remain later phases.
 14. [Bound order intents and completion](docs/architecture/0007-order-lifecycle.md)
 15. [Partial funds movements and payouts](docs/architecture/0008-funds-payouts.md)
 16. [Joined risk and peak-path capital](docs/architecture/0009-joined-risk.md)
+17. [Protection claims and repeated deficits](docs/architecture/0010-protection-claims.md)
 
 These tracked documents are sufficient to start the first implementation phase.
 Ignored `work/` contains the original local research; it is not a CI dependency.

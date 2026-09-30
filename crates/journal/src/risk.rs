@@ -420,6 +420,13 @@ impl State {
                     // hoped-for rebates, fees earned from customers or rewritten snapshots.
                     match &e.change {
                         Change::Fill { .. } => {}
+                        Change::Protection(
+                            cinder_kernel::ledger::protection::ProtectionChange::Recognize {
+                                ..
+                            }
+                            | cinder_kernel::ledger::protection::ProtectionChange::Commit { .. }
+                            | cinder_kernel::ledger::protection::ProtectionChange::Absorb { .. },
+                        ) => {}
                         Change::Economics(EconomicChange::Execution { fee, .. })
                             if fee.atoms() >= 0 => {}
                         _ => return Err(ControlError::Invalid),
@@ -662,8 +669,23 @@ impl State {
             )?,
             ledger.venue().funding().atoms().max(0),
         )?;
+        let designated = if ledger.protection().active {
+            ledger
+                .protection()
+                .reserve
+                .checked_sub(
+                    ledger
+                        .protection()
+                        .committed()
+                        .map_err(|_| ControlError::Capacity)?,
+                )
+                .map_err(|_| ControlError::Capacity)?
+                .atoms()
+        } else {
+            house_free
+        };
         let free_capital = sub(
-            sub(house_free.min(backing), pending_deficit)?,
+            sub(house_free.min(backing).min(designated), pending_deficit)?,
             active.held(Resource::House)?,
         )?;
         flags.capital = free_capital < policy.buffer.atoms();
@@ -755,6 +777,7 @@ impl State {
         let mut minimum = current.free_capital.atoms();
         let f = &current.flags;
         let mut admissible = !self.frozen
+            && self.protection_ready().is_ok()
             && !f.insolvent
             && !f.illiquid
             && !f.private_initial
@@ -822,6 +845,7 @@ impl State {
         })
     }
     pub(crate) fn risk_gate(&self) -> Result<()> {
+        self.protection_ready()?;
         if self.risk_report()?.admissible {
             Ok(())
         } else {
@@ -838,6 +862,9 @@ impl State {
             Control::Collateral(_)
             | Control::Risk(Action::Install { .. })
             | Control::Release(_) => false,
+            Control::Protection(crate::protection::Action::Apply{decision,..}) => matches!(
+                decision.change, cinder_kernel::ledger::protection::ProtectionChange::Designate{delta} if delta.atoms()<0),
+            Control::Protection(_) => false,
             Control::Order(orders) => !matches!(
                 orders,
                 crate::orders::Action::AdvanceAuthority { .. }

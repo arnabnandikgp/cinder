@@ -148,6 +148,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Explicit house coverage policy and authenticated allocation decisions.
+    Protection(crate::protection::Action),
     /// Joined policy installation and authenticated private leverage selection.
     Risk(crate::risk::Action),
     /// Ordered funds/withdrawal lifecycle in this same financial state.
@@ -261,6 +263,7 @@ pub struct State {
     pub(crate) order_fills: Vec<(Event, Event)>,
     pub(crate) collateral: Option<crate::collateral::Cut>,
     pub(crate) risk: Option<crate::risk::Policy>,
+    pub(crate) protection_policy: Option<crate::protection::Policy>,
     pub(crate) selections: Vec<crate::risk::Selection>,
     pub(crate) funds: Vec<crate::funds::Operation>,
     pub(crate) funds_observations: Vec<crate::funds::Observation>,
@@ -295,6 +298,7 @@ impl State {
             order_fills: Vec::new(),
             collateral: None,
             risk: None,
+            protection_policy: None,
             selections: Vec::new(),
             funds: Vec::new(),
             funds_observations: Vec::new(),
@@ -364,6 +368,7 @@ impl State {
         }
     }
     pub(crate) fn all_capacity(&self) -> Result<(), ControlError> {
+        self.protection_ready()?;
         if self.risk.is_some() {
             return self.risk_gate();
         }
@@ -386,6 +391,7 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Protection(action) => self.protection_action(action)?,
             Control::Risk(action) => self.risk_action(action)?,
             Control::Funds(action) => self.funds_action(action)?,
             Control::Collateral(cut) => self.install_collateral(cut)?,
@@ -545,6 +551,8 @@ impl State {
         let mut inputs = Vec::new();
         for input in &tx.inputs {
             let valid = input.authority_epoch != 0
+                && !input.event.as_ref().is_some_and(|e| matches!(&e.change,
+                    Change::Protection(c) if !matches!(c, cinder_kernel::ledger::protection::ProtectionChange::Recognize{..})))
                 && input.observed_at <= tx.at
                 && input.source.domain == self.config.domain
                 && self.config.sources.iter().any(|s| s.scope == input.source)

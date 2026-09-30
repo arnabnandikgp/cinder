@@ -6,7 +6,7 @@ use cinder_kernel::{
     amounts::*,
     codec::Canonical,
     identity::*,
-    ledger::{economics::*, evidence::*, funds::*, *},
+    ledger::{economics::*, evidence::*, funds::*, protection::*, *},
     math::Rounding,
     position::*,
 };
@@ -27,7 +27,7 @@ impl Writer {
             valid: true,
         };
         s.raw(b"CINDER-J\0");
-        s.raw(&4_u16.to_be_bytes());
+        s.raw(&5_u16.to_be_bytes());
         s.byte(tag);
         s
     }
@@ -88,7 +88,7 @@ impl<'a> Reader<'a> {
         if r.take(9)? != b"CINDER-J\0" {
             return Err(Error::Codec);
         }
-        if r.array::<2>()? != 4_u16.to_be_bytes() {
+        if r.array::<2>()? != 5_u16.to_be_bytes() {
             return Err(Error::Version);
         }
         if r.byte()? != tag {
@@ -326,6 +326,10 @@ pub fn encode_event(e: &Event) -> Result<Vec<u8>, Error> {
     w.item(&e.key);
     w.raw(&e.policy.get().to_be_bytes());
     match &e.change {
+        Change::Protection(change) => {
+            w.byte(8);
+            encode_protection(&mut w, change);
+        }
         Change::Funds(change) => {
             w.byte(7);
             encode_funds(&mut w, change);
@@ -469,6 +473,7 @@ pub fn decode_event(bytes: &[u8]) -> Result<Event, Error> {
     let key = r.item()?;
     let policy = PolicyVersion::new(u32::from_be_bytes(r.array()?)).map_err(|_| Error::Codec)?;
     let change = match r.byte()? {
+        8 => Change::Protection(decode_protection(&mut r)?),
         7 => Change::Funds(decode_funds(&mut r)?),
         0 => Change::BindExecution {
             market: read_market(&mut r)?,
@@ -630,6 +635,70 @@ pub(crate) fn read_mandate(r: &mut Reader<'_>) -> Result<Mandate, Error> {
         fee_payer: read_owner(r)?,
     })
 }
+pub(crate) fn encode_protection(w: &mut Writer, p: &ProtectionChange) {
+    match p {
+        ProtectionChange::Designate { delta } => {
+            w.byte(0);
+            w.item(delta);
+        }
+        ProtectionChange::Recognize {
+            kind,
+            cause,
+            amount,
+        } => {
+            w.byte(1);
+            w.byte(match kind {
+                Kind::Deficit => 0,
+                Kind::Remediation => 1,
+            });
+            w.raw(cause);
+            w.item(amount);
+        }
+        ProtectionChange::Commit { claim, amount } => {
+            w.byte(2);
+            w.item(claim);
+            w.item(amount);
+        }
+        ProtectionChange::Absorb { allocations } => {
+            w.byte(3);
+            w.count(allocations.len());
+            for a in allocations {
+                w.item(&a.claim);
+                w.item(&a.amount);
+            }
+        }
+    }
+}
+pub(crate) fn decode_protection(r: &mut Reader<'_>) -> Result<ProtectionChange, Error> {
+    Ok(match r.byte()? {
+        0 => ProtectionChange::Designate { delta: r.item()? },
+        1 => ProtectionChange::Recognize {
+            kind: match r.byte()? {
+                0 => Kind::Deficit,
+                1 => Kind::Remediation,
+                _ => return Err(Error::Codec),
+            },
+            cause: r.array()?,
+            amount: r.item()?,
+        },
+        2 => ProtectionChange::Commit {
+            claim: r.item()?,
+            amount: r.item()?,
+        },
+        3 => {
+            let mut allocations = vec![];
+            for _ in 0..r.count()? {
+                allocations.push(Allocation {
+                    claim: r.item()?,
+                    amount: r.item()?,
+                });
+            }
+            ProtectionChange::Absorb { allocations }
+        }
+        _ => return Err(Error::Codec),
+    })
+}
+
 fn encode_funds(w: &mut Writer, f: &FundsChange) {
     match f {
         FundsChange::Authorize(m) => {
@@ -783,6 +852,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Protection(action) => {
+                w.byte(8);
+                crate::protection::encode_action(&mut w, action);
+            }
             Control::Risk(action) => {
                 w.byte(7);
                 crate::risk::encode_action(&mut w, action);
@@ -888,6 +961,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             5 => Control::Collateral(crate::collateral::decode(&mut r)?),
             6 => Control::Funds(crate::funds::decode_action(&mut r)?),
             7 => Control::Risk(crate::risk::decode_action(&mut r)?),
+            8 => Control::Protection(crate::protection::decode_action(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -993,11 +1067,39 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.u64(s.raw_unresolved);
     w.option(&s.collateral, crate::collateral::encode);
     w.option(&s.risk, crate::risk::encode_policy);
+    w.option(&s.protection_policy, crate::protection::encode_policy);
     w.count(s.selections.len());
     for selection in &s.selections {
         crate::risk::encode_selection(&mut w, selection);
     }
     w.u64(s.ledger.version());
+    let protection = s.ledger.protection();
+    w.byte(u8::from(protection.active));
+    w.item(&protection.reserve);
+    w.item(&protection.absorbed_total);
+    w.count(protection.claims.len());
+    for c in &protection.claims {
+        w.item(&c.id);
+        w.byte(match c.kind {
+            Kind::Deficit => 0,
+            Kind::Remediation => 1,
+        });
+        w.raw(&c.cause);
+        for v in [
+            c.amount,
+            c.committed,
+            c.absorbed,
+            c.recovered,
+            c.offset,
+            c.replenished,
+        ] {
+            w.item(&v);
+        }
+    }
+    w.count(protection.receipt_faults.len());
+    for k in &protection.receipt_faults {
+        w.item(k);
+    }
     w.item(&s.ledger.vault());
     w.item(&s.ledger.in_transit().map_err(|_| Error::Invalid)?);
     w.item(&s.ledger.unpaired().map_err(|_| Error::Invalid)?);

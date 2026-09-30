@@ -5,6 +5,7 @@ pub mod encrypted;
 pub mod funds;
 pub mod model;
 pub mod orders;
+pub mod protection;
 pub mod replicated;
 pub mod risk;
 pub mod sqlite;
@@ -15,7 +16,7 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 // Order classification/authority/lifecycle changes replay semantics.
-const ENGINE_REVISION: u16 = 11;
+const ENGINE_REVISION: u16 = 12;
 
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

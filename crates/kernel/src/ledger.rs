@@ -8,6 +8,7 @@ use alloc::vec::Vec;
 pub mod economics;
 pub mod evidence;
 pub mod funds;
+pub mod protection;
 use economics::*;
 use evidence::*;
 
@@ -93,6 +94,8 @@ pub enum FillTarget {
 /// Phase-local transition schema. No outbound actions or risk admission are exposed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
+    /// House protection recognition and reclassification, not separate fund assets.
+    Protection(protection::ProtectionChange),
     /// Partial transfers and beneficiary settlement, sharing the same asset bridge.
     Funds(funds::FundsChange),
     /// Qualified funding/fee economics, sharing this ledger and its replay keys.
@@ -260,6 +263,7 @@ pub struct Ledger {
     vault: QuoteAtoms,
     transfers: Vec<Transfer>,
     movements: Vec<funds::Movement>,
+    protection: protection::Protection,
     bindings: Vec<Binding>,
     events: Vec<Event>,
     unresolved: Vec<EventKey>,
@@ -334,6 +338,7 @@ impl Ledger {
             vault: QuoteAtoms::new(config.quote, 0),
             transfers: Vec::new(),
             movements: Vec::new(),
+            protection: protection::Protection::new(config.quote),
             bindings: Vec::new(),
             events: Vec::new(),
             unresolved: Vec::new(),
@@ -472,6 +477,7 @@ impl Ledger {
     }
     fn apply_distinct(&mut self, event: &Event) -> Result<(), LedgerError> {
         match &event.change {
+            Change::Protection(change) => self.apply_protection(&event.key, change)?,
             Change::Funds(change) => self.apply_funds(&event.key, change)?,
             Change::Economics(change) => self.apply_economics(&event.key, change)?,
             Change::Reconcile(check) => self.apply_check(&event.key, check)?,
@@ -500,6 +506,9 @@ impl Ledger {
                 let book = self.book_mut(*owner)?;
                 book.cash = book.cash.checked_add(*amount)?;
                 self.move_cash(*location, *amount)?;
+                if let Owner::Customer(id) = owner {
+                    self.protection_receipt(*id, *amount, &source)?;
+                }
                 if *owner == Owner::Suspense {
                     self.unresolved.push(source);
                 }

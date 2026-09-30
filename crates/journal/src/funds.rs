@@ -145,6 +145,7 @@ impl State {
     }
 
     fn funds_ready(&self) -> Result<(), ControlError> {
+        self.protection_ready()?;
         if self.frozen
             || self.raw_unresolved != 0
             || self.funds.iter().any(|o| o.faulted)

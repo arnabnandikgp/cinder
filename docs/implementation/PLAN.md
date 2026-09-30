@@ -269,9 +269,13 @@ Remove the study's single-episode limitation. Live coverage/priority remains G02
 unsupported shortfalls preserve claims and halt preferential payout.
 Evidence: W01, W09; V06, repeated/adaptive loss, overpayment and recovery vectors.
 
-- [ ] Recognition/absorption/payment cannot consume the same free capital twice or create phantom assets.
-- [ ] Multiple episodes and later recoveries replenish the correct resource once; excess returns to the customer.
-- [ ] Capital providers cannot withdraw ahead of incurred obligations; coordinated insurance extraction is stress-tested and bounded or disabled.
+- [x] Recognition/absorption/payment cannot consume the same free capital twice or create phantom assets.
+- [x] Multiple episodes and later recoveries replenish the correct resource once; excess returns to the customer.
+- [x] Capital providers cannot withdraw ahead of incurred obligations; coordinated insurance extraction is stress-tested and bounded or disabled.
+
+The bounded implementation contract is [ADR 0010](../architecture/0010-protection-claims.md).
+G02 production coverage/priority and live capital calibration remain open; native
+house capital cash withdrawals are disabled, not misrepresented as customer payouts.
 
 <a id="p11"></a>
 ## P11 — Customer liquidation and late-close exceptions

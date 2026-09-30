@@ -116,6 +116,16 @@ interval derivation and finite-path limitations are explicit. No experimental
 ledger contributes assets, historical ADL candidate becomes policy, or synthetic
 limit becomes live calibration. P10–P12 extend scenario transitions in their layers.
 
+### P10: repeated protection episodes
+
+[ADR 0010](../architecture/0010-protection-claims.md) promotes W01/W09 and V06 into
+the same financial ledger, durable policy/decision controller and joined capital
+gate. The source hashes and single-episode limitation removed from the study are
+recorded. A tracked opposing-account counterexample demonstrates why aggregate
+reconciliation is not extraction resistance; global lifetime caps remain consumed
+across recoveries, account changes and policy revisions. G02 allocation approval,
+actual authentication and live insurance calibration are not simulated into truth.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:
