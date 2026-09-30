@@ -429,6 +429,13 @@ Merge: none.
 
 ## P08 — Funds and payouts
 
+Review follow-up, 2026-10-01: reproduced the summary-only faulted-cancellation
+concern with a failing regression before fixing it. Clean local cancellation now
+rejects faulted operations, terminal evidence or actual bound receipts. All 18
+funds groups pass; new coverage includes separate/same-transaction receipts,
+duplicate commit, reopen/next advance and legitimate clean cancellation. No loss
+allocation or custody authority changed; assembled-stack verification follows.
+
 Work: 2026-09-30 — implemented kernel partial movements with transit/unpaired
 contra-balances, paid counters, explicit fee ownership and house overpayment;
 journal FIFO/partial consent, shared holds and terminal/source coverage. Initial

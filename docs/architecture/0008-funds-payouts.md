@@ -56,6 +56,11 @@ certificate may precede its receipts but cannot release early. Contradictions
 re-encumber and contain the operation. Neither timeout nor an empty response is
 proof that a native capability can no longer execute.
 
+Unexposed cancellation is only a clean local abandonment: a faulted operation,
+terminal proof, or any real bound receipt prevents it from releasing the hold or
+marking the operation terminal. Contradictory pre-exposure receipts still post
+their actual effects; refusal, duplicate delivery and replay preserve containment.
+
 The terminal evidence reference and nonzero authority epoch are **not cryptographic
 authentication or native fencing by themselves**. P16 must qualify the retained
 evidence before constructing this trusted input. Abstract prepared bytes are not

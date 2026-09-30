@@ -329,6 +329,15 @@ impl State {
                     .iter_mut()
                     .find(|o| o.intent.request == *request)
                     .ok_or(ControlError::Invalid)?;
+                if o.faulted
+                    || o.proof.is_some()
+                    || self.ledger.movements().iter().any(|m| {
+                        Some(m.mandate.attempt) == o.attempt
+                            && (m.faulted || !m.receipts.is_empty())
+                    })
+                {
+                    return Err(ControlError::Unqualified);
+                }
                 if o.terminal
                     || self
                         .attempts

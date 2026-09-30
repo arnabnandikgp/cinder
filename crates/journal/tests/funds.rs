@@ -318,6 +318,107 @@ fn claim(s: &Store) -> i128 {
 }
 
 #[test]
+fn faulted_unexposed_payout_cannot_release_its_hold_by_cancellation() {
+    for same_transaction in [false, true] {
+        let t = Temp::new();
+        let mut s = setup(&t, false);
+        assert_eq!(
+            commit(
+                &mut s,
+                3,
+                vec![],
+                vec![accept(intent(3, true)), prepare(3, 80)]
+            )
+            .receipt
+            .controls,
+            None
+        );
+        let receipt = leg(10, Leg::Debit, 40, 0);
+        if !same_transaction {
+            assert_eq!(
+                commit(&mut s, 4, vec![receipt.clone()], vec![])
+                    .receipt
+                    .inputs,
+                [InputResult::Normalized(Disposition::Applied)]
+            );
+        }
+        let cancelled = commit(
+            &mut s,
+            5,
+            if same_transaction {
+                vec![receipt]
+            } else {
+                vec![]
+            },
+            vec![Control::Funds(Action::CancelUnexposed(request(3)))],
+        );
+        assert_eq!(cancelled.receipt.controls, Some(ControlError::Unqualified));
+        assert!(s.state().unwrap().funds()[0].faulted);
+        assert!(!s.state().unwrap().funds()[0].terminal);
+        assert!(
+            s.state()
+                .unwrap()
+                .holds()
+                .iter()
+                .find(|h| h.request == request(3))
+                .unwrap()
+                .active
+        );
+        assert_eq!(s.state().unwrap().ledger().in_transit().unwrap(), cash(40));
+        let tx = s
+            .transaction(CommitId::new([5; 32]).unwrap())
+            .unwrap()
+            .clone();
+        assert!(s.commit(tx).unwrap().duplicate);
+        let state = s.state().unwrap().clone();
+        drop(s);
+        let mut reopened = open(&t);
+        assert_eq!(reopened.state().unwrap(), &state);
+        commit(&mut reopened, 6, vec![], vec![]);
+        assert!(
+            reopened
+                .state()
+                .unwrap()
+                .holds()
+                .iter()
+                .find(|h| h.request == request(3))
+                .unwrap()
+                .active
+        );
+    }
+    let t = Temp::new();
+    let mut clean = setup(&t, false);
+    commit(
+        &mut clean,
+        3,
+        vec![],
+        vec![accept(intent(3, true)), prepare(3, 80)],
+    );
+    assert_eq!(
+        commit(
+            &mut clean,
+            4,
+            vec![],
+            vec![Control::Funds(Action::CancelUnexposed(request(3)))]
+        )
+        .receipt
+        .controls,
+        None
+    );
+    assert!(clean.state().unwrap().funds()[0].terminal);
+    assert!(
+        !clean
+            .state()
+            .unwrap()
+            .holds()
+            .iter()
+            .find(|h| h.request == request(3))
+            .unwrap()
+            .active
+    );
+}
+
+#[test]
 fn partial_transfer_moves_existing_assets_once_and_never_mints_another_customer_credit() {
     let t = Temp::new();
     let mut s = setup(&t, false);
