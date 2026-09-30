@@ -97,6 +97,9 @@ impl State {
         if resource == Resource::Location(Location::Vault) {
             return Ok(self.ledger.vault());
         }
+        if resource == Resource::Location(Location::Broker) {
+            return Ok(self.ledger.broker());
+        }
         let b = match resource {
             Resource::Customer(id) => self.ledger.book(Owner::Customer(id)),
             Resource::House => self.ledger.book(Owner::House),

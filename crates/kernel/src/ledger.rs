@@ -25,13 +25,15 @@ pub enum Owner {
     Suspense,
 }
 
-/// The initial pool's two location classes; native cash is not a token balance.
+/// Independent custody locations; native cash is not a token balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Location {
     /// Nonnegative physical quote assets under the designated custody route.
     Vault,
     /// Signed native venue cash, excluding position PnL.
     Venue,
+    /// Nonnegative tokens in the allowlisted intermediary wallet, not venue margin.
+    Broker,
 }
 
 /// Trusted source routing, qualified by the eventual ingestion adapter.
@@ -267,6 +269,7 @@ pub struct Ledger {
     suspense: Book,
     venue: Book,
     vault: QuoteAtoms,
+    broker: QuoteAtoms,
     transfers: Vec<Transfer>,
     movements: Vec<funds::Movement>,
     protection: protection::Protection,
@@ -285,7 +288,7 @@ pub struct Ledger {
 /// a proof of authentic assets, a liquidity report, or a claim of future solvency.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostics {
-    /// Signed external value: vault + transit - unpaired settlement + native
+    /// Signed external value: vault + broker + transit - unpaired settlement + native
     /// cash/funding and marked PnL. Transit is not spendable liquidity/capital.
     pub net_assets: QuoteAtoms,
     /// Individually positive customer entitlements only.
@@ -344,6 +347,7 @@ impl Ledger {
             suspense: Book::empty(&config),
             venue: Book::empty(&config),
             vault: QuoteAtoms::new(config.quote, 0),
+            broker: QuoteAtoms::new(config.quote, 0),
             transfers: Vec::new(),
             movements: Vec::new(),
             protection: protection::Protection::new(config.quote),
@@ -396,6 +400,10 @@ impl Ledger {
     /// Nonnegative physical assets; not additive to a native total-equity snapshot.
     pub fn vault(&self) -> QuoteAtoms {
         self.vault
+    }
+    /// Actual allowlisted broker-wallet tokens, never also counted as vault/venue cash.
+    pub fn broker(&self) -> QuoteAtoms {
+        self.broker
     }
     /// Outstanding full/partial movement receivables, counted once and not cash.
     pub fn in_transit(&self) -> Result<QuoteAtoms, LedgerError> {
@@ -453,6 +461,13 @@ impl Ledger {
                 self.vault = next;
             }
             Location::Venue => self.venue.cash = self.venue.cash.checked_add(amount)?,
+            Location::Broker => {
+                let next = self.broker.checked_add(amount)?;
+                if next.atoms() < 0 {
+                    return Err(LedgerError::PhysicalShortfall);
+                }
+                self.broker = next;
+            }
         }
         Ok(())
     }
@@ -605,7 +620,7 @@ impl Ledger {
     }
     /// Exact structural identities, independent of any mark or positive backing.
     /// Signed native cash minus native basis equals total private cash minus basis
-    /// after including the vault and transit exactly once.
+    /// after including the vault, broker and transit exactly once.
     pub fn check_bridge(&self) -> Result<(), LedgerError> {
         let books = || {
             self.customers
@@ -630,10 +645,12 @@ impl Ledger {
                 })
         };
         let unpaired = self.unpaired()?;
+        let transit = self.in_transit()?;
         let native = self
             .vault
             .atoms()
-            .checked_add(self.in_transit()?.atoms())
+            .checked_add(self.broker.atoms())
+            .and_then(|n| n.checked_add(transit.atoms()))
             .and_then(|n| n.checked_sub(unpaired.atoms()))
             .and_then(|n| n.checked_add(self.venue.cash.atoms()))
             .and_then(|n| n.checked_add(self.venue.funding.atoms()))
@@ -687,6 +704,7 @@ impl Ledger {
         self.check_bridge()?;
         let net_assets = self
             .vault
+            .checked_add(self.broker)?
             .checked_add(self.in_transit()?)?
             .checked_sub(self.unpaired()?)?
             .checked_add(self.book_equity(&self.venue, marks)?)?;

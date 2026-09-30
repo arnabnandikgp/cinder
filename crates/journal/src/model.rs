@@ -288,6 +288,7 @@ pub struct State {
     pub(crate) funds_observations: Vec<crate::funds::Observation>,
     pub(crate) funds_receipts: Vec<(EventKey, Option<u64>)>,
     pub(crate) frozen: bool,
+    pub(crate) native_funding_ready: bool,
     pub(crate) raw_unresolved: u64,
     pub(crate) raw_inputs: Vec<crate::raw::Entry>,
     pub(crate) now: u64,
@@ -307,6 +308,10 @@ impl State {
         {
             return Err(Error::Limit);
         }
+        let native_funding_ready = !config
+            .sources
+            .iter()
+            .any(|s| s.location == Location::Broker);
         Ok(Self {
             ledger: Ledger::new(config.clone()).map_err(|_| Error::Invalid)?,
             config,
@@ -328,6 +333,7 @@ impl State {
             funds_observations: Vec::new(),
             funds_receipts: Vec::new(),
             frozen: false,
+            native_funding_ready,
             raw_unresolved: 0,
             raw_inputs: Vec::new(),
             now: 0,
@@ -349,6 +355,50 @@ impl State {
     pub fn unresolved_raw(&self) -> u64 {
         self.raw_unresolved
     }
+    /// Funding setup/credit fence for native risk; receipts and cleanup remain separate.
+    pub fn native_funding_ready(&self) -> bool {
+        self.native_funding_ready
+    }
+    /// Recheck the current financial/authority cut before the original funds
+    /// capability is delivered. This grants no retry/resend authorization.
+    pub fn qualified_funds_delivery(&self, key: AttemptKey) -> Result<(), ControlError> {
+        let a = self
+            .attempts
+            .iter()
+            .find(|a| a.key == key)
+            .ok_or(ControlError::Invalid)?;
+        if a.kind != AttemptKind::Funds
+            || !a.possibly_exposed
+            || a.expires_at <= self.now
+            || !self
+                .holds
+                .iter()
+                .any(|h| h.request == key.request && h.active)
+        {
+            return Err(ControlError::Unqualified);
+        }
+        self.funds_exposure(a)?;
+        self.exposure_qualified(a)
+    }
+    /// Current qualified location capacity after shared holds; not promised future
+    /// settlement. When risk policy exists its joined margin envelope is used.
+    pub fn available_location(&self, location: Location) -> Result<QuoteAtoms, ControlError> {
+        if self.risk.is_some() {
+            let current = self.risk_report()?.current;
+            return Ok(match location {
+                Location::Vault => current.vault_free,
+                Location::Venue => current.venue_free,
+                Location::Broker => current.broker_free,
+            });
+        }
+        let resource = Resource::Location(location);
+        self.capacity(resource)?
+            .checked_sub(
+                self.reserved(resource)
+                    .map_err(|_| ControlError::Capacity)?,
+            )
+            .map_err(|_| ControlError::Capacity)
+    }
     /// Sum active holds on this exact resource dimension.
     pub fn reserved(&self, resource: Resource) -> Result<QuoteAtoms, Error> {
         self.holds
@@ -366,6 +416,7 @@ impl State {
         }
         let book = match resource {
             Resource::Location(Location::Vault) => return Ok(self.ledger.vault()),
+            Resource::Location(Location::Broker) => return Ok(self.ledger.broker()),
             Resource::Location(Location::Venue) => self.ledger.venue(),
             Resource::House => self
                 .ledger
@@ -542,6 +593,9 @@ impl State {
         // under freeze or late evidence, including at the final proposal cut.
         if attempt.kind == AttemptKind::Cancel {
             return Ok(());
+        }
+        if attempt.kind != AttemptKind::Funds && !self.native_funding_ready {
+            return Err(ControlError::Unqualified);
         }
         if self.frozen
             || self.raw_unresolved != 0

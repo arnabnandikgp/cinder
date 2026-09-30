@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { delimiter, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -14,7 +14,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const programs = resolve(root, 'programs');
 const client = resolve(root, 'clients/vault');
 const anchor = process.env.CINDER_ANCHOR_TOOL || 'anchor';
-const env = { ...process.env, NO_DNA: '1', CARGO_TARGET_DIR: resolve(programs, 'target') };
+const env = { ...process.env, PATH: dirname(process.execPath) + delimiter + process.env.PATH,
+  NO_DNA: '1', CARGO_TARGET_DIR: resolve(programs, 'target') };
 assert.equal(process.versions.node, '24.21.0', 'Use the repository Node pin');
 function run(command, args, cwd = programs) {
   let output;
@@ -92,7 +93,7 @@ try {
   }
   assert(ready, `Surfpool startup timeout: ${serverLog}`);
   // Asynchronous child keeps the parent available to supervise/clean up the sandbox.
-  const tests = spawn(process.execPath, ['--test', '--test-concurrency=1', 'tests/vault.test.ts'], { cwd: client, env, stdio: 'inherit' });
+  const tests = spawn(process.execPath, ['--test', '--test-concurrency=1', 'tests/funding.test.ts', 'tests/vault.test.ts'], { cwd: client, env, stdio: 'inherit' });
   await new Promise((accept, reject) => {
     tests.on('error', reject); tests.on('exit', (code, signal) => code === 0 ? accept() : reject(new Error(`Vault tests failed: ${code ?? signal}`)));
   });

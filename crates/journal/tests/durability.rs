@@ -170,7 +170,7 @@ fn replay_rejects_corrupt_bytes_versions_and_recomputed_wrong_projection() {
             .unwrap()
             .as_bytes()
             .to_vec();
-        assert_eq!(&bytes[12..14], &19_u16.to_be_bytes());
+        assert_eq!(&bytes[12..14], &20_u16.to_be_bytes());
         bytes[index] = revision;
         f.opaque = FixtureProtection.seal(context, &bytes).unwrap();
         rehash(f);

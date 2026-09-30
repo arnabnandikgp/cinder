@@ -18,7 +18,7 @@
 | [P13 — Pacifica observations](PLAN.md#p13) | in progress | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | [#37](https://github.com/arnabnandikgp/cinder/pull/37), stacked above #36 |
 | [P14 — Pacifica execution](PLAN.md#p14) | in progress | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), stacked above #37 |
 | [P15 — Solana vault](PLAN.md#p15) | in progress | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), stacked above #38 |
-| [P16 — Funding coordinator](PLAN.md#p16) | open | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | — |
+| [P16 — Funding coordinator](PLAN.md#p16) | in progress | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | `tee/p16-funding-coordinator`, above #39; publication pending |
 | [P17 — Recovery program](PLAN.md#p17) | open | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | — |
 | [P18 — Private API and SDK](PLAN.md#p18) | open | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | — |
 | [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
@@ -36,17 +36,16 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p15-solana-vault`, ready PR #39 stacked above P14 #38. The user's latest
-request explicitly resumes P15 with Anchor 1.2.0 and a stacked PR; the old
-stop-before-P15 boundary is superseded. This authorizes local implementation and
-offline signed SBF tests, not merges, external deployments or venue transactions.
-P16/P17 remain separate phases. Preserve unrelated `stays/` and ignored `work/`.
-P15 uses an isolated program workspace and unsigned TS client; deployment identity,
-key governance and live limits remain G03/G05 gates. See the P15 log below.
+Current branch: `tee/p16-funding-coordinator`, above ready P15 PR #39. The user's
+latest request authorizes this next implementation/stacked PR, not a merge,
+deployment, external transaction or P17. Preserve unrelated `stays/` and ignored
+`work/`. P16's final clean-export debug/release runner and codec/SBF checks pass;
+publication is next. Production source qualification, identity and
+key governance remain G01/G03/G05 gates. See the P16 log below.
 Prior stack-wide CodeRabbit triage confirmed eight
 unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
 branches (with P13's cumulative byte-budget fix in P05) and locally restacked.
-Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14=17; older revisions
+Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14/P15=17, P16=18; older revisions
 fail closed. Final clean-export verification of code head `dc0ee4b` at
 `/private/tmp/cinder-stack-review.3fhk3G` passed the complete pinned offline runner:
 245 Rust tests per debug/release profile, two compile-fail doctests per profile,
@@ -764,10 +763,40 @@ Merge: none.
 
 ## P16 — Funding coordinator
 
-Work: not started.
-Verification: not run; acceptance in PLAN P16.
-Unexpected: none yet.
-Next: port controller expose-before-send/crash scenarios onto the common journal and actual custody interfaces.
+Work: implemented the three-location funding controller, native credit-readiness
+fence, immutable original plans/UUIDs, exact signed-wire persistence, separate
+broker-owner signer with shared Gateway credits, causal receipt qualification,
+house-owned actual fees, payout wallet/counter binding, marginal allocation and
+residual reporting. Added the bounded unsigned Anchor client contract, instruction
+builder and exact-wire signature verification; see ADR 0016. No second ledger,
+new dependency, native account topology or custody/recovery promise introduced.
+Verification: final staged-only export `/private/tmp/cinder-p16-export.Ft5cJS`
+passes 262 Rust tests plus two compile-fail doctests in each debug/release profile,
+both strict Clippy configurations, all-target build, formatting and 24 repository
+tests. All 30 client/offline SBF tests pass with Anchor 1.2.0, locked generated-IDL
+equality and pinned Node/SBF/Surfpool. This includes 17 new coordinator/risk/crash
+regression groups, four real-signature codec groups and actual custody rail
+execution. The ignored
+child entry is actually invoked/killed by the parent regression. All 30 client/
+offline SBF tests also passed in the working tree. The export excludes `work/`,
+`stays/` and Git metadata and reuses only build/package caches. Only documentation
+verification/publication notes follow that tested source. No Linux container, external
+RPC, live venue call, deployment, wallet/cloud access or delegated review used.
+Unexpected: the old two-location ledger could not represent intermediate broker
+tokens honestly. Added that location to the same kernel, risk liquidity and replay
+commitment (revision 18); old semantics fail closed. Forecast now includes prepared
+ingress before exposure to avoid a reservation/dispatch double-allocation gap.
+The old experiment's one-off deposit-first bootstrap permission is not promoted:
+missing/lending-active accounts fail closed without a new approved manifest.
+Source-qualified native completion and chain finality remain trusted observation
+ports; the synthetic tests are not evidence of deployed production recognizers.
+Focused self-review tightened one-use wire capability consumption and final
+financial/authority checks before delivery, rejected noncanonical signed bytes,
+and retained a regression for every older journal revision including 17. This is
+not an independent security audit. The first whole-workspace run failed only the
+old revision-17 golden assertion; it was updated and both final profiles pass.
+Next: publish P16
+above #39. Stop before P17 until requested; do not merge the stack automatically.
 PR: none.
 Merge: none.
 

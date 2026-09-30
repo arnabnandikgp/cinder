@@ -277,7 +277,7 @@ impl State {
                 if self.liquidation.is_some() {
                     self.close_limit(i.quantity.unit())?;
                 }
-                if self.frozen {
+                if self.frozen || !self.native_funding_ready {
                     return Err(ControlError::Unqualified);
                 }
                 self.request(i.request)?;

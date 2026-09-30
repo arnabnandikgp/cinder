@@ -117,6 +117,9 @@ pub enum Action {
     Finalize(RequestKey),
     /// Restrict ordinary new exposure; receipt accounting and scoped cancels continue.
     Freeze,
+    /// Trusted funding-qualification port: fence native risk while collateral or
+    /// account setup is uncertain. This does not authorize a transfer or payout.
+    NativeCreditReady(bool),
 }
 
 /// Queue/lifecycle metadata, not another asset or claim ledger.
@@ -186,6 +189,7 @@ impl State {
     pub(crate) fn funds_action(&mut self, action: &Action) -> Result<(), ControlError> {
         match action {
             Action::Freeze => self.frozen = true,
+            Action::NativeCreditReady(ready) => self.native_funding_ready = *ready,
             Action::Accept {
                 intent: i,
                 approval,
@@ -669,6 +673,10 @@ pub(crate) fn encode_action(w: &mut Writer, a: &Action) {
             w.item(k);
         }
         Action::Freeze => w.byte(4),
+        Action::NativeCreditReady(ready) => {
+            w.byte(5);
+            w.byte(u8::from(*ready));
+        }
     }
 }
 pub(crate) fn decode_action(r: &mut Reader<'_>) -> Result<Action, Error> {
@@ -688,6 +696,7 @@ pub(crate) fn decode_action(r: &mut Reader<'_>) -> Result<Action, Error> {
         2 => Ok(Action::CancelUnexposed(r.item()?)),
         3 => Ok(Action::Finalize(r.item()?)),
         4 => Ok(Action::Freeze),
+        5 => Ok(Action::NativeCreditReady(r.bool()?)),
         _ => Err(Error::Codec),
     }
 }

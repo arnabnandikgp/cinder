@@ -57,7 +57,7 @@ pub struct Step {
     pub marks: Vec<PriceTicks>,
     /// Explicit hypothetical executions. No receipts, future fees/rebates or fundraising.
     pub events: Vec<Event>,
-    /// Both supported locations exactly once; every demand is aggregated per location.
+    /// Vault/native and, when configured, broker locations exactly once.
     pub liquidity: Vec<Liquidity>,
 }
 /// Explicit finite path. Each prefix, not just its ending, constrains capital.
@@ -193,6 +193,8 @@ pub struct Snapshot {
     pub vault_free: QuoteAtoms,
     /// Available native cash/free collateral minus source commitments and due demands.
     pub venue_free: QuoteAtoms,
+    /// Available broker-wallet tokens, never native margin or vault payout liquidity.
+    pub broker_free: QuoteAtoms,
 }
 /// Every tested prefix remains inspectable; no success-only summary hides failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -394,7 +396,13 @@ impl State {
                     || step.after_ms > p.horizon_ms
                     || step.events.len() > MAX_STEPS
                     || step.marks.len() != self.config.markets.len()
-                    || step.liquidity.len() != 2
+                    || step.liquidity.len()
+                        != 2 + usize::from(
+                            self.config
+                                .sources
+                                .iter()
+                                .any(|s| s.location == Location::Broker),
+                        )
                 {
                     return Err(ControlError::Invalid);
                 }
@@ -408,6 +416,12 @@ impl State {
                 }
                 for (j, l) in step.liquidity.iter().enumerate() {
                     if l.accessible_bps > 10_000
+                        || l.location == Location::Broker
+                            && !self
+                                .config
+                                .sources
+                                .iter()
+                                .any(|s| s.location == Location::Broker)
                         || l.due.unit() != self.config.quote
                         || l.due.atoms() < 0
                         || step.liquidity[..j]
@@ -773,7 +787,12 @@ impl State {
         let venue_access = sub(native_equity, native_requirement)?
             .min(ledger.venue().cash().atoms())
             .max(0);
-        let mut location_free = [vault_free, sub(venue_access, other_native)?];
+        let broker_held = active.held(Resource::Location(Location::Broker))?;
+        let mut location_free = [
+            vault_free,
+            sub(venue_access, other_native)?,
+            sub(ledger.broker().atoms(), broker_held)?,
+        ];
         for l in liquidity {
             let (index, available, held) = match l.location {
                 Location::Vault => (
@@ -782,6 +801,7 @@ impl State {
                     active.held(Resource::Location(Location::Vault))?,
                 ),
                 Location::Venue => (1, venue_access, other_native),
+                Location::Broker => (2, ledger.broker().atoms(), broker_held),
             };
             let accessible = mul_div(
                 available.max(0),
@@ -802,6 +822,7 @@ impl State {
             free_capital: atom(free_capital),
             vault_free: atom(location_free[0]),
             venue_free: atom(location_free[1]),
+            broker_free: atom(location_free[2]),
         })
     }
     /// Recompute current/pending margin and every configured stress prefix under

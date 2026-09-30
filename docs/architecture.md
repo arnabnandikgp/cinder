@@ -37,7 +37,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Pacifica observations | Lossless bounded codecs, durable provenance/replay and explicit capability gaps implemented; no live qualification | P13 |
 | Pacifica signing adapter | Durable native preimages, scoped Ed25519 signer, shared credit reservation and fake transport implemented; no live-qualified deployment | P14 |
 | Solana custody vault and normal authorization | Anchor 1.2 program, public receipts/shared paid counters and offline signed SBF tests implemented; deployment gated | P15 |
-| Funding round trip and recovery claims | Planned; bounded prototypes remain evidence only | P16–P17 |
+| Funding round trip | Durable three-location coordinator, original-wire/attempt reconciliation and shared credit budget tested offline; source/live qualification gated | P16 |
+| Recovery claims | Planned; bounded prototypes remain evidence only | P17 |
 | Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
@@ -125,6 +126,7 @@ independently authoritative balance table.
 | House book | Protocol capital, explicit house exposures, income and obligations | A residual bucket for unexplained differences or customer assets |
 | Suspense | Named observations awaiting attribution/resolution | Spendable profit or permission to erase a missing customer's claim |
 | Solana vault | Program-enforced custody of tokens currently on Solana | PDA authority over an ordinary signed HTTP venue account |
+| Broker wallet tokens | Separate intermediate custody on the allowlisted route | Vault payout liquidity, venue margin, a second customer deposit, or automatic recovery access |
 | Transit receivable | One evidenced transfer leg between locations | Another deposit, immediately spendable tokens, or guaranteed recovery |
 
 Keep customer wallet/agent authorization, native trading authority, fund/recovery
@@ -145,6 +147,12 @@ same token authority and preserved paid counters. [ADR 0015](architecture/0015-s
 records the role/epoch fence, immutable receipts and bootstrap upgrade-authority
 check. Its public counters are not current private entitlements. HyperLink's
 contract count is not a requirement for Cinder.
+
+[ADR 0016](architecture/0016-funding-coordinator.md) joins this vault to native
+funding through the existing journal. Prepared physical allocations inform a
+forecast, not trading credit. Exact original wire/attempt identity persists before
+egress; HTTP acknowledgements cannot become settlement. Live source completeness,
+RPC trust and production key governance remain explicit qualification gates.
 
 ## 4. The financial state and its reconciliation
 
@@ -169,7 +177,8 @@ configured conversion to quote atoms per lot:
 e_i = c_i + Σ_m(q_im p_m - b_im) + a_i
 h   = c_H + Σ_m(q_Hm p_m - b_Hm) + a_H
 s   = c_S + Σ_m(q_Sm p_m - b_Sm) + a_S
-N   = vault + transit + native_cash + Σ_m(q_Vm p_m - b_Vm) + a_V
+N   = vault + broker + transit - unpaired_settlement
+    + native_cash + Σ_m(q_Vm p_m - b_Vm) + a_V
 q_Vm = Σ_i q_im + q_Hm + q_Sm
 N = Σ_i e_i + h + s
 ```
@@ -178,6 +187,8 @@ This implemented form represents unattributed obligations in suspense, not also 
 second subtraction from assets. Later third-party liabilities must have a named
 representation and be subtracted exactly once. No generic balancing adjustment
 is allowed to hide a broken bridge.
+`unpaired_settlement` offsets an independently observed arrival whose matching
+debit has not yet arrived; it is not a second customer claim or spendable capital.
 
 P03 checks exposure and a price-independent cash-minus-basis identity; P04 extends
 the intercept to include recognized funding after every distinct accepted event.

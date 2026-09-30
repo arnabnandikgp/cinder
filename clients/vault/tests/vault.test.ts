@@ -7,6 +7,7 @@ import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SystemProgram, Tr
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createMint, createAccount, mintTo, getAccount,
   freezeAccount, thawAccount, approve, transfer } from '@solana/spl-token';
 import { customerAddress, depositReceiptAddress, identity, movement, receiptAddress, u64, vaultAddresses, vaultProgram } from '../src/index.ts';
+import { fundingInstruction, verifyFundingWire } from '../src/funding.ts';
 
 // In-memory disposable identities only; no wallet file, network URL or deployed key is inherited.
 const RPC_URL = 'http://127.0.0.1:18899';
@@ -109,6 +110,31 @@ async function fixture() {
     customer, auth, receipt, depositReceipt, initialize, deposit, release, payout, returned, freeze, state };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+test('funding codec executes the selected release, return and payout rails in SBF', async () => {
+  const f=await fixture(); await send(await f.deposit(),[f.owner]);
+  for (const rail of ['Release','Return','Payout']) {
+    const auth=f.auth(`codec-${rail}`), amount=rail==='Payout'?50_000n:100_000n;
+    const bytes=(p:PublicKey|Uint8Array)=>Array.from(p instanceof PublicKey?p.toBytes():p);
+    const c:Record<string,unknown>={schema:'cinder-vault-funding-v1',rail,network:bytes(id('offline-sandbox')),
+      program:bytes(programId),domain:bytes(f.domain),pool:bytes(f.pool),config:bytes(f.config),vault:bytes(f.vault),
+      mint:bytes(f.mint),funds:bytes(f.funds.publicKey),broker:bytes(f.broker.publicKey),broker_tokens:bytes(f.brokerTokens),
+      decimals:6,venue_program:bytes(f.outsider.publicKey),venue_vault:bytes(f.foreignTokens),epoch:'1',
+      operation:auth.operation,customer:bytes(f.owner.publicKey),amount:amount.toString(),sequence:'0',paid:'0',
+      recipient_tokens:rail==='Payout'?bytes(f.source):bytes(Buffer.alloc(32)),expires_at_slot:auth.expiresAtSlot.toString()};
+    const contract=Buffer.from(JSON.stringify(Object.fromEntries(Object.keys(c).sort().map(k=>[k,c[k]]))));
+    const built=await fundingInstruction(program,contract), signer=rail==='Return'?f.broker:f.funds;
+    const block=await connection.getLatestBlockhash();
+    const tx=new Transaction({feePayer:signer.publicKey,...block}).add(built.instruction);tx.sign(signer);
+    const verified=await verifyFundingWire(program,contract,tx.serialize());
+    const signature=await connection.sendRawTransaction(verified.wire,{skipPreflight:true});
+    assert.equal((await connection.confirmTransaction({signature,...block},'confirmed')).value.err,null);
+    const receipt=await program.account.movementReceipt.fetch(f.receipt(auth));
+    assert.equal(receipt.amount.toString(),amount.toString());
+    assert.equal(receipt.kind,rail==='Release'?1:rail==='Return'?2:3);
+  }
+  const state=await f.state();assert.equal(state.broker,0n);assert.equal(state.vault,350_000n);
+  assert.equal(state.customer.paid.toString(),'50000');
+});
 async function rejectsAtomic(f: Fixture, ix: TransactionInstruction, signers: Keypair[], receipt?: PublicKey, error?: RegExp) {
   const before = await f.state();
   if (error) await assert.rejects(send(ix, signers), error);

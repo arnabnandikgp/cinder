@@ -362,9 +362,14 @@ controller, with one common journal and bounded bootstrap/config transitions.
 No automatic exposure to lending or unresolved native agent rights. Offline first;
 live test requires a current approved manifest. Evidence: W04 and V01/V05.
 
-- [ ] Marginal working collateral is funded once; unconfirmed venue credit cannot admit a trade.
-- [ ] Kill/restart after withdrawal POST exposure reconciles the original attempt without double withdrawal or payout.
-- [ ] Fees, partial/failed returns, bootstrap exceptions and cleanup residuals are attributed and reported, not hidden by retries.
+- [x] Marginal working collateral is funded once; unconfirmed venue credit cannot admit a trade.
+- [x] Kill/restart after withdrawal POST exposure reconciles the original attempt without double withdrawal or payout.
+- [x] Fees, partial/failed returns, bootstrap exceptions and cleanup residuals are attributed and reported, not hidden by retries.
+
+Offline implementation evidence is in ADR 0016 and TRACKER. Historical bootstrap
+exception permission is deliberately not a default; missing/lending-active setup
+refuses admission. Native completeness/RPC authentication, production key custody
+and any live manifest remain separate G01/G03/G05 qualification gates.
 
 <a id="p17"></a>
 ## P17 — Recovery claims and Solana payout program

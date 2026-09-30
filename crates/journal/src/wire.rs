@@ -208,12 +208,14 @@ pub(crate) fn location(w: &mut Writer, l: Location) {
     w.byte(match l {
         Location::Vault => 0,
         Location::Venue => 1,
+        Location::Broker => 2,
     });
 }
 pub(crate) fn read_location(r: &mut Reader<'_>) -> Result<Location, Error> {
     match r.byte()? {
         0 => Ok(Location::Vault),
         1 => Ok(Location::Venue),
+        2 => Ok(Location::Broker),
         _ => Err(Error::Codec),
     }
 }
@@ -1213,6 +1215,8 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
         w.item(k);
     }
     w.item(&s.ledger.vault());
+    w.item(&s.ledger.broker());
+    w.byte(u8::from(s.native_funding_ready));
     w.item(&s.ledger.in_transit().map_err(|_| Error::Invalid)?);
     w.item(&s.ledger.unpaired().map_err(|_| Error::Invalid)?);
     w.count(s.ledger.movements().len());

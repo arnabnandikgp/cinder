@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 // Order classification/authority/lifecycle changes replay semantics.
-const ENGINE_REVISION: u16 = 19;
+const ENGINE_REVISION: u16 = 20;
 
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -277,6 +277,14 @@ impl<B: Backend, P: Protection> Journal<B, P> {
     /// Exact retained private transaction for authorized audit, including raw evidence.
     pub fn transaction(&self, id: CommitId) -> Option<&Transaction> {
         self.history.iter().find(|r| r.tx.id == id).map(|r| &r.tx)
+    }
+    /// Replayed outcome for a retained transaction, including rejected controls.
+    /// Private adapter provenance must not treat failed controls as authorization.
+    pub fn transaction_receipt(&self, id: CommitId) -> Option<&Receipt> {
+        self.history
+            .iter()
+            .find(|r| r.tx.id == id)
+            .map(|r| &r.receipt)
     }
     /// Private accepted history for deterministic adapter projections. Revalidate
     /// freshness first; this read view grants no exposure or economic authority.

@@ -107,6 +107,20 @@ impl std::fmt::Debug for Outbound {
     }
 }
 impl Outbound {
+    pub(crate) fn funding(origin: &str, body: PrivateBytes) -> Result<Self, Error> {
+        let origin = if origin == Origin::Testnet.url() {
+            Origin::Testnet
+        } else if origin == Origin::Mainnet.url() {
+            Origin::Mainnet
+        } else {
+            return Err(Error::Qualification);
+        };
+        Ok(Self {
+            origin,
+            path: "/api/v1/account/withdraw",
+            body,
+        })
+    }
     /// Only the prequalified origin; never follow a server-supplied redirect.
     pub fn origin(&self) -> Origin {
         self.origin
@@ -354,6 +368,57 @@ impl Gateway {
             funds_observations: vec![],
             controls: vec![],
         })
+    }
+    /// Same pooled credit bucket for P16's separately authorized funds signer.
+    /// The coordinator adds its immutable plan and financial exposure to this
+    /// transaction before one atomic commit. This is not a signing endpoint.
+    pub(crate) fn funding_transaction<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        id: CommitId,
+        at: u64,
+        profile: &Profile,
+        cost: u32,
+    ) -> Result<Transaction, Error> {
+        if journal.transaction(id).is_some()
+            || profile.commitment()? != self.profile.commitment()?
+            || cost == 0
+            || cost > self.policy.read_cost
+        {
+            return Err(Error::Qualification);
+        }
+        let history = self.history(journal, at)?;
+        self.credit(&history, at, cost, true)?;
+        self.transaction(
+            journal,
+            id,
+            at,
+            Record::Spend {
+                cost,
+                cleanup: true,
+                plan: None,
+            },
+        )
+    }
+    /// Recheck writer/key fencing immediately before a P16 funds signature.
+    pub(crate) fn funding_current<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        at: u64,
+    ) -> Result<(), Error> {
+        self.active(&self.history(journal, at)?)
+    }
+    pub(crate) fn funding_cooldown(
+        &self,
+        at: u64,
+        retry: Option<u64>,
+    ) -> Result<PrivateBytes, Error> {
+        self.evidence(Record::Cooldown {
+            until: cooldown_until(at, retry),
+        })
+    }
+    pub(crate) fn funding_expiry(&self, lifetime: u64) -> u64 {
+        lifetime.min(self.policy.expiry_ms)
     }
     /// Trusted administrator/key-release port, not a customer/API method. Record
     /// a strictly newer key epoch; rotations do not reset spent API credits.

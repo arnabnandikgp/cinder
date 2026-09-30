@@ -25,6 +25,8 @@ observation codecs with durable provenance and explicit qualification gaps, plus
 a scoped native signing boundary and shared API-credit admission tested offline.
 Independent witness/Nitro qualification, live native qualification and deployed
 services remain later phases.
+P15/P16 add the Anchor 1.2 custody vault and a durable vault/broker/venue funding
+coordinator with original-attempt reconciliation and offline signed SBF tests.
 
 ## Start here
 
@@ -50,6 +52,7 @@ services remain later phases.
 20. [Pacifica observation qualification](docs/architecture/0013-pacifica-observations.md)
 21. [Durable native signing and API credits](docs/architecture/0014-pacifica-execution.md)
 22. [Solana custody vault and normal authorization](docs/architecture/0015-solana-vault.md)
+23. [Funding coordinator and exact round-trip settlement](docs/architecture/0016-funding-coordinator.md)
 
 Resume implementation from the current handoff in the tracker.
 Ignored `work/` contains the original local research; it is not a CI dependency.

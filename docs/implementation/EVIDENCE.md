@@ -275,6 +275,20 @@ is not another financial ledger. No experimental deployment account, live signed
 payload, RPC key or customer private state is promoted. The venue controller,
 recovery proof/activation and live governance remain P16/P17/G03/G05 boundaries.
 
+## P16 funding-controller promotion
+
+[ADR 0016](../architecture/0016-funding-coordinator.md) promotes W04's durable
+original-attempt controller, causal credit/withdrawal correlation, actual-fee
+accounting and crash/cleanup requirements into the existing P08 journal. It
+records the original controller/binding/public-IDL hashes and a sanitized minimal
+deposit ABI. Broker custody is a separate location in the same financial state.
+The tracked client verifies exact signed wires and executes custody rails in SBF;
+the coordinator's actual killed-child test exercises POST-before-reply restart.
+None of these checks uses ignored research, wallet material, external endpoints,
+research account defaults or historical bootstrap permissions. Source-complete
+native settlement and authenticated chain finality remain qualified ports; codec
+and fake-observation tests do not upgrade them into live G01/P23 evidence.
+
 ## Requirement-to-phase traceability
 
 | Contract | Owning implementation | Mandatory evidence |
