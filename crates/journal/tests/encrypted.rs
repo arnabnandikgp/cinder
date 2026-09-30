@@ -234,6 +234,107 @@ fn lost_witness_reply_replays_once_and_never_redelivers_exposure() {
 }
 
 #[test]
+fn new_acceptance_repairs_old_history_before_a_second_replica_loss() {
+    let (a, b, w) = (
+        MemoryReplica::default(),
+        MemoryReplica::default(),
+        TestWitness::default(),
+    );
+    let mut j = create(&a, &b, &w);
+    j.commit(credit(j.head(), 1)).unwrap();
+    a.0.lock().unwrap().0.clear();
+    j.commit(credit(j.head(), 2)).unwrap();
+    assert_eq!(a.0.lock().unwrap().0.len(), b.0.lock().unwrap().0.len());
+    let expected = j.state().unwrap().clone();
+    b.0.lock().unwrap().0.clear();
+    assert_eq!(
+        Journal::open(backend(&a, &b, &w, 1), cipher(), config())
+            .unwrap()
+            .state()
+            .unwrap(),
+        &expected
+    );
+}
+
+#[test]
+fn read_can_recover_from_one_copy_but_failed_historical_repair_blocks_acceptance() {
+    // Current writes succeed while this adapter refuses to restore old objects.
+    struct RefuseOld {
+        inner: MemoryReplica,
+        before: u64,
+    }
+    impl Replica for RefuseOld {
+        fn identity(&self) -> [u8; 32] {
+            self.inner.identity()
+        }
+        fn get(&mut self, hash: [u8; 32]) -> Result<Frame, Error> {
+            self.inner.get(hash)
+        }
+        fn put(&mut self, f: &Frame) -> Result<(), Error> {
+            if f.head.sequence < self.before {
+                return Err(Error::Storage);
+            }
+            self.inner.put(f)
+        }
+    }
+    let (a, b, w) = (
+        MemoryReplica::default(),
+        MemoryReplica::default(),
+        TestWitness::default(),
+    );
+    let mut j = create(&a, &b, &w);
+    j.commit(credit(j.head(), 1)).unwrap();
+    drop(j);
+    let before = w.0.lock().unwrap().0;
+    a.0.lock().unwrap().0.clear();
+    let backend = Replicated::new(
+        stream(),
+        1,
+        RefuseOld {
+            inner: a,
+            before: 2,
+        },
+        b,
+        w.clone(),
+    )
+    .unwrap();
+    let mut recovered = Journal::open(backend, cipher(), config()).unwrap();
+    assert_eq!(recovered.state().unwrap().ledger().events().len(), 1);
+    assert_eq!(
+        recovered.commit(credit(recovered.head(), 2)).unwrap_err(),
+        Error::Storage
+    );
+    assert_eq!(w.0.lock().unwrap().0, before);
+}
+
+#[test]
+fn ambiguous_witness_busy_is_not_a_known_prewrite_lock_failure() {
+    struct BusyReply(TestWitness);
+    impl Witness for BusyReply {
+        fn read(&mut self, s: Stream) -> Result<Anchor, Error> {
+            self.0.read(s)
+        }
+        fn accept(&mut self, s: Stream, expected: Anchor, next: Head) -> Result<(), Error> {
+            self.0.accept(s, expected, next)?;
+            Err(Error::Busy)
+        }
+    }
+    let (a, b, w) = (
+        MemoryReplica::default(),
+        MemoryReplica::default(),
+        TestWitness::default(),
+    );
+    drop(create(&a, &b, &w));
+    let wrapped = Replicated::new(stream(), 1, a.clone(), b.clone(), BusyReply(w.clone())).unwrap();
+    let mut j = Journal::open(wrapped, cipher(), config()).unwrap();
+    let tx = credit(j.head(), 1);
+    assert_eq!(j.commit(tx.clone()).unwrap_err(), Error::Storage);
+    assert_eq!(j.state().unwrap_err(), Error::Poisoned);
+    let mut recovered = Journal::open(backend(&a, &b, &w, 1), cipher(), config()).unwrap();
+    assert!(recovered.commit(tx).unwrap().duplicate);
+}
+
+#[test]
 fn fenced_writer_cannot_ack_duplicate_or_new_action_with_loaded_key() {
     let (a, b, w) = (
         MemoryReplica::default(),

@@ -57,7 +57,8 @@ Empty/uninitialized streams have no restorable financial snapshot.
 
 1. Validate exact trusted stream and writer epoch against the fresh witness.
 2. Compute the existing atomic financial transition and encrypted frame.
-3. Durably write/read back both distinct configured replicas.
+3. Durably write/read back both distinct configured replicas. Check and repair
+   both copies of earlier accepted history; failed repair prevents new acceptance.
 4. Atomically compare-and-set `(epoch, accepted_head)` at the witness.
 5. Check the resulting authority/head, then release the journal receipt or exposure.
 
@@ -67,6 +68,12 @@ Content addressing lets a successor retry the same sequence without deleting or
 replaying an orphan. A failure after acceptance is an **unknown outcome**, not a
 rejection: the handle poisons, replay recovers the original transaction, and exact
 retry does not re-expose it. New heads are bounded before witness acceptance.
+Only a known stale CAS rejection is propagated as such. Every other witness-accept
+error, including an incorrectly returned remote `Busy`, becomes an uncertain
+storage outcome and poisons the caller. Read-only recovery uses either valid copy
+lazily and does not require the other replica to be writable; this availability
+does not authorize further single-copy acceptance. Repair is ciphertext-only and
+read back before acceptance; it cannot change the independent accepted head.
 
 `Witness` is an authenticated, replay-resistant, durably linearizable port, scoped
 by stream and caller authorization. It is not implemented by the parent-host file

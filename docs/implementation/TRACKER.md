@@ -385,7 +385,16 @@ Build/review skill guidance informed checked bounds, secrecy and adversarial tes
 no telemetry, subagent, deployment, live venue or container action.
 Implementation commit: `9cfee2b`; PR #30 is ready above #29 in native stack #28.
 P04/P05 hosted TEE checks passed on their reviewed restacked heads; the unrelated
-legacy Vercel preview remains failed. P06 hosted CI/review is pending separately.
+legacy Vercel preview remains failed. P06 TEE CI passed at `bd3e9db`. Its subsequent
+review identified two relevant edge cases: new acceptance now repairs/checks all
+historical replica copies, and witness accept errors other than known stale CAS
+rejection force uncertain-outcome poisoning. Read-only one-copy recovery remains
+available. Three targeted regressions cover sequential replica loss, refused
+historical repair, and a committed witness response mislabeled Busy. Local full
+verification of this follow-up passed: 99 Rust tests in debug/release, two
+compile-fail doctests, 23 repository tests, fmt, strict default/all-feature Clippy
+and build. No new live or container tests. CodeRabbit comments 4139804671 and
+4139804693 are addressed; updated hosted checks remain separate evidence.
 Next: proceed to P07 under the user's continuous P06–P14 authorization, checking
 P06 CI/reviews at phase boundaries. Do not start P15 or merge PRs.
 PR: https://github.com/arnabnandikgp/cinder/pull/30

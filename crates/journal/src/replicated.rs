@@ -94,10 +94,10 @@ impl<A: Replica, B: Replica, W: Witness> Replicated<A, B, W> {
         Ok(a)
     }
     fn fetch(&mut self, expected: Head) -> Result<Frame, Error> {
-        for candidate in [
-            self.first.get(expected.hash),
-            self.second.get(expected.hash),
-        ] {
+        // Recovery only needs one valid copy. Do not require repair availability
+        // to serve an authenticated read; new acceptance repairs/checks both below.
+        for replica in [&mut self.first as &mut dyn Replica, &mut self.second] {
+            let candidate = replica.get(expected.hash);
             if let Ok(frame) = candidate
                 && frame.head == expected
                 && frame.validate().is_ok()
@@ -106,6 +106,24 @@ impl<A: Replica, B: Replica, W: Witness> Replicated<A, B, W> {
             }
         }
         Err(Error::Storage)
+    }
+    fn ensure_both(&mut self, frame: &Frame) -> Result<(), Error> {
+        for replica in [&mut self.first as &mut dyn Replica, &mut self.second] {
+            if replica
+                .get(frame.head.hash)
+                .is_ok_and(|copy| copy == *frame)
+            {
+                continue;
+            }
+            replica.put(frame).map_err(|_| Error::Storage)?;
+            if !replica
+                .get(frame.head.hash)
+                .is_ok_and(|copy| copy == *frame)
+            {
+                return Err(Error::Storage);
+            }
+        }
+        Ok(())
     }
     /// Export a bounded replay snapshot of authenticated ciphertext records.
     /// It contains no decoded projection; retaining the complete history avoids
@@ -245,8 +263,8 @@ impl<A: Replica, B: Replica, W: Witness> Backend for Replicated<A, B, W> {
             return Err(Error::Limit);
         }
         // Check cumulative bounds before acceptance, not only at the next restart.
-        let total = self
-            .load()?
+        let history = self.load()?;
+        let total = history
             .iter()
             .try_fold(frame.opaque.as_bytes().len(), |n, f| {
                 n.checked_add(f.opaque.as_bytes().len()).ok_or(Error::Limit)
@@ -255,7 +273,15 @@ impl<A: Replica, B: Replica, W: Witness> Backend for Replicated<A, B, W> {
             return Err(Error::Limit);
         }
         self.copy_both(frame)?;
-        self.witness.accept(self.stream, anchor, frame.head)?;
+        // Losing an old copy must not silently turn later accepted history into
+        // single-replica durability. Restore all missing/corrupt accepted objects
+        // or refuse new acceptance. Orphans remain harmless if repair fails.
+        for accepted in &history {
+            self.ensure_both(accepted)?;
+        }
+        self.witness
+            .accept(self.stream, anchor, frame.head)
+            .map_err(|e| if e == Error::Stale { e } else { Error::Storage })?;
         // CAS already succeeded: any failure now is an uncertain caller outcome,
         // not a known rejection. Force the journal to poison until reconciliation.
         if self.anchor().map_err(|_| Error::Storage)?
