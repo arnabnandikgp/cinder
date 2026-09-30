@@ -607,6 +607,14 @@ Merge: none.
 
 ## P13 — Pacifica observations
 
+Review follow-up (2026-09-30): CodeRabbit #4141545400 addressed in two owning
+layers. P05 enforces the replay byte limit before append/exposure; P13 stores one
+exact response archive with compact hash/ordinal references in normalized and gap
+inputs. All 13 Pacifica observation groups and strict all-feature Clippy pass.
+The new 32-row/gap regression verifies exact archived bodies, reference resolution,
+bounded per-input overhead and restart reconstruction. Engine 17 carries the
+stacked semantic fences; this storage-deduplication change does not rewrite history.
+
 Work: 2026-09-30 — added the Pacifica crate, exact typed native schemas, immutable
 qualification profile, shared REST/WS identities, diagnostic views, bounded cursor
 replay and named containment. Raw provenance and economic inputs share one encrypted

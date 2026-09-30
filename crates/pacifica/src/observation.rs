@@ -8,9 +8,11 @@ use cinder_kernel::{
     math::DecimalScale,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
 const MAGIC: &[u8] = b"CINDER-PACIFICA-EVIDENCE-1\0";
+const INPUT_REF: &[u8] = b"CINDER-PACIFICA-INPUT-1\0";
 /// Maximum exact response body; larger pages must be requested with smaller limits.
 pub const MAX_BODY: usize = 16384;
 /// Maximum records per response; body and journal limits also apply.
@@ -550,17 +552,26 @@ pub fn ingest<B: Backend, P: Protection>(
     let mut view = replay(journal, profile)?;
     let old_gaps = view.gaps.clone();
     let result = view.inspect(profile, &message, journal.state()?);
+    // Exact body/routing metadata lives once in evidence. Each input points to
+    // that immutable archive and its normalized-event ordinal (MAX for a gap).
+    let digest = Sha256::digest(evidence.as_bytes());
+    let reference = |ordinal: u32| -> Result<PrivateBytes, Error> {
+        let mut bytes = INPUT_REF.to_vec();
+        bytes.extend_from_slice(&digest);
+        bytes.extend_from_slice(&ordinal.to_be_bytes());
+        Ok(PrivateBytes::new(bytes)?)
+    };
     let mut inputs = Vec::new();
     let mut unnormalized = false;
     match result {
         Ok(events) => {
-            for event in events {
+            for (ordinal, event) in events.into_iter().enumerate() {
                 inputs.push(Input {
                     source: profile.source,
                     source_cut: None,
                     authority_epoch: profile.revision,
                     observed_at: message.received_at,
-                    raw: PrivateBytes::new(message.body.as_bytes().to_vec())?,
+                    raw: reference(u32::try_from(ordinal).map_err(|_| Error::Limit)?)?,
                     event: Some(event),
                 });
             }
@@ -574,7 +585,7 @@ pub fn ingest<B: Backend, P: Protection>(
             source_cut: None,
             authority_epoch: profile.revision,
             observed_at: message.received_at,
-            raw: PrivateBytes::new(message.body.as_bytes().to_vec())?,
+            raw: reference(u32::MAX)?,
             event: None,
         });
     }

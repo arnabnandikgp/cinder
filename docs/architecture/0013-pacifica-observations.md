@@ -17,7 +17,15 @@ commit in that same transaction. Views and cursors rebuild from accepted history
 they are not another balance database. Unknown commit outcomes poison the journal;
 an exact retry produces no second effect. Changed profile/history requires an
 explicit migration, not a reinterpretation. Journal wire revision is 8 and engine
-revision is 10 after the P11 review correction; old formats reject.
+revision is 17 after the stacked review corrections; old formats reject.
+
+Each normalized input stores a compact `CINDER-PACIFICA-INPUT-1\0` reference:
+SHA-256 of its transaction's exact evidence attachment followed by a big-endian
+u32 normalized-event ordinal (`u32::MAX` for an unnormalized/gap input). The full
+body is stored once, not copied into each of up to 32 inputs. Replay retains the
+archive and every reference. The journal enforces its cumulative opaque-byte
+budget before append, using the same limit as reopen; exceeding it contains
+ingestion and does not discard evidence or grant an exposure.
 
 Trade identity is `(network, deployment, venue, native account, trade namespace,
 history_id)`, never order ID, client ID, arrival time or LI. REST/WS share the key;

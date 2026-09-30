@@ -110,6 +110,62 @@ fn setup(t: &Temp) -> Store {
     assert_eq!(c.receipt.controls, None);
     s
 }
+
+#[test]
+fn full_page_and_gap_inputs_reference_one_exact_archive_and_replay() {
+    use sha2::{Digest, Sha256};
+    let t = Temp::new();
+    let mut s = setup(&t);
+    let rows: Vec<_> = (1000..1032).map(|id| row(id, "open_long")).collect();
+    let page = msg(Kind::Trades, rest(json!(rows)));
+    assert!(page.body.len() < MAX_BODY);
+    let mut invalid = msg(Kind::Trades, rest(json!([])));
+    invalid.body = "malformed exact response".into();
+    for (n, message, count) in [(3, page, 32), (4, invalid, 1)] {
+        let exact_body = message.body.clone();
+        put(&mut s, n, message);
+        let tx = s.transaction(CommitId::new([n; 32]).unwrap()).unwrap();
+        assert_eq!(tx.evidence.len(), 1);
+        assert_eq!(tx.inputs.len(), count);
+        let archived = tx.evidence[0].as_bytes();
+        let payload = archived
+            .strip_prefix(b"CINDER-PACIFICA-EVIDENCE-1\0")
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(payload).unwrap();
+        assert_eq!(body["message"]["body"], exact_body);
+        let digest = Sha256::digest(archived);
+        for (ordinal, input) in tx.inputs.iter().enumerate() {
+            let reference = input
+                .raw
+                .as_bytes()
+                .strip_prefix(b"CINDER-PACIFICA-INPUT-1\0")
+                .unwrap();
+            assert_eq!(reference.len(), 36);
+            assert_eq!(&reference[..32], digest.as_slice());
+            let expected = if input.event.is_some() {
+                ordinal as u32
+            } else {
+                u32::MAX
+            };
+            assert_eq!(&reference[32..], &expected.to_be_bytes());
+        }
+        assert!(
+            tx.inputs
+                .iter()
+                .map(|i| i.raw.as_bytes().len())
+                .sum::<usize>()
+                < count * 64
+        );
+    }
+    let state = s.state().unwrap().clone();
+    let view = replay(&mut s, &profile()).unwrap();
+    drop(s);
+    let mut reopened = t.open();
+    assert_eq!(reopened.state().unwrap(), &state);
+    let rebuilt = replay(&mut reopened, &profile()).unwrap();
+    assert_eq!(rebuilt.gaps, view.gaps);
+    assert_eq!(rebuilt.cursors, view.cursors);
+}
 #[test]
 fn rest_ws_overlap_exact_ids_post_once_replay_and_same_commit_retry() {
     let t = Temp::new();
