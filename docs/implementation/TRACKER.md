@@ -302,6 +302,11 @@ Merge: none.
 
 ## P05 — Durable journal
 
+Review follow-up, 2026-10-01: CodeRabbit #4147277655 is valid. Added the
+missing P13 acceptance contract for qualified per-input resolution and its stable
+identity/effect/replay boundaries. No P05 admin reset was added. The plan validator
+passes (25 phases, 14 documents); P13 owns implementation and offline regressions.
+
 Work: 2026-09-30 — added cinder-journal with versioned lossless P03/P04 codecs,
 complete raw/normalized evidence and deterministic receipts/state replay; atomic
 SQLite CAS commits include postings, event consumption, shared holds and immutable

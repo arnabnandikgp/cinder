@@ -52,8 +52,14 @@ Neither a duplicate native receipt nor a conflict can release a different hold.
 Failed transactions before persistence change no authoritative state.
 
 Unknown raw evidence increments a retained containment count; P05 has no generic
-admin reset. P13 must introduce qualified resolution rather than clearing it by
-fiat. A reader must independently supply the expected genesis configuration.
+admin reset. P13 owns qualified per-input resolution, keyed by the original
+CommitId/input ordinal and exact source/evidence fingerprint. Its qualification
+port must establish the complete normalized effects or authenticated absence of
+an economic effect; an acknowledgement or a later matching snapshot is not enough.
+Resolution and effects must commit once, retain original evidence, reject conflicts
+and leave unrelated raw/lifecycle faults blocked. PLAN P13 makes this an explicit
+acceptance criterion; P05 cannot clear the gate by fiat.
+A reader must independently supply the expected genesis configuration.
 Missing, unsupported, mismatched or corrupt history is never replaced by a new
 empty customer account. Audit access returns the original private transaction;
 it belongs inside the trusted runtime, not a public endpoint.

@@ -305,6 +305,7 @@ Last ID is a global complete journal. Evidence: W03; VM-01–VM-09 qualification
 - [ ] REST/WS overlap posts one economic fill; reversal legs remain separate and empty position snapshots mean flat.
 - [ ] Precision/PnL/funding gaps remain named and disabled for dependent use; the observed fee discrepancy is not auto-written off.
 - [ ] Pagination, gaps, corrections, stale snapshots and replay cuts have tested containment; raw evidence retains provenance.
+- [ ] Qualified raw-input resolution binds the original CommitId/input ordinal and exact evidence fingerprint; normalized effects or an authenticated no-effect finding commit with resolution once. Wrong scope, conflicting/repeated resolution, restart and unrelated unresolved inputs cannot clear the exposure gate. No generic administrative reset is available.
 
 <a id="p14"></a>
 ## P14 — Pacifica signed execution boundary
