@@ -319,6 +319,16 @@ New test outcomes are recorded in TRACKER after verification, not inferred from 
 
 ## Source fingerprints
 
+P18 promotion: [ADR 0018](../architecture/0018-private-api.md) extracts W06's
+canonical capabilities, confidential transport seam, current-epoch authorization
+before replay/query, durable operation IDs and secret-safe projections. Tracked
+Rust tests use actual encrypted SQLite records and synthetic qualified policies;
+eight independent-binding wire vectors and TypeScript tests cover every method.
+No native credential, ignored research, RPC/venue call or live wallet is required.
+Numerical admission and channel/attestation implementations remain qualified ports,
+not promoted from a fake transport or illustrative hold amount. No external Cargo
+version/feature changed; the local API dependency/lockfile policy is explicit.
+
 SHA-256 of the selected local inputs when the baseline was extracted. Originals
 remain unchanged; later source revisions require a dated promotion note, not silent
 replacement of approval history. Fingerprints are provenance, not trusted execution.

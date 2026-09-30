@@ -31,4 +31,5 @@ if (args[0] === '--properties') {
   run('cargo', ['build', '--workspace', '--all-targets', '--all-features', '--locked', '--offline']);
   run('cargo', ['test', '--workspace', '--all-features', '--locked', '--offline']);
   run('cargo', ['test', '--workspace', '--all-features', '--release', '--locked', '--offline']);
+  run(process.execPath, ['scripts/check-private-client.mjs']);
 }

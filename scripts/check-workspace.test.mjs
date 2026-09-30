@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 function fixture() {
   const pkg = name => ({ name, id: name, version: '0.1.0', source: null, targets: [{ kind: ['lib'] }], dependencies: [] });
-  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica'].map(pkg);
+  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica', 'cinder-api'].map(pkg);
   packages[2].dependencies = [
     { name: 'cinder-ports', kind: null, path: '/repo/crates/ports', req: '=0.1.0', target: null },
     { name: 'cinder-kernel', kind: 'dev', path: '/repo/crates/kernel', req: '=0.1.0', target: null },
@@ -19,6 +19,7 @@ function fixture() {
     {name: 'cinder-journal', kind: null, path: '/repo/crates/journal', req: '=0.1.0', target: null},
     ...['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'serde' ? ['derive'] : name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : [], uses_default_features: name !== 'ed25519-dalek', optional: false})),
   ];
+  packages[5].dependencies = packages[4].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal', 'sha2', 'ed25519-dalek', 'zeroize'].includes(dep.name));
   const workspace_members = packages.map(p => p.id);
   packages.push(...dependencyPolicy.packages.map(p => ({...pkg(p.name), id: `${p.name}@${p.version}`, version: p.version, source: dependencyPolicy.registry, targets: [{kind: ['lib']}, ...(p.buildScript ? [{kind: ['custom-build']}] : [])]})));
   return { packages, workspace_members, resolve: {nodes: dependencyPolicy.packages.map(p => ({id: `${p.name}@${p.version}`, features: p.features}))} };

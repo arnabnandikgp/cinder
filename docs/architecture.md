@@ -39,7 +39,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Solana custody vault and normal authorization | Anchor 1.2 program, public receipts/shared paid counters and offline signed SBF tests implemented; deployment gated | P15 |
 | Funding round trip | Durable three-location coordinator, original-wire/attempt reconciliation and shared credit budget tested offline; source/live qualification gated | P16 |
 | Recovery claims | Implemented for offline review in the same vault; immutable statements, funded activation, owner claims/shared counters; actual joined preparation/delivery remains P21 | P17 |
-| Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
+| Private API/SDK | Implemented against trusted confidential-channel/admission ports; encrypted journal auth/replay, no public plaintext listener | P18 |
+| Attested client channel, actual Nitro runtime | Planned qualification | P19–P20 |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one
@@ -92,7 +93,7 @@ state. Reconciliation connects these domains; none substitutes for the others.
 
 ### Code ownership
 
-The off-chain workspace has five Rust crates:
+The off-chain workspace has six Rust crates:
 
 - `cinder-kernel`: dependency-free, `no_std`, checked integer types and pure state
   transitions. No clock, database, signer, network or venue SDK imports.
@@ -105,6 +106,9 @@ The off-chain workspace has five Rust crates:
   kernel; [ADR 0005](architecture/0005-durable-journal.md) specifies the contract.
 - `cinder-pacifica`: native observation/signing codecs and durable adapter authority;
   native execution remains separately qualified.
+- `cinder-api`: customer signatures, scoped Cinder grants and private projections
+  over the same journal. It cannot sign native pooled-account commands. Its
+  exact-integer SDK lives in `clients/private`; transport qualification remains P19.
 
 The isolated `programs/` Anchor workspace owns public Solana custody, not private
 financial accounting. Its generated typed client is `clients/vault/`; neither

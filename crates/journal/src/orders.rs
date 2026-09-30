@@ -254,6 +254,12 @@ impl State {
             .map(|(_, e)| *e)
     }
 
+    /// Current authenticated-customer epoch for trusted runtime authorization.
+    /// This read-only accessor is not a signature verifier or public account API.
+    pub fn authority_epoch(&self, account: AccountId) -> Option<u64> {
+        self.authority(account)
+    }
+
     pub(crate) fn order_action(&mut self, action: &Action) -> Result<(), ControlError> {
         match action {
             Action::AdvanceAuthority { account, epoch } => {

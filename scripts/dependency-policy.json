@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "55610b06fc0ba2c6458d512419dd53ebf1af821e090f66f38e6334df9575902b",
+  "lockfileSha256": "d62b8a53c790a55a8927db31a3437fad81382d1bdf686424db2aa43139a05d6b",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
     {

@@ -20,7 +20,7 @@
 | [P15 — Solana vault](PLAN.md#p15) | closed | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), merged `95fe3b7` |
 | [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
 | [P17 — Recovery program](PLAN.md#p17) | in progress | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), based on merged P16 |
-| [P18 — Private API and SDK](PLAN.md#p18) | open | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | — |
+| [P18 — Private API and SDK](PLAN.md#p18) | in progress | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | Local branch above #41 |
 | [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
 | [P20 — Nitro qualification](PLAN.md#p20) | open | Actual enclave, key-release, egress and storage/fencing behavior is qualified; mocks cannot stand in for hardware evidence. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
@@ -36,7 +36,7 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at `95fe3b7395ac62d8c91554e27fa9a3032d3d26b9`.
-Current branch: `tee/p17-recovery-claims`, a new shallow native stack based on
+Current branch: `tee/p18-private-api`, stacked above `tee/p17-recovery-claims` (#41), based on
 that merged trunk. The user authorized merging the reviewed stack and continuing
 implementation. P04–P16 merged atomically through `gh stack merge --yes --merge`
 on 2026-10-01; all 13 PR receipts report that exact commit. Local trunk was
@@ -63,7 +63,14 @@ four pure codec groups. Strict Rust/TypeScript checks, generated-IDL equality an
 SBF stack diagnostics pass. Ready PR #41 is published from implementation commit
 `e1b820b322ac2d87c31a4478aaacff5bcf44818e` directly above the merged TEE trunk;
 this following commit only records publication. No hosted CI/review result is claimed.
-Next: review P17, then begin P18 private grants/API/SDK on the shallow stack.
+P18 now passes the pinned complete offline runner from a clean staged-source
+export without `work/`, `stays/` or local credentials: 294 Rust tests plus two
+compile-fail doctests per debug/release profile, 24 repository tests, strict
+formatting/Clippy/all-target build and 9 TypeScript SDK tests. This is local macOS
+evidence, not a hosted Linux result, attestation qualification or independent audit.
+The Solana program/SDK are unchanged in P18; their P17 51-test SBF result was not
+rerun or relabeled as a new P18 run. No external Cargo version/feature changed.
+Next: publish P18 private grants/API/SDK above P17; neither PR is merged.
 Actual ledger-to-claim finalization/independent delivery remains P21; source/hardware
 and live release gates remain explicit. No new economic policy was adopted.
 
@@ -912,10 +919,31 @@ the original head's green checks are not evidence for the fix. P17 remains
 
 ## P18 — Private API and SDK
 
-Work: not started.
-Verification: not run; acceptance in PLAN P18.
-Unexpected: none yet.
-Next: define owner/agent request grants and operation-state SDK responses with local confidential transport ports.
+Work: 2026-10-01 — added the venue-independent `cinder-api` boundary and thin
+`clients/private` SDK. Strict Ed25519/channel/domain/epoch authorization precedes
+account-scoped replay/query; governed owner/recipient bindings and grants are
+persisted in the same protected journal. Added per-market/per-order/lifetime grant
+bounds, all-grant revocation with exposure fencing, server-only P09 admission
+port, attributed cancels, fixed owner payouts, exact position/cash/funding/hold
+views and explicit ACK/partial/unknown/actual-payment semantics. Promoted W06 in
+ADR 0018, pinned only existing crypto/tool dependencies and added offline SDK CI.
+Verification: complete pinned offline macOS runner passes from a clean staged
+export with no research/credentials/unrelated files: **294 Rust tests and two
+compile-fail doctests in each debug/release profile**, 24 repository tests, both
+strict Clippy configurations, formatting, all-target build, strict TypeScript and
+**9/9 SDK tests**. New P18 coverage is 17 encrypted-journal authorization/lifecycle
+groups and two interop groups (eight exact signed-method vectors and shared reply).
+`git diff --check` passes. No container or new vault/SBF run was necessary; no
+hosted result is claimed before publication.
+Unexpected: local fixture assertions initially confused tentative preparation
+with signature exposure, and cancel-status routing with the cancel attempt rather
+than its original order. Corrected the fixtures without weakening the actual
+authority/terminal gates. Tightened grant dispatch expiry and trade-only replay
+ownership during self-review. No new economic policy or production limit adopted.
+Next: publish ready P18 above #41, then review its hosted checks/findings before merge.
+P19 owns real attested transport, stream framing and client release verification;
+P20 hardware, P21 integrated recovery and G01–G05 remain explicit gates. No live
+venue/RPC, deployment, AWS, configured wallet, container or agent was used.
 PR: none.
 Merge: none.
 

@@ -401,9 +401,9 @@ Deliver: customer/agent grants, canonical auth, private views, operation/query
 semantics and thin SDK. Use local encrypted-transport interfaces pending P19;
 do not expose a public plaintext fallback. Evidence: W06; auth/replay/ownership tests.
 
-- [ ] Authenticate before dedupe/private lookup; one customer's order or operation cannot be queried/cancelled by another.
-- [ ] Grants enforce methods, domain, expiry, limits and epoch; native authority is never exposed to customers.
-- [ ] ACK/fill/unknown and partial/fee semantics are explicit in SDK results; logging/errors do not leak private payloads.
+- [x] Authenticate before dedupe/private lookup; one customer's order or operation cannot be queried/cancelled by another.
+- [x] Grants enforce methods, domain, expiry, limits and epoch; native authority is never exposed to customers.
+- [x] ACK/fill/unknown and partial/fee semantics are explicit in SDK results; logging/errors do not leak private payloads.
 
 <a id="p19"></a>
 ## P19 — Attested transport and client release verification

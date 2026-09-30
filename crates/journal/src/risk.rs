@@ -825,6 +825,11 @@ impl State {
             broker_free: atom(location_free[2]),
         })
     }
+    /// Whether joined risk policy is installed. This is not a qualification result;
+    /// admission still evaluates the complete proposed state at its current time.
+    pub fn has_joined_risk(&self) -> bool {
+        self.risk.is_some()
+    }
     /// Recompute current/pending margin and every configured stress prefix under
     /// this exact journal state. Errors mean unqualified, never an empty safe report.
     pub fn risk_report(&self) -> Result<Report> {
