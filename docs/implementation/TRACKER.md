@@ -5,8 +5,8 @@
 | [P00 — Foundation](PLAN.md#p00) | closed | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), merged `587a8ca` |
 | [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
 | [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
-| [P03 — Unified ledger](PLAN.md#p03) | in progress | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), ready for review |
-| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), stacked above #26 |
+| [P03 — Unified ledger](PLAN.md#p03) | closed | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), merged `3bd8c12` |
+| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
 | [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
 | [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
 | [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
@@ -35,11 +35,11 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P02 `17a29e2`.
-Current branch: `tee/p04-funding-reconciliation`, created with `gh stack add` above
-`tee/p03-unified-ledger` at `e165eca78f34d696303084d2134110c686953186` (PR #26).
-The user explicitly authorized P04 while reviewing P03; neither PR is authorized
-to merge. Preserve unrelated `stays/` and ignored `work/`. P04 extends P03's one
+Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
+Current branch: `tee/p04-funding-reconciliation`, originally created above P03
+with `gh stack add`, now rebased onto its reviewed squash merge. User authorized
+P03's review fixes and merge, not P04/P05's merges. Preserve unrelated `stays/`
+and ignored `work/`. P04 extends P03's one
 in-memory ledger with funding, fees and source-evidence containment, and updates
 the [full architecture](../architecture.md). No durable store, program, service,
 live native adapter or Nitro runtime has been implemented.
@@ -53,10 +53,10 @@ for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-P02 is merged with user authorization; P03 is open as PR #26. P04 passed local and
-clean-export verification and is ready for review as PR #27, linked with P03 in
-GitHub stack #28 using `gh stack submit --auto --open`. Next implementation phase
-is P05's durable journal, after separate authorization. Native execution and
+P03 is merged with user authorization. P04 is open as PR #27 on the TEE trunk;
+P05 is a dependent layer (#29) in GitHub stack #28 and carries its own handoff.
+P04's full local checks passed again with the reviewed arithmetic fix. Review
+and merge the remaining layers only with authorization. Native execution and
 customer-funds deployment are not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
 
@@ -210,9 +210,11 @@ Clippy. Three new regressions cover the fix; the direct reversal was explicitly
 run red before the change. The full runner also passed clean staged export tree
 `6c7dbf0a0bc1680c6dca7f609c2c9fbcd78115b3`, without ignored research or unrelated
 files; only this documentation verification note follows that snapshot.
-This direction supersedes the older
-handoff's request for merge authorization; actual merge closure belongs in the
-next authorized stack layer, with P04/P05 rebased and retested.
+Closure: fixed head `e77ad2b63108848c30f1b7629c4accd4a3c22a68` passed hosted
+Plan/handoff and Offline Rust workspace checks; CodeRabbit confirmed the fix and
+resolved its thread. The legacy Vercel preview remained failed, not a TEE test
+failure. No branch protection/ruleset or deployment settings were changed.
+Merged #26 with `gh stack merge 26 --squash --yes`; only this layer was merged.
 
 Work: 2026-09-30 — added production signed-basis fill transitions, explicit rational
 lot/tick conversion and one scoped customer/house/suspense/native ledger. Physical
@@ -245,10 +247,10 @@ remains a trusted caller obligation until P13, not inferred from passing aggrega
 Subsequent direction: user authorized P04 as a dependent stack layer while reviewing
 P03. Its base remains exactly `e165eca78f34d696303084d2134110c686953186`; no P03 branch
 rewrite or merge occurred.
-Next: review PR #26 CI/findings and obtain separate merge authorization; dependent
-P04 must be kept based on the reviewed P03 result.
+Next: keep P04/P05 rebased and verified on the reviewed merged result. P06 remains
+the next implementation phase, separate from this review fix.
 PR: https://github.com/arnabnandikgp/cinder/pull/26
-Merge: none.
+Merge: 3bd8c1287873db2d535f94b6e2e8ebb2a298458a.
 
 ## P04 — Funding, fees and reconciliation
 
@@ -284,10 +286,15 @@ fixed locally before the successful full run. The first clean-export doc check
 flagged an inline rather than line-start `Next:` handoff; corrected the formatting.
 Skill guidance informed checked
 math/adversarial testing without adding a runtime dependency or live test.
-Next: review #26 and #27 bottom-up; inspect their final CI/findings and obtain merge
-authorization. P03's branch/head is unchanged; P04 bases on `tee/p03-unified-ledger`,
-not legacy `main`. If P03 changes, restack/retest P04 and update this evidence.
-Once authorized, P05 must persist complete normalized observations (including
+Review restack, 2026-09-30: `gh stack rebase` moved this branch onto merged P03
+`3bd8c12` without conflicts. Full pinned offline checks passed with the three new
+P03 regressions: 63 Rust tests plus 2 compile-fail doctests in debug/release,
+21 script tests, formatting, strict Clippy and build. Tested tree
+`2a129549cb5e043aad88f768fa531e1f7047e997` is unchanged across the squash-merge
+restack; only this tracker closeout follows it. No containers or live calls.
+Next: review #27's final CI/findings and obtain merge authorization; it now bases
+on `product/tee-v1`, not legacy `main`. Keep P05 #29 stacked above this layer.
+P05 must persist complete normalized observations (including
 duplicates/rejections, times and dispositions) and outer raw evidence atomically
 with postings/consumption. Do not replay only the accepted event list, bypass the
 ingestion gate, or treat this in-memory evidence as crash durability.
