@@ -613,7 +613,8 @@ replay and named containment. Raw provenance and economic inputs share one encry
 journal transaction. Promoted VM-01–VM-09 and rechecked current primary documentation.
 Verification: full pinned offline runner passed: 216 Rust tests per debug/release
 profile (12 adapter groups), two doctests, 23 repository tests, strict Clippy,
-formatting and build. Clean export pending. No live calls or wallets used.
+formatting and build. Clean export `e2a9eb7` at
+`/private/tmp/cinder-p13-export.HEhqQa` passed the same runner. No live calls or wallets used.
 Unexpected: retained response attachments required an explicit journal wire/engine
 revision (8/9 initially, engine 10 after the P11 review correction). Public
 settlement/funding/completeness semantics remain insufficient;
