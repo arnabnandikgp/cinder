@@ -176,6 +176,7 @@ pub struct Journal<B: Backend, P: Protection> {
     state: State,
     head: Head,
     history: Vec<Accepted>,
+    opaque_bytes: usize,
     poisoned: bool,
 }
 impl<B: Backend, P: Protection> fmt::Debug for Journal<B, P> {
@@ -212,6 +213,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             state,
             head: frame.head,
             history: Vec::new(),
+            opaque_bytes: frame.opaque.as_bytes().len(),
             poisoned: false,
         })
     }
@@ -226,6 +228,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             state,
             head: Head::default(),
             history: Vec::new(),
+            opaque_bytes: 0,
             poisoned: true,
         };
         s.reload()?;
@@ -310,6 +313,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
         self.state = state;
         self.head = head;
         self.history = history;
+        self.opaque_bytes = total;
         self.poisoned = false;
         Ok(())
     }
@@ -352,6 +356,11 @@ impl<B: Backend, P: Protection> Journal<B, P> {
         let opaque = self.protection.seal(context, &w.finish()?)?;
         let frame = Frame::new(next, self.head.hash, opaque);
         frame.validate()?;
+        let opaque_bytes = self
+            .opaque_bytes
+            .checked_add(frame.opaque.as_bytes().len())
+            .filter(|n| *n <= MAX_HISTORY_BYTES)
+            .ok_or(Error::Limit)?;
         let mut exposures = Vec::new();
         if receipt.controls.is_none() {
             for c in &tx.controls {
@@ -376,6 +385,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
         }
         self.state = state;
         self.head = frame.head;
+        self.opaque_bytes = opaque_bytes;
         self.history.push(Accepted {
             tx,
             bytes,

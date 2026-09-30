@@ -342,6 +342,12 @@ doctests in debug/release, 23 script tests, formatting, both strict Clippy profi
 and build. The process-kill parents still exercise the intentionally ignored
 worker. Only this verification note follows the tested tree; no additional
 clean-export, container or live qualification is claimed for this follow-up.
+Stack review follow-up: P13 comment 4141545400 also exposed a P05 commit/reload
+byte-budget mismatch. Count exact protected bytes, including genesis, before
+append/exposure; update the counter only after successful append and rebuild it
+on reload. A full-budget/reopen/duplicate/exposure regression passes, along with
+all 23 journal tests and strict workspace Clippy. Existing frame bytes/semantics
+are unchanged. This is capacity containment, not automatic evidence pruning.
 Next: review #27 and #29 bottom-up; merge only with user authorization.
 If a parent changes, restack/retest descendants and update their evidence. Keep
 the stack shallow before starting another layer. P06 must close the valid-history rollback counterexample

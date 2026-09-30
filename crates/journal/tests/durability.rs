@@ -29,6 +29,62 @@ fn rehash(frame: &mut Frame) {
 }
 
 #[test]
+fn history_byte_limit_precedes_append_and_exposure_and_survives_reopen() {
+    // Deliberately padded fixture protection, not a production cipher. Count
+    // opaque bytes (including genesis/overhead), not just transaction payloads.
+    struct Padded;
+    impl Protection for Padded {
+        fn seal(&self, c: RecordContext, p: &[u8]) -> Result<PrivateBytes, Error> {
+            let inner = FixtureProtection.seal(c, p)?;
+            let mut bytes = (inner.as_bytes().len() as u32).to_be_bytes().to_vec();
+            bytes.extend_from_slice(inner.as_bytes());
+            bytes.resize(wire::MAX_RECORD, 0);
+            PrivateBytes::new(bytes)
+        }
+        fn open(&self, c: RecordContext, b: &PrivateBytes) -> Result<PrivateBytes, Error> {
+            let n = u32::from_be_bytes(b.as_bytes()[..4].try_into().unwrap()) as usize;
+            FixtureProtection.open(c, &PrivateBytes::new(b.as_bytes()[4..4 + n].to_vec())?)
+        }
+    }
+    let t = Temp::new();
+    let mut s = Journal::create(SqliteBackend::create(&t.db).unwrap(), Padded, config()).unwrap();
+    let first = transaction(
+        s.head(),
+        1,
+        vec![receipt(1, Owner::Customer(user(1)), 100)],
+        vec![reserve(1, 1), prepare(1)],
+    );
+    assert_eq!(s.commit(first.clone()).unwrap().receipt.controls, None);
+    let frames = MAX_HISTORY_BYTES / wire::MAX_RECORD;
+    for n in 2..frames {
+        let tx = transaction(s.head(), n.try_into().unwrap(), vec![], vec![]);
+        s.commit(tx).unwrap();
+    }
+    let head = s.head();
+    let overflow = transaction(
+        head,
+        frames.try_into().unwrap(),
+        vec![],
+        vec![Control::Expose(attempt(1))],
+    );
+    assert_eq!(s.commit(overflow.clone()).unwrap_err(), Error::Limit);
+    assert_eq!(s.head(), head);
+    assert!(!s.state().unwrap().attempts()[0].possibly_exposed);
+    assert!(s.commit(first).unwrap().duplicate);
+    drop(s);
+    let mut reopened = Journal::open(
+        SqliteBackend::open(&t.db, Migration::None).unwrap(),
+        Padded,
+        config(),
+    )
+    .unwrap();
+    assert_eq!(reopened.head(), head);
+    assert_eq!(reopened.commit(overflow).unwrap_err(), Error::Limit);
+    assert_eq!(reopened.head(), head);
+    assert!(!reopened.state().unwrap().attempts()[0].possibly_exposed);
+}
+
+#[test]
 fn replay_rejects_corrupt_bytes_versions_and_recomputed_wrong_projection() {
     let temp = Temp::new();
     let mut s = temp.create();
