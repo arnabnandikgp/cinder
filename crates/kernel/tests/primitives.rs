@@ -1,5 +1,5 @@
 //! P02 finite-width and canonical-value conformance, not a complete ledger.
-use cinder_kernel::{Error, amounts::*, codec::Canonical, identity::*, math::*};
+use cinder_kernel::{Error, amounts::*, codec::Canonical, identity::*, math::*, position::*};
 
 fn asset() -> AssetUnit {
     AssetUnit {
@@ -375,45 +375,28 @@ fn value_decoders_reject_unknown_schema_units_truncation_and_trailing_bytes() {
     assert_eq!(PriceTicks::decode(&price), Err(Error::InvalidSign));
 }
 
-// This is only a small conformance driver. P03 owns the production fill transition.
+// Promoted in P03: the retained golden vectors now exercise production accounting.
 fn fixture_fill(q: i64, b: i128, c: i128, x: i64, price: i128) -> (i64, i128, i128) {
-    let basis = BasisAtoms::new(market(), b);
-    let new_q = QuantityLots::new(market(), q)
-        .checked_add(QuantityLots::new(market(), x))
+    let result = Position::new(QuantityLots::new(market(), q), BasisAtoms::new(market(), b))
         .unwrap()
-        .lots();
-    if q == 0 || q.signum() == x.signum() {
-        return (
-            new_q,
-            basis
-                .checked_add(BasisAtoms::new(market(), i128::from(x) * price))
-                .unwrap()
-                .atoms(),
-            c,
-        );
-    }
-    let closed = q.unsigned_abs().min(x.unsigned_abs());
-    let (allocated, remaining) = basis.split(closed, q.unsigned_abs()).unwrap();
-    let signed_closed = i128::from(q.signum()) * i128::from(closed);
-    let realized = QuoteAtoms::new(asset(), signed_closed * price)
-        .checked_sub(QuoteAtoms::new(asset(), allocated.atoms()))
+        .fill(
+            Market::new(market(), 1, 1).unwrap(),
+            QuantityLots::new(market(), x),
+            PriceTicks::new(market(), price.try_into().unwrap()).unwrap(),
+        )
         .unwrap();
-    let open = i128::from(x) + signed_closed;
     (
-        new_q,
-        remaining
-            .checked_add(BasisAtoms::new(market(), open * price))
-            .unwrap()
-            .atoms(),
+        result.position.quantity().lots(),
+        result.position.basis().atoms(),
         QuoteAtoms::new(asset(), c)
-            .checked_add(realized)
+            .checked_add(result.realized)
             .unwrap()
             .atoms(),
     )
 }
 
 #[test]
-fn v02_signed_basis_vectors_use_primitives_without_importing_research_runtime() {
+fn v02_signed_basis_vectors_use_production_fill_without_importing_research_runtime() {
     for line in include_str!("fixtures/basis-v1.tsv")
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())

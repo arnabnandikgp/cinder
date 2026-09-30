@@ -4,8 +4,8 @@
 | --- | --- | --- | --- |
 | [P00 — Foundation](PLAN.md#p00) | closed | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), merged `587a8ca` |
 | [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
-| [P02 — Financial types and identities](PLAN.md#p02) | in progress | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), ready for review |
-| [P03 — Unified ledger](PLAN.md#p03) | open | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | — |
+| [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
+| [P03 — Unified ledger](PLAN.md#p03) | in progress | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), ready for review |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
 | [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
 | [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
@@ -35,10 +35,11 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged workspace `5aea02e`.
-Current branch: `tee/p02-financial-types`. Preserve unrelated `stays/` and local
-ignored `work/`. P02 implements pure financial types/identities; no production
-ledger, program, service or native adapter has been built.
+Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P02 `17a29e2`.
+Current branch: `tee/p03-unified-ledger`. Preserve unrelated `stays/` and local
+ignored `work/`. P03 implements the pure in-memory ledger/position foundation and
+the requested [full architecture](../architecture.md). No durable store, program,
+service, live native adapter or Nitro runtime has been implemented.
 
 Repository integration follow-up: the TEE trunk had no classic branch protection
 or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
@@ -49,8 +50,8 @@ for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-P01 is merged; P02 is implemented in PR #25, awaiting review/merge before closure.
-The ledger/journal follows. Native execution and customer-funds deployment are
+P02 is merged with user authorization; P03 passes local verification and is open as PR #26.
+Funding/fees and the durable journal follow. Native execution and customer-funds deployment are
 not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
 
@@ -175,19 +176,71 @@ when Exact division was both fractional and out of range; exactness now rejects
 first in every case. No incorrect numeric result was accepted. Checked i128
 product-first division would unnecessarily reject representable partial basis;
 used quotient/remainder decomposition with an explicit range argument instead.
-Next: review PR #25 CI/findings and obtain merge authorization. P03 must
-implement the joined ledger/fill transition (the V02 driver is test-only), qualified
-tick-to-basis conversion, ownership projections and wrong-owner/default cases.
+Closeout: final head `84d63932b2375487851bce35b507a508b4e4bcfa` passed both Cinder
+CI jobs. CodeRabbit reported success but had no submitted review or inline findings;
+this is not formal approval. Legacy Vercel preview remained failed and was not
+changed. User explicitly authorized the squash merge; local TEE trunk was fast-forwarded.
+Next: implement P03 on merged P02; V02's test-only driver is replaced by production accounting there.
 PR: https://github.com/arnabnandikgp/cinder/pull/25
-Merge: none.
+Merge: 17a29e2878bbeeea272aeb61a2051de12268754e.
 
 ## P03 — Unified ledger
 
-Work: not started.
-Verification: not run; acceptance in PLAN P03.
-Unexpected: none yet.
-Next: join customer/house/suspense and asset/basis projections; port V01–V03 before optimizing.
-PR: none.
+Review follow-up, 2026-09-30: user authorized addressing relevant CodeRabbit
+findings and merging #26 before P06. The sole actionable finding
+[4139343064](https://github.com/arnabnandikgp/cinder/pull/26#discussion_r4139343064)
+is valid: artificial reversal sublegs rejected an exact whole fill. Reproduced
+`Error::Inexact` with a failing 3/2 regression before changing production code.
+Fix allocates the exact whole-fill signed value toward zero, retaining residue
+in opening basis. Added mirrored/full-close, pooled bridge/replay and four-ratio
+property regressions; clarified the integer equations in BASELINE/ADR 0003.
+The generic docstring-percentage warning is not a missing-public-contract defect:
+public Rust items already enforce `missing_docs = deny`; private/test helper
+docstrings will not be bulk-added solely to satisfy that heuristic. No wider
+Solana-program audit, venue deployment, protocol-policy change or telemetry action.
+Review-skill guidance was used for reproduction, checked arithmetic and scope.
+The fix passed the pinned macOS full offline runner: 42 Rust tests and two
+compile-fail doctests in debug/release, 21 script tests, formatting and strict
+Clippy. Three new regressions cover the fix; the direct reversal was explicitly
+run red before the change. The full runner also passed clean staged export tree
+`6c7dbf0a0bc1680c6dca7f609c2c9fbcd78115b3`, without ignored research or unrelated
+files; only this documentation verification note follows that snapshot.
+This direction supersedes the older
+handoff's request for merge authorization; actual merge closure belongs in the
+next authorized stack layer, with P04/P05 rebased and retested.
+
+Work: 2026-09-30 — added production signed-basis fill transitions, explicit rational
+lot/tick conversion and one scoped customer/house/suspense/native ledger. Physical
+vault, native signed cash and full-transfer receivables reconcile without duplicating
+assets. Stored execution routes bind fill ownership; exact normalized duplicates
+are no-ops and changed payloads conflict. Read-only diagnostics expose deficits
+even for net-flat external positions. Added the requested detailed architecture,
+ADR 0003 hand derivations/limitations and tracked research promotion.
+Verification: pinned macOS arm64 Rust 1.97.1 / Node 24.21.0 `node scripts/check.mjs`
+passed 21 script tests, 39 Rust tests and 2 compile-fail doctests in debug/release,
+formatting, strict Clippy and build. This includes 14 new ledger tests, 25,020
+position/fill combinations at two marks, and 12 seeded histories of 128 fills at
+three marks against an independent cash-flow oracle, followed by exact replay.
+V02 now uses production accounting rather than a test-only transition. Focused
+self-review covered ownership routing, native/private basis mismatch, physical
+versus signed cash, second-leg failure atomicity, replay conflicts, source scopes,
+suspense and i64 minimum/checked-overflow behavior. No container/live venue/wallet/
+chain/AWS run; no machine proof or independent audit. The full runner also passed
+from clean staged export tree `3b4e21e374c02abf72327e13ac98d3915352fc6d`, excluding
+`work/`, `stays/` and Git metadata; only documentation closeout follows that snapshot.
+`node scripts/check.mjs --properties` passed all 8 discovered property tests.
+Implementation commit: `2dfa0e89cc9da6d348f240bf099e484a09363f94`; only this tracker
+closeout follows it. Hosted CI and independent review are pending; inspect the
+final PR head before merge, rather than carrying local results into a CI claim.
+Unexpected: the first strict Clippy run flagged a test's modulo parity check; fixed
+to the pinned toolchain idiom. Native cash and private realized cash intentionally
+differ when external netting realizes PnL, so the structural check uses cash minus
+basis rather than demanding identical cash/basis sums. Normalized causal evidence
+remains a trusted caller obligation until P13, not inferred from passing aggregate checks.
+Next: review PR #26 CI/findings and obtain merge authorization. P04 then adds
+qualified funding/fees and discrepancy containment on this same ledger, not a second
+book. Do not merge P03 or start P04 without subsequent authorization.
+PR: https://github.com/arnabnandikgp/cinder/pull/26
 Merge: none.
 
 ## P04 — Funding, fees and reconciliation

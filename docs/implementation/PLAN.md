@@ -145,10 +145,13 @@ Deliver: one pure transition state with customer/house/suspense ownership, cash 
 physical assets, basis/PnL and explicit shortfall diagnostics. All external changes
 have named provenance; no plugin gets a second balance sheet. Evidence: W01–W02;
 V01–V03, wrong-owner and opposing-position/default conformance vectors.
+Also deliver the user-requested [full system architecture](../architecture.md),
+including component responsibilities, trust boundaries, end-to-end operation and
+the distinction between implemented and planned phases.
 
-- [ ] Opening, scaling, partial/full closes and reversals preserve exact basis and bridge identities.
-- [ ] Net-flat default remains visibly underbacked; negative customer claims are not spendable assets.
-- [ ] Wrong-user attribution fails even when aggregate exposure/equity matches; projections cannot double-count assets.
+- [x] Opening, scaling, partial/full closes and reversals preserve exact basis and bridge identities.
+- [x] Net-flat default remains visibly underbacked; negative customer claims are not spendable assets.
+- [x] Wrong-user attribution fails even when aggregate exposure/equity matches; projections cannot double-count assets.
 
 <a id="p04"></a>
 ## P04 — Funding, fees and evidence reconciliation

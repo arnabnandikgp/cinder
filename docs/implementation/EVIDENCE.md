@@ -50,6 +50,16 @@ fingerprints, signed-basis/identity requirements, tracked golden vectors and the
 limits. Primitive tests no longer depend on ignored research. V02's joined ledger
 transition remains P03; native precision/causal qualification remains P13.
 
+### P03: joined position and location ledger
+
+[ADR 0003](../architecture/0003-unified-ledger.md) records the one-book bridge,
+source hashes, attribution boundary and promoted implementation tests. V01/V03
+and the winner/loser/default cases run against the Rust ledger; V02 now invokes
+the production fill transition. The [system architecture](../architecture.md)
+maps approved W01–W09 requirements to their future components without treating
+prototypes as deployed services. P04 onward still owns funding/fees, durable
+consumption, admission, full transfer lifecycle and native qualification.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:

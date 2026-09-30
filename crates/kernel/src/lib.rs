@@ -3,14 +3,16 @@
 //!
 //! Inputs must contain all required observations. Kernel code must not access
 //! clocks, stores, signers or networks. Canonical codecs use bounded heap buffers
-//! through `alloc`, without third-party dependencies. No ledger or dispatch exists.
+//! through `alloc`, without third-party dependencies. No durable store or dispatch exists.
 
 extern crate alloc;
 
 pub mod amounts;
 pub mod codec;
 pub mod identity;
+pub mod ledger;
 pub mod math;
+pub mod position;
 
 /// Explicit primitive rejection; none of these errors mutates a ledger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
