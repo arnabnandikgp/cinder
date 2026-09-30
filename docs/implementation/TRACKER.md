@@ -8,7 +8,7 @@
 | [P03 — Unified ledger](PLAN.md#p03) | closed | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), merged `3bd8c12` |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
 | [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
-| [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | Local verification; stacked above #29 |
+| [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
 | [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
 | [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
 | [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
@@ -383,9 +383,12 @@ Test-only SQLite witness required signed integer conversions; fixed locally.
 Strict Clippy requested a fixture type alias; fixed before full verification.
 Build/review skill guidance informed checked bounds, secrecy and adversarial tests;
 no telemetry, subagent, deployment, live venue or container action.
-Next: publish the verified P06 stacked PR, then proceed to P07
-under the user's continuous P06–P14 authorization. Do not start P15 or merge PRs.
-PR: none.
+Implementation commit: `9cfee2b`; PR #30 is ready above #29 in native stack #28.
+P04/P05 hosted TEE checks passed on their reviewed restacked heads; the unrelated
+legacy Vercel preview remains failed. P06 hosted CI/review is pending separately.
+Next: proceed to P07 under the user's continuous P06–P14 authorization, checking
+P06 CI/reviews at phase boundaries. Do not start P15 or merge PRs.
+PR: https://github.com/arnabnandikgp/cinder/pull/30
 Merge: none.
 
 ## P07 — Order intents and reservations
