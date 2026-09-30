@@ -9,7 +9,7 @@
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
 | [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
 | [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
-| [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | Local implementation; publication follows base review fixes |
+| [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), stacked above #30 |
 | [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
 | [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
 | [P10 — Protection claims](PLAN.md#p10) | open | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | — |
@@ -422,8 +422,9 @@ Unexpected: internal binding time exposed an old-receive-time rejection: financi
 projection now uses monotone commit time while retaining the original input time.
 Journal wire is explicitly revision 2 / engine 3; updated old-revision fixtures.
 P06 review fixes were made and tested in the owning layer, then P07 was restacked.
-Next: publish P07, then continue P08 under the user's P06–P14 authorization.
-PR: none.
+Next: P07 is ready as #31. Continue P08 under the user's P06–P14 authorization;
+inspect hosted checks/reviews at phase boundaries. Do not merge or start P15.
+PR: https://github.com/arnabnandikgp/cinder/pull/31
 Merge: none.
 
 ## P08 — Funds and payouts
