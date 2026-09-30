@@ -1,7 +1,17 @@
 {
-  "lockfileSha256": "7f3cb6253fbbf465ee0dfcdd3da5497c38a393ed300336ca04a4182c3abc084d",
+  "lockfileSha256": "05e0ae6f7491a3889cb934a2ab4010d16659c852632176704f38be77dc1f590c",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
+    {
+      "name": "aead",
+      "version": "0.5.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "getrandom",
+        "rand_core"
+      ]
+    },
     {
       "name": "bitflags",
       "version": "2.13.2",
@@ -27,6 +37,33 @@
       "features": []
     },
     {
+      "name": "chacha20",
+      "version": "0.9.1",
+      "buildScript": false,
+      "features": [
+        "zeroize"
+      ]
+    },
+    {
+      "name": "chacha20poly1305",
+      "version": "0.10.1",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "getrandom",
+        "rand_core"
+      ]
+    },
+    {
+      "name": "cipher",
+      "version": "0.4.4",
+      "buildScript": false,
+      "features": [
+        "zeroize"
+      ]
+    },
+    {
       "name": "cpufeatures",
       "version": "0.2.17",
       "buildScript": false,
@@ -37,6 +74,8 @@
       "version": "0.1.7",
       "buildScript": false,
       "features": [
+        "getrandom",
+        "rand_core",
         "std"
       ]
     },
@@ -82,6 +121,18 @@
       ]
     },
     {
+      "name": "getrandom",
+      "version": "0.2.17",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "inout",
+      "version": "0.1.4",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "libc",
       "version": "0.2.189",
       "buildScript": true,
@@ -102,10 +153,30 @@
       ]
     },
     {
+      "name": "opaque-debug",
+      "version": "0.3.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "pkg-config",
       "version": "0.3.34",
       "buildScript": false,
       "features": []
+    },
+    {
+      "name": "poly1305",
+      "version": "0.8.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "rand_core",
+      "version": "0.6.4",
+      "buildScript": false,
+      "features": [
+        "getrandom"
+      ]
     },
     {
       "name": "rusqlite",
@@ -141,8 +212,20 @@
       "features": []
     },
     {
+      "name": "subtle",
+      "version": "2.6.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "typenum",
       "version": "1.20.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "universal-hash",
+      "version": "0.5.1",
       "buildScript": false,
       "features": []
     },
@@ -157,6 +240,21 @@
       "version": "0.9.5",
       "buildScript": false,
       "features": []
+    },
+    {
+      "name": "wasi",
+      "version": "0.11.1+wasi-snapshot-preview1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "zeroize",
+      "version": "1.8.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default"
+      ]
     }
   ]
 }

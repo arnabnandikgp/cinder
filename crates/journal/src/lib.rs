@@ -1,7 +1,8 @@
-//! Atomic persistence boundary. No native transport, signer or production cipher.
-//! Private record protection is mandatory and supplied by the P06 trusted runtime.
+//! Atomic private persistence. No native transport, signer or deployed witness.
 
+pub mod encrypted;
 pub mod model;
+pub mod replicated;
 pub mod sqlite;
 pub mod wire;
 use cinder_kernel::{identity::Domain, ledger::Config};
@@ -128,6 +129,11 @@ pub trait Backend {
     fn load(&mut self) -> Result<Vec<Frame>, Error>;
     /// CAS append; None expects an empty, explicitly created store. No implicit retries.
     fn append(&mut self, expected: Option<Head>, frame: &Frame) -> Result<(), Error>;
+    /// Revalidate authority/freshness before serving a durable retry. Plain P05
+    /// storage has no independent witness; replicated storage overrides this.
+    fn check_current(&mut self, _expected: Head) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 /// A one-shot local action delivery following a confirmed durable exposure record.
@@ -242,6 +248,16 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             Ok(&self.state)
         }
     }
+    /// Check the independently witnessed current head/epoch before returning a
+    /// view. A cached `state()` is not present writer authority. Read freshness is
+    /// linearized at this check; it does not revoke already escaped capabilities.
+    pub fn verified_state(&mut self) -> Result<&State, Error> {
+        if let Err(error) = self.backend.check_current(self.head) {
+            self.poisoned = true;
+            return Err(error);
+        }
+        self.state()
+    }
     /// Last locally verified head; a stale value is not an independent freshness witness.
     pub fn head(&self) -> Head {
         self.head
@@ -322,6 +338,10 @@ impl<B: Backend, P: Protection> Journal<B, P> {
     pub fn commit(&mut self, tx: Transaction) -> Result<Committed, Error> {
         if self.poisoned {
             return Err(Error::Poisoned);
+        }
+        if let Err(error) = self.backend.check_current(self.head) {
+            self.poisoned = true;
+            return Err(error);
         }
         let bytes = wire::encode_transaction(&tx)?;
         if let Some(old) = self.history.iter().find(|a| a.tx.id == tx.id) {

@@ -8,7 +8,7 @@
 | [P03 — Unified ledger](PLAN.md#p03) | closed | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), merged `3bd8c12` |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
 | [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
-| [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
+| [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | Local verification; stacked above #29 |
 | [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
 | [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
 | [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
@@ -36,12 +36,13 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p05-durable-journal`, created with `gh stack add` above
-`tee/p04-funding-reconciliation` at `2ed38812cedabf89cc6d49afc5d2c69663f2660f`
-(PR #27), now restacked on merged P03. User authorized P03's review fixes and
-merge, not P04/P05's merges. Preserve unrelated `stays/` and ignored `work/`.
-P05 adds the local durable journal, not production encrypted storage, a program,
-service, live native adapter or Nitro runtime.
+Current branch: `tee/p06-encrypted-durability`, created with `gh stack add` above
+P05 `48075d3fed669a5543f63867376640ccc36d561c` (PR #29). User authorized continuous
+stacked P06–P14 implementation while away, stopping before P15; no merges or new
+external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
+`work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
+new permissions or a genuine unresolved blocker. P06 supplies local crypto and
+trusted-service contracts, not a deployed witness or Nitro runtime.
 
 Repository integration follow-up: the TEE trunk had no classic branch protection
 or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
@@ -363,10 +364,27 @@ Merge: none.
 
 ## P06 — Encrypted durability
 
-Work: not started.
-Verification: not run; acceptance in PLAN P06.
-Unexpected: none yet.
-Next: promote M2 corruption/rollback cases and define the authenticated head/writer-epoch interface.
+Work: 2026-09-30 — added versioned XChaCha20-Poly1305 records, random per-proposal
+nonces, stream/context binding and explicit key generation. Added distinct
+content-addressed replica ports/files, two-copy readback-before-witness acceptance,
+bounded full encrypted replay snapshots, current-head/epoch checks and poisoned
+unknown outcomes. Keys/private byte buffers are zeroized on ordinary drop; no
+universal memory-erasure claim. M2/W06 cases promoted into tracked tests/ADR 0006.
+Verification: pinned macOS arm64 Rust 1.97.1 / Node 24.21.0 full offline runner
+passed: 96 Rust tests plus 2 compile-fail doctests in debug/release, 23 script
+tests, formatting, default/all-features strict Clippy and build. Eleven P06 tests
+include four actual child kills; the two ignored workers are invoked by their
+parent tests (P05 and P06). The same full runner passed clean staged export tree
+`0a802fbecba10d3c003f5a52f0828cb03105bb99`, with no `work/`, `stays/` or Git
+metadata; only this handoff closeout follows it. Build caches were reused.
+Unexpected: caught accidental replica aliasing in self-review and added an identity
+guard/regression; distinct IDs still do not prove infrastructure independence.
+Test-only SQLite witness required signed integer conversions; fixed locally.
+Strict Clippy requested a fixture type alias; fixed before full verification.
+Build/review skill guidance informed checked bounds, secrecy and adversarial tests;
+no telemetry, subagent, deployment, live venue or container action.
+Next: publish the verified P06 stacked PR, then proceed to P07
+under the user's continuous P06–P14 authorization. Do not start P15 or merge PRs.
 PR: none.
 Merge: none.
 

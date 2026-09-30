@@ -15,10 +15,10 @@ Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
 without operator assistance. The planning foundation and pinned workspace are
 merged, including exact financial primitives and canonical event identities.
-The open P03–P05 stack adds the joined ledger, full-system architecture,
-funding/fee accounting, evidence containment and a local atomic journal with
-crash/replay tests. Production encrypted persistence, native adapters and deployed
-services remain later phases.
+P03's joined ledger is merged. The open P04–P06 stack adds funding/fee accounting,
+evidence containment, atomic replay, AEAD ciphertext replication and writer fencing
+against a trusted witness port. Independent witness/Nitro qualification, native
+adapters and deployed services remain later phases.
 
 ## Start here
 
@@ -34,6 +34,7 @@ services remain later phases.
 10. [Unified ledger decision and invariants](docs/architecture/0003-unified-ledger.md)
 11. [Funding, fees and evidence reconciliation](docs/architecture/0004-funding-reconciliation.md)
 12. [Durable journal and replay boundary](docs/architecture/0005-durable-journal.md)
+13. [Encrypted durability and writer epochs](docs/architecture/0006-encrypted-durability.md)
 
 These tracked documents are sufficient to start the first implementation phase.
 Ignored `work/` contains the original local research; it is not a CI dependency.
@@ -50,6 +51,6 @@ node scripts/check.mjs
 ```
 
 The four local crates are `cinder-kernel`, `cinder-ports`, `cinder-test-support`
-and `cinder-journal`. Only the journal uses pinned storage/hash dependencies;
+and `cinder-journal`. Only the journal uses pinned storage/hash/AEAD dependencies;
 the kernel remains dependency-free. No check uses live endpoints.
 Node runs repository checks, not the financial runtime.

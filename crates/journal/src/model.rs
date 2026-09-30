@@ -10,14 +10,16 @@ use cinder_kernel::{
     ledger::{evidence::Disposition, *},
 };
 use std::fmt;
+use zeroize::Zeroize;
 
 /// Private bytes: never print raw evidence or attempted signing material in Debug.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PrivateBytes(Vec<u8>);
 impl PrivateBytes {
     /// Retain exact bounded bytes; caller excludes credentials/transport headers.
-    pub fn new(bytes: Vec<u8>) -> Result<Self, Error> {
+    pub fn new(mut bytes: Vec<u8>) -> Result<Self, Error> {
         if bytes.len() > MAX_RECORD {
+            bytes.zeroize();
             Err(Error::Limit)
         } else {
             Ok(Self(bytes))
@@ -31,6 +33,11 @@ impl PrivateBytes {
 impl fmt::Debug for PrivateBytes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PrivateBytes([REDACTED])")
+    }
+}
+impl Drop for PrivateBytes {
+    fn drop(&mut self) {
+        self.0.zeroize();
     }
 }
 

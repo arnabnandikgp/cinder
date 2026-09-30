@@ -51,7 +51,10 @@ controllers must reconcile through actual evidence rather than access that oracl
 The local journal is `crates/journal`; its tests create and remove only uniquely
 named disposable temporary directories. `test-hooks` is a test-only feature used
 by the all-features runner, not a deployment feature. Its fixture protection is
-deliberately insecure; there is no production cipher or plaintext fallback.
+deliberately insecure and must never protect real data. P06 supplies an actual AEAD
+record path with a required trusted witness contract; tests of that path use local
+witness doubles, not production-independent infrastructure. See
+[ADR 0006](architecture/0006-encrypted-durability.md). There is no plaintext fallback.
 Add future packages only with documented ownership and an updated dependency guard.
 
 Ordinary tests must use tracked sanitized fixtures. Never mount ignored `work/`,

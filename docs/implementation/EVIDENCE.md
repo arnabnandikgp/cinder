@@ -83,6 +83,14 @@ The valid-history rollback counterexample is retained for P06: the fixture
 protector and public hash chain are not cryptographic or freshness evidence.
 No funding prototype, wallet, signed live payload or M1/M2 authority was promoted.
 
+### P06: encrypted accepted tail and writer epochs
+
+[ADR 0006](../architecture/0006-encrypted-durability.md) promotes W05/W06 corruption,
+rollback, two-copy acceptance, orphans and writer-fencing cases into the same Rust
+journal. Real AEAD and local ciphertext file/crash tests replace toy protection
+for this path. The witness remains a trusted synthetic port; no independent remote
+witness, hardware evidence, live signing authority or experimental keys are promoted.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:

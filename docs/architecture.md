@@ -26,8 +26,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Build, typed amounts, IDs, canonical primitive encoding | Implemented and previously merged | P01–P02 |
 | Single quote-pool ledger, exact positions, ownership, cash/location bridge | Implemented in base PR; pure in-memory proposals | P03 |
 | Funding, fees, source discrepancies | Implemented in base stack; qualified normalized inputs, no live adapter | P04 |
-| Local atomic journal and replay | Implemented in this layer; opaque storage, mandatory protection interface, no production cipher | P05 |
-| Encrypted replicas, current-head witness and writer fencing | Planned; not supplied by local SQLite/hash chaining | P06 |
+| Local atomic journal and replay | Implemented in base stack; opaque storage and mandatory protection interface | P05 |
+| Encrypted replicas, current-head witness and writer fencing | Implemented against a trusted witness port; no independently deployed witness or Nitro qualification | P06 |
 | Intent/funds controllers, joined risk, protection, liquidation, ADL | Planned; no execution service yet | P07–P12 |
 | Pacifica observation and signing adapters | Planned; research evidence is not an implemented adapter | P13–P14 |
 | Solana custody, funding round trip, recovery claims | Planned; bounded prototypes remain evidence only | P15–P17 |
@@ -282,9 +282,9 @@ proposal refuses. Bounded flat-cash reservations are not P09 margin approval;
 exactly one prepared attempt per hold can become possibly exposed, and a lost
 reply never regenerates its local delivery. Disk/uncertain commit errors poison
 the coordinator until explicit replay. This is not authentication or permission
-to send money. P06 still owns AEAD, replication, freshness and writer fencing;
-P05's test protector is intentionally insecure and its public hash chain cannot
-detect a valid complete rollback.
+to send money. P06 adds [AEAD, replication and witnessed acceptance](architecture/0006-encrypted-durability.md).
+Its restore safety is conditional on the independently authenticated witness port;
+the P05-only protector/public chain still cannot detect complete valid rollback.
 
 ## 6. Normal operating flows
 

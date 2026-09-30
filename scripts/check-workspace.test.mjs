@@ -12,7 +12,7 @@ function fixture() {
   ];
   packages[3].dependencies = [
     { ...packages[2].dependencies[1], kind: null },
-    ...['rusqlite', 'sha2'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'rusqlite' ? ['bundled'] : [], uses_default_features: name === 'sha2', optional: false})),
+    ...['rusqlite', 'sha2', 'chacha20poly1305', 'zeroize'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'rusqlite' ? ['bundled'] : [], uses_default_features: name !== 'rusqlite', optional: false})),
   ];
   const workspace_members = packages.map(p => p.id);
   packages.push(...dependencyPolicy.packages.map(p => ({...pkg(p.name), version: p.version, source: dependencyPolicy.registry, targets: [{kind: ['lib']}, ...(p.buildScript ? [{kind: ['custom-build']}] : [])]})));

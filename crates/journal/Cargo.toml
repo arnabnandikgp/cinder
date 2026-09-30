@@ -11,6 +11,8 @@ description = "Atomic opaque-record journal and deterministic Cinder replay"
 cinder-kernel.workspace = true
 rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
 sha2 = "=0.10.9"
+chacha20poly1305 = "=0.10.1"
+zeroize = "=1.8.2"
 
 [features]
 test-hooks = []

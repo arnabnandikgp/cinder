@@ -64,6 +64,11 @@ and an explicit distinction between a tested example and a production assumption
 - Use a shallow native GitHub stack, normally at most 2–3 open layers. First base is
   `product/tee-v1`; a dependent PR bases on the prior layer's branch. Independent
   phases can have separate stacks after shared dependencies land.
+  Run-specific exception, 2026-09-30: user explicitly authorized successive stacked
+  P06–P14 PRs while away. Keep each phase independently reviewable and verified;
+  do not merge any layer or start P15. Stop for material new policy/security choices
+  or external permissions. This supersedes the normal shallow-depth preference,
+  not any acceptance criterion or production gate.
 - Initial local setup: `gh stack init --base product/tee-v1 <branch>`. Inspect
   `gh stack view` before `gh stack submit`; submission can push every stack branch.
   Review the current CLI help before publishing. Do not accidentally open against
@@ -203,9 +208,13 @@ freshness-witness interfaces, restore procedure and writer fencing. A local fake
 witness tests the contract, not independence; production witness choice is G03.
 Evidence: W05–W06; corruption, stale valid ciphertext and split-writer kill tests.
 
-- [ ] Acknowledgement waits for specified durable commit; one replica loss restores, insufficient valid evidence fails closed.
-- [ ] Restoring an old authentic snapshot cannot silently roll back claims/paid counters or revive an old writer.
-- [ ] Host-visible files/logs exclude private plaintext; witness/key/availability assumptions are documented and testable.
+- [x] Acknowledgement waits for specified durable commit; one replica loss restores, insufficient valid evidence fails closed.
+- [x] Restoring an old authentic snapshot cannot silently roll back claims/paid counters or revive an old writer.
+- [x] Host-visible files/logs exclude private plaintext; witness/key/availability assumptions are documented and testable.
+
+Implementation and trusted-port limits: [ADR 0006](../architecture/0006-encrypted-durability.md).
+Witness independence, actual Nitro key release and native credential fencing are
+not established by local files/process tests; G03/P20 remain explicit gates.
 
 <a id="p07"></a>
 ## P07 — Order intents and shared reservations

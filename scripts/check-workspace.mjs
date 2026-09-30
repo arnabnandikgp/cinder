@@ -16,7 +16,7 @@ const allowed = new Map([
   ['cinder-kernel', []],
   ['cinder-ports', []],
   ['cinder-test-support', ['cinder-ports:normal', 'cinder-kernel:dev']],
-  ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal']],
+  ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
@@ -45,10 +45,10 @@ export function validateWorkspace(metadata) {
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
-      if (pkg.name === 'cinder-journal' && ['rusqlite', 'sha2'].includes(dep.name)) {
+      if (pkg.name === 'cinder-journal' && ['rusqlite', 'sha2', 'chacha20poly1305', 'zeroize'].includes(dep.name)) {
         const expected = approved.get(dep.name);
         const features = dep.name === 'rusqlite' ? ['bundled'] : [];
-        if (dep.source !== dependencyPolicy.registry || dep.path || dep.req !== `=${expected.version}` || dep.target != null || dep.optional || dep.uses_default_features !== (dep.name === 'sha2') || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: storage dependency configuration not approved`);
+        if (dep.source !== dependencyPolicy.registry || dep.path || dep.req !== `=${expected.version}` || dep.target != null || dep.optional || dep.uses_default_features !== (dep.name !== 'rusqlite') || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: storage dependency configuration not approved`);
         continue;
       }
       if (dep.source != null || !dep.path || dep.req !== '=0.1.0' || dep.target != null) errors.push(`${pkg.name}: dependency must be an unconditional exact local pin`);
@@ -82,6 +82,6 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
     for (const error of errors) process.stderr.write(`${error}\n`);
     process.exitCode = 1;
   } else {
-    process.stdout.write('Workspace boundaries OK: 4 local packages; kernel remains dependency-free; pinned storage dependencies only.\n');
+    process.stdout.write('Workspace boundaries OK: 4 local packages; kernel remains dependency-free; pinned storage/crypto dependencies only.\n');
   }
 }
