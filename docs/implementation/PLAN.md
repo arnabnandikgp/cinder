@@ -333,9 +333,9 @@ matching, auth capability checks, rolling API-credit limits and cleanup reserve.
 No blanket modify/DCA/conditional-order support or pooled cancel-all exposure.
 Evidence: W03–W04; captured sanitized signing vectors and fake-server failure tests.
 
-- [ ] Signed domain/expiry/account/attempt matches the admitted action; replay and key-epoch changes fail safely.
-- [ ] Hidden ACK, 429, delayed response and cancel race reconcile before retry; cleanup capacity cannot be spent on new orders.
-- [ ] Native fund-moving permissions are explicitly contained by the custody design; no false trading-only credential claim.
+- [x] Signed domain/expiry/account/attempt matches the admitted action; replay and key-epoch changes fail safely. Native signature omissions are explicit and covered by local envelope/key-scope requirements, not misrepresented as native enforcement.
+- [x] Hidden ACK, 429, delayed response and cancel race reconcile before retry; cleanup capacity cannot be spent on new orders.
+- [x] Native fund-moving permissions are explicitly contained by the custody design; no false trading-only credential claim. P14 implements the narrow signer allowlist; onward vault custody and attested key release remain P15/P16/P20 gates.
 
 <a id="p15"></a>
 ## P15 — Solana vault and normal-path authorization

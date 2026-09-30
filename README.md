@@ -46,8 +46,11 @@ services remain later phases.
 16. [Joined risk and peak-path capital](docs/architecture/0009-joined-risk.md)
 17. [Protection claims and repeated deficits](docs/architecture/0010-protection-claims.md)
 18. [Bounded liquidation and close exceptions](docs/architecture/0011-liquidation-exceptions.md)
+19. [ADL allocation and restoration](docs/architecture/0012-adl-restoration.md)
+20. [Pacifica observation qualification](docs/architecture/0013-pacifica-observations.md)
+21. [Durable native signing and API credits](docs/architecture/0014-pacifica-execution.md)
 
-These tracked documents are sufficient to start the first implementation phase.
+Resume implementation from the current handoff in the tracker.
 Ignored `work/` contains the original local research; it is not a CI dependency.
 Later phases must promote their needed sanitized specifications and fixtures before
 relying on them. No wallets, credentials, signed live requests or private customer
@@ -61,7 +64,7 @@ offline with the same command used in CI:
 node scripts/check.mjs
 ```
 
-The four local crates are `cinder-kernel`, `cinder-ports`, `cinder-test-support`
-and `cinder-journal`. Only the journal uses pinned storage/hash/AEAD dependencies;
-the kernel remains dependency-free. No check uses live endpoints.
+The five local crates are `cinder-kernel`, `cinder-ports`, `cinder-test-support`,
+`cinder-journal` and `cinder-pacifica`. Storage, cryptography and native JSON/signing
+dependencies stay outside the dependency-free kernel. No check uses live endpoints.
 Node runs repository checks, not the financial runtime.

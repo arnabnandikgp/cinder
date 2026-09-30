@@ -655,15 +655,17 @@ real Ed25519 signer, GTC/ALO/IOC and attributed cancel encoding, durable key epo
 shared API-credit/read admission and cleanup reserve, plus persisted unknown/429
 response handling. No arbitrary-message or money-moving signer is exposed.
 Verification: full pinned runner passed 230 Rust tests per debug/release profile,
-two doctests and 23 repository tests. Subsequent ACK parsing/dependency-identity
-hardening passed focused adapter tests and all 24 repository tests; clean export
-of the final implementation is pending. Includes 14 signing/execution groups.
+two doctests and initially 23 repository tests. After ACK parsing/dependency-identity
+hardening, the final clean tracked export of `0bd24d3` at
+`/private/tmp/cinder-p14-export.wlqXju` passed the full pinned runner: 230 Rust tests
+per debug/release profile, two doctests, all 24 repository tests, formatting, strict
+Clippy in both feature configurations and build. Includes 14 signing/execution groups.
 Unexpected: native signatures omit account/domain/epoch; bind them in the durable
 envelope and require independently scoped keys. Limits are one-sided and native
 agent authority is wider than trading; neither limitation is concealed. Read-credit
 reservations include bounded delivery time; rotation does not replenish them. P13
 hosted CI/CodeRabbit are green, no inline comments at this boundary.
-Next: finish full checks and clean export, open ready stacked P14, then STOP BEFORE
+Next: open ready stacked P14, then STOP BEFORE
 P15. No merges, live calls, Solana vault work or new permissions in this run.
 PR: none.
 Merge: none.
