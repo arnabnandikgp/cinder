@@ -37,7 +37,7 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
 Current branch: `tee/p11-liquidation-exceptions`, created with `gh stack add` above
-P10 #34 (`e109a7f`). User authorized continuous
+P10 #34 (`a1309af`, including reviewed scenario-key fix). User authorized continuous
 stacked P06–P14 implementation while away, stopping before P15; no merges or new
 external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
 `work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
@@ -539,12 +539,24 @@ Merge: none.
 
 ## P11 — Liquidation and exceptions
 
-Work: 2026-09-30 — started bounded liquidation/close allocation and exceptional
+Work: 2026-09-30 — implemented bounded liquidation/close allocation and exceptional
 house unwind, using the existing order status, shared holds and authoritative ledger.
-Verification: not run; acceptance in PLAN P11.
+Qualified policy bounds size, price, fees, time and funded support. Actual partial,
+over-limit and late fills retain their economics without silently flipping users.
+Verification: initial full pinned runner passed 178 Rust tests per profile, two
+doctests, 23 repository tests, formatting, strict Clippy and build. Then added a
+local-abandonment contradiction regression and restacked on the P10 reviewed fix;
+the final focused close suite passes 17 groups including 432 long/short allocation
+cases and a joined close scenario. Final clean-export full verification follows.
 Unexpected: split-owner execution must partition the whole exact native fill value
-before rounding, rather than demand that both synthetic child notionals be exact.
-Next: implement bounded liquidation/unwind ports and late-close exception ownership before native dispatch.
+before rounding, rather than require both artificial child notionals to be exact.
+Self-review added explicit never-exposed abandonment and final-cut authority
+revalidation; neither can release an exposed unknown action. P10 claim absorption
+now requires full order completion, including these house-only reserved exits.
+Native crisis recovery/incident resumption and live calibration remain gated; this
+controller is deliberately limited to funded, source-qualified bounded exits.
+Next: complete clean-export verification, publish P11 above #34, then continue P12
+RF1/RF2 and bounded-resource quota scheduling. Do not merge or enter P15.
 PR: none.
 Merge: none.
 

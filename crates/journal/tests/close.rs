@@ -22,6 +22,9 @@ fn run(s: &mut Store, events: Vec<Event>, controls: Vec<Control>) -> cinder_jour
     s.commit(tx).unwrap()
 }
 fn live(t: &Temp, lots: i64, mark: u64) -> Store {
+    live_paths(t, lots, mark, vec![])
+}
+fn live_paths(t: &Temp, lots: i64, mark: u64, events: Vec<Event>) -> Store {
     use cinder_kernel::ledger::evidence::*;
     let mut s = t.create();
     let mut es = vec![
@@ -117,7 +120,7 @@ fn live(t: &Temp, lots: i64, mark: u64) -> Store {
             steps: vec![risk::Step {
                 after_ms: 1,
                 marks: vec![p(mark)],
-                events: vec![],
+                events,
                 liquidity: [Location::Vault, Location::Venue]
                     .into_iter()
                     .map(|location| risk::Liquidity {
@@ -611,6 +614,48 @@ fn actual_fill_contradicting_local_abandonment_reencumbers_and_stays_house_owned
         5
     );
     assert_eq!(qty(s.state().unwrap().ledger(), Owner::House), -1);
+}
+
+#[test]
+fn close_scenarios_bind_attempt_keys_and_apply_economic_fills_without_touching_live_inventory() {
+    let t = Temp::new();
+    let s = live_paths(
+        &t,
+        2,
+        100,
+        vec![
+            Event {
+                key: RecordKey::Attempt(attempt(50)),
+                policy: config().policy,
+                change: Change::Close(CloseChange::Bind {
+                    house: false,
+                    quantity: q(-2),
+                }),
+            },
+            event(
+                1000,
+                Change::Close(CloseChange::Execution {
+                    attempt: attempt(50),
+                    quantity: q(-3),
+                    price: p(100),
+                    fee: cash(3),
+                    pnl: None,
+                    customer_allowed: true,
+                }),
+            ),
+        ],
+    );
+    let report = s.state().unwrap().risk_report().unwrap();
+    let rows = &report.paths[0].prefixes;
+    assert_eq!(rows.len(), 4);
+    assert_eq!(rows[3].customers[0].initial, cash(0));
+    assert_eq!(rows[3].free_capital, cash(9989));
+    assert_eq!(report.target, cash(11));
+    assert_eq!(
+        qty(s.state().unwrap().ledger(), Owner::Customer(user(1))),
+        2
+    );
+    assert!(s.state().unwrap().ledger().closes().is_empty());
 }
 fn put(l: &Ledger, e: Event) -> Ledger {
     assert_eq!(
