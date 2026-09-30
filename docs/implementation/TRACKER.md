@@ -48,7 +48,11 @@ per debug/release profile, 24 repository tests, formatting, both strict Clippy
 configurations and all-target build. All 30 client/offline Surfpool/SBF tests,
 TypeScript checks and generated-IDL equality pass as well. Build/package caches
 were reused explicitly; `work/`, `stays/` and Git metadata were excluded.
-Only documentation evidence follows that tested source; publication is next. Production
+The fixes are published across the native stack (13 branches, P04 unchanged).
+Inline threads #4147277655/#4148900279 are resolved with verified-fix replies;
+P08/P13 summary dispositions are recorded on their PRs. Hosted checks restarted
+and were still running at the post-push snapshot; they are not claimed green.
+Only documentation evidence follows the tested source. Production
 source qualification, identity and key governance remain G01/G03/G05 gates.
 Prior stack-wide CodeRabbit triage confirmed eight
 unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
@@ -76,7 +80,7 @@ runtime hardening is not a new offline acceptance requirement. P16 #4148900279
 is reproduced/fixed without weakening ordinary/restoration risk fences. The 14
 older resolved threads were checked for bot confirmation; remaining unchanged
 layers have no new relevant actionable finding. New hosted reviews after the
-upcoming push are not implied by this snapshot.
+published restack are not implied by this snapshot.
 
 | Phase / PR | Existing review disposition |
 | --- | --- |
@@ -794,7 +798,8 @@ and incorporates P13's engine-19 exact-input resolution after restacking. Full
 assembled-stack verification passed at `1c3bd09`: 275 Rust tests plus two
 compile-fail doctests per profile, 24 repository tests and all 30 client/SBF tests.
 No container, external RPC/venue call, wallet access, deployment or delegation
-was used. Publication/review dispositions are next. P15's latest review has
+was used. Fixes are published and both actionable inline threads resolved; P08/P13
+summary replies explain their fixes. Hosted checks are running. P15's latest review has
 no concrete defect; its signer/deployment trust qualifications remain documented.
 
 Work: implemented the three-location funding controller, native credit-readiness
