@@ -27,7 +27,7 @@ impl Writer {
             valid: true,
         };
         s.raw(b"CINDER-J\0");
-        s.raw(&7_u16.to_be_bytes());
+        s.raw(&8_u16.to_be_bytes());
         s.byte(tag);
         s
     }
@@ -95,7 +95,7 @@ impl<'a> Reader<'a> {
         if r.take(9)? != b"CINDER-J\0" {
             return Err(Error::Codec);
         }
-        if r.array::<2>()? != 7_u16.to_be_bytes() {
+        if r.array::<2>()? != 8_u16.to_be_bytes() {
             return Err(Error::Version);
         }
         if r.byte()? != tag {
@@ -870,6 +870,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.raw(&tx.id.bytes());
     head(&mut w, tx.expected);
     w.u64(tx.at);
+    w.count(tx.evidence.len());
+    for body in &tx.evidence {
+        w.blob(body.as_bytes());
+    }
     w.count(tx.inputs.len());
     for i in &tx.inputs {
         scope(&mut w, i.source);
@@ -971,6 +975,10 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
     let id = CommitId::new(r.array()?)?;
     let expected = read_head(&mut r)?;
     let at = r.u64()?;
+    let mut evidence = Vec::new();
+    for _ in 0..r.count()? {
+        evidence.push(PrivateBytes::new(r.blob()?.to_vec())?);
+    }
     let mut inputs = Vec::new();
     for _ in 0..r.count()? {
         inputs.push(Input {
@@ -1033,6 +1041,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
         id,
         expected,
         at,
+        evidence,
         inputs,
         order_observations,
         funds_observations,

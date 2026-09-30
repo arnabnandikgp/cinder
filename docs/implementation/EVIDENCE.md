@@ -235,6 +235,17 @@ Upstream starting points (not newly requalified in P00):
 [orders](https://docs.pacifica.fi/api-documentation/api/rest-api/orders/create-limit-order),
 [rate limits](https://docs.pacifica.fi/api-documentation/api/rate-limits).
 
+## P13 native observation promotion
+
+2026-09-30: promoted [VM-01–VM-09](../venues/pacifica.md), an immutable qualification
+profile and lossless native schemas into `cinder-pacifica`. Twelve joined tests
+include a sanitized six-row numeric transcription, REST/WS dedup, reversal legs,
+whole-snapshot replacement, exact large IDs, funding/forced-event containment,
+cursor gaps and an explicit two-atom cash discrepancy. Raw bodies/provenance share
+the protected journal transaction; independent diagnostic views replay that history.
+See [ADR 0013](../architecture/0013-pacifica-observations.md). Current primary docs
+were checked; historical observations were not rerun or upgraded into live evidence.
+
 ## Requirement-to-phase traceability
 
 | Contract | Owning implementation | Mandatory evidence |

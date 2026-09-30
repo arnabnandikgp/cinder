@@ -183,6 +183,7 @@ pub fn transaction(head: Head, n: u8, events: Vec<Event>, controls: Vec<Control>
         id: CommitId::new([n; 32]).unwrap(),
         expected: head,
         at: 10,
+        evidence: vec![],
         inputs: events.into_iter().map(input).collect(),
         order_observations: vec![],
         funds_observations: vec![],

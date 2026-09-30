@@ -15,7 +15,7 @@
 | [P10 — Protection claims](PLAN.md#p10) | in progress | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | [#34](https://github.com/arnabnandikgp/cinder/pull/34), stacked above #33 |
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | in progress | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | [#35](https://github.com/arnabnandikgp/cinder/pull/35), stacked above #34 |
 | [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | [#36](https://github.com/arnabnandikgp/cinder/pull/36), stacked above #35 |
-| [P13 — Pacifica observations](PLAN.md#p13) | open | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | — |
+| [P13 — Pacifica observations](PLAN.md#p13) | in progress | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | Local implementation above #36 |
 | [P14 — Pacifica execution](PLAN.md#p14) | open | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | — |
 | [P15 — Solana vault](PLAN.md#p15) | open | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | — |
 | [P16 — Funding coordinator](PLAN.md#p16) | open | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | — |
@@ -36,8 +36,8 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p12-adl-restoration`, created with `gh stack add` above
-P11 #35 (`c702021`). User authorized continuous
+Current branch: `tee/p13-pacifica-observations`, created with `gh stack add` above
+P12 #36 (`3bdef58`). User authorized continuous
 stacked P06–P14 implementation while away, stopping before P15; no merges or new
 external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
 `work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
@@ -607,10 +607,22 @@ Merge: none.
 
 ## P13 — Pacifica observations
 
-Work: not started.
-Verification: not run; acceptance in PLAN P13.
-Unexpected: none yet.
-Next: promote sanitized VM-01–VM-09 mapping, recheck current docs and implement codecs/replay with fake transport.
+Work: 2026-09-30 — added the Pacifica crate, exact typed native schemas, immutable
+qualification profile, shared REST/WS identities, diagnostic views, bounded cursor
+replay and named containment. Raw provenance and economic inputs share one encrypted
+journal transaction. Promoted VM-01–VM-09 and rechecked current primary documentation.
+Verification: full pinned offline runner passed: 216 Rust tests per debug/release
+profile (12 adapter groups), two doctests, 23 repository tests, strict Clippy,
+formatting and build. Clean export pending. No live calls or wallets used.
+Unexpected: retained response attachments required an explicit journal wire/engine
+revision (8/9 initially, engine 10 after the P11 review correction). Public
+settlement/funding/completeness semantics remain insufficient;
+dependent capabilities stay disabled. Initial fixture missed the required location
+hold; corrected the fixture, not the production admission rule. One old engine
+golden assertion also needed the explicit version bump. P12's two hosted checks
+and CodeRabbit are green; no inline findings were present at this phase boundary.
+Next: complete offline/clean verification and publish P13, then P14 bounded signing
+and shared API-credit admission. Stop before P15; preserve all open G01/G02 gates.
 PR: none.
 Merge: none.
 

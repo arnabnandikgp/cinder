@@ -17,6 +17,7 @@ const allowed = new Map([
   ['cinder-ports', []],
   ['cinder-test-support', ['cinder-ports:normal', 'cinder-kernel:dev']],
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
+  ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
@@ -45,6 +46,12 @@ export function validateWorkspace(metadata) {
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
+      if (pkg.name === 'cinder-pacifica' && ['serde', 'serde_json', 'sha2'].includes(dep.name)) {
+        const expected = approved.get(dep.name);
+        const features = dep.name === 'serde' ? ['derive'] : [];
+        if (dep.source !== dependencyPolicy.registry || dep.path || dep.req !== `=${expected.version}` || dep.target != null || dep.optional || !dep.uses_default_features || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: adapter dependency configuration not approved`);
+        continue;
+      }
       if (pkg.name === 'cinder-journal' && ['rusqlite', 'sha2', 'chacha20poly1305', 'zeroize'].includes(dep.name)) {
         const expected = approved.get(dep.name);
         const features = dep.name === 'rusqlite' ? ['bundled'] : [];
@@ -82,6 +89,6 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
     for (const error of errors) process.stderr.write(`${error}\n`);
     process.exitCode = 1;
   } else {
-    process.stdout.write('Workspace boundaries OK: 4 local packages; kernel remains dependency-free; pinned storage/crypto dependencies only.\n');
+    process.stdout.write('Workspace boundaries OK: 5 local packages; kernel remains dependency-free; pinned storage/crypto/JSON dependencies only.\n');
   }
 }

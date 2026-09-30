@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "05e0ae6f7491a3889cb934a2ab4010d16659c852632176704f38be77dc1f590c",
+  "lockfileSha256": "b91e757b0c694784448ae0340a7ea5d6d96f6ee0afea4f3ce1f9a483ba1c0aed",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
     {
@@ -133,6 +133,12 @@
       "features": []
     },
     {
+      "name": "itoa",
+      "version": "1.0.18",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "libc",
       "version": "0.2.189",
       "buildScript": true,
@@ -150,6 +156,15 @@
         "min_sqlite_version_3_34_1",
         "pkg-config",
         "vcpkg"
+      ]
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
       ]
     },
     {
@@ -171,6 +186,22 @@
       "features": []
     },
     {
+      "name": "proc-macro2",
+      "version": "1.0.107",
+      "buildScript": true,
+      "features": [
+        "proc-macro"
+      ]
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47",
+      "buildScript": true,
+      "features": [
+        "proc-macro"
+      ]
+    },
+    {
       "name": "rand_core",
       "version": "0.6.4",
       "buildScript": false,
@@ -185,6 +216,43 @@
       "features": [
         "bundled",
         "modern_sqlite"
+      ]
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229",
+      "buildScript": true,
+      "features": [
+        "default",
+        "derive",
+        "serde_derive",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.229",
+      "buildScript": true,
+      "features": [
+        "result",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_derive",
+      "version": "1.0.229",
+      "buildScript": false,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.151",
+      "buildScript": true,
+      "features": [
+        "default",
+        "std"
       ]
     },
     {
@@ -218,8 +286,26 @@
       "features": []
     },
     {
+      "name": "syn",
+      "version": "3.0.6",
+      "buildScript": false,
+      "features": [
+        "clone-impls",
+        "derive",
+        "parsing",
+        "printing",
+        "proc-macro"
+      ]
+    },
+    {
       "name": "typenum",
       "version": "1.20.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.26",
       "buildScript": false,
       "features": []
     },
@@ -255,6 +341,12 @@
         "alloc",
         "default"
       ]
+    },
+    {
+      "name": "zmij",
+      "version": "1.0.23",
+      "buildScript": true,
+      "features": []
     }
   ]
 }

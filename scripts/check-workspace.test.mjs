@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 function fixture() {
   const pkg = name => ({ name, id: name, version: '0.1.0', source: null, targets: [{ kind: ['lib'] }], dependencies: [] });
-  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal'].map(pkg);
+  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica'].map(pkg);
   packages[2].dependencies = [
     { name: 'cinder-ports', kind: null, path: '/repo/crates/ports', req: '=0.1.0', target: null },
     { name: 'cinder-kernel', kind: 'dev', path: '/repo/crates/kernel', req: '=0.1.0', target: null },
@@ -13,6 +13,11 @@ function fixture() {
   packages[3].dependencies = [
     { ...packages[2].dependencies[1], kind: null },
     ...['rusqlite', 'sha2', 'chacha20poly1305', 'zeroize'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'rusqlite' ? ['bundled'] : [], uses_default_features: name !== 'rusqlite', optional: false})),
+  ];
+  packages[4].dependencies = [
+    {...packages[2].dependencies[1], kind: null},
+    {name: 'cinder-journal', kind: null, path: '/repo/crates/journal', req: '=0.1.0', target: null},
+    ...['serde', 'serde_json', 'sha2'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'serde' ? ['derive'] : [], uses_default_features: true, optional: false})),
   ];
   const workspace_members = packages.map(p => p.id);
   packages.push(...dependencyPolicy.packages.map(p => ({...pkg(p.name), version: p.version, source: dependencyPolicy.registry, targets: [{kind: ['lib']}, ...(p.buildScript ? [{kind: ['custom-build']}] : [])]})));

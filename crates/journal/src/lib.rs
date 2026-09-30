@@ -18,7 +18,7 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 // Order classification/authority/lifecycle changes replay semantics.
-const ENGINE_REVISION: u16 = 16;
+const ENGINE_REVISION: u16 = 17;
 
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -269,9 +269,18 @@ impl<B: Backend, P: Protection> Journal<B, P> {
     pub fn head(&self) -> Head {
         self.head
     }
+    /// Trusted immutable genesis configuration; not a native metadata refresh.
+    pub fn configuration(&self) -> &Config {
+        &self.config
+    }
     /// Exact retained private transaction for authorized audit, including raw evidence.
     pub fn transaction(&self, id: CommitId) -> Option<&Transaction> {
         self.history.iter().find(|r| r.tx.id == id).map(|r| &r.tx)
+    }
+    /// Private accepted history for deterministic adapter projections. Revalidate
+    /// freshness first; this read view grants no exposure or economic authority.
+    pub fn transactions(&self) -> impl Iterator<Item = &Transaction> {
+        self.history.iter().map(|r| &r.tx)
     }
     /// Bounded explicit reload/reconciliation after contention or an unknown reply.
     /// P06 must add independent freshness; this detects no full valid-history rollback.

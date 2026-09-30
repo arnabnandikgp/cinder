@@ -206,6 +206,9 @@ pub struct Transaction {
     pub expected: Head,
     /// Trusted injected transaction time; no clock is read by the model.
     pub at: u64,
+    /// Opaque private provenance only; never financial authority or a resolved gap.
+    /// Adapter projections rebuild these from accepted transactions, not another DB.
+    pub evidence: Vec<PrivateBytes>,
     /// Raw and normalized observations, including duplicate/conflicting input.
     pub inputs: Vec<Input>,
     /// Qualified order statuses; no ACK here becomes a fill or releases a hold.
@@ -570,6 +573,7 @@ impl State {
             return Err(Error::Limit);
         }
         if tx.at < self.now
+            || tx.evidence.len() > MAX_ITEMS
             || tx.inputs.len() > MAX_ITEMS
             || tx.controls.len() > MAX_ITEMS
             || tx.order_observations.len() > MAX_ITEMS
