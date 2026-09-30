@@ -15,6 +15,7 @@ use cinder_kernel::{
     position::Market,
 };
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 
 type Result<T> = std::result::Result<T, ControlError>;
 const SCALE: u64 = 10_000;
@@ -240,6 +241,57 @@ fn value(m: Market, q: i128, p: PriceTicks) -> Result<i128> {
     .map_err(|_| ControlError::Capacity)
 }
 
+// Build once per report. Retained identities still prevent replay, but released
+// history must not multiply the work of every customer/scenario prefix.
+struct ActiveRisk<'a> {
+    holds: Vec<&'a Hold>,
+    order_holds: Vec<&'a Hold>,
+    orders: Vec<&'a crate::orders::Order>,
+}
+fn request_index(k: RequestKey) -> (NetworkId, DeploymentId, AccountId, RequestId) {
+    (k.domain.network, k.domain.deployment, k.account, k.request)
+}
+impl<'a> ActiveRisk<'a> {
+    fn new(s: &'a State) -> Self {
+        let order_ids: BTreeSet<_> = s
+            .orders
+            .iter()
+            .map(|o| request_index(o.intent.request))
+            .collect();
+        let holds: Vec<_> = s.holds.iter().filter(|h| h.active).collect();
+        let hold_ids: BTreeSet<_> = holds.iter().map(|h| request_index(h.request)).collect();
+        let order_holds = holds
+            .iter()
+            .copied()
+            .filter(|h| order_ids.contains(&request_index(h.request)))
+            .collect();
+        let orders = s
+            .orders
+            .iter()
+            .filter(|o| o.remaining() != 0 && hold_ids.contains(&request_index(o.intent.request)))
+            .collect();
+        Self {
+            holds,
+            order_holds,
+            orders,
+        }
+    }
+    fn held(&self, r: Resource) -> Result<i128> {
+        self.holds
+            .iter()
+            .flat_map(|h| &h.reservations)
+            .filter(|h| h.resource == r)
+            .try_fold(0, |a, h| add(a, h.amount.atoms()))
+    }
+    fn order_hold(&self, r: Resource) -> Result<i128> {
+        self.order_holds
+            .iter()
+            .flat_map(|h| &h.reservations)
+            .filter(|h| h.resource == r)
+            .try_fold(0, |a, h| add(a, h.amount.atoms()))
+    }
+}
+
 impl State {
     pub(crate) fn risk_action(&mut self, a: &Action) -> Result<()> {
         match a {
@@ -380,19 +432,6 @@ impl State {
         }
         Ok(())
     }
-    fn order_hold(&self, r: Resource) -> Result<i128> {
-        self.holds
-            .iter()
-            .filter(|h| h.active && self.orders.iter().any(|o| o.intent.request == h.request))
-            .flat_map(|h| &h.reservations)
-            .filter(|h| h.resource == r)
-            .try_fold(0, |a, h| add(a, h.amount.atoms()))
-    }
-    fn held(&self, r: Resource) -> Result<i128> {
-        self.reserved(r)
-            .map(|x| x.atoms())
-            .map_err(|_| ControlError::Capacity)
-    }
     fn leverage(&self, id: AccountId, r: &MarketRule) -> u64 {
         self.selections
             .iter()
@@ -404,18 +443,15 @@ impl State {
     /// and total adverse execution cost. Favorable fills cannot finance another order.
     fn pending(
         &self,
+        active: &ActiveRisk<'_>,
         owner: Option<AccountId>,
         market: Market,
         mark: PriceTicks,
     ) -> Result<(i128, i128, i128)> {
         let (mut buys, mut sells, mut cost) = (0, 0, 0);
-        for o in self.orders.iter().filter(|o| {
+        for o in active.orders.iter().filter(|o| {
             o.intent.quantity.unit() == market.unit()
                 && owner.is_none_or(|id| id == o.intent.request.account)
-                && self
-                    .holds
-                    .iter()
-                    .any(|h| h.request == o.intent.request && h.active)
         }) {
             let q = i128::from(o.remaining());
             if q == 0 {
@@ -468,6 +504,7 @@ impl State {
     }
     fn risk_snapshot(
         &self,
+        active: &ActiveRisk<'_>,
         ledger: &Ledger,
         marks: &[PriceTicks],
         liquidity: &[Liquidity],
@@ -501,7 +538,7 @@ impl State {
                     .iter()
                     .find(|r| r.market == m.unit())
                     .ok_or(ControlError::Unqualified)?;
-                let (buys, sells, cost) = self.pending(Some(*id), *m, mark)?;
+                let (buys, sells, cost) = self.pending(active, Some(*id), *m, mark)?;
                 let q = i128::from(pos.quantity().lots());
                 i64::try_from(add(q, buys)?).map_err(|_| ControlError::Capacity)?;
                 i64::try_from(sub(q, sells)?).map_err(|_| ControlError::Capacity)?;
@@ -519,8 +556,8 @@ impl State {
             }
             outcome = add(outcome, costs)?;
             let resource = Resource::Customer(*id);
-            let other = sub(self.held(resource)?, self.order_hold(resource)?)?;
-            let requirement = outcome.max(add(initial, self.order_hold(resource)?)?);
+            let other = sub(active.held(resource)?, active.order_hold(resource)?)?;
+            let requirement = outcome.max(add(initial, active.order_hold(resource)?)?);
             let free = sub(sub(equity, other)?, requirement)?;
             flags.private_initial |= free < 0;
             flags.private_maintenance |= equity < maintenance;
@@ -574,7 +611,7 @@ impl State {
                 .find(|r| r.market == m.unit())
                 .ok_or(ControlError::Unqualified)?
                 .native_bps;
-            let (buys, sells, cost) = self.pending(None, *m, mark)?;
+            let (buys, sells, cost) = self.pending(active, None, *m, mark)?;
             let q = i128::from(pos.quantity().lots());
             i64::try_from(add(q, buys)?).map_err(|_| ControlError::Capacity)?;
             i64::try_from(sub(q, sells)?).map_err(|_| ControlError::Capacity)?;
@@ -609,9 +646,9 @@ impl State {
             });
         }
         let resource = Resource::Location(Location::Venue);
-        let other_native = sub(self.held(resource)?, self.order_hold(resource)?)?;
+        let other_native = sub(active.held(resource)?, active.order_hold(resource)?)?;
         let native_requirement = add(native_initial, native_cost)?
-            .max(add(current_native_initial, self.order_hold(resource)?)?);
+            .max(add(current_native_initial, active.order_hold(resource)?)?);
         flags.native_initial = native_equity < add(native_requirement, other_native)?;
         flags.native_maintenance = native_equity < add(native_maintenance, native_cost)?;
         let house_free = sub(self.book_equity(house, marks)?, house_initial)?;
@@ -627,12 +664,12 @@ impl State {
         )?;
         let free_capital = sub(
             sub(house_free.min(backing), pending_deficit)?,
-            self.held(Resource::House)?,
+            active.held(Resource::House)?,
         )?;
         flags.capital = free_capital < policy.buffer.atoms();
         let vault_free = sub(
             ledger.vault().atoms(),
-            self.held(Resource::Location(Location::Vault))?,
+            active.held(Resource::Location(Location::Vault))?,
         )?;
         let venue_access = sub(native_equity, native_requirement)?
             .min(ledger.venue().cash().atoms())
@@ -643,7 +680,7 @@ impl State {
                 Location::Vault => (
                     0,
                     ledger.vault().atoms(),
-                    self.held(Resource::Location(Location::Vault))?,
+                    active.held(Resource::Location(Location::Vault))?,
                 ),
                 Location::Venue => (1, venue_access, other_native),
             };
@@ -683,22 +720,34 @@ impl State {
         self.ledger
             .qualified_diagnostics(&c.marks, self.now, c.policy.evidence)
             .map_err(|_| ControlError::Unqualified)?;
-        // Include nested ownership/active-hold scans, not only snapshot count.
+        let active = ActiveRisk::new(self);
+        // Bound index construction (log2(MAX_ITEMS) < 32), then the actual
+        // active scans, including reservations, selections and market lookups.
+        // Historical order/hold counts occur only in the one-time index cost.
+        let preparation = (self.orders.len() + self.holds.len()).saturating_mul(32);
+        let reservations: usize = active.holds.iter().map(|h| h.reservations.len()).sum();
         let work = (self.config.customers.len() + 3)
             .saturating_mul(self.config.markets.len())
-            .saturating_mul(self.orders.len() + 1)
-            .saturating_mul(self.holds.len() + 1)
             .saturating_mul(
-                policy
+                active.orders.len()
+                    + 4 * reservations
+                    + 2 * self.selections.len()
+                    + 4 * self.config.markets.len()
+                    + 1,
+            )
+            .saturating_mul(
+                1 + policy
                     .paths
                     .iter()
-                    .map(|p| 1 + p.steps.iter().map(|s| s.events.len() + 1).sum::<usize>())
-                    .sum(),
-            );
+                    .map(|p| p.steps.iter().map(|s| s.events.len() + 1).sum::<usize>())
+                    .sum::<usize>(),
+            )
+            .saturating_add(preparation);
         if work > 1_000_000 {
             return Err(ControlError::Unqualified);
         }
         let current = self.risk_snapshot(
+            &active,
             &self.ledger,
             &c.marks.iter().map(|m| m.price).collect::<Vec<_>>(),
             &[],
@@ -726,7 +775,7 @@ impl State {
                 // A grouped step cannot hide distress between its events. Price
                 // shock first, then every actual transition gets a separate prefix.
                 let mut snapshots =
-                    vec![self.risk_snapshot(&ledger, &step.marks, &step.liquidity)?];
+                    vec![self.risk_snapshot(&active, &ledger, &step.marks, &step.liquidity)?];
                 for e in &step.events {
                     let result = ledger
                         .ingest(e, at)
@@ -737,7 +786,12 @@ impl State {
                         return Err(ControlError::Unqualified);
                     }
                     ledger = result.state;
-                    snapshots.push(self.risk_snapshot(&ledger, &step.marks, &step.liquidity)?);
+                    snapshots.push(self.risk_snapshot(
+                        &active,
+                        &ledger,
+                        &step.marks,
+                        &step.liquidity,
+                    )?);
                 }
                 for snapshot in snapshots {
                     minimum = minimum.min(snapshot.free_capital.atoms());

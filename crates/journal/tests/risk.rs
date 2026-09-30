@@ -226,6 +226,100 @@ fn accept(i: orders::Intent) -> Control {
 }
 
 #[test]
+fn opposing_pending_order_is_classified_before_its_reservation_is_checked() {
+    let t = Temp::new();
+    let mut s = setup(&t, 100, 100, 100, 0, 0);
+    assert_eq!(
+        commit(&mut s, vec![], vec![accept(intent(60, 9))])
+            .receipt
+            .controls,
+        None
+    );
+    let mut opposing = accept(intent(61, -9));
+    if let Control::Order(orders::Action::Accept { reservations, .. }) = &mut opposing {
+        reservations[0].amount = cash(20);
+    }
+    assert_eq!(
+        commit(&mut s, vec![], vec![opposing]).receipt.controls,
+        None
+    );
+    let r = report(&s);
+    assert_eq!(r.current.customers[0].outcome_requirement, cash(90));
+    assert_eq!(r.current.customers[0].other_held, cash(0));
+    assert_eq!(r.current.customers[0].free, cash(10));
+    let before = s.state().unwrap().clone();
+    assert_eq!(
+        commit(&mut s, vec![], vec![accept(intent(62, 2))])
+            .receipt
+            .controls,
+        Some(ControlError::Capacity)
+    );
+    assert_eq!(s.state().unwrap().holds(), before.holds());
+    assert_eq!(report(&s), r);
+    drop(s);
+    assert_eq!(report(&t.open()), r);
+}
+
+#[test]
+fn retired_history_does_not_multiply_risk_work_but_live_work_is_bounded() {
+    let t = Temp::new();
+    let mut s = setup(&t, 100_000, 100_000, 100_000, 0, 0);
+    let mut controls = vec![];
+    for n in 1_u64..=350 {
+        let mut i = intent(60, 1);
+        let mut id = [0; 32];
+        id[..8].copy_from_slice(&n.to_be_bytes());
+        i.request.request = RequestId::new(id).unwrap();
+        controls.push(accept(i.clone()));
+        controls.push(Control::Release(i.request));
+    }
+    assert_eq!(commit(&mut s, vec![], controls).receipt.controls, None);
+    assert_eq!(s.state().unwrap().holds().len(), 350);
+    assert!(s.state().unwrap().holds().iter().all(|h| !h.active));
+    assert!(report(&s).admissible);
+    let mut expensive = policy();
+    expensive.revision = PolicyVersion::new(2).unwrap();
+    expensive.paths = (1..=32)
+        .map(|n| Path {
+            id: [n; 32],
+            steps: vec![step(100); 64],
+        })
+        .collect();
+    assert_eq!(install(&mut s, expensive).receipt.controls, None);
+    // Even many scenario prefixes remain cheap when all orders are retired.
+    assert!(report(&s).admissible);
+    drop(s);
+    let mut s = t.open();
+    assert!(report(&s).admissible);
+    let retained = s.state().unwrap().holds()[0].request;
+    let mut duplicate = intent(60, 1);
+    duplicate.request = retained;
+    assert_eq!(
+        commit(&mut s, vec![], vec![accept(duplicate)])
+            .receipt
+            .controls,
+        Some(ControlError::Invalid)
+    );
+    let mut blocked = false;
+    for n in 60..80 {
+        let result = commit(&mut s, vec![], vec![accept(intent(n, 1))]);
+        if result.receipt.controls == Some(ControlError::Unqualified) {
+            blocked = true;
+            break;
+        }
+        assert_eq!(result.receipt.controls, None);
+    }
+    assert!(
+        blocked,
+        "active orders and scenario scans must still obey the work budget"
+    );
+    assert!(
+        report(&s).admissible,
+        "the over-budget candidate is rolled back"
+    );
+}
+
+#[test]
 fn private_selection_changes_initial_margin_not_position_equity_or_native_setting() {
     let t = Temp::new();
     let mut s = setup(&t, 100, 100, 100, 2, 0);

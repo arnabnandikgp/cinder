@@ -276,12 +276,9 @@ impl State {
                 {
                     return Err(ControlError::Invalid);
                 }
-                // First reserve atomically, then evaluate again with the proposed
-                // order included in independent reachable outcomes.
-                self.control(&Control::Reserve {
-                    request: i.request,
-                    reservations: reservations.clone(),
-                })?;
+                // Reserve evaluates the whole candidate. Classify the new hold as
+                // an order hold and include its pending outcomes in that same cut.
+                // A rejected control rolls back both the order and reservation.
                 self.orders.push(Order {
                     intent: (**i).clone(),
                     attempt: None,
@@ -294,9 +291,10 @@ impl State {
                     faulted: false,
                     bound_violated: false,
                 });
-                if self.risk.is_some() {
-                    self.all_capacity()?;
-                }
+                self.control(&Control::Reserve {
+                    request: i.request,
+                    reservations: reservations.clone(),
+                })?;
             }
             Action::Prepare { attempt } => {
                 let index = self

@@ -467,6 +467,15 @@ Merge: none.
 
 ## P09 — Joined risk admission
 
+Review follow-up (2026-09-30): addressed CodeRabbit #4142787863/#4142787878.
+Accept inserts the candidate order before its atomic reserve/capacity evaluation;
+a rejected candidate still rolls back both. Risk reports build an active index once,
+preserve retired identities, and budget index construction plus actual active
+reservation/order/selection/scenario scans. Engine 11 rejects the former engine 5.
+The 20 risk groups pass, including opposing-pending admission, 350 released orders,
+reopen/idempotency and active-work-budget rejection; strict all-feature Clippy passes.
+No policy/capital-limit change or evidence pruning.
+
 Work: 2026-09-30 — implemented one joined derived risk report over ledger/shared holds,
 independent pending quantity intervals and adverse execution cost, capped private
 leverage, native margin, capital/concentration and location/deadline scenarios.
