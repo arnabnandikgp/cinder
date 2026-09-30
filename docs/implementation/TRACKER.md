@@ -42,7 +42,13 @@ deployment, external transaction or P17. Preserve unrelated `stays/` and ignored
 `work/`. Four relevant findings are fixed on their owning branches and locally
 restacked: P05's acceptance contract/P13 exact-input resolution, P08 cancellation,
 P13 rejected-page diagnostics, and P16 emergency exits. Focused regression checks
-pass; the new combined clean-export run and publication are pending. Production
+pass. Clean tracked export `1c3bd09` at `/private/tmp/cinder-review-fixes.AoqmUu`
+passes the complete pinned runner: 275 Rust tests and two compile-fail doctests
+per debug/release profile, 24 repository tests, formatting, both strict Clippy
+configurations and all-target build. All 30 client/offline Surfpool/SBF tests,
+TypeScript checks and generated-IDL equality pass as well. Build/package caches
+were reused explicitly; `work/`, `stays/` and Git metadata were excluded.
+Only documentation evidence follows that tested source; publication is next. Production
 source qualification, identity and key governance remain G01/G03/G05 gates.
 Prior stack-wide CodeRabbit triage confirmed eight
 unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
@@ -663,7 +669,8 @@ controls; retries never repost cash or clear unrelated faults. Seven journal
 resolution groups and all 14 observation groups pass locally, including restart,
 conflicts, duplicate-effect/hold isolation, restored exposure gating and work bounds.
 The new semantics/state commitment fence old histories with engine 19 (wire 8).
-Full assembled-stack checks are pending. Live authentication/completeness remain
+Full assembled-stack checks passed at `1c3bd09` (see current handoff).
+Live authentication/completeness remain
 G01/P23 obligations; synthetic evidence hashes do not prove them.
 
 Review follow-up (2026-09-30): CodeRabbit #4141545400 addressed in two owning
@@ -783,8 +790,11 @@ Narrowed the readiness fence to Order/Generic/Restoration, preserving all existi
 emergency authority, freeze, evidence and funded-close checks. Added regressions
 for both control orderings, restart, ordinary/generic/restoration refusal and
 freeze under an incomplete-credit cut. Engine 20 fences changed replay semantics
-and incorporates P13's engine-19 exact-input resolution when restacked. Full
-assembled-stack verification and publication are pending. P15's latest review has
+and incorporates P13's engine-19 exact-input resolution after restacking. Full
+assembled-stack verification passed at `1c3bd09`: 275 Rust tests plus two
+compile-fail doctests per profile, 24 repository tests and all 30 client/SBF tests.
+No container, external RPC/venue call, wallet access, deployment or delegation
+was used. Publication/review dispositions are next. P15's latest review has
 no concrete defect; its signer/deployment trust qualifications remain documented.
 
 Work: implemented the three-location funding controller, native credit-readiness
