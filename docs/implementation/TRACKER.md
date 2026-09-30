@@ -19,7 +19,7 @@
 | [P14 — Pacifica execution](PLAN.md#p14) | closed | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), merged `95fe3b7` |
 | [P15 — Solana vault](PLAN.md#p15) | closed | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), merged `95fe3b7` |
 | [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
-| [P17 — Recovery program](PLAN.md#p17) | in progress | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | `tee/p17-recovery-claims`, from merged trunk |
+| [P17 — Recovery program](PLAN.md#p17) | in progress | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), based on merged P16 |
 | [P18 — Private API and SDK](PLAN.md#p18) | open | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | — |
 | [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
 | [P20 — Nitro qualification](PLAN.md#p20) | open | Actual enclave, key-release, egress and storage/fencing behavior is qualified; mocks cannot stand in for hardware evidence. | — |
@@ -60,8 +60,10 @@ P17 implementation now passes both pinned offline runners in this working tree:
 the same 275 Rust tests/two compile-fail doctests per profile, 24 repository tests,
 and **51/51** client/SBF checks including 17 new recovery transaction groups and
 four pure codec groups. Strict Rust/TypeScript checks, generated-IDL equality and
-SBF stack diagnostics pass. Preparing the PR; no hosted CI/review result is claimed.
-Next: publish/review P17, then begin P18 private grants/API/SDK on the shallow stack.
+SBF stack diagnostics pass. Ready PR #41 is published from implementation commit
+`e1b820b322ac2d87c31a4478aaacff5bcf44818e` directly above the merged TEE trunk;
+this following commit only records publication. No hosted CI/review result is claimed.
+Next: review P17, then begin P18 private grants/API/SDK on the shallow stack.
 Actual ledger-to-claim finalization/independent delivery remains P21; source/hardware
 and live release gates remain explicit. No new economic policy was adopted.
 
@@ -864,8 +866,9 @@ with 16 siblings: **1,124 bytes** without the optional compute instruction and
 **34,433 CU** for the actual signed test transaction. Tests cover malformed paths,
 wrong identities/roles/counters, unresolved reservations, frozen custody/destination,
 impairment/repair, late arrivals, root/receipt replay, odd trees, over/understated
-totals, malicious duplicate owners and integer overflow. No ignored research,
-configured wallet, external RPC/venue call, container, deployment or agent is used.
+totals, malicious duplicate owners and integer overflow. Tests require no ignored
+research or configured wallet, and use no external RPC/venue call, container,
+deployment or agent.
 This verification ran in the working tree; it is not mislabeled a fresh clean-export
 run, independent audit or complete solvency proof. `git diff --check` passes.
 
@@ -879,11 +882,11 @@ no transitive version or kernel dependency changed. Source qualification and pri
 claim delivery remain P21, not invented on-chain facts. One-time full recovery and
 no new fee follow the bounded research contract; production terms stay G02-gated.
 
-Next: publish the ready P17 PR against merged `product/tee-v1`; review its hosted
+Next: ready P17 PR #41 targets merged `product/tee-v1`; review its hosted
 checks/findings before any merge. P18 adds private owner/agent API/SDK grants and
 operation semantics above P17, with confidential transport ports pending P19.
 Do not deploy, call live venues or activate a real recovery estate from this handoff.
-PR: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/41.
 Merge: none.
 
 ## P18 — Private API and SDK
