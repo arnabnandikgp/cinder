@@ -46,7 +46,13 @@ Current request is stack-wide CodeRabbit triage/fixes, not merge or P15. Eight
 unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
 branches (with P13's cumulative byte-budget fix in P05) and locally restacked.
 Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14=17; older revisions
-fail closed. Targeted checks pass; final clean-export verification/push follows.
+fail closed. Final clean-export verification of code head `dc0ee4b` at
+`/private/tmp/cinder-stack-review.3fhk3G` passed the complete pinned offline runner:
+245 Rust tests per debug/release profile, two compile-fail doctests per profile,
+24 repository tests, formatting, both strict Clippy configurations and all-target
+build. The export excluded `work/`, `stays/` and Git metadata. Final changes after
+that run only record this evidence. PR threads carry the remote fix disposition;
+do not confuse successful local tests with a newly completed hosted review.
 Private authentication, native completeness, hardware attestation and deployment
 remain their own gates; this is an offline-qualified implementation stack.
 
