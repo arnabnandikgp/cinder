@@ -72,6 +72,7 @@ toolchains implicitly or inherit the legacy Phoenix versions.
 ```sh
 node scripts/check.mjs
 node scripts/check.mjs --properties
+node scripts/check-vault.mjs # P15+: isolated Anchor/SBF + offline Surfpool check
 git diff --check
 ```
 
@@ -92,6 +93,10 @@ qualification required by an owning phase remains a separate acceptance gate.
 Keep the kernel dependency-free and `no_std`; no I/O, clocks, venue SDKs or test
 doubles may leak into it. Extend the dependency guard only with an explicit
 architecture decision. Test-support is not a production service or durable store.
+The separate `programs/` workspace pins Anchor language/SPL/CLI 1.2.0, with
+`@anchor-lang/core` 1.2.0 in `clients/vault/`. Its setup and isolated SBF/toolchain
+pins are in [vault setup](programs/README.md). Use `NO_DNA=1` for Anchor/Surfpool
+commands; never inherit a configured wallet or deploy the fixed test identity.
 For Linux checks, export only intended tracked/staged source, mount it read-only
 with networking disabled, and write build outputs to container-local temporary
 storage. Never mount ignored research or wallet/cloud directories. Use Apple

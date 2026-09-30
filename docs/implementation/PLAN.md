@@ -348,9 +348,9 @@ cohesive program unless a separate trust/upgrade boundary justifies another; rec
 the decision. Port M1 invariants, not disposable deployment identities.
 Evidence: W04–W05; local SBF tests against actual program instruction boundaries.
 
-- [ ] Correct owner/mint/program/PDA/recipient/signer checks; wrong domain/account substitutions and duplicate receipts reject.
-- [ ] Funding release/payout bounds and epoch/counter changes are atomic even if downstream token transfer fails.
-- [ ] Upgrade/rotation and normal/recovery authority boundaries are specified; deployment stays disabled without G03/G05.
+- [x] Correct owner/mint/program/PDA/recipient/signer checks; wrong domain/account substitutions and duplicate receipts reject.
+- [x] Funding release/payout bounds and epoch/counter changes are atomic even if downstream token transfer fails.
+- [x] Upgrade/rotation and normal/recovery authority boundaries are specified; deployment stays disabled without G03/G05.
 
 <a id="p16"></a>
 ## P16 — Funding coordinator and native round trip

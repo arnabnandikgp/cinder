@@ -1,0 +1,58 @@
+name: Solana custody vault
+
+on:
+  pull_request:
+    branches: [product/tee-v1, 'tee/**']
+  push:
+    branches: [product/tee-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vault-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-vault:
+    name: Offline Anchor vault (SBF + Surfpool)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+      - name: Install checksum-verified local test tools
+        env:
+          NO_DNA: '1'
+        run: |
+          set -euo pipefail
+          vault_tools="$RUNNER_TEMP/cinder-vault-tools"
+          mkdir -p "$vault_tools"
+          curl --fail --location --retry 3 https://github.com/otter-sec/anchor/releases/download/v1.2.0/anchor-1.2.0-x86_64-unknown-linux-gnu -o "$vault_tools/anchor"
+          printf '%s  %s\n' 0c9c41a3292c281cc6eadb78d6e1c8224d8324a34b0736a89d640fd314db05b7 "$vault_tools/anchor" | sha256sum --check -
+          chmod +x "$vault_tools/anchor"
+          curl --fail --location --retry 3 https://github.com/solana-foundation/surfpool/releases/download/v1.5.0/surfpool-linux-x64.tar.gz -o "$vault_tools/surfpool.tar.gz"
+          printf '%s  %s\n' 5b20a3b46e60c4f819af7b4da5c3ea211f76041710617841cc23247d15887ddc "$vault_tools/surfpool.tar.gz" | sha256sum --check -
+          tar -xzf "$vault_tools/surfpool.tar.gz" -C "$vault_tools"
+          curl --fail --location --retry 3 https://github.com/anza-xyz/agave/releases/download/v3.1.10/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -o "$vault_tools/agave.tar.bz2"
+          printf '%s  %s\n' a7205ff29bcf0f7199740225ecae2b85a28ea9668892d5ec21bd9749882984a1 "$vault_tools/agave.tar.bz2" | sha256sum --check -
+          tar -xjf "$vault_tools/agave.tar.bz2" -C "$vault_tools"
+          printf '%s\n' "$vault_tools" "$vault_tools/solana-release/bin" >> "$GITHUB_PATH"
+      - name: Hydrate exact build dependencies
+        working-directory: programs
+        run: |
+          set -euo pipefail
+          cargo fetch --locked
+          # Download platform-tools 1.52 explicitly before the offline source/test run.
+          NO_DNA=1 cargo build-sbf --manifest-path cinder-vault/Cargo.toml --tools-version v1.52 --arch v0 -- --locked
+      - name: Hydrate exact client dependencies (no lifecycle scripts)
+        working-directory: clients/vault
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Locked SBF build and offline transaction suite
+        run: node scripts/check-vault.mjs

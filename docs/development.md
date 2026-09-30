@@ -11,7 +11,7 @@ package boundaries and the deliberately small P01 scope.
   manager or the official release binaries; do not change global tools implicitly.
 - A C compiler builds the pinned bundled SQLite dependency; no database server
   is needed. No Node package manager, API keys, RPC endpoint, wallet, Solana CLI,
-  Anchor, Docker or AWS account is needed for current checks.
+  Anchor, Docker or AWS account is needed for off-chain workspace checks.
 
 One-time installation of toolchains/CI actions and `cargo fetch --locked` needs
 network access. After hydration, source build/lint/tests are offline; Cargo runs
@@ -43,6 +43,20 @@ persistence. Do not count debug/release executions as independent mathematical p
 The original 233 research groups remain separate evidence, not production coverage.
 
 ## Files and packages
+
+### Solana custody checks (P15)
+
+`programs/` is a separate Anchor 1.2.0 Cargo workspace with its own lockfile;
+`clients/vault/` pins `@anchor-lang/core` 1.2.0 and owns its generated IDL/types.
+Follow [vault setup](../programs/README.md), then run `node scripts/check-vault.mjs`.
+This separate CI job installs checksum-verified Anchor, Agave and Surfpool tools,
+hydrates locked dependencies, and runs signed SBF instructions only in offline
+localhost Surfpool. It never uses a configured CLI wallet or remote account fork.
+It checks IDL/source equality, strict Rust/TypeScript compilation and actual CPI
+rollback. Global tool replacements, external deployments and production key
+release are not automatic setup steps. See [ADR 0015](architecture/0015-solana-vault.md).
+
+### Off-chain ownership
 
 Kernel changes belong in `crates/kernel`; keep network, time, signing, persistence
 and venue SDKs outside it. Port contracts live in `crates/ports`; offline doubles

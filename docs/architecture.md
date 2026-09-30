@@ -36,7 +36,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Native ADL and RF1/RF2 restoration | Qualified cuts, bounded exact-EDF schedule and original-basis postings implemented; no live ADL recognizer or execution service | P12 |
 | Pacifica observations | Lossless bounded codecs, durable provenance/replay and explicit capability gaps implemented; no live qualification | P13 |
 | Pacifica signing adapter | Durable native preimages, scoped Ed25519 signer, shared credit reservation and fake transport implemented; no live-qualified deployment | P14 |
-| Solana custody, funding round trip, recovery claims | Planned; bounded prototypes remain evidence only | P15–P17 |
+| Solana custody vault and normal authorization | Anchor 1.2 program, public receipts/shared paid counters and offline signed SBF tests implemented; deployment gated | P15 |
+| Funding round trip and recovery claims | Planned; bounded prototypes remain evidence only | P16–P17 |
 | Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
@@ -90,7 +91,7 @@ state. Reconciliation connects these domains; none substitutes for the others.
 
 ### Code ownership
 
-The current workspace has four Rust crates:
+The off-chain workspace has five Rust crates:
 
 - `cinder-kernel`: dependency-free, `no_std`, checked integer types and pure state
   transitions. No clock, database, signer, network or venue SDK imports.
@@ -101,11 +102,17 @@ The current workspace has four Rust crates:
 - `cinder-journal`: versioned transactions, joined holds/attempts, exact replay and
   opaque SQLite storage. Its pinned storage/hash dependencies stay outside the
   kernel; [ADR 0005](architecture/0005-durable-journal.md) specifies the contract.
+- `cinder-pacifica`: native observation/signing codecs and durable adapter authority;
+  native execution remains separately qualified.
+
+The isolated `programs/` Anchor workspace owns public Solana custody, not private
+financial accounting. Its generated typed client is `clients/vault/`; neither
+adds Anchor dependencies to the kernel or the off-chain workspace.
 
 New packages are introduced when an owning phase implements a real boundary,
 with an architecture decision. Language/runtime pins are in
 [ADR 0001](architecture/0001-workspace.md). P05 selects local SQLite explicitly;
-transport cryptography, program topology and production witness providers are
+transport cryptography and production witness providers are
 not selected implicitly by this diagram. A controller may request a transition; it cannot maintain an
 independently authoritative balance table.
 
@@ -133,9 +140,11 @@ it trading-only. The supported intermediate key-controlled funding account remai
 an explicit custody boundary. No Solana program, encrypted snapshot, or threshold
 signature is claimed to manufacture an unsupported native authorization interface.
 
-Prefer one cohesive Solana custody/recovery program unless an actual trust or
-upgrade boundary justifies several. P15/P17 own that decision and account schema;
-HyperLink's contract count is not a requirement for Cinder.
+P15 selects one cohesive Solana custody program; P17 will add recovery using its
+same token authority and preserved paid counters. [ADR 0015](architecture/0015-solana-vault.md)
+records the role/epoch fence, immutable receipts and bootstrap upgrade-authority
+check. Its public counters are not current private entitlements. HyperLink's
+contract count is not a requirement for Cinder.
 
 ## 4. The financial state and its reconciliation
 

@@ -17,7 +17,7 @@
 | [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | [#36](https://github.com/arnabnandikgp/cinder/pull/36), stacked above #35 |
 | [P13 — Pacifica observations](PLAN.md#p13) | in progress | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | [#37](https://github.com/arnabnandikgp/cinder/pull/37), stacked above #36 |
 | [P14 — Pacifica execution](PLAN.md#p14) | in progress | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), stacked above #37 |
-| [P15 — Solana vault](PLAN.md#p15) | open | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | — |
+| [P15 — Solana vault](PLAN.md#p15) | in progress | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | `tee/p15-solana-vault`, stacked above #38; PR pending |
 | [P16 — Funding coordinator](PLAN.md#p16) | open | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | — |
 | [P17 — Recovery program](PLAN.md#p17) | open | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | — |
 | [P18 — Private API and SDK](PLAN.md#p18) | open | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | — |
@@ -36,13 +36,14 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p14-pacifica-execution`, PR #38 above P13 #37. The authorized
-continuous P06–P14 run has finished its implementation and offline verification. STOP BEFORE
-P15: resume only after the user asks. Nine new phase PRs (#30–#38) are stacked;
-none was merged and no new external test/deployment was performed. Preserve
-unrelated `stays/` and ignored `work/`. P11's late review corrections are propagated
-through P12–P14 with explicit engine revisions, not silently reinterpreted history.
-Current request is stack-wide CodeRabbit triage/fixes, not merge or P15. Eight
+Current branch: `tee/p15-solana-vault`, stacked above P14 #38. The user's latest
+request explicitly resumes P15 with Anchor 1.2.0 and a stacked PR; the old
+stop-before-P15 boundary is superseded. This authorizes local implementation and
+offline signed SBF tests, not merges, external deployments or venue transactions.
+P16/P17 remain separate phases. Preserve unrelated `stays/` and ignored `work/`.
+P15 uses an isolated program workspace and unsigned TS client; deployment identity,
+key governance and live limits remain G03/G05 gates. See the P15 log below.
+Prior stack-wide CodeRabbit triage confirmed eight
 unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
 branches (with P13's cumulative byte-budget fix in P05) and locally restacked.
 Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14=17; older revisions
@@ -723,11 +724,38 @@ Merge: none.
 
 ## P15 — Solana vault
 
-Work: not started.
-Verification: not run; acceptance in PLAN P15.
-Unexpected: none yet.
-Next: promote M1 authority invariants; document program topology and build local SBF vault/payout tests.
-PR: none.
+Work: one cohesive Anchor 1.2.0 vault in the isolated `programs/` workspace;
+typed classic-token/PDA constraints, upgrade-authority bootstrap, public customer
+attribution, immutable deposit/operator receipts, allowlisted working-collateral
+release/return, ordinary payouts with shared lifetime paid/sequence counters,
+signed role handoff and epoch fence. Recovery authority only freezes; it cannot
+pay through the normal path or reset history. Generated IDL/types and an unsigned
+`@anchor-lang/core` 1.2.0 client are tracked. ADR 0015 promotes W04/W05 invariants
+without fixture keys or a second private financial ledger.
+Verification: all 25 signed SBF transaction tests passed locally in offline
+Surfpool via the complete vault runner. All financial-workspace checks passed:
+both strict Clippy configurations, all-target build, debug/release tests, doctests
+and 24 repository regressions. Debug symbols/incremental compilation were disabled
+to bound disk usage, not to disable debug assertions. Clean-export verification
+passed from `/private/tmp/cinder-p15-export.FVQoPZ` as well: complete vault and
+financial runners passed without `work/`, `stays/` or Git metadata, using only
+hydrated dependency/build caches. Strict vault Rust and TypeScript compilation
+passed. The reproducible runner checks exact tool and
+lock pins, generated-IDL equality and stack diagnostics, owns its localhost-only
+Surfpool lifecycle, and refuses occupied ports. A separate checksum-pinned CI job
+does not contact venues or RPCs during tests.
+Unexpected: Anchor's token-init macro references its Token-2022 module even for
+typed classic Token; enabling that Rust module does not enable Token-2022 assets.
+Boxed account wrappers remove generated SBF stack overflows. Customer deposit IDs
+have a separate owner-bound namespace to prevent operator receipt squatting.
+Prefunded-PDA tests must supply the system-account rent minimum, not one lamport.
+Disk exhaustion required removing only reproducible debug artifacts, not source,
+research, wallets or unrelated files.
+Next: open the verified P15 above #38 using `gh stack`. Do not merge.
+P16 joins finalized custody receipts/native funding to
+the existing authoritative journal; P17 adds funded final claims sharing these
+paid counters, not an independent payout program.
+PR: pending.
 Merge: none.
 
 ## P16 — Funding coordinator

@@ -49,6 +49,7 @@ services remain later phases.
 19. [ADL allocation and restoration](docs/architecture/0012-adl-restoration.md)
 20. [Pacifica observation qualification](docs/architecture/0013-pacifica-observations.md)
 21. [Durable native signing and API credits](docs/architecture/0014-pacifica-execution.md)
+22. [Solana custody vault and normal authorization](docs/architecture/0015-solana-vault.md)
 
 Resume implementation from the current handoff in the tracker.
 Ignored `work/` contains the original local research; it is not a CI dependency.
@@ -68,3 +69,8 @@ The five local crates are `cinder-kernel`, `cinder-ports`, `cinder-test-support`
 `cinder-journal` and `cinder-pacifica`. Storage, cryptography and native JSON/signing
 dependencies stay outside the dependency-free kernel. No check uses live endpoints.
 Node runs repository checks, not the financial runtime.
+
+The isolated Anchor 1.2 workspace in `programs/` and unsigned TypeScript client
+in `clients/vault/` are verified separately with `node scripts/check-vault.mjs`.
+See [vault setup](programs/README.md) for the pinned tools. Signed transaction
+tests run only in offline localhost Surfpool; no deployment is authorized.

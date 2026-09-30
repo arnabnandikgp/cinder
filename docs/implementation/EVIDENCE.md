@@ -264,6 +264,17 @@ tests and cross-checked against Node/OpenSSL. Fake transport covers lost ACK,
 from a wallet, deployment or production capability promotion occurred. P13's hosted
 checks and CodeRabbit were green with no inline findings at this phase boundary.
 
+## P15 custody instruction promotion
+
+[ADR 0015](../architecture/0015-solana-vault.md) promotes W04's actual-transfer,
+asset/recipient/authority and rollback requirements, and W05's normal/recovery
+fence and permanent paid-history requirements. The original source hashes are
+recorded there. Tracked tests execute the new Anchor 1.2 SBF in offline Surfpool,
+not a copied one-run vault or mock instruction validator. Public custody evidence
+is not another financial ledger. No experimental deployment account, live signed
+payload, RPC key or customer private state is promoted. The venue controller,
+recovery proof/activation and live governance remain P16/P17/G03/G05 boundaries.
+
 ## Requirement-to-phase traceability
 
 | Contract | Owning implementation | Mandatory evidence |
