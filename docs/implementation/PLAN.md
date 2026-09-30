@@ -254,9 +254,9 @@ margin, pending-outcome evaluation, peak-path capital depletion, concentration a
 location/deadline liquidity. Synthetic profiles exercise gates; no live calibration.
 Evidence: W01, W09; every-prefix shocks/recoveries, cap-change and reduce-only cases.
 
-- [ ] One atomic version/cut accounts for all existing commitments and proposed reachable outcomes.
-- [ ] Insolvency, illiquidity, margin breach and capital-target breach remain distinguishable; external shocks still ingest.
-- [ ] Unbounded/missing data restricts new risk; resource-location reuse and imagined future revenues cannot pass admission.
+- [x] One atomic version/cut accounts for all existing commitments and proposed reachable outcomes.
+- [x] Insolvency, illiquidity, margin breach and capital-target breach remain distinguishable; external shocks still ingest.
+- [x] Unbounded/missing data restricts new risk; resource-location reuse and imagined future revenues cannot pass admission.
 
 <a id="p10"></a>
 ## P10 — Protection claims and repeated deficit episodes

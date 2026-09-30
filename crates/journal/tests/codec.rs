@@ -130,7 +130,7 @@ fn variants() -> Vec<Event> {
 fn every_p03_p04_event_variant_is_losslessly_canonical() {
     for e in variants() {
         let b = encode_event(&e).unwrap();
-        assert_eq!(&b[..12], b"CINDER-J\0\0\x03\x02");
+        assert_eq!(&b[..12], b"CINDER-J\0\0\x04\x02");
         assert_eq!(decode_event(&b).unwrap(), e);
         assert_eq!(encode_event(&decode_event(&b).unwrap()).unwrap(), b);
         for n in 0..b.len() {

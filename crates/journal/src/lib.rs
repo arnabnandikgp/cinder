@@ -6,6 +6,7 @@ pub mod funds;
 pub mod model;
 pub mod orders;
 pub mod replicated;
+pub mod risk;
 pub mod sqlite;
 pub mod wire;
 use cinder_kernel::{identity::Domain, ledger::Config};
@@ -14,7 +15,7 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 // Order classification/authority/lifecycle changes replay semantics.
-const ENGINE_REVISION: u16 = 4;
+const ENGINE_REVISION: u16 = 5;
 
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

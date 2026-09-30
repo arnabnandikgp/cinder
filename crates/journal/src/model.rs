@@ -148,6 +148,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Joined policy installation and authenticated private leverage selection.
+    Risk(crate::risk::Action),
     /// Ordered funds/withdrawal lifecycle in this same financial state.
     Funds(crate::funds::Action),
     /// Install explicitly configured collateral policy and fresh qualified marks.
@@ -258,6 +260,8 @@ pub struct State {
     pub(crate) order_observations: Vec<crate::orders::Observation>,
     pub(crate) order_fills: Vec<(Event, Event)>,
     pub(crate) collateral: Option<crate::collateral::Cut>,
+    pub(crate) risk: Option<crate::risk::Policy>,
+    pub(crate) selections: Vec<crate::risk::Selection>,
     pub(crate) funds: Vec<crate::funds::Operation>,
     pub(crate) funds_observations: Vec<crate::funds::Observation>,
     pub(crate) funds_receipts: Vec<(EventKey, Option<u64>)>,
@@ -290,6 +294,8 @@ impl State {
             order_observations: Vec::new(),
             order_fills: Vec::new(),
             collateral: None,
+            risk: None,
+            selections: Vec::new(),
             funds: Vec::new(),
             funds_observations: Vec::new(),
             funds_receipts: Vec::new(),
@@ -358,6 +364,9 @@ impl State {
         }
     }
     pub(crate) fn all_capacity(&self) -> Result<(), ControlError> {
+        if self.risk.is_some() {
+            return self.risk_gate();
+        }
         for r in self
             .holds
             .iter()
@@ -377,6 +386,7 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Risk(action) => self.risk_action(action)?,
             Control::Funds(action) => self.funds_action(action)?,
             Control::Collateral(cut) => self.install_collateral(cut)?,
             Control::Order(action) => self.order_action(action)?,
@@ -389,6 +399,7 @@ impl State {
                     || reservations.len() > MAX_ITEMS
                     || self.holds.len() >= MAX_ITEMS
                     || self.holds.iter().any(|h| h.request == *request)
+                    || self.selections.iter().any(|s| s.request == *request)
                 {
                     return Err(ControlError::Invalid);
                 }
@@ -599,7 +610,10 @@ impl State {
                 }
             }
             if controls.is_none() {
-                s = candidate;
+                controls = candidate.risk_controls(&tx.controls).err();
+                if controls.is_none() {
+                    s = candidate;
+                }
             }
         }
         let receipt = Receipt {

@@ -27,7 +27,7 @@ impl Writer {
             valid: true,
         };
         s.raw(b"CINDER-J\0");
-        s.raw(&3_u16.to_be_bytes());
+        s.raw(&4_u16.to_be_bytes());
         s.byte(tag);
         s
     }
@@ -40,6 +40,9 @@ impl Writer {
     }
     pub(crate) fn byte(&mut self, b: u8) {
         self.raw(&[b]);
+    }
+    pub(crate) fn invalid(&mut self) {
+        self.valid = false;
     }
     pub(crate) fn u64(&mut self, n: u64) {
         self.raw(&n.to_be_bytes());
@@ -85,7 +88,7 @@ impl<'a> Reader<'a> {
         if r.take(9)? != b"CINDER-J\0" {
             return Err(Error::Codec);
         }
-        if r.array::<2>()? != 3_u16.to_be_bytes() {
+        if r.array::<2>()? != 4_u16.to_be_bytes() {
             return Err(Error::Version);
         }
         if r.byte()? != tag {
@@ -780,6 +783,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Risk(action) => {
+                w.byte(7);
+                crate::risk::encode_action(&mut w, action);
+            }
             Control::Funds(action) => {
                 w.byte(6);
                 crate::funds::encode_action(&mut w, action);
@@ -880,6 +887,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             4 => Control::Order(crate::orders::decode_action(&mut r)?),
             5 => Control::Collateral(crate::collateral::decode(&mut r)?),
             6 => Control::Funds(crate::funds::decode_action(&mut r)?),
+            7 => Control::Risk(crate::risk::decode_action(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -984,6 +992,11 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.u64(s.now);
     w.u64(s.raw_unresolved);
     w.option(&s.collateral, crate::collateral::encode);
+    w.option(&s.risk, crate::risk::encode_policy);
+    w.count(s.selections.len());
+    for selection in &s.selections {
+        crate::risk::encode_selection(&mut w, selection);
+    }
     w.u64(s.ledger.version());
     w.item(&s.ledger.vault());
     w.item(&s.ledger.in_transit().map_err(|_| Error::Invalid)?);

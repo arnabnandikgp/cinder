@@ -11,7 +11,7 @@
 | [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
 | [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), stacked above #30 |
 | [P08 — Funds and payouts](PLAN.md#p08) | in progress | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | [#32](https://github.com/arnabnandikgp/cinder/pull/32), stacked above #31 |
-| [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
+| [P09 — Joined risk admission](PLAN.md#p09) | in progress | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | Local implementation above #32 |
 | [P10 — Protection claims](PLAN.md#p10) | open | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | — |
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | open | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | — |
 | [P12 — ADL and restoration](PLAN.md#p12) | open | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | — |
@@ -36,8 +36,8 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p08-funds-payouts`, created with `gh stack add` above
-P07 #31 (`8fd9651`). User authorized continuous
+Current branch: `tee/p09-risk-admission`, created with `gh stack add` above
+P08 #32 (`0049c26`). User authorized continuous
 stacked P06–P14 implementation while away, stopping before P15; no merges or new
 external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
 `work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
@@ -467,10 +467,25 @@ Merge: none.
 
 ## P09 — Joined risk admission
 
-Work: not started.
-Verification: not run; acceptance in PLAN P09.
-Unexpected: none yet.
-Next: bound pending outcomes under one state cut; implement synthetic policy profiles without enabling live risk.
+Work: 2026-09-30 — implemented one joined derived risk report over ledger/shared holds,
+independent pending quantity intervals and adverse execution cost, capped private
+leverage, native margin, capital/concentration and location/deadline scenarios.
+Verification: pinned full offline runner passed 147 Rust tests in debug/release,
+two compile-fail doctests, 23 repository tests, formatting, strict Clippy and build.
+The 18-group risk suite includes 540 partial/price/order-ordering cases, replay,
+every-prefix capital, cap downgrade, actual shock, source-liquidity and shared
+payout tests. Self-review added a final-control-cut check to prevent exposure
+preceding a policy downgrade in the same atomic proposal, and evaluates each
+execution inside grouped scenarios. A conservative nested-work bound was tightened
+after that run; final clean-export verification follows below.
+P08 head `0049c26` passed hosted TEE CI and CodeRabbit status with no inline findings.
+Unexpected: no new product decision. The interval bound intentionally overestimates
+some combinations; finite stress paths are not a probability or universal guarantee.
+Unexpected: scenario execution/evidence errors fail qualification rather than
+vanishing into an empty safe report; old wire 3 / engine 4 are explicitly rejected
+for wire 4 / engine 5. No actual live policy or independent solvency proof claimed.
+Next: final clean verification and publication above #32, then P10 protection
+claims. Continue the authorized stack without merging or entering P15.
 PR: none.
 Merge: none.
 

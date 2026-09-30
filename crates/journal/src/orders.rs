@@ -276,8 +276,8 @@ impl State {
                 {
                     return Err(ControlError::Invalid);
                 }
-                // P09 replaces flat-only capacity with outcome-aware margin. Do not
-                // silently weaken it in order to make a lifecycle test place risk.
+                // First reserve atomically, then evaluate again with the proposed
+                // order included in independent reachable outcomes.
                 self.control(&Control::Reserve {
                     request: i.request,
                     reservations: reservations.clone(),
@@ -294,6 +294,9 @@ impl State {
                     faulted: false,
                     bound_violated: false,
                 });
+                if self.risk.is_some() {
+                    self.all_capacity()?;
+                }
             }
             Action::Prepare { attempt } => {
                 let index = self

@@ -154,7 +154,11 @@ impl State {
         {
             return Err(ControlError::Unqualified);
         }
-        self.collateral_capacity(Resource::Location(Location::Vault))?;
+        if self.risk.is_some() {
+            self.risk_gate()?;
+        } else {
+            self.collateral_capacity(Resource::Location(Location::Vault))?;
+        }
         Ok(())
     }
 

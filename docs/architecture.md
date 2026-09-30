@@ -30,7 +30,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Encrypted replicas, current-head witness and writer fencing | Implemented against a trusted witness port; no independently deployed witness or Nitro qualification | P06 |
 | Bound order intents, partial/terminal lifecycle and shared holds | Implemented against trusted authentication/source ports; no live execution | P07 |
 | Partial funds and FIFO payouts | Implemented with marked collateral and qualified receipt ports; no native sends | P08 |
-| Joined risk, protection, liquidation, ADL | Planned; no execution service yet | P09–P12 |
+| Joined margin, capital and liquidity admission | Implemented with conservative pending bounds and finite synthetic stress paths; not calibrated | P09 |
+| Protection, liquidation, ADL | Planned; no execution service yet | P10–P12 |
 | Pacifica observation and signing adapters | Planned; research evidence is not an implemented adapter | P13–P14 |
 | Solana custody, funding round trip, recovery claims | Planned; bounded prototypes remain evidence only | P15–P17 |
 | Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |

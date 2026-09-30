@@ -107,6 +107,15 @@ including arrival-before-debit. Open-position tests use qualified synthetic mark
 and explicit initial margin; pending-order outcomes remain P09's prerequisite.
 No fixture wallet, live authority, native finality or funding sender is promoted.
 
+### P09: joined bounded admission
+
+[ADR 0009](../architecture/0009-joined-risk.md) promotes W01/W09 leverage, gross/net,
+pending-order, every-prefix capital and location-liquidity cases into one derived
+report over the production ledger and shared holds. The source hashes, conservative
+interval derivation and finite-path limitations are explicit. No experimental
+ledger contributes assets, historical ADL candidate becomes policy, or synthetic
+limit becomes live calibration. P10–P12 extend scenario transitions in their layers.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:
