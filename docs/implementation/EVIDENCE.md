@@ -71,6 +71,18 @@ qualification. Exact source hashes and the still-unexplained Pacifica precision
 gap are recorded in the ADR. Durable raw evidence remains P05/P13, not the
 in-memory retained normalized observations delivered here.
 
+### P05: durable atomic transition and exposure boundary
+
+[ADR 0005](../architecture/0005-durable-journal.md) promotes W01 atomicity,
+W04 immutable attempts/unknown outcomes and W05 crash/rollback lessons into the
+tracked journal and synthetic process tests. Ten actual child kills cover five
+commit points for joined credit/hold/consumption and prepared-action exposure.
+Replay, concurrent capacity, schema migration, real SQLite disk-full, source
+evidence retention and secret-safe diagnostics no longer depend on ignored files.
+The valid-history rollback counterexample is retained for P06: the fixture
+protector and public hash chain are not cryptographic or freshness evidence.
+No funding prototype, wallet, signed live payload or M1/M2 authority was promoted.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Single offline entry point used locally and in CI, after toolchain installation.
+// Offline entry point after toolchain installation and locked dependency fetch.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -26,6 +26,7 @@ if (args[0] === '--properties') {
   run(process.execPath, ['--test', 'scripts/check-implementation-plan.test.mjs', 'scripts/check-workspace.test.mjs', 'scripts/check-financial-fixtures.test.mjs']);
   run(process.execPath, ['scripts/check-workspace.mjs']);
   run('cargo', ['fmt', '--all', '--', '--check']);
+  run('cargo', ['clippy', '--workspace', '--all-targets', '--locked', '--offline', '--', '-D', 'warnings']);
   run('cargo', ['clippy', '--workspace', '--all-targets', '--all-features', '--locked', '--offline', '--', '-D', 'warnings']);
   run('cargo', ['build', '--workspace', '--all-targets', '--all-features', '--locked', '--offline']);
   run('cargo', ['test', '--workspace', '--all-features', '--locked', '--offline']);

@@ -1,0 +1,162 @@
+{
+  "lockfileSha256": "7f3cb6253fbbf465ee0dfcdd3da5497c38a393ed300336ca04a4182c3abc084d",
+  "registry": "registry+https://github.com/rust-lang/crates.io-index",
+  "packages": [
+    {
+      "name": "bitflags",
+      "version": "2.13.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "block-buffer",
+      "version": "0.10.4",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "cc",
+      "version": "1.4.7",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.5",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "cpufeatures",
+      "version": "0.2.17",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "crypto-common",
+      "version": "0.1.7",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "digest",
+      "version": "0.10.7",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "block-buffer",
+        "core-api",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "fallible-iterator",
+      "version": "0.3.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default"
+      ]
+    },
+    {
+      "name": "fallible-streaming-iterator",
+      "version": "0.1.9",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "find-msvc-tools",
+      "version": "0.1.13",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "generic-array",
+      "version": "0.14.7",
+      "buildScript": true,
+      "features": [
+        "more_lengths"
+      ]
+    },
+    {
+      "name": "libc",
+      "version": "0.2.189",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "libsqlite3-sys",
+      "version": "0.38.2",
+      "buildScript": true,
+      "features": [
+        "bundled",
+        "bundled_bindings",
+        "cc",
+        "default",
+        "min_sqlite_version_3_34_1",
+        "pkg-config",
+        "vcpkg"
+      ]
+    },
+    {
+      "name": "pkg-config",
+      "version": "0.3.34",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "rusqlite",
+      "version": "0.40.2",
+      "buildScript": false,
+      "features": [
+        "bundled",
+        "modern_sqlite"
+      ]
+    },
+    {
+      "name": "sha2",
+      "version": "0.10.9",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "shlex",
+      "version": "2.0.1",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "smallvec",
+      "version": "1.16.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "typenum",
+      "version": "1.20.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "vcpkg",
+      "version": "0.2.15",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "version_check",
+      "version": "0.9.5",
+      "buildScript": false,
+      "features": []
+    }
+  ]
+}

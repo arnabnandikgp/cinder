@@ -1,0 +1,19 @@
+[package]
+name = "cinder-journal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = false
+description = "Atomic opaque-record journal and deterministic Cinder replay"
+
+[dependencies]
+cinder-kernel.workspace = true
+rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled"] }
+sha2 = "=0.10.9"
+
+[features]
+test-hooks = []
+
+[lints]
+workspace = true

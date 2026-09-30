@@ -25,8 +25,9 @@ implementation is a separate workstream, not the template for this architecture.
 | --- | --- | --- |
 | Build, typed amounts, IDs, canonical primitive encoding | Implemented and previously merged | P01–P02 |
 | Single quote-pool ledger, exact positions, ownership, cash/location bridge | Implemented in base PR; pure in-memory proposals | P03 |
-| Funding, fees, source discrepancies | Implemented in this stack layer; qualified normalized inputs, no live adapter | P04 |
-| Durable journal, encrypted replicas, current-head witness | Planned; no production store yet | P05–P06 |
+| Funding, fees, source discrepancies | Implemented in base stack; qualified normalized inputs, no live adapter | P04 |
+| Local atomic journal and replay | Implemented in this layer; opaque storage, mandatory protection interface, no production cipher | P05 |
+| Encrypted replicas, current-head witness and writer fencing | Planned; not supplied by local SQLite/hash chaining | P06 |
 | Intent/funds controllers, joined risk, protection, liquidation, ADL | Planned; no execution service yet | P07–P12 |
 | Pacifica observation and signing adapters | Planned; research evidence is not an implemented adapter | P13–P14 |
 | Solana custody, funding round trip, recovery claims | Planned; bounded prototypes remain evidence only | P15–P17 |
@@ -83,7 +84,7 @@ state. Reconciliation connects these domains; none substitutes for the others.
 
 ### Code ownership
 
-The current workspace has three Rust crates:
+The current workspace has four Rust crates:
 
 - `cinder-kernel`: dependency-free, `no_std`, checked integer types and pure state
   transitions. No clock, database, signer, network or venue SDK imports.
@@ -91,12 +92,15 @@ The current workspace has three Rust crates:
   implementations or evidence that a venue supports an action.
 - `cinder-test-support`: deterministic clocks, stores and venue doubles for fault
   tests. It must not become a production store or enter the kernel dependency graph.
+- `cinder-journal`: versioned transactions, joined holds/attempts, exact replay and
+  opaque SQLite storage. Its pinned storage/hash dependencies stay outside the
+  kernel; [ADR 0005](architecture/0005-durable-journal.md) specifies the contract.
 
 New packages are introduced when an owning phase implements a real boundary,
 with an architecture decision. Language/runtime pins are in
-[ADR 0001](architecture/0001-workspace.md). Databases, transport cryptography,
-program topology and production witness providers are not selected implicitly by
-this diagram. A controller may request a transition; it cannot maintain an
+[ADR 0001](architecture/0001-workspace.md). P05 selects local SQLite explicitly;
+transport cryptography, program topology and production witness providers are
+not selected implicitly by this diagram. A controller may request a transition; it cannot maintain an
 independently authoritative balance table.
 
 ## 3. Accounts, assets and authority
@@ -244,8 +248,9 @@ The target normalized envelope binds network/deployment, native source account,
 semantic namespace, economic event/leg, operation/attempt, units/precision, source
 cut/observation time, authority, payload and policy versions. P02 defines the
 primitive keys; P03 compares exact normalized events in memory; P04 ingestion also
-retains rejected/duplicate observations and injected arrival times. P05/P13 complete
-the durable/source-qualified envelope. A matching identifier with changed payload
+retains rejected/duplicate observations and injected arrival times. P05 persists
+the full envelope and raw evidence; P13 must still qualify its native source and
+causal meaning. A matching identifier with changed payload
 is a conflict, not an update to silently overwrite.
 
 Processing order is:
@@ -270,8 +275,16 @@ event, not mutation of history or a general-purpose admin balance setter.
 P03/P04 clone state to propose transitions and expose read-only projections. P04's
 ingestion path preserves named evidence even when an economic transition rejects;
 complete replay uses observation history, not only accepted financial events. This
-is failure atomicity inside a pure function, not process-crash durability, a
-concurrent compare-and-swap, authentication, or a permission to send money.
+is failure atomicity inside a pure function. P05 wraps that function in a durable
+SQLite CAS transaction and replays complete observations, receipts, holds and
+attempts. Facts remain recordable when the accompanying all-or-none control
+proposal refuses. Bounded flat-cash reservations are not P09 margin approval;
+exactly one prepared attempt per hold can become possibly exposed, and a lost
+reply never regenerates its local delivery. Disk/uncertain commit errors poison
+the coordinator until explicit replay. This is not authentication or permission
+to send money. P06 still owns AEAD, replication, freshness and writer fencing;
+P05's test protector is intentionally insecure and its public hash chain cannot
+detect a valid complete rollback.
 
 ## 6. Normal operating flows
 

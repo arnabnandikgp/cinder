@@ -390,6 +390,10 @@ impl Ledger {
     pub fn events(&self) -> &[Event] {
         &self.events
     }
+    /// Unresolved ownership count; zero value does not discharge attribution.
+    pub fn unresolved_attribution(&self) -> usize {
+        self.unresolved.len()
+    }
     fn market_index(&self, unit: MarketUnit) -> Result<usize, LedgerError> {
         let index = self
             .config

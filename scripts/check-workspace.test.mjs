@@ -1,15 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateKernelSource, validateWorkspace } from './check-workspace.mjs';
+import { dependencyPolicy, validateKernelSource, validateLockfile, validateWorkspace } from './check-workspace.mjs';
+import { readFileSync } from 'node:fs';
 
 function fixture() {
-  const pkg = name => ({ name, id: name, source: null, targets: [{ kind: ['lib'] }], dependencies: [] });
-  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support'].map(pkg);
+  const pkg = name => ({ name, id: name, version: '0.1.0', source: null, targets: [{ kind: ['lib'] }], dependencies: [] });
+  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal'].map(pkg);
   packages[2].dependencies = [
     { name: 'cinder-ports', kind: null, path: '/repo/crates/ports', req: '=0.1.0', target: null },
     { name: 'cinder-kernel', kind: 'dev', path: '/repo/crates/kernel', req: '=0.1.0', target: null },
   ];
-  return { packages, workspace_members: packages.map(p => p.id) };
+  packages[3].dependencies = [
+    { ...packages[2].dependencies[1], kind: null },
+    ...['rusqlite', 'sha2'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'rusqlite' ? ['bundled'] : [], uses_default_features: name === 'sha2', optional: false})),
+  ];
+  const workspace_members = packages.map(p => p.id);
+  packages.push(...dependencyPolicy.packages.map(p => ({...pkg(p.name), version: p.version, source: dependencyPolicy.registry, targets: [{kind: ['lib']}, ...(p.buildScript ? [{kind: ['custom-build']}] : [])]})));
+  return { packages, workspace_members, resolve: {nodes: dependencyPolicy.packages.map(p => ({id: p.name, features: p.features}))} };
 }
 
 test('the intended local graph passes', () => {
@@ -52,4 +59,18 @@ test('obvious std escapes and missing boundary reject', () => {
 test('submodules need no root attribute but cannot explicitly escape to std', () => {
   assert.deepEqual(validateKernelSource('use alloc::vec::Vec;', false), []);
   assert.equal(validateKernelSource('use std::net;', false).length, 1);
+});
+test('storage pins, features and external build scripts cannot expand silently', () => {
+  const metadata = fixture();
+  metadata.packages[3].dependencies[1].uses_default_features = true;
+  assert.match(validateWorkspace(metadata).join('\n'), /configuration not approved/);
+  metadata.resolve.nodes.find(n => n.id === 'rusqlite').features = ['bundled', 'load_extension'];
+  assert.match(validateWorkspace(metadata).join('\n'), /unapproved resolved features/);
+  metadata.packages.find(p => p.name === 'sha2').targets.push({kind: ['custom-build']});
+  assert.match(validateWorkspace(metadata).join('\n'), /unapproved external build script/);
+});
+test('registry lock checksums and edges are pinned by an explicit policy digest', () => {
+  const lock = readFileSync(new URL('../Cargo.lock', import.meta.url));
+  assert.deepEqual(validateLockfile(lock), []);
+  assert.equal(validateLockfile(Buffer.concat([lock, Buffer.from('\n')])).length, 1);
 });

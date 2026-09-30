@@ -7,7 +7,7 @@
 | [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
 | [P03 — Unified ledger](PLAN.md#p03) | closed | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), merged `3bd8c12` |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
-| [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
+| [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | Local verification; stacked above #27 |
 | [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
 | [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
 | [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
@@ -36,13 +36,12 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p04-funding-reconciliation`, originally created above P03
-with `gh stack add`, now rebased onto its reviewed squash merge. User authorized
-P03's review fixes and merge, not P04/P05's merges. Preserve unrelated `stays/`
-and ignored `work/`. P04 extends P03's one
-in-memory ledger with funding, fees and source-evidence containment, and updates
-the [full architecture](../architecture.md). No durable store, program, service,
-live native adapter or Nitro runtime has been implemented.
+Current branch: `tee/p05-durable-journal`, created with `gh stack add` above
+`tee/p04-funding-reconciliation` at `2ed38812cedabf89cc6d49afc5d2c69663f2660f`
+(PR #27), now restacked on merged P03. User authorized P03's review fixes and
+merge, not P04/P05's merges. Preserve unrelated `stays/` and ignored `work/`.
+P05 adds the local durable journal, not production encrypted storage, a program,
+service, live native adapter or Nitro runtime.
 
 Repository integration follow-up: the TEE trunk had no classic branch protection
 or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
@@ -54,7 +53,7 @@ reports deployment failure, but its build logs were not inspected; do not infer 
 specific build error from that status alone. These integrations were left unchanged.
 
 P03 is merged with user authorization. P04 is open as PR #27 on the TEE trunk;
-P05 is a dependent layer (#29) in GitHub stack #28 and carries its own handoff.
+P05 is a dependent layer in GitHub stack #28 and carries its own handoff below.
 P04's full local checks passed again with the reviewed arithmetic fix. Review
 and merge the remaining layers only with authorization. Native execution and
 customer-funds deployment are not implied by this foundation. P19/P21/P22 support
@@ -303,10 +302,34 @@ Merge: none.
 
 ## P05 — Durable journal
 
-Work: not started.
-Verification: not run; acceptance in PLAN P05.
-Unexpected: none yet.
-Next: implement atomic consumed-key/posting/hold commits and process-kill replay tests.
+Work: 2026-09-30 — added cinder-journal with versioned lossless P03/P04 codecs,
+complete raw/normalized evidence and deterministic receipts/state replay; atomic
+SQLite CAS commits include postings, event consumption, shared holds and immutable
+attempts. Exposure is recorded before one-shot local delivery; unknown commit
+outcomes poison the handle and restart never automatically resends. Actual adverse
+facts survive refused control proposals. Added migration, concurrency, page-full,
+corruption and real killed-child tests; ADR 0005 and source fingerprints explain
+the P06 privacy/freshness boundary. Dependency guard narrowly permits pinned
+storage/hash packages; CI hydrates them before offline checks.
+Verification: pinned macOS arm64 Rust 1.97.1 / Node 24.21.0 full offline runner
+passed 23 script tests, 82 Rust tests and 2 compile-fail doctests in debug/release,
+formatting, default/hook-enabled strict Clippy and build. P05 adds 22 Rust tests,
+including two parent tests that kill ten actual child processes; the one ignored
+worker is explicitly invoked by those parents. Ten finite property tests are
+included in the full run. No container, live endpoint, wallet, chain, AWS,
+independent review or machine proof is claimed. The same full runner passed from
+clean staged export tree `84b578e8174b3fbe078a3f1a200028ecc59e2432`, excluding
+`work/`, `stays/` and Git metadata; compiler/dependency caches were reused to
+conserve disk space. Only documentation handoff clarifications follow that tree.
+Unexpected: SQLite requires signed database integers; added checked conversions.
+Tests caught fixture type mismatches; strict Clippy required naming the test-hook
+type. Fixed before full verification. No production cipher is supplied: a mandatory
+protection seam and opaque storage keep P06's security work explicit. Flat-only
+capacity and one attempt per hold intentionally prevent inventing P07/P09 policy.
+Next: submit P05 above #27 with gh stack,
+then review bottom-up. P06 must close the valid-history rollback counterexample
+with AEAD, independent authenticated freshness and writer fencing; do not expose
+private data or real native actions using the test-only protector.
 PR: none.
 Merge: none.
 

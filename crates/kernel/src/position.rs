@@ -32,6 +32,10 @@ impl Market {
     pub fn unit(self) -> MarketUnit {
         self.unit
     }
+    /// Exact configured conversion for versioned persistence, not a rounded price.
+    pub fn conversion(self) -> (u64, u64) {
+        (self.numerator, self.denominator)
+    }
     /// Exact signed value, not an actual collateral debit for opening a perp.
     pub fn notional(self, quantity: QuantityLots, price: PriceTicks) -> Result<QuoteAtoms, Error> {
         quantity.unit().require(self.unit)?;

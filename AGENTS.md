@@ -76,8 +76,11 @@ git diff --check
 ```
 
 The full runner already includes the property tests; the focused command is for
-iteration, not an additional proof. Cargo commands are locked/offline after
-toolchain installation. Financial conformance remains P02/P03 onward.
+iteration, not an additional proof. After toolchain installation and explicit
+`cargo fetch --locked`, Cargo checks are locked/offline. P05 introduces pinned
+storage/hash dependencies outside the kernel; update the dependency policy only
+with a reviewed architecture/dependency change. Never deploy with `test-hooks` or
+the journal tests' insecure fixture protection.
 
 Routine PRs use pinned local macOS checks and hosted Linux CI; a local Linux
 container run is not a pre-PR requirement. If CI fails, inspect its logs, test

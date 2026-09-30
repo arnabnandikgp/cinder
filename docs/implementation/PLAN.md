@@ -182,9 +182,16 @@ evidence and deterministic rebuild. Serialize economic state changes with bounde
 CAS/retry semantics. Persist exact attempted action before capability exposure.
 Evidence: W01, W04–W05; process-kill tests at each commit/exposure boundary.
 
-- [ ] Restart yields the same state and consumed IDs; torn commit cannot credit without deduplication or vice versa.
-- [ ] Concurrent requests cannot spend the same entitlement/reserve; duplicate/conflicting receipts stay distinct.
-- [ ] Schema migration, audit replay and secret-safe evidence retention are tested; disk/commit failure stops dispatch.
+- [x] Restart yields the same state and consumed IDs; torn commit cannot credit without deduplication or vice versa.
+- [x] Concurrent requests cannot spend the same entitlement/reserve; duplicate/conflicting receipts stay distinct.
+- [x] Schema migration, audit replay and secret-safe evidence retention are tested; disk/commit failure stops dispatch.
+
+Technical evidence: [ADR 0005](../architecture/0005-durable-journal.md) and the
+journal tests. Secret-safe retention means opaque storage and redacted diagnostics
+behind a mandatory protection interface; it does not claim production encryption
+or hostile-host freshness. Those remain P06. Flat-capacity/one-attempt holds are
+the bounded P05 infrastructure slice, not full P07/P09 authorization/risk policy.
+Review and merge remain open in TRACKER.
 
 <a id="p06"></a>
 ## P06 — Encrypted durability and writer epochs
