@@ -99,7 +99,7 @@ impl Position {
             .checked_sub(QuoteAtoms::new(market.unit.quote, self.basis.atoms()))
     }
     /// Apply an actual fill, preserving division residue and consuming full-close basis.
-    /// Uses widened signed close quantities so i64::MIN does not require negating i64.
+    /// Uses unsigned magnitudes so i64::MIN does not require negating i64.
     pub fn fill(
         self,
         market: Market,
@@ -117,21 +117,16 @@ impl Position {
             self.quantity.lots() != 0 && self.quantity.lots().signum() != delta.lots().signum();
         let (basis, realized) = if reducing {
             let closed = self.quantity.magnitude().min(delta.magnitude());
-            let signed_closed = i128::from(self.quantity.lots().signum()) * i128::from(closed);
             let (allocated, remaining) = self.basis.split(closed, self.quantity.magnitude())?;
-            let realized = market
-                .value(signed_closed, price)?
+            // Only the whole actual fill must be exact. Split its signed value
+            // toward zero; retain any conversion residue in the opening basis.
+            let total = market.notional(delta, price)?;
+            let (closing, opening) =
+                BasisAtoms::new(market.unit, total.atoms()).split(closed, delta.magnitude())?;
+            let realized = QuoteAtoms::new(market.unit.quote, closing.atoms())
+                .checked_neg()?
                 .checked_sub(QuoteAtoms::new(market.unit.quote, allocated.atoms()))?;
-            let opening = i128::from(delta.lots())
-                .checked_add(signed_closed)
-                .ok_or(Error::Overflow)?;
-            (
-                remaining.checked_add(BasisAtoms::new(
-                    market.unit,
-                    market.value(opening, price)?.atoms(),
-                ))?,
-                realized,
-            )
+            (remaining.checked_add(opening)?, realized)
         } else {
             (
                 self.basis.checked_add(BasisAtoms::new(

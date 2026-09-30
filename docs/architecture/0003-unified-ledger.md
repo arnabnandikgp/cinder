@@ -23,6 +23,12 @@ Products and conversions are checked; inexact conversion rejects. Qualified nati
 precision and fee rounding remain P04/P13, not arbitrary defaults inferred here.
 Signed basis splits toward zero, retaining the entire remainder in the open basis.
 A full close consumes all basis; opening notional is not debited from cash.
+For a reversal, require the **whole fill** value to be exact, then allocate that
+signed value toward zero between the closing quantity and the new opening basis.
+Do not independently require its artificial closing/opening legs to be exactly
+convertible. With conversion 3/2, reversing short 1 (basis -3) by buying 2 at tick
+5 has whole value 15: close share 7, new basis 8, realized -4. The mirrored sell
+has the opposite signs. The next full close consumes the retained residue.
 
 ## Transitions and attribution
 
@@ -77,7 +83,9 @@ correct authenticated allocation. Proof obligations by transition:
   no private entitlement changes.
 - Binding: no financial change.
 - Fill: for opening, `Δc=0`, `Δb=xv`, so `Δ(c-b)=-xv`. For a reduction/reversal,
-  `Δc=t z v-beta`, `Δb=-beta+(x+t z)v`; subtraction again gives `-xv`.
+  set exact whole value `T=xv` and signed closing share
+  `k=trunc_toward_zero(T*z/abs(x))`. Then `Δc=-k-beta`,
+  `Δb=-beta+(T-k)`; subtraction gives exactly `-T`, including split residue.
   Both native and the one attributed owner receive the same `x,v`, even if their
   old quantities/bases differ. Exposure rises by `x` on each side.
 - Equal replay: identity transition. Conflict/rejection: input state unchanged.
@@ -111,6 +119,9 @@ Deterministic properties cover 25,020 position/fill combinations at two marks an
 12 seeded histories of 128 fills, each checked at three marks against an independent
 cash-flow/exposure oracle. Histories replay from empty state with exact equality.
 These are finite tests plus the hand derivation above, **not machine verification**.
+The P03 review also adds bidirectional 3/2 reversal/full-close and pooled-bridge
+replay regressions, plus a finite property across four rational conversions,
+representable marks and both signs. Inexact whole fills continue to reject.
 The DeFi skill's referenced QEDGen guide is unavailable in this installation; no
 fabricated `.qedspec`, generated proof, independent audit or live qualification is
 claimed. Machine proof/implementation-refinement obligations remain explicit for

@@ -186,6 +186,29 @@ Merge: 17a29e2878bbeeea272aeb61a2051de12268754e.
 
 ## P03 — Unified ledger
 
+Review follow-up, 2026-09-30: user authorized addressing relevant CodeRabbit
+findings and merging #26 before P06. The sole actionable finding
+[4139343064](https://github.com/arnabnandikgp/cinder/pull/26#discussion_r4139343064)
+is valid: artificial reversal sublegs rejected an exact whole fill. Reproduced
+`Error::Inexact` with a failing 3/2 regression before changing production code.
+Fix allocates the exact whole-fill signed value toward zero, retaining residue
+in opening basis. Added mirrored/full-close, pooled bridge/replay and four-ratio
+property regressions; clarified the integer equations in BASELINE/ADR 0003.
+The generic docstring-percentage warning is not a missing-public-contract defect:
+public Rust items already enforce `missing_docs = deny`; private/test helper
+docstrings will not be bulk-added solely to satisfy that heuristic. No wider
+Solana-program audit, venue deployment, protocol-policy change or telemetry action.
+Review-skill guidance was used for reproduction, checked arithmetic and scope.
+The fix passed the pinned macOS full offline runner: 42 Rust tests and two
+compile-fail doctests in debug/release, 21 script tests, formatting and strict
+Clippy. Three new regressions cover the fix; the direct reversal was explicitly
+run red before the change. The full runner also passed clean staged export tree
+`6c7dbf0a0bc1680c6dca7f609c2c9fbcd78115b3`, without ignored research or unrelated
+files; only this documentation verification note follows that snapshot.
+This direction supersedes the older
+handoff's request for merge authorization; actual merge closure belongs in the
+next authorized stack layer, with P04/P05 rebased and retested.
+
 Work: 2026-09-30 — added production signed-basis fill transitions, explicit rational
 lot/tick conversion and one scoped customer/house/suspense/native ledger. Physical
 vault, native signed cash and full-transfer receivables reconcile without duplicating

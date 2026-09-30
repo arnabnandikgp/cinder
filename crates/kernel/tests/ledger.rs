@@ -668,6 +668,130 @@ fn failing_second_fill_leg_does_not_commit_the_private_first_leg() {
 }
 
 #[test]
+fn reversal_splits_exact_whole_fill_and_retains_residue_in_new_basis() {
+    let market = Market::new(q(0).unit(), 3, 2).unwrap();
+    for sign in [-1, 1] {
+        let position = Position::flat(q(0).unit())
+            .fill(market, q(sign), p(2))
+            .unwrap()
+            .position;
+        let crossed = position.fill(market, q(-2 * sign), p(5)).unwrap();
+        assert_eq!(crossed.position.quantity(), q(-sign));
+        assert_eq!(crossed.realized, amount(4 * i128::from(sign)));
+        assert_eq!(crossed.position.basis().atoms(), -8 * i128::from(sign));
+        // The next full close consumes every atom, including the split residue.
+        let closed = crossed.position.fill(market, q(sign), p(6)).unwrap();
+        assert_eq!(closed.position, Position::flat(q(0).unit()));
+        assert_eq!(closed.realized, amount(-i128::from(sign)));
+        // A genuinely inexact whole fill is still rejected, never rounded.
+        assert_eq!(position.fill(market, q(-sign), p(5)), Err(Error::Inexact));
+    }
+}
+
+#[test]
+fn rational_crossing_fill_preserves_pooled_bridge_and_replay() {
+    for sign in [-1, 1] {
+        let mut c = config();
+        c.markets[0] = Market::new(q(0).unit(), 3, 2).unwrap();
+        let s = fill(
+            &Ledger::new(c.clone()).unwrap(),
+            1,
+            FillTarget::House,
+            sign,
+            2,
+        );
+        let route = attempt(id(11), 20);
+        let s = bind(&s, route, if sign < 0 { Side::Buy } else { Side::Sell });
+        let e = event(
+            2,
+            Location::Venue,
+            Change::Fill {
+                target: FillTarget::Customer(route),
+                quantity: q(-2 * sign),
+                price: p(5),
+            },
+        );
+        let next = s.apply(&e).unwrap();
+        assert_eq!(next.venue().cash(), amount(4 * i128::from(sign)));
+        assert_eq!(
+            next.venue().positions()[0].basis().atoms(),
+            -8 * i128::from(sign)
+        );
+        assert_eq!(
+            next.book(Owner::Customer(id(11))).unwrap().cash(),
+            amount(0)
+        );
+        assert_eq!(
+            next.book(Owner::Customer(id(11))).unwrap().positions()[0]
+                .basis()
+                .atoms(),
+            -15 * i128::from(sign)
+        );
+        next.check_bridge().unwrap();
+        assert_eq!(
+            next.diagnostics(&[p(6)]).unwrap().net_assets,
+            amount(3 * i128::from(sign))
+        );
+        assert_eq!(next.apply(&e).unwrap(), next);
+        let replay = next
+            .events()
+            .iter()
+            .try_fold(Ledger::new(c).unwrap(), |s, e| s.apply(e))
+            .unwrap();
+        assert_eq!(replay, next);
+    }
+}
+
+#[test]
+fn property_rational_fills_preserve_whole_value_at_representable_marks() {
+    for (numerator, denominator) in [(1_u64, 2_u64), (2, 3), (3, 2), (5, 3)] {
+        let market = Market::new(q(0).unit(), numerator, denominator).unwrap();
+        for lots in -3_i64..=3 {
+            for magnitude in [0, 1, 7, 13] {
+                if lots == 0 && magnitude != 0 {
+                    continue;
+                }
+                let basis = magnitude * i128::from(lots.signum());
+                let before = Position::new(q(lots), BasisAtoms::new(market.unit(), basis)).unwrap();
+                for delta in -6_i64..=6 {
+                    if delta == 0 {
+                        continue;
+                    }
+                    for price in 1..=6 {
+                        let product = i128::from(delta) * i128::from(price) * i128::from(numerator);
+                        let result = before.fill(market, q(delta), p(price));
+                        if product % i128::from(denominator) != 0 {
+                            assert_eq!(result, Err(Error::Inexact));
+                            continue;
+                        }
+                        let result = result.unwrap();
+                        let total = product / i128::from(denominator);
+                        assert_eq!(
+                            result.realized.atoms() - (result.position.basis().atoms() - basis),
+                            -total
+                        );
+                        assert_eq!(result.position.quantity(), q(lots + delta));
+                        if lots + delta == 0 {
+                            assert_eq!(result.position.basis().atoms(), 0);
+                        }
+                        for mark in [denominator, 2 * denominator] {
+                            let change = result.realized.atoms()
+                                + result.position.unrealized(market, p(mark)).unwrap().atoms()
+                                - before.unrealized(market, p(mark)).unwrap().atoms();
+                            let expected =
+                                i128::from(delta) * i128::from(mark) * i128::from(numerator)
+                                    / i128::from(denominator)
+                                    - total;
+                            assert_eq!(change, expected);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn signed_native_cash_can_record_a_real_loss_without_inventing_negative_vault_tokens() {
     let s = fill(
         &Ledger::new(config()).unwrap(),

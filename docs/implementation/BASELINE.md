@@ -78,6 +78,11 @@ q' = q+x; b' = b-beta+x_open*v; c' = c+realized
 Keep division residue in remaining basis. Full close consumes all old basis.
 Before fees, the marked equity change equals `x*(p-v)`. Native and customer basis
 can differ even when their quantities reconcile. PnL is not a spot notional debit.
+Integer refinement for rational conversions: require exact whole-fill value
+`T=x*v`, split `k=trunc_toward_zero(T*z/abs(x))`, and use
+`realized=-k-beta`, `b'=b-beta+(T-k)`. This retains split residue in the opening
+basis without demanding exactness of artificial sublegs. When both legs are
+exact it is the same formula above; genuinely inexact whole fills still reject.
 
 Qualified funding `f_i` updates `a_i += f_i`; native funding updates `a_V += f_V`.
 Any house residual `f_V-sum_i(f_i)` requires attributed house exposure or a qualified
