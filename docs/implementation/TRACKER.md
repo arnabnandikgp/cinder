@@ -42,8 +42,33 @@ P15: resume only after the user asks. Nine new phase PRs (#30–#38) are stacked
 none was merged and no new external test/deployment was performed. Preserve
 unrelated `stays/` and ignored `work/`. P11's late review corrections are propagated
 through P12–P14 with explicit engine revisions, not silently reinterpreted history.
+Current request is stack-wide CodeRabbit triage/fixes, not merge or P15. Eight
+unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
+branches (with P13's cumulative byte-budget fix in P05) and locally restacked.
+Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14=17; older revisions
+fail closed. Targeted checks pass; final clean-export verification/push follows.
 Private authentication, native completeness, hardware attestation and deployment
 remain their own gates; this is an offline-qualified implementation stack.
+
+### CodeRabbit coverage snapshot (2026-09-30)
+
+| Phase / PR | Existing review disposition |
+| --- | --- |
+| P04 / #27 | Review failed; no actionable finding submitted. Not evidence of a clean review. |
+| P05 / #29 | Rate-limited; no actionable finding submitted. Shared P13 byte-budget fix added here. |
+| P06 / #30 | Two earlier findings already resolved; no new unresolved finding. |
+| P07 / #31 | Rate-limited; no actionable finding submitted. Not evidence of a clean review. |
+| P08 / #32 | Bot explicitly reported no actionable comments. |
+| P09 / #33 | Two valid pending-order/work-budget findings fixed and regression-tested. |
+| P10 / #34 | Two earlier findings already resolved; no new unresolved finding. |
+| P11 / #35 | Two earlier findings already resolved; propagated guards preserved. |
+| P12 / #36 | Three valid receipt/void/house-owner findings fixed and regression-tested. |
+| P13 / #37 | One valid archive-duplication/replay-budget finding fixed in P13 and P05. |
+| P14 / #38 | Two valid read-cooldown/malformed-reply findings fixed and regression-tested. |
+
+Generic docstring-percentage notices were assessed as non-blocking metrics, not
+missing specified behavior; no blanket comment churn was introduced. Review
+rate limits/failures are reported honestly rather than interpreted as approval.
 
 Repository integration follow-up: the TEE trunk had no classic branch protection
 or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
@@ -650,6 +675,15 @@ PR: [#37](https://github.com/arnabnandikgp/cinder/pull/37), above #36.
 Merge: none.
 
 ## P14 — Pacifica execution
+
+Review follow-up (2026-09-30): CodeRabbit #4141057824/#4141057830 addressed.
+Trusted read 429 reporting binds a persisted read reservation, records shared
+cooldown, supports late replies after key rotation, and deduplicates exact retries.
+Malformed post-send bodies/times persist bounded Unknown evidence with HTTP status
+and backoff instead of returning a pre-send-looking Codec error. Targeted Pacifica
+tests pass (2 unit, 15 execution, 13 observation groups), plus strict all-feature
+Clippy. New cases include restart, changed/unknown reservation rejection, repeated
+responses, short/huge retry durations, oversized 200/429 and regressing clocks.
 
 Work: 2026-09-30 — added exact native preimage persistence before signing, a scoped
 real Ed25519 signer, GTC/ALO/IOC and attributed cancel encoding, durable key epochs,

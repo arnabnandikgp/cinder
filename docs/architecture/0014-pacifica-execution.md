@@ -72,6 +72,16 @@ ACK/cancel ACK changes no cash/position and releases no hold. P13's unresolved
 completeness gate is not bypassed by a closed status. Response provenance, exact
 body and normalized status are persisted separately from the exposure transaction.
 
+The trusted read scheduler retains each read reservation's commit ID. After a 429
+it calls `record_read_limit` before scheduling more traffic. That port validates
+the original read/policy binding, persists a shared 60-second-to-one-hour cooldown,
+and remains available for late responses after signer rotation. Exact duplicate
+reports do not extend cooldowns; conflicting retries reject. Regressing receive
+times are clamped to the current committed time rather than dropping the limit.
+Oversized or clock-invalid post-send replies persist a bounded rejection marker
+and `Unknown`, retain HTTP status and any 429 cooldown, and never release holds
+or authorize a retry. Exact bodies are retained only when within the accepted bound.
+
 The synchronous trusted transport seam is exercised by fake servers only. Its
 contract forbids retries, redirects, mutation and plaintext host logging; actual
 enclave TLS, fresh clocks and hostile-host qualification belong to P19/P20. No

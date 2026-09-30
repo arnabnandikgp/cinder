@@ -414,6 +414,149 @@ fn rate_limit_and_error_responses_are_unknown_not_retry_permission() {
         assert_eq!(fake.requests.len(), 1);
     }
 }
+
+#[test]
+fn read_429_is_scoped_idempotent_shared_and_survives_rotation_and_reopen() {
+    for retry_after in [None, Some(1), Some(u64::MAX)] {
+        let t = Temp::new();
+        let mut s = t.create();
+        let g = gateway();
+        seed(&mut s, &g);
+        prepare(&mut s, 3, 1, TimeInForce::GoodTilCancelled, 10);
+        let before = s.head();
+        assert!(
+            g.record_read_limit(&mut s, id(99), 20, retry_after)
+                .is_err()
+        );
+        assert!(g.record_read_limit(&mut s, id(2), 20, retry_after).is_err());
+        assert_eq!(s.head(), before);
+        g.reserve_read(&mut s, id(10), 20, false)
+            .unwrap()
+            .consume(20)
+            .unwrap();
+        let rotated = Gateway::new(profile(), policy(), Zeroizing::new([8; 32]), 2).unwrap();
+        rotated.activate(&mut s, id(11), 22).unwrap();
+        // The previous key's in-flight read still reports a shared limit. A clock
+        // regression cannot regress the journal or drop the observed cooldown.
+        g.record_read_limit(&mut s, id(10), 19, retry_after)
+            .unwrap();
+        let head = s.head();
+        g.record_read_limit(&mut s, id(10), 19, retry_after)
+            .unwrap();
+        assert_eq!(s.head(), head);
+        assert!(
+            g.record_read_limit(&mut s, id(10), 20, retry_after)
+                .is_err()
+        );
+        assert_eq!(s.head(), head);
+        assert!(rotated.reserve_read(&mut s, id(12), 23, false).is_err());
+        assert!(rotated.reserve_read(&mut s, id(12), 23, true).is_err());
+        let mut fake = Fake::default();
+        assert!(
+            rotated
+                .dispatch(&mut s, dispatch(3, 23), &mut fake)
+                .is_err()
+        );
+        assert!(fake.requests.is_empty());
+        drop(s);
+        let mut s = t.open();
+        let until = 22 + retry_after.unwrap_or(60_000).clamp(60_000, 3_600_000);
+        assert!(
+            rotated
+                .reserve_read(&mut s, id(12), until - 1, true)
+                .is_err()
+        );
+        rotated
+            .reserve_read(&mut s, id(12), until, true)
+            .unwrap()
+            .consume(until)
+            .unwrap();
+        let head = s.head();
+        // A late duplicate cannot restart its cooldown, even after other commits.
+        g.record_read_limit(&mut s, id(10), 19, retry_after)
+            .unwrap();
+        assert_eq!(s.head(), head);
+        rotated.reserve_read(&mut s, id(13), until, true).unwrap();
+    }
+}
+
+#[test]
+fn rejected_post_send_replies_remain_unknown_with_status_and_cooldown() {
+    for status in [200, 429] {
+        for (oversized, early) in [(true, false), (false, true), (true, true)] {
+            let t = Temp::new();
+            let mut s = t.create();
+            let g = gateway();
+            seed(&mut s, &g);
+            prepare(&mut s, 3, 1, TimeInForce::GoodTilCancelled, 10);
+            prepare(&mut s, 4, 1, TimeInForce::GoodTilCancelled, 10);
+            let mut body = br#"{"order_id":1}"#.to_vec();
+            if oversized {
+                body.resize(observation::MAX_BODY + 1, b' ');
+            }
+            let mut fake = Fake::default();
+            fake.replies.push_back(Reply::Response {
+                status,
+                body: PrivateBytes::new(body).unwrap(),
+                received_at: if early { 19 } else { 21 },
+                retry_after_ms: Some(1),
+            });
+            assert_eq!(
+                g.dispatch(&mut s, dispatch(3, 20), &mut fake).unwrap(),
+                Outcome::Unknown
+            );
+            let tx = s.transactions().last().unwrap();
+            let at = if early { 20 } else { 21 };
+            assert_eq!(tx.at, at);
+            assert_eq!(tx.order_observations[0].status, Status::Unknown);
+            assert_eq!(
+                tx.order_observations[0].raw.as_bytes(),
+                b"response rejected: bound or clock"
+            );
+            let provenance: Value = serde_json::from_slice(
+                tx.evidence[0]
+                    .as_bytes()
+                    .strip_prefix(b"CINDER-PACIFICA-EXECUTION-1\0")
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(provenance["record"]["Response"]["status"], status);
+            assert_eq!(tx.evidence.len(), if status == 429 { 2 } else { 1 });
+            assert!(s.state().unwrap().orders()[0].unknown);
+            assert!(!s.state().unwrap().orders()[0].acknowledged);
+            assert_eq!(
+                s.state()
+                    .unwrap()
+                    .reserved(Resource::Customer(user(1)))
+                    .unwrap(),
+                cash(20)
+            );
+            assert_eq!(
+                s.state().unwrap().ledger().venue().positions()[0].quantity(),
+                q(0)
+            );
+            drop(s);
+            let mut s = t.open();
+            assert!(
+                g.dispatch(
+                    &mut s,
+                    Dispatch {
+                        commit: id(150),
+                        ..dispatch(3, 22)
+                    },
+                    &mut fake
+                )
+                .is_err()
+            );
+            if status == 429 {
+                assert!(g.dispatch(&mut s, dispatch(4, 22), &mut fake).is_err());
+                assert!(g.reserve_read(&mut s, id(15), at + 59_999, true).is_err());
+                g.reserve_read(&mut s, id(15), at + 60_000, true).unwrap();
+            }
+            assert_eq!(fake.requests.len(), 1);
+        }
+    }
+}
 #[test]
 fn durable_key_revocation_and_private_grant_revocation_prevent_dispatch() {
     let t = Temp::new();

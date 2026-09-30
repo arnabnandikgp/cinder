@@ -135,6 +135,8 @@ pub struct ReadPermit {
 impl ReadPermit {
     /// Consume once at an injected current time, then send immediately. Expired
     /// permits cannot be stockpiled past the accounting window. No refund on loss.
+    /// Retain the reservation's CommitId and report HTTP 429 through
+    /// `Gateway::record_read_limit` before scheduling more traffic.
     pub fn consume(self, now: u64) -> Result<(u64, u32), Error> {
         if now < self.at || now >= self.until {
             return Err(Error::Qualification);
@@ -172,6 +174,11 @@ enum Record {
     Response {
         attempt: Vec<u8>,
         status: Option<u16>,
+    },
+    ReadLimit {
+        reservation: [u8; 32],
+        received_at: u64,
+        retry_after_ms: Option<u64>,
     },
 }
 #[derive(Serialize, Deserialize)]
@@ -303,7 +310,7 @@ impl Gateway {
                         Record::Cooldown { until } => {
                             result.blocked_until = result.blocked_until.max(until)
                         }
-                        Record::Response { .. } => {}
+                        Record::Response { .. } | Record::ReadLimit { .. } => {}
                     }
                 }
             }
@@ -428,6 +435,66 @@ impl Gateway {
             cost: self.policy.read_cost,
             until: at.checked_add(self.policy.expiry_ms).ok_or(Error::Limit)?,
         })
+    }
+    /// Trusted egress response port for HTTP 429 on an already reserved read.
+    /// Call after consuming its permit, before further dispatch. The reservation
+    /// binds pool/policy provenance; no active signer is required for a late reply
+    /// after rotation. Exact retries are idempotent; changed replies conflict.
+    pub fn record_read_limit<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        reservation: CommitId,
+        received_at: u64,
+        retry_after_ms: Option<u64>,
+    ) -> Result<(), Error> {
+        let at = received_at.max(journal.transactions().map(|t| t.at).max().unwrap_or(0));
+        self.history(journal, at)?;
+        let source = journal
+            .transaction(reservation)
+            .ok_or(Error::Qualification)?;
+        let [body] = source.evidence.as_slice() else {
+            return Err(Error::Qualification);
+        };
+        let archive: Archive = serde_json::from_slice(
+            body.as_bytes()
+                .strip_prefix(MAGIC)
+                .ok_or(Error::Qualification)?,
+        )
+        .map_err(|_| Error::Codec)?;
+        if archive.contract != self.contract
+            || !matches!(archive.record,
+                Record::Spend { cost, plan: None, .. } if cost == self.policy.read_cost
+            )
+        {
+            return Err(Error::Qualification);
+        }
+        let evidence = self.evidence(Record::ReadLimit {
+            reservation: reservation.bytes(),
+            received_at,
+            retry_after_ms,
+        })?;
+        let mut hash = Sha256::new();
+        hash.update(b"CINDER-PACIFICA-READ-LIMIT-1\0");
+        hash.update(reservation.bytes());
+        let id = CommitId::new(hash.finalize().into())?;
+        if let Some(old) = journal.transaction(id) {
+            return if old.evidence.first() == Some(&evidence) {
+                Ok(())
+            } else {
+                Err(Error::Journal(cinder_journal::Error::Conflict))
+            };
+        }
+        let mut tx = self.transaction(
+            journal,
+            id,
+            at,
+            Record::Cooldown {
+                until: cooldown_until(at, retry_after_ms),
+            },
+        )?;
+        tx.evidence.insert(0, evidence);
+        journal.commit(tx)?;
+        Ok(())
     }
     fn plan(&self, state: &State, dispatch: Dispatch) -> Result<(Plan, u32, bool), Error> {
         let a = state
@@ -600,20 +667,21 @@ impl Gateway {
                 received_at,
                 retry_after_ms,
             } => {
-                if body.as_bytes().len() > observation::MAX_BODY || received_at < dispatch.at {
-                    return Err(Error::Codec);
-                }
-                let outcome = if status == 200 {
+                let malformed =
+                    body.as_bytes().len() > observation::MAX_BODY || received_at < dispatch.at;
+                let received_at = received_at.max(dispatch.at);
+                let body = if malformed {
+                    PrivateBytes::new(b"response rejected: bound or clock".to_vec())?
+                } else {
+                    body
+                };
+                let outcome = if status == 200 && !malformed {
                     acknowledged(body.as_bytes(), plan.path.ends_with("/cancel"))
                 } else {
                     Outcome::Unknown
                 };
                 let cooldown = if status == 429 {
-                    Some(
-                        received_at
-                            .checked_add(retry_after_ms.unwrap_or(WINDOW).clamp(WINDOW, 3_600_000))
-                            .ok_or(Error::Limit)?,
-                    )
+                    Some(cooldown_until(received_at, retry_after_ms))
                 } else {
                     None
                 };
@@ -660,6 +728,11 @@ impl Gateway {
         }
         Ok(outcome)
     }
+}
+fn cooldown_until(at: u64, retry_after_ms: Option<u64>) -> u64 {
+    // A broken extreme clock must not erase a post-send observation via overflow.
+    // Saturation contains future traffic rather than wrapping into an expired limit.
+    at.saturating_add(retry_after_ms.unwrap_or(WINDOW).clamp(WINDOW, 3_600_000))
 }
 fn canonical(data: Value, timestamp: u64, expiry_window: u64, kind: &str) -> Result<String, Error> {
     serde_json::to_string(
@@ -710,6 +783,12 @@ fn acknowledged(body: &[u8], cancel: bool) -> Outcome {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cooldown_clock_overflow_saturates_instead_of_dropping_response() {
+        assert_eq!(cooldown_until(u64::MAX - 1, None), u64::MAX);
+        assert_eq!(cooldown_until(10, Some(0)), 60_010);
+        assert_eq!(cooldown_until(10, Some(u64::MAX)), 3_600_010);
+    }
     fn hex<const N: usize>(s: &str) -> [u8; N] {
         (0..N)
             .map(|i| u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).unwrap())
