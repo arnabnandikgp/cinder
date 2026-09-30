@@ -9,7 +9,7 @@
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
 | [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
 | [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
-| [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
+| [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | Local implementation; publication follows base review fixes |
 | [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
 | [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
 | [P10 — Protection claims](PLAN.md#p10) | open | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | — |
@@ -402,10 +402,21 @@ Merge: none.
 
 ## P07 — Order intents and reservations
 
-Work: not started.
-Verification: not run; acceptance in PLAN P07.
-Unexpected: none yet.
-Next: add durable intent/attempt lifecycle and shared hold semantics, then cancel/unknown races.
+Work: 2026-09-30 — integrated immutable GTC/ALO/IOC intents, authenticated-port
+digest/epoch binding, shared commitments, canonical place/attributed-cancel actions,
+partial fills, ACK/unknown/terminal history and adverse-fill containment in the
+same journal. Original/classified facts replay without changed ownership. A late
+terminal contradiction re-encumbers holds without erasing a valid customer fill.
+ADR 0007 defines the promoted contract and remaining P09/P13/P14/P18 ports.
+Verification: focused 13-test order suite and full offline runner in progress;
+includes 24 additive delivery/terminal permutations with SQLite reloads. No live
+venue calls or signatures. Final worktree/clean-export evidence follows publication.
+Unexpected: internal binding time exposed an old-receive-time rejection: financial
+projection now uses monotone commit time while retaining the original input time.
+Journal wire is explicitly revision 2 / engine 3; updated old-revision fixtures.
+P06 review found replica-redundancy and uncertain-witness-response cases; fix them
+in the owning base layer and restack before publishing this phase.
+Next: finish local validation/base review fixes, publish P07, then continue P08.
 PR: none.
 Merge: none.
 

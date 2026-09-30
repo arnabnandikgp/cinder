@@ -112,6 +112,8 @@ pub struct Hold {
 /// Exact action prepared before potential signature/transport exposure.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Attempt {
+    /// Bound action class; cleanup cannot be substituted with a risk-increasing order.
+    pub kind: AttemptKind,
     /// Attempt under the reservation's parent request.
     pub key: AttemptKey,
     /// Exact unsigned signing preimage/action encoding; never a generated secret key.
@@ -123,6 +125,16 @@ pub struct Attempt {
     /// Once true, reconciliation is required even if no reply reached the caller.
     pub possibly_exposed: bool,
 }
+/// Durable semantic scope for a one-shot exposure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttemptKind {
+    /// P05 abstract port, unavailable for an accepted order's request.
+    Generic,
+    /// Place the exact authorized order.
+    Order,
+    /// Cancel only the bound original order.
+    Cancel,
+}
 impl fmt::Debug for Attempt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Attempt([PRIVATE])")
@@ -132,6 +144,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Authorized private order lifecycle joined to these same reservations.
+    Order(crate::orders::Action),
     /// Acquire unique resources under one compare-and-swap head.
     Reserve {
         /// Parent operation.
@@ -172,6 +186,8 @@ pub struct Transaction {
     pub at: u64,
     /// Raw and normalized observations, including duplicate/conflicting input.
     pub inputs: Vec<Input>,
+    /// Qualified order statuses; no ACK here becomes a fill or releases a hold.
+    pub order_observations: Vec<crate::orders::Observation>,
     /// All-or-none control subproposal; actual external facts remain recordable.
     pub controls: Vec<Control>,
 }
@@ -210,6 +226,8 @@ pub enum ControlError {
 pub struct Receipt {
     /// One disposition for every input, including corrupt/duplicate evidence.
     pub inputs: Vec<InputResult>,
+    /// True for accepted or exact duplicate status; false is retained and contained.
+    pub order_observations: Vec<bool>,
     /// None means all controls applied; Some means none applied.
     pub controls: Option<ControlError>,
     /// Resulting kernel proposal version, not the journal sequence.
@@ -223,6 +241,10 @@ pub struct State {
     pub(crate) ledger: Ledger,
     pub(crate) holds: Vec<Hold>,
     pub(crate) attempts: Vec<Attempt>,
+    pub(crate) orders: Vec<crate::orders::Order>,
+    pub(crate) authorities: Vec<(AccountId, u64)>,
+    pub(crate) order_observations: Vec<crate::orders::Observation>,
+    pub(crate) order_fills: Vec<(Event, Event)>,
     pub(crate) raw_unresolved: u64,
     pub(crate) now: u64,
 }
@@ -246,6 +268,10 @@ impl State {
             config,
             holds: Vec::new(),
             attempts: Vec::new(),
+            orders: Vec::new(),
+            authorities: Vec::new(),
+            order_observations: Vec::new(),
+            order_fills: Vec::new(),
             raw_unresolved: 0,
             now: 0,
         })
@@ -299,7 +325,7 @@ impl State {
             book.cash().atoms().max(0),
         ))
     }
-    fn request(&self, k: RequestKey) -> Result<(), ControlError> {
+    pub(crate) fn request(&self, k: RequestKey) -> Result<(), ControlError> {
         if k.domain != self.config.domain || self.ledger.book(Owner::Customer(k.account)).is_err() {
             Err(ControlError::Invalid)
         } else {
@@ -324,8 +350,9 @@ impl State {
         }
         Ok(())
     }
-    fn control(&mut self, c: &Control) -> Result<(), ControlError> {
+    pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Order(action) => self.order_action(action)?,
             Control::Reserve {
                 request,
                 reservations,
@@ -361,6 +388,13 @@ impl State {
             Control::Release(request) => {
                 self.request(*request)?;
                 if self
+                    .orders
+                    .iter()
+                    .any(|o| o.intent.request == *request && o.attempt.is_some())
+                {
+                    return Err(ControlError::Unqualified);
+                }
+                if self
                     .attempts
                     .iter()
                     .any(|a| a.key.request == *request && a.possibly_exposed)
@@ -380,38 +414,38 @@ impl State {
                 authority_epoch,
                 expires_at,
             } => {
-                self.request(key.request)?;
-                if self.attempts.len() >= MAX_ITEMS
-                    || message.as_bytes().is_empty()
-                    || message.as_bytes().len() > 65536
-                    || *authority_epoch == 0
+                if self.orders.iter().any(|o| o.intent.request == key.request)
                     || self.attempts.iter().any(|a| a.key.request == key.request)
-                    || !self
-                        .holds
-                        .iter()
-                        .any(|h| h.request == key.request && h.active)
                 {
                     return Err(ControlError::Invalid);
                 }
-                if *expires_at <= self.now {
-                    return Err(ControlError::Expired);
-                }
-                self.attempts.push(Attempt {
-                    key: *key,
-                    message: message.clone(),
-                    authority_epoch: *authority_epoch,
-                    expires_at: *expires_at,
-                    possibly_exposed: false,
-                });
+                self.prepare_attempt(
+                    *key,
+                    message.clone(),
+                    *authority_epoch,
+                    *expires_at,
+                    AttemptKind::Generic,
+                )?;
             }
             Control::Expose(key) => {
-                if self.raw_unresolved != 0
-                    || self.ledger.issues().iter().any(|i| i.open)
-                    || self.ledger.unresolved_attribution() != 0
-                {
-                    return Err(ControlError::Unqualified);
+                let attempt = self
+                    .attempts
+                    .iter()
+                    .find(|a| a.key == *key)
+                    .ok_or(ControlError::Invalid)?;
+                self.order_exposure(attempt)?;
+                // Attributed cancellation grants no additional exposure. Permit
+                // cleanup even when a late fact/funding gap blocks new risk.
+                if attempt.kind != AttemptKind::Cancel {
+                    if self.raw_unresolved != 0
+                        || self.ledger.issues().iter().any(|i| i.open)
+                        || self.ledger.unresolved_attribution() != 0
+                        || self.orders.iter().any(|o| o.faulted)
+                    {
+                        return Err(ControlError::Unqualified);
+                    }
+                    self.all_capacity()?;
                 }
-                self.all_capacity()?;
                 let a = self
                     .attempts
                     .iter_mut()
@@ -452,7 +486,11 @@ impl State {
         if observations > 4096 || cells > 65536 {
             return Err(Error::Limit);
         }
-        if tx.at < self.now || tx.inputs.len() > MAX_ITEMS || tx.controls.len() > MAX_ITEMS {
+        if tx.at < self.now
+            || tx.inputs.len() > MAX_ITEMS
+            || tx.controls.len() > MAX_ITEMS
+            || tx.order_observations.len() > MAX_ITEMS
+        {
             return Err(Error::Invalid);
         }
         let mut s = self.clone();
@@ -470,9 +508,16 @@ impl State {
             let result = if !valid {
                 InputResult::EnvelopeRejected
             } else if let Some(e) = &input.event {
-                match s.ledger.ingest(e, input.observed_at) {
+                let classified = s.order_fill(input, e)?;
+                // Projection time is the monotone journal acceptance time. The
+                // original receive time remains in Input; late evidence must not
+                // be erased because an internal binding was recorded meanwhile.
+                match s.ledger.ingest(&classified, tx.at) {
                     Ok(ingested) => {
                         s.ledger = ingested.state;
+                        if ingested.disposition == Disposition::Applied {
+                            s.order_applied(e, input.source_cut)?;
+                        }
                         InputResult::Normalized(ingested.disposition)
                     }
                     Err(_) => InputResult::EnvelopeRejected,
@@ -488,13 +533,18 @@ impl State {
             }
             inputs.push(result);
         }
+        let mut order_observations = Vec::new();
+        for o in &tx.order_observations {
+            order_observations.push(s.order_observe(o)?);
+        }
         let mut candidate = s.clone();
         let mut controls = None;
         // A duplicate/conflicting fact cannot be reused to release new commitments.
         if !tx.controls.is_empty()
-            && inputs
-                .iter()
-                .any(|i| !matches!(i, InputResult::Normalized(Disposition::Applied)))
+            && (order_observations.iter().any(|ok| !ok)
+                || inputs
+                    .iter()
+                    .any(|i| !matches!(i, InputResult::Normalized(Disposition::Applied))))
         {
             controls = Some(ControlError::Unqualified);
         }
@@ -511,6 +561,7 @@ impl State {
         }
         let receipt = Receipt {
             inputs,
+            order_observations,
             controls,
             ledger_version: s.ledger.version(),
         };

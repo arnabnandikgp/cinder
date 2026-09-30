@@ -184,6 +184,7 @@ pub fn transaction(head: Head, n: u8, events: Vec<Event>, controls: Vec<Control>
         expected: head,
         at: 10,
         inputs: events.into_iter().map(input).collect(),
+        order_observations: vec![],
         controls,
     }
 }

@@ -2,6 +2,7 @@
 
 pub mod encrypted;
 pub mod model;
+pub mod orders;
 pub mod replicated;
 pub mod sqlite;
 pub mod wire;
@@ -10,8 +11,8 @@ use model::*;
 use sha2::{Digest, Sha256};
 use std::fmt;
 
-// Whole-fill reversal allocation changes replay semantics; reject revision 1.
-const ENGINE_REVISION: u16 = 2;
+// Order classification/authority/lifecycle changes replay semantics.
+const ENGINE_REVISION: u16 = 3;
 
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

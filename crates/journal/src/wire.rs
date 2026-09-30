@@ -27,7 +27,7 @@ impl Writer {
             valid: true,
         };
         s.raw(b"CINDER-J\0");
-        s.raw(&1_u16.to_be_bytes());
+        s.raw(&2_u16.to_be_bytes());
         s.byte(tag);
         s
     }
@@ -85,7 +85,7 @@ impl<'a> Reader<'a> {
         if r.take(9)? != b"CINDER-J\0" {
             return Err(Error::Codec);
         }
-        if r.array::<2>()? != 1_u16.to_be_bytes() {
+        if r.array::<2>()? != 2_u16.to_be_bytes() {
             return Err(Error::Version);
         }
         if r.byte()? != tag {
@@ -627,14 +627,14 @@ fn read_resource(r: &mut Reader<'_>) -> Result<Resource, Error> {
         _ => Err(Error::Codec),
     }
 }
-fn reservations(w: &mut Writer, rs: &[Reservation]) {
+pub(crate) fn reservations(w: &mut Writer, rs: &[Reservation]) {
     w.count(rs.len());
     for r in rs {
         resource(w, r.resource);
         w.item(&r.amount);
     }
 }
-fn read_reservations(r: &mut Reader<'_>) -> Result<Vec<Reservation>, Error> {
+pub(crate) fn read_reservations(r: &mut Reader<'_>) -> Result<Vec<Reservation>, Error> {
     let mut values = Vec::new();
     for _ in 0..r.count()? {
         values.push(Reservation {
@@ -667,9 +667,22 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
             }
         }
     }
+    w.count(tx.order_observations.len());
+    for o in &tx.order_observations {
+        w.item(&o.key);
+        w.item(&o.attempt);
+        crate::orders::encode_status(&mut w, &o.status);
+        w.u64(o.authority_epoch);
+        w.u64(o.observed_at);
+        w.blob(o.raw.as_bytes());
+    }
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Order(action) => {
+                w.byte(4);
+                crate::orders::encode_action(&mut w, action);
+            }
             Control::Reserve {
                 request,
                 reservations: rs,
@@ -719,6 +732,17 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             event: r.option(|r| decode_event(r.blob()?))?,
         });
     }
+    let mut order_observations = Vec::new();
+    for _ in 0..r.count()? {
+        order_observations.push(crate::orders::Observation {
+            key: r.item()?,
+            attempt: r.item()?,
+            status: crate::orders::decode_status(&mut r)?,
+            authority_epoch: r.u64()?,
+            observed_at: r.u64()?,
+            raw: PrivateBytes::new(r.blob()?.to_vec())?,
+        });
+    }
     let mut controls = Vec::new();
     for _ in 0..r.count()? {
         controls.push(match r.byte()? {
@@ -734,6 +758,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
                 expires_at: r.u64()?,
             },
             3 => Control::Expose(r.item()?),
+            4 => Control::Order(crate::orders::decode_action(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -743,6 +768,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
         expected,
         at,
         inputs,
+        order_observations,
         controls,
     })
 }
@@ -808,6 +834,10 @@ pub(crate) fn receipt(r: &Receipt) -> Result<Vec<u8>, Error> {
             }
         }
     }
+    w.count(r.order_observations.len());
+    for ok in &r.order_observations {
+        w.byte(u8::from(*ok));
+    }
     w.option(&r.controls, |w, e| {
         w.byte(match e {
             ControlError::Invalid => 0,
@@ -859,11 +889,54 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     }
     w.count(s.attempts.len());
     for a in &s.attempts {
+        w.byte(match a.kind {
+            AttemptKind::Generic => 0,
+            AttemptKind::Order => 1,
+            AttemptKind::Cancel => 2,
+        });
         w.item(&a.key);
         w.blob(a.message.as_bytes());
         w.u64(a.authority_epoch);
         w.u64(a.expires_at);
         w.byte(u8::from(a.possibly_exposed));
+    }
+    w.count(s.authorities.len());
+    for (a, epoch) in &s.authorities {
+        w.raw(&a.bytes());
+        w.u64(*epoch);
+    }
+    w.count(s.orders.len());
+    for o in &s.orders {
+        crate::orders::encode_intent(&mut w, &o.intent);
+        w.option(&o.attempt, |w, a| w.item(a));
+        w.item(&o.filled);
+        w.count(o.executions.len());
+        for (key, cut) in &o.executions {
+            w.item(key);
+            w.option(cut, |w, c| w.u64(*c));
+        }
+        w.byte(u8::from(o.acknowledged));
+        w.byte(u8::from(o.cancel_acknowledged));
+        w.byte(u8::from(o.unknown));
+        w.byte(u8::from(o.faulted));
+        w.byte(u8::from(o.bound_violated));
+        w.option(&o.terminal, |w, t| {
+            crate::orders::encode_status(w, &crate::orders::Status::Terminal(t.clone()))
+        });
+    }
+    w.count(s.order_observations.len());
+    for o in &s.order_observations {
+        w.item(&o.key);
+        w.item(&o.attempt);
+        crate::orders::encode_status(&mut w, &o.status);
+        w.u64(o.authority_epoch);
+        w.u64(o.observed_at);
+        w.blob(o.raw.as_bytes());
+    }
+    w.count(s.order_fills.len());
+    for (original, classified) in &s.order_fills {
+        w.blob(&encode_event(original)?);
+        w.blob(&encode_event(classified)?);
     }
     h.update(w.finish()?);
     h.update((s.ledger.events().len() as u64).to_be_bytes());

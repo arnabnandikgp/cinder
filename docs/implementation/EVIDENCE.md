@@ -91,6 +91,13 @@ journal. Real AEAD and local ciphertext file/crash tests replace toy protection
 for this path. The witness remains a trusted synthetic port; no independent remote
 witness, hardware evidence, live signing authority or experimental keys are promoted.
 
+### P07: bound intents and qualified terminal history
+
+[ADR 0007](../architecture/0007-order-lifecycle.md) promotes W01/W03 order-identity,
+partial/terminal, duplicate, bound-violation and independent pending-direction cases
+into the same durable journal. Its source hashes and trusted authentication/causal
+qualification boundaries are explicit. No reference ledger is added to assets.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:

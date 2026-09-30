@@ -35,6 +35,7 @@ adapters and deployed services remain later phases.
 11. [Funding, fees and evidence reconciliation](docs/architecture/0004-funding-reconciliation.md)
 12. [Durable journal and replay boundary](docs/architecture/0005-durable-journal.md)
 13. [Encrypted durability and writer epochs](docs/architecture/0006-encrypted-durability.md)
+14. [Bound order intents and completion](docs/architecture/0007-order-lifecycle.md)
 
 These tracked documents are sufficient to start the first implementation phase.
 Ignored `work/` contains the original local research; it is not a CI dependency.

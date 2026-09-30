@@ -28,7 +28,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Funding, fees, source discrepancies | Implemented in base stack; qualified normalized inputs, no live adapter | P04 |
 | Local atomic journal and replay | Implemented in base stack; opaque storage and mandatory protection interface | P05 |
 | Encrypted replicas, current-head witness and writer fencing | Implemented against a trusted witness port; no independently deployed witness or Nitro qualification | P06 |
-| Intent/funds controllers, joined risk, protection, liquidation, ADL | Planned; no execution service yet | P07–P12 |
+| Bound order intents, partial/terminal lifecycle and shared holds | Implemented against trusted authentication/source ports; no live execution | P07 |
+| Funds controllers, joined risk, protection, liquidation, ADL | Planned; no execution service yet | P08–P12 |
 | Pacifica observation and signing adapters | Planned; research evidence is not an implemented adapter | P13–P14 |
 | Solana custody, funding round trip, recovery claims | Planned; bounded prototypes remain evidence only | P15–P17 |
 | Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
