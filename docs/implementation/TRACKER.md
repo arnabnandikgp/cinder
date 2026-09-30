@@ -444,6 +444,9 @@ checked claim discharge, actual adverse outcomes, source-specific coverage,
 hold consumption and replay commitments; no second financial ledger was added.
 At this boundary P06 `a2babf0` and P07 `8fd9651` both passed hosted TEE CI and
 CodeRabbit status; P07 had no inline findings. Status is not an independent audit.
+Clean export of implementation commit `4d4e1cd` at
+`/private/tmp/cinder-p08-export.cCxf6m` passed the same full pinned offline runner,
+without `work/`, `stays/` or Git metadata. Only handoff/publication notes follow.
 Unexpected: none requiring a new product decision. Numerical collateral profiles
 are explicit synthetic test parameters, not live leverage/fee approvals.
 Unexpected: the partial-receipt algebra needed an explicit unpaired contra-balance
