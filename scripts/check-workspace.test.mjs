@@ -17,11 +17,11 @@ function fixture() {
   packages[4].dependencies = [
     {...packages[2].dependencies[1], kind: null},
     {name: 'cinder-journal', kind: null, path: '/repo/crates/journal', req: '=0.1.0', target: null},
-    ...['serde', 'serde_json', 'sha2'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'serde' ? ['derive'] : [], uses_default_features: true, optional: false})),
+    ...['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'serde' ? ['derive'] : name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : [], uses_default_features: name !== 'ed25519-dalek', optional: false})),
   ];
   const workspace_members = packages.map(p => p.id);
-  packages.push(...dependencyPolicy.packages.map(p => ({...pkg(p.name), version: p.version, source: dependencyPolicy.registry, targets: [{kind: ['lib']}, ...(p.buildScript ? [{kind: ['custom-build']}] : [])]})));
-  return { packages, workspace_members, resolve: {nodes: dependencyPolicy.packages.map(p => ({id: p.name, features: p.features}))} };
+  packages.push(...dependencyPolicy.packages.map(p => ({...pkg(p.name), id: `${p.name}@${p.version}`, version: p.version, source: dependencyPolicy.registry, targets: [{kind: ['lib']}, ...(p.buildScript ? [{kind: ['custom-build']}] : [])]})));
+  return { packages, workspace_members, resolve: {nodes: dependencyPolicy.packages.map(p => ({id: `${p.name}@${p.version}`, features: p.features}))} };
 }
 
 test('the intended local graph passes', () => {
@@ -69,7 +69,7 @@ test('storage pins, features and external build scripts cannot expand silently',
   const metadata = fixture();
   metadata.packages[3].dependencies[1].uses_default_features = true;
   assert.match(validateWorkspace(metadata).join('\n'), /configuration not approved/);
-  metadata.resolve.nodes.find(n => n.id === 'rusqlite').features = ['bundled', 'load_extension'];
+  metadata.resolve.nodes.find(n => n.id.startsWith('rusqlite@')).features = ['bundled', 'load_extension'];
   assert.match(validateWorkspace(metadata).join('\n'), /unapproved resolved features/);
   metadata.packages.find(p => p.name === 'sha2').targets.push({kind: ['custom-build']});
   assert.match(validateWorkspace(metadata).join('\n'), /unapproved external build script/);
@@ -78,4 +78,14 @@ test('registry lock checksums and edges are pinned by an explicit policy digest'
   const lock = readFileSync(new URL('../Cargo.lock', import.meta.url));
   assert.deepEqual(validateLockfile(lock), []);
   assert.equal(validateLockfile(Buffer.concat([lock, Buffer.from('\n')])).length, 1);
+});
+
+test('multiple pinned versions keep distinct graph identities and features', () => {
+  const metadata = fixture();
+  const syn = metadata.packages.filter(p => p.name === 'syn');
+  assert.equal(syn.length, 2);
+  assert.deepEqual(validateWorkspace(metadata), []);
+  const index = metadata.packages.indexOf(syn[0]);
+  metadata.packages[index] = {...syn[1]};
+  assert.match(validateWorkspace(metadata).join('\n'), /unexpected package set/);
 });

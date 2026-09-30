@@ -53,3 +53,32 @@ fees or funding. Existing genuine fills remain ingestible despite an admission
 failure. New source qualifications or correction rules must be explicit; changing
 a profile against old archived history currently rejects and needs a reviewed
 migration. No native endpoint silently writes customer equity or clears suspense.
+
+## Signed execution boundary (P14)
+
+The [official signing format](https://docs.pacifica.fi/api-documentation/api/signing/implementation)
+sorts object keys recursively and signs compact JSON containing operation data,
+timestamp, expiry window and operation type. Account/agent headers remain outside
+that signed object. Cinder persists a separate binding of all local authorization
+fields and requires a pool/environment-exclusive native key; it does not pretend
+the native signature cryptographically includes those missing fields.
+
+[Limit creation](https://docs.pacifica.fi/api-documentation/api/rest-api/orders/create-limit-order)
+and [scoped cancellation](https://docs.pacifica.fi/api-documentation/api/rest-api/orders/cancel-order)
+support the narrow method set. Cinder uses an explicit adverse-side limit for
+GTC/ALO/IOC and the original attempt's client ID for cancellation. Acknowledgement
+is not fill finality. No native pooled reduce-only flag is inferred from a private
+customer close. Opposite-side execution collars and fee ceilings remain local
+checks, not guarantees supplied by the native order payload.
+
+[Rate limits](https://docs.pacifica.fi/api-documentation/api/rate-limits) use weighted
+credits over a rolling window and share capacity across parent/subaccounts.
+The controller accounts in tenths, reserves cleanup capacity and retains conservative
+credit debits through the allowed send delay. A 429 adds durable backoff, not a fresh
+attempt or refund. Native headers cannot grant an unqualified larger local quota.
+
+[Agent-key documentation](https://docs.pacifica.fi/api-documentation/api/signing/api-agent-keys)
+describes delegated signing, not the narrower custody separation Cinder requires.
+The research-observed money-moving powers remain part of the threat model.
+[ADR 0014](../architecture/0014-pacifica-execution.md) records the exact signer,
+credit, transport and remaining custody/qualification boundaries.

@@ -253,6 +253,17 @@ is offline-tested with seven synthetic groups and immutable evidence bindings.
 It does not supply a live authenticated complete-history/no-effect provider;
 that capability remains disabled pending G01/P23 qualification. See ADR 0013.
 
+## P14 native execution promotion
+
+2026-09-30: [ADR 0014](../architecture/0014-pacifica-execution.md) promotes official
+canonical signing and scoped create/cancel fields, actual Ed25519/base58, durable
+preimage/key binding and conservative shared API-credit accounting. Public docs
+were rechecked; the historical RFC8032/golden request vector is tracked in unit
+tests and cross-checked against Node/OpenSSL. Fake transport covers lost ACK,
+429/delay, cancellation races and commit/fencing faults. No live test, key import
+from a wallet, deployment or production capability promotion occurred. P13's hosted
+checks and CodeRabbit were green with no inline findings at this phase boundary.
+
 ## Requirement-to-phase traceability
 
 | Contract | Owning implementation | Mandatory evidence |

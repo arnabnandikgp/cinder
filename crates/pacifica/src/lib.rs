@@ -1,4 +1,5 @@
 //! Pacifica-specific evidence boundary. No sockets, keys, clocks or ledger copies.
+pub mod execution;
 mod native;
 pub mod observation;
 pub mod profile;

@@ -17,20 +17,20 @@ const allowed = new Map([
   ['cinder-ports', []],
   ['cinder-test-support', ['cinder-ports:normal', 'cinder-kernel:dev']],
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
-  ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal']],
+  ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'ed25519-dalek:normal', 'bs58:normal', 'zeroize:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
   const errors = [];
   const packages = metadata.packages ?? [];
-  const approved = new Map(dependencyPolicy.packages.map(p => [p.name, p]));
-  const names = new Set(packages.map(p => p.name));
-  if (packages.length !== allowed.size + approved.size || [...allowed.keys(), ...approved.keys()].some(name => !names.has(name))) errors.push('unexpected package set; review and update the boundary contract');
+  const approved = new Map(dependencyPolicy.packages.map(p => [`${p.name}@${p.version}`, p]));
+  const identities = new Set(packages.map(p => `${p.name}@${p.version}`));
+  if (identities.size !== packages.length || packages.length !== allowed.size + approved.size || [...allowed.keys()].some(name => !identities.has(`${name}@0.1.0`)) || [...approved.keys()].some(key => !identities.has(key))) errors.push('unexpected package set; review and update the boundary contract');
   const members = new Set(metadata.workspace_members ?? []);
   if (members.size !== allowed.size) errors.push('unexpected workspace member set');
   for (const pkg of packages) {
     if (!allowed.has(pkg.name)) {
-      const expected = approved.get(pkg.name);
+      const expected = approved.get(`${pkg.name}@${pkg.version}`);
       if (!expected || pkg.source !== dependencyPolicy.registry || pkg.version !== expected.version || members.has(pkg.id)) errors.push(`${pkg.name}: external source/version not approved`);
       if (expected) {
         if (Boolean(pkg.targets?.some(t => t.kind.includes('custom-build'))) !== expected.buildScript) errors.push(`${pkg.name}: unapproved external build script`);
@@ -46,16 +46,16 @@ export function validateWorkspace(metadata) {
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
-      if (pkg.name === 'cinder-pacifica' && ['serde', 'serde_json', 'sha2'].includes(dep.name)) {
-        const expected = approved.get(dep.name);
-        const features = dep.name === 'serde' ? ['derive'] : [];
-        if (dep.source !== dependencyPolicy.registry || dep.path || dep.req !== `=${expected.version}` || dep.target != null || dep.optional || !dep.uses_default_features || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: adapter dependency configuration not approved`);
+      if (pkg.name === 'cinder-pacifica' && ['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].includes(dep.name)) {
+        const expected = dependencyPolicy.packages.find(p => p.name === dep.name && dep.req === `=${p.version}`);
+        const features = dep.name === 'serde' ? ['derive'] : dep.name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : [];
+        if (!expected || dep.source !== dependencyPolicy.registry || dep.path || dep.target != null || dep.optional || dep.uses_default_features !== (dep.name !== 'ed25519-dalek') || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: adapter dependency configuration not approved`);
         continue;
       }
       if (pkg.name === 'cinder-journal' && ['rusqlite', 'sha2', 'chacha20poly1305', 'zeroize'].includes(dep.name)) {
-        const expected = approved.get(dep.name);
+        const expected = dependencyPolicy.packages.find(p => p.name === dep.name && dep.req === `=${p.version}`);
         const features = dep.name === 'rusqlite' ? ['bundled'] : [];
-        if (dep.source !== dependencyPolicy.registry || dep.path || dep.req !== `=${expected.version}` || dep.target != null || dep.optional || dep.uses_default_features !== (dep.name !== 'rusqlite') || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: storage dependency configuration not approved`);
+        if (!expected || dep.source !== dependencyPolicy.registry || dep.path || dep.target != null || dep.optional || dep.uses_default_features !== (dep.name !== 'rusqlite') || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: storage dependency configuration not approved`);
         continue;
       }
       if (dep.source != null || !dep.path || dep.req !== '=0.1.0' || dep.target != null) errors.push(`${pkg.name}: dependency must be an unconditional exact local pin`);

@@ -16,7 +16,7 @@
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | in progress | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | [#35](https://github.com/arnabnandikgp/cinder/pull/35), stacked above #34 |
 | [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | [#36](https://github.com/arnabnandikgp/cinder/pull/36), stacked above #35 |
 | [P13 — Pacifica observations](PLAN.md#p13) | in progress | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | [#37](https://github.com/arnabnandikgp/cinder/pull/37), stacked above #36 |
-| [P14 — Pacifica execution](PLAN.md#p14) | open | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | — |
+| [P14 — Pacifica execution](PLAN.md#p14) | in progress | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | Local implementation above #37 |
 | [P15 — Solana vault](PLAN.md#p15) | open | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | — |
 | [P16 — Funding coordinator](PLAN.md#p16) | open | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | — |
 | [P17 — Recovery program](PLAN.md#p17) | open | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | — |
@@ -36,8 +36,8 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p13-pacifica-observations`, created with `gh stack add` above
-P12 #36 (`3bdef58`). User authorized continuous
+Current branch: `tee/p14-pacifica-execution`, created with `gh stack add` above
+P13 #37 (`17072f9`). User authorized continuous
 stacked P06–P14 implementation while away, stopping before P15; no merges or new
 external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
 `work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
@@ -650,10 +650,21 @@ Merge: none.
 
 ## P14 — Pacifica execution
 
-Work: not started.
-Verification: not run; acceptance in PLAN P14.
-Unexpected: none yet.
-Next: bind signed attempts to durable admission and test unknown ACK/429/cancel against a fake server.
+Work: 2026-09-30 — added exact native preimage persistence before signing, a scoped
+real Ed25519 signer, GTC/ALO/IOC and attributed cancel encoding, durable key epochs,
+shared API-credit/read admission and cleanup reserve, plus persisted unknown/429
+response handling. No arbitrary-message or money-moving signer is exposed.
+Verification: full pinned runner passed 230 Rust tests per debug/release profile,
+two doctests and 23 repository tests. Subsequent ACK parsing/dependency-identity
+hardening passed focused adapter tests and all 24 repository tests; clean export
+of the final implementation is pending. Includes 14 signing/execution groups.
+Unexpected: native signatures omit account/domain/epoch; bind them in the durable
+envelope and require independently scoped keys. Limits are one-sided and native
+agent authority is wider than trading; neither limitation is concealed. Read-credit
+reservations include bounded delivery time; rotation does not replenish them. P13
+hosted CI/CodeRabbit are green, no inline comments at this boundary.
+Next: finish full checks and clean export, open ready stacked P14, then STOP BEFORE
+P15. No merges, live calls, Solana vault work or new permissions in this run.
 PR: none.
 Merge: none.
 
