@@ -14,7 +14,7 @@
 | [P09 — Joined risk admission](PLAN.md#p09) | in progress | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | [#33](https://github.com/arnabnandikgp/cinder/pull/33), stacked above #32 |
 | [P10 — Protection claims](PLAN.md#p10) | in progress | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | [#34](https://github.com/arnabnandikgp/cinder/pull/34), stacked above #33 |
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | in progress | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | [#35](https://github.com/arnabnandikgp/cinder/pull/35), stacked above #34 |
-| [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | Local implementation above #35 |
+| [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | [#36](https://github.com/arnabnandikgp/cinder/pull/36), stacked above #35 |
 | [P13 — Pacifica observations](PLAN.md#p13) | open | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | — |
 | [P14 — Pacifica execution](PLAN.md#p14) | open | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | — |
 | [P15 — Solana vault](PLAN.md#p15) | open | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | — |
@@ -590,9 +590,9 @@ owner/work/storage bounds and failure rather than an alternative allocation.
 Tests cover trillion-lot accepted profiles and an unsupported irregular profile.
 Source time, immutable cap/depth revisions and cumulative positive-cost limits
 are explicit. No live ADL source or margin-isolated subaccount claim was added.
-Next: publish P12, then implement
-P13 sanitized Pacifica observations using current primary docs. Do not enter P15.
-PR: none.
+Next: implement P13 sanitized Pacifica observations using current primary docs.
+Do not enter P15. P12 is ready for review, not merged or live-qualified.
+PR: [#36](https://github.com/arnabnandikgp/cinder/pull/36), above #35.
 Merge: none.
 
 ## P13 — Pacifica observations
