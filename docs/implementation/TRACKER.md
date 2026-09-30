@@ -478,6 +478,10 @@ payout tests. Self-review added a final-control-cut check to prevent exposure
 preceding a policy downgrade in the same atomic proposal, and evaluates each
 execution inside grouped scenarios. A conservative nested-work bound was tightened
 after that run; final clean-export verification follows below.
+Clean export of final implementation `9917561` at
+`/private/tmp/cinder-p09-export.qDNdq1` passed the same full runner (147 Rust tests
+per profile, two doctests and 23 repository tests), including the tightened bound.
+No `work/`, `stays/` or Git metadata was present; no Linux container or live call.
 P08 head `0049c26` passed hosted TEE CI and CodeRabbit status with no inline findings.
 Unexpected: no new product decision. The interval bound intentionally overestimates
 some combinations; finite stress paths are not a probability or universal guarantee.
