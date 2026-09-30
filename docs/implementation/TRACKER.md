@@ -20,7 +20,7 @@
 | [P15 — Solana vault](PLAN.md#p15) | closed | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), merged `95fe3b7` |
 | [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
 | [P17 — Recovery program](PLAN.md#p17) | in progress | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), based on merged P16 |
-| [P18 — Private API and SDK](PLAN.md#p18) | in progress | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | Local branch above #41 |
+| [P18 — Private API and SDK](PLAN.md#p18) | in progress | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), stacked above #41 |
 | [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
 | [P20 — Nitro qualification](PLAN.md#p20) | open | Actual enclave, key-release, egress and storage/fencing behavior is qualified; mocks cannot stand in for hardware evidence. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
@@ -70,7 +70,11 @@ formatting/Clippy/all-target build and 9 TypeScript SDK tests. This is local mac
 evidence, not a hosted Linux result, attestation qualification or independent audit.
 The Solana program/SDK are unchanged in P18; their P17 51-test SBF result was not
 rerun or relabeled as a new P18 run. No external Cargo version/feature changed.
-Next: publish P18 private grants/API/SDK above P17; neither PR is merged.
+Ready P18 PR #42 is published above P17 #41 using native `gh stack` (stack #43),
+from implementation commit `f6b2e84bced022135a3601e4f7211bf59f552525`.
+This following commit records publication only; no implementation changed after
+the full check. Hosted checks/review are separate evidence and not claimed green.
+Next: review P18, then P19 attested transport/release verification. Neither PR is merged.
 Actual ledger-to-claim finalization/independent delivery remains P21; source/hardware
 and live release gates remain explicit. No new economic policy was adopted.
 
@@ -940,11 +944,11 @@ with signature exposure, and cancel-status routing with the cancel attempt rathe
 than its original order. Corrected the fixtures without weakening the actual
 authority/terminal gates. Tightened grant dispatch expiry and trade-only replay
 ownership during self-review. No new economic policy or production limit adopted.
-Next: publish ready P18 above #41, then review its hosted checks/findings before merge.
+Next: ready P18 PR #42 targets P17 #41; review its hosted checks/findings before merge.
 P19 owns real attested transport, stream framing and client release verification;
 P20 hardware, P21 integrated recovery and G01–G05 remain explicit gates. No live
 venue/RPC, deployment, AWS, configured wallet, container or agent was used.
-PR: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/42.
 Merge: none.
 
 ## P19 — Attested transport
