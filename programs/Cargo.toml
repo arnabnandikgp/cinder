@@ -1,0 +1,16 @@
+[workspace]
+members = ["cinder-vault"]
+resolver = "2"
+
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.test]
+debug = 0
+incremental = false
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1

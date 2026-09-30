@@ -5,20 +5,20 @@
 | [P00 — Foundation](PLAN.md#p00) | closed | Every phase has approved scope, testable completion criteria and a reproducible next-agent handoff. | [#23](https://github.com/arnabnandikgp/cinder/pull/23), merged `587a8ca` |
 | [P01 — Workspace and harness](PLAN.md#p01) | closed | A pinned, offline-buildable workspace keeps the pure kernel separate from I/O and supplies deterministic fault-test ports. | [#24](https://github.com/arnabnandikgp/cinder/pull/24), merged `5aea02e` |
 | [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
-| [P03 — Unified ledger](PLAN.md#p03) | in progress | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), ready for review |
-| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | open | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | — |
-| [P05 — Durable journal](PLAN.md#p05) | open | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | — |
-| [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
-| [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
-| [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
-| [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
-| [P10 — Protection claims](PLAN.md#p10) | open | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | — |
-| [P11 — Liquidation and exceptions](PLAN.md#p11) | open | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | — |
-| [P12 — ADL and restoration](PLAN.md#p12) | open | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | — |
-| [P13 — Pacifica observations](PLAN.md#p13) | open | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | — |
-| [P14 — Pacifica execution](PLAN.md#p14) | open | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | — |
-| [P15 — Solana vault](PLAN.md#p15) | open | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | — |
-| [P16 — Funding coordinator](PLAN.md#p16) | open | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | — |
+| [P03 — Unified ledger](PLAN.md#p03) | closed | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), merged `3bd8c12` |
+| [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
+| [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
+| [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
+| [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), stacked above #30 |
+| [P08 — Funds and payouts](PLAN.md#p08) | in progress | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | [#32](https://github.com/arnabnandikgp/cinder/pull/32), stacked above #31 |
+| [P09 — Joined risk admission](PLAN.md#p09) | in progress | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | [#33](https://github.com/arnabnandikgp/cinder/pull/33), stacked above #32 |
+| [P10 — Protection claims](PLAN.md#p10) | in progress | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | [#34](https://github.com/arnabnandikgp/cinder/pull/34), stacked above #33 |
+| [P11 — Liquidation and exceptions](PLAN.md#p11) | in progress | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | [#35](https://github.com/arnabnandikgp/cinder/pull/35), stacked above #34 |
+| [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | [#36](https://github.com/arnabnandikgp/cinder/pull/36), stacked above #35 |
+| [P13 — Pacifica observations](PLAN.md#p13) | in progress | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | [#37](https://github.com/arnabnandikgp/cinder/pull/37), stacked above #36 |
+| [P14 — Pacifica execution](PLAN.md#p14) | in progress | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), stacked above #37 |
+| [P15 — Solana vault](PLAN.md#p15) | in progress | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), stacked above #38 |
+| [P16 — Funding coordinator](PLAN.md#p16) | in progress | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), stacked above #39 |
 | [P17 — Recovery program](PLAN.md#p17) | open | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | — |
 | [P18 — Private API and SDK](PLAN.md#p18) | open | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | — |
 | [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
@@ -35,11 +35,70 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P02 `17a29e2`.
-Current branch: `tee/p03-unified-ledger`. Preserve unrelated `stays/` and local
-ignored `work/`. P03 implements the pure in-memory ledger/position foundation and
-the requested [full architecture](../architecture.md). No durable store, program,
-service, live native adapter or Nitro runtime has been implemented.
+Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
+Current branch: `tee/p16-funding-coordinator`, ready PR #40 above P15 #39. The user's
+latest request authorizes stack-wide review fixes including P15/P16, not a merge,
+deployment, external transaction or P17. Preserve unrelated `stays/` and ignored
+`work/`. Four relevant findings are fixed on their owning branches and locally
+restacked: P05's acceptance contract/P13 exact-input resolution, P08 cancellation,
+P13 rejected-page diagnostics, and P16 emergency exits. Focused regression checks
+pass. Clean tracked export `1c3bd09` at `/private/tmp/cinder-review-fixes.AoqmUu`
+passes the complete pinned runner: 275 Rust tests and two compile-fail doctests
+per debug/release profile, 24 repository tests, formatting, both strict Clippy
+configurations and all-target build. All 30 client/offline Surfpool/SBF tests,
+TypeScript checks and generated-IDL equality pass as well. Build/package caches
+were reused explicitly; `work/`, `stays/` and Git metadata were excluded.
+The fixes are published across the native stack (13 branches, P04 unchanged).
+Inline threads #4147277655/#4148900279 are resolved with verified-fix replies;
+P08/P13 summary dispositions are recorded on their PRs. Hosted checks restarted
+and were still running at the post-push snapshot; they are not claimed green.
+Only documentation evidence follows the tested source. Production
+source qualification, identity and key governance remain G01/G03/G05 gates.
+Prior stack-wide CodeRabbit triage confirmed eight
+unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
+branches (with P13's cumulative byte-budget fix in P05) and locally restacked.
+Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14/P15=19, P16=20; older revisions
+fail closed. Final clean-export verification of code head `dc0ee4b` at
+`/private/tmp/cinder-stack-review.3fhk3G` passed the complete pinned offline runner:
+245 Rust tests per debug/release profile, two compile-fail doctests per profile,
+24 repository tests, formatting, both strict Clippy configurations and all-target
+build. The export excluded `work/`, `stays/` and Git metadata. Final changes after
+that run only record this evidence. PR threads carry the remote fix disposition;
+do not confuse successful local tests with a newly completed hosted review.
+Private authentication, native completeness, hardware attestation and deployment
+remain their own gates; this is an offline-qualified implementation stack.
+
+### CodeRabbit coverage snapshot (2026-09-30)
+
+Latest triage, 2026-10-01 (supersedes the historical rows below): P04/P07 now have
+completed full reviews with no actionable finding. P05 #4147277655 is addressed
+by its explicit P13 acceptance contract and P13's bounded qualified resolution
+port. P08's later summary finding is reproduced/fixed with cancellation retaining
+faulted holds. P13's later summary finding is reproduced/fixed with transactional
+diagnostic inspection. P15's latest full review has no concrete defect; optional
+runtime hardening is not a new offline acceptance requirement. P16 #4148900279
+is reproduced/fixed without weakening ordinary/restoration risk fences. The 14
+older resolved threads were checked for bot confirmation; remaining unchanged
+layers have no new relevant actionable finding. New hosted reviews after the
+published restack are not implied by this snapshot.
+
+| Phase / PR | Existing review disposition |
+| --- | --- |
+| P04 / #27 | Review failed; no actionable finding submitted. Not evidence of a clean review. |
+| P05 / #29 | Rate-limited; no actionable finding submitted. Shared P13 byte-budget fix added here. |
+| P06 / #30 | Two earlier findings already resolved; no new unresolved finding. |
+| P07 / #31 | Rate-limited; no actionable finding submitted. Not evidence of a clean review. |
+| P08 / #32 | Bot explicitly reported no actionable comments. |
+| P09 / #33 | Two valid pending-order/work-budget findings fixed and regression-tested. |
+| P10 / #34 | Two earlier findings already resolved; no new unresolved finding. |
+| P11 / #35 | Two earlier findings already resolved; propagated guards preserved. |
+| P12 / #36 | Three valid receipt/void/house-owner findings fixed and regression-tested. |
+| P13 / #37 | One valid archive-duplication/replay-budget finding fixed in P13 and P05. |
+| P14 / #38 | Two valid read-cooldown/malformed-reply findings fixed and regression-tested. |
+
+Generic docstring-percentage notices were assessed as non-blocking metrics, not
+missing specified behavior; no blanket comment churn was introduced. Review
+rate limits/failures are reported honestly rather than interpreted as approval.
 
 Repository integration follow-up: the TEE trunk had no classic branch protection
 or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
@@ -50,9 +109,11 @@ for repository/deployment-setting changes. The existing Vercel check
 reports deployment failure, but its build logs were not inspected; do not infer a
 specific build error from that status alone. These integrations were left unchanged.
 
-P02 is merged with user authorization; P03 passes local verification and is open as PR #26.
-Funding/fees and the durable journal follow. Native execution and customer-funds deployment are
-not implied by this foundation. P19/P21/P22 support
+P03 is merged with user authorization. P04 is open as PR #27 on the TEE trunk;
+P05 is open as PR #29 above #27 in GitHub stack #28, with its handoff below.
+P04's full local checks passed again with the reviewed arithmetic fix. Review
+and merge the remaining layers only with authorization. Native execution and
+customer-funds deployment are not implied by this foundation. P19/P21/P22 support
 offline development independently of actual P20 AWS availability; P23 joins both.
 
 Each session appends dated work/evidence/deviations and replaces the next action
@@ -205,9 +266,11 @@ Clippy. Three new regressions cover the fix; the direct reversal was explicitly
 run red before the change. The full runner also passed clean staged export tree
 `6c7dbf0a0bc1680c6dca7f609c2c9fbcd78115b3`, without ignored research or unrelated
 files; only this documentation verification note follows that snapshot.
-This direction supersedes the older
-handoff's request for merge authorization; actual merge closure belongs in the
-next authorized stack layer, with P04/P05 rebased and retested.
+Closure: fixed head `e77ad2b63108848c30f1b7629c4accd4a3c22a68` passed hosted
+Plan/handoff and Offline Rust workspace checks; CodeRabbit confirmed the fix and
+resolved its thread. The legacy Vercel preview remained failed, not a TEE test
+failure. No branch protection/ruleset or deployment settings were changed.
+Merged #26 with `gh stack merge 26 --squash --yes`; only this layer was merged.
 
 Work: 2026-09-30 — added production signed-basis fill transitions, explicit rational
 lot/tick conversion and one scoped customer/house/suspense/native ledger. Physical
@@ -237,127 +300,547 @@ to the pinned toolchain idiom. Native cash and private realized cash intentional
 differ when external netting realizes PnL, so the structural check uses cash minus
 basis rather than demanding identical cash/basis sums. Normalized causal evidence
 remains a trusted caller obligation until P13, not inferred from passing aggregate checks.
-Next: review PR #26 CI/findings and obtain merge authorization. P04 then adds
-qualified funding/fees and discrepancy containment on this same ledger, not a second
-book. Do not merge P03 or start P04 without subsequent authorization.
+Subsequent direction: user authorized P04 as a dependent stack layer while reviewing
+P03. Its base remains exactly `e165eca78f34d696303084d2134110c686953186`; no P03 branch
+rewrite or merge occurred.
+Next: keep P04/P05 rebased and verified on the reviewed merged result. P06 remains
+the next implementation phase, separate from this review fix.
 PR: https://github.com/arnabnandikgp/cinder/pull/26
-Merge: none.
+Merge: 3bd8c1287873db2d535f94b6e2e8ebb2a298458a.
 
 ## P04 — Funding, fees and reconciliation
 
-Work: not started.
-Verification: not run; acceptance in PLAN P04.
-Unexpected: none yet.
-Next: port gross/net funding and inclusive-fee cases, then add named mismatch containment.
-PR: none.
+Work: 2026-09-30 — added frozen funding inventory cuts, explicit missing rate/native
+inputs, per-boundary recognition/settlement, signed rounding and named source
+corrections on the same ledger. Actual execution fees/rebates follow stored owner
+routes; inclusive native PnL normalizes once against native basis. Separate broker
+fees move customer-to-house cash only. Unknown/unexplained economics remain in
+suspense, not house profit. Ingestion retains normalized duplicates/rejections,
+injected times and dispositions; named issues retain age. Complete component
+checks and qualified marks gate dependent views without blocking actual losses.
+Added a pure normalization port and offline fixture, ADR 0004, source fingerprints,
+architecture updates and technical acceptance checks. No live adapter or fee policy.
+Verification: pinned macOS arm64 Rust 1.97.1 / Node 24.21.0 `node scripts/check.mjs`
+passed 21 script tests, 60 Rust tests and 2 compile-fail doctests in debug/release,
+formatting, strict Clippy and build. P04 adds 19 economic/evidence tests and 2
+normalization-port tests. The funding property includes 500 signed rounding cases;
+replay preserves all observation dispositions and retained conflicts. Source
+qualification is still a trusted input, not proved by those tests. The focused
+`node scripts/check.mjs --properties` passed 9 tests. The full runner also passed
+from clean staged export tree `0a2293f0981d8620bc637feab3a9407339635062`, excluding
+`work/`, `stays/` and Git metadata. Implementation commit:
+`a5f1755995110563ed0981cb41a3f36f84c0273b`; only this documentation handoff follows it.
+No container, live venue, wallet, chain, AWS, machine proof or independent audit
+was used/claimed. Hosted CI and PR review remain separate pending evidence;
+inspect the final PR head before any authorized merge.
+Unexpected: self-review tightened snapshot resolution to require named effects
+to explain every originally known component exactly; a later matching snapshot
+or unrelated transaction cannot clear it. Audit effects retain before/after books
+so an extreme signed value need not form an overflowing delta merely for ingestion.
+A compile-time module-visibility error and Clippy's manual-contains warning were
+fixed locally before the successful full run. The first clean-export doc check
+flagged an inline rather than line-start `Next:` handoff; corrected the formatting.
+Skill guidance informed checked
+math/adversarial testing without adding a runtime dependency or live test.
+Review restack, 2026-09-30: `gh stack rebase` moved this branch onto merged P03
+`3bd8c12` without conflicts. Full pinned offline checks passed with the three new
+P03 regressions: 63 Rust tests plus 2 compile-fail doctests in debug/release,
+21 script tests, formatting, strict Clippy and build. Tested tree
+`2a129549cb5e043aad88f768fa531e1f7047e997` is unchanged across the squash-merge
+restack; only this tracker closeout follows it. No containers or live calls.
+Next: review #27's final CI/findings and obtain merge authorization; it now bases
+on `product/tee-v1`, not legacy `main`. Keep P05 #29 stacked above this layer.
+P05 must persist complete normalized observations (including
+duplicates/rejections, times and dispositions) and outer raw evidence atomically
+with postings/consumption. Do not replay only the accepted event list, bypass the
+ingestion gate, or treat this in-memory evidence as crash durability.
+PR: https://github.com/arnabnandikgp/cinder/pull/27
 Merge: none.
 
 ## P05 — Durable journal
 
-Work: not started.
-Verification: not run; acceptance in PLAN P05.
-Unexpected: none yet.
-Next: implement atomic consumed-key/posting/hold commits and process-kill replay tests.
-PR: none.
+Review follow-up, 2026-10-01: CodeRabbit #4147277655 is valid. Added the
+missing P13 acceptance contract for qualified per-input resolution and its stable
+identity/effect/replay boundaries. No P05 admin reset was added. The plan validator
+passes (25 phases, 14 documents); P13 owns implementation and offline regressions.
+
+Work: 2026-09-30 — added cinder-journal with versioned lossless P03/P04 codecs,
+complete raw/normalized evidence and deterministic receipts/state replay; atomic
+SQLite CAS commits include postings, event consumption, shared holds and immutable
+attempts. Exposure is recorded before one-shot local delivery; unknown commit
+outcomes poison the handle and restart never automatically resends. Actual adverse
+facts survive refused control proposals. Added migration, concurrency, page-full,
+corruption and real killed-child tests; ADR 0005 and source fingerprints explain
+the P06 privacy/freshness boundary. Dependency guard narrowly permits pinned
+storage/hash packages; CI hydrates them before offline checks.
+Verification: pinned macOS arm64 Rust 1.97.1 / Node 24.21.0 full offline runner
+passed 23 script tests, 82 Rust tests and 2 compile-fail doctests in debug/release,
+formatting, default/hook-enabled strict Clippy and build. P05 adds 22 Rust tests,
+including two parent tests that kill ten actual child processes; the one ignored
+worker is explicitly invoked by those parents. Ten finite property tests are
+included in the full run. No container, live endpoint, wallet, chain, AWS,
+independent review or machine proof is claimed. The same full runner passed from
+clean staged export tree `84b578e8174b3fbe078a3f1a200028ecc59e2432`, excluding
+`work/`, `stays/` and Git metadata; compiler/dependency caches were reused to
+conserve disk space. Only documentation handoff clarifications follow that tree.
+Implementation commit: `326e21cc17cdef03afafa8ab326e1f3130d0a3a9`.
+The final PR-link handoff is documentation-only. Hosted Linux CI and external
+reviews are separate evidence; inspect the final PR head before any authorized
+merge. Existing Vercel/repository integration settings remain unchanged.
+Unexpected: SQLite requires signed database integers; added checked conversions.
+Tests caught fixture type mismatches; strict Clippy required naming the test-hook
+type. Fixed before full verification. No production cipher is supplied: a mandatory
+protection seam and opaque storage keep P06's security work explicit. Flat-only
+capacity and one attempt per hold intentionally prevent inventing P07/P09 policy.
+Review restack, 2026-09-30: inherited the merged P03 whole-fill fix and new
+regressions via P04. Only tracker handoff text conflicted during rebase; retained
+P03's merge evidence and P05's implementation record. Advanced financial-engine
+revision to 2 so earlier journal semantics cannot be silently replayed under the
+corrected arithmetic. Genesis and transaction tests reject revision 1; wire and
+SQLite schema versions are unchanged. No production migration or P06 work is
+implied. Full pinned local offline revalidation passed on tree
+`8c8a13acd86edd58dca6f2f4a5d6efdf2f6ac7ab`: 85 Rust tests plus 2 compile-fail
+doctests in debug/release, 23 script tests, formatting, both strict Clippy profiles
+and build. The process-kill parents still exercise the intentionally ignored
+worker. Only this verification note follows the tested tree; no additional
+clean-export, container or live qualification is claimed for this follow-up.
+Stack review follow-up: P13 comment 4141545400 also exposed a P05 commit/reload
+byte-budget mismatch. Count exact protected bytes, including genesis, before
+append/exposure; update the counter only after successful append and rebuild it
+on reload. A full-budget/reopen/duplicate/exposure regression passes, along with
+all 23 journal tests and strict workspace Clippy. Existing frame bytes/semantics
+are unchanged. This is capacity containment, not automatic evidence pruning.
+Next: review #27 and #29 bottom-up; merge only with user authorization.
+If a parent changes, restack/retest descendants and update their evidence. Keep
+the stack shallow before starting another layer. P06 must close the valid-history rollback counterexample
+with AEAD, independent authenticated freshness and writer fencing; do not expose
+private data or real native actions using the test-only protector.
+PR: https://github.com/arnabnandikgp/cinder/pull/29
 Merge: none.
 
 ## P06 — Encrypted durability
 
-Work: not started.
-Verification: not run; acceptance in PLAN P06.
-Unexpected: none yet.
-Next: promote M2 corruption/rollback cases and define the authenticated head/writer-epoch interface.
-PR: none.
+Work: 2026-09-30 — added versioned XChaCha20-Poly1305 records, random per-proposal
+nonces, stream/context binding and explicit key generation. Added distinct
+content-addressed replica ports/files, two-copy readback-before-witness acceptance,
+bounded full encrypted replay snapshots, current-head/epoch checks and poisoned
+unknown outcomes. Keys/private byte buffers are zeroized on ordinary drop; no
+universal memory-erasure claim. M2/W06 cases promoted into tracked tests/ADR 0006.
+Verification: pinned macOS arm64 Rust 1.97.1 / Node 24.21.0 full offline runner
+passed: 96 Rust tests plus 2 compile-fail doctests in debug/release, 23 script
+tests, formatting, default/all-features strict Clippy and build. Eleven P06 tests
+include four actual child kills; the two ignored workers are invoked by their
+parent tests (P05 and P06). The same full runner passed clean staged export tree
+`0a802fbecba10d3c003f5a52f0828cb03105bb99`, with no `work/`, `stays/` or Git
+metadata; only this handoff closeout follows it. Build caches were reused.
+Unexpected: caught accidental replica aliasing in self-review and added an identity
+guard/regression; distinct IDs still do not prove infrastructure independence.
+Test-only SQLite witness required signed integer conversions; fixed locally.
+Strict Clippy requested a fixture type alias; fixed before full verification.
+Build/review skill guidance informed checked bounds, secrecy and adversarial tests;
+no telemetry, subagent, deployment, live venue or container action.
+Implementation commit: `9cfee2b`; PR #30 is ready above #29 in native stack #28.
+P04/P05 hosted TEE checks passed on their reviewed restacked heads; the unrelated
+legacy Vercel preview remains failed. P06 TEE CI passed at `bd3e9db`. Its subsequent
+review identified two relevant edge cases: new acceptance now repairs/checks all
+historical replica copies, and witness accept errors other than known stale CAS
+rejection force uncertain-outcome poisoning. Read-only one-copy recovery remains
+available. Three targeted regressions cover sequential replica loss, refused
+historical repair, and a committed witness response mislabeled Busy. Local full
+verification of this follow-up passed: 99 Rust tests in debug/release, two
+compile-fail doctests, 23 repository tests, fmt, strict default/all-feature Clippy
+and build. No new live or container tests. CodeRabbit comments 4139804671 and
+4139804693 are addressed; updated hosted checks remain separate evidence.
+Next: proceed to P07 under the user's continuous P06–P14 authorization, checking
+P06 CI/reviews at phase boundaries. Do not start P15 or merge PRs.
+PR: https://github.com/arnabnandikgp/cinder/pull/30
 Merge: none.
 
 ## P07 — Order intents and reservations
 
-Work: not started.
-Verification: not run; acceptance in PLAN P07.
-Unexpected: none yet.
-Next: add durable intent/attempt lifecycle and shared hold semantics, then cancel/unknown races.
-PR: none.
+Work: 2026-09-30 — integrated immutable GTC/ALO/IOC intents, authenticated-port
+digest/epoch binding, shared commitments, canonical place/attributed-cancel actions,
+partial fills, ACK/unknown/terminal history and adverse-fill containment in the
+same journal. Original/classified facts replay without changed ownership. A late
+terminal contradiction re-encumbers holds without erasing a valid customer fill.
+ADR 0007 defines the promoted contract and remaining P09/P13/P14/P18 ports.
+Verification: before restacking, full offline runner passed: 109 Rust tests in
+debug/release, two compile-fail doctests, 23 repository tests, fmt, strict Clippy
+and build. The 13-test order suite includes all 24 additive delivery/terminal
+permutations with real SQLite reloads. First full run correctly caught an obsolete
+wire-v1 golden header, updated explicitly for wire v2. Final restacked clean export
+of commit `7f47ea3` passed the same full runner: 112 Rust tests in debug/release,
+two compile-fail doctests and 23 repository tests, including the three added P06
+regressions. Export `/private/tmp/cinder-p07-export.OA9rLI` contained no `work/`,
+`stays/` or Git metadata. Only verification/publication notes follow that source.
+No live venue calls or signatures.
+Unexpected: internal binding time exposed an old-receive-time rejection: financial
+projection now uses monotone commit time while retaining the original input time.
+Journal wire is explicitly revision 2 / engine 3; updated old-revision fixtures.
+P06 review fixes were made and tested in the owning layer, then P07 was restacked.
+Next: P07 is ready as #31. Continue P08 under the user's P06–P14 authorization;
+inspect hosted checks/reviews at phase boundaries. Do not merge or start P15.
+PR: https://github.com/arnabnandikgp/cinder/pull/31
 Merge: none.
 
 ## P08 — Funds and payouts
 
-Work: not started.
-Verification: not run; acceptance in PLAN P08.
-Unexpected: none yet.
-Next: join partial movement receipts to live position state and reserve total payout debit atomically.
-PR: none.
+Review follow-up, 2026-10-01: reproduced the summary-only faulted-cancellation
+concern with a failing regression before fixing it. Clean local cancellation now
+rejects faulted operations, terminal evidence or actual bound receipts. All 18
+funds groups pass; new coverage includes separate/same-transaction receipts,
+duplicate commit, reopen/next advance and legitimate clean cancellation. No loss
+allocation or custody authority changed; assembled-stack verification follows.
+
+Work: 2026-09-30 — implemented kernel partial movements with transit/unpaired
+contra-balances, paid counters, explicit fee ownership and house overpayment;
+journal FIFO/partial consent, shared holds and terminal/source coverage. Initial
+marked-collateral prerequisite is joined for open-position withdrawals;
+P09 still owns pending-order outcomes, leverage selection and full capital envelope.
+Verification: focused 17-group funds suite passes, including all 24 four-leg receipt
+permutations with exact replay and every-prefix bridge checks. The initial full
+runner passed 127 Rust tests (15 new groups), debug/release, two compile-fail
+doctests, 23 repository tests, formatting, strict Clippy and build. Final full run
+with two additional certificate/consent regressions also passed: 129 Rust tests
+in each profile and the same other checks. Self-review
+checked claim discharge, actual adverse outcomes, source-specific coverage,
+hold consumption and replay commitments; no second financial ledger was added.
+At this boundary P06 `a2babf0` and P07 `8fd9651` both passed hosted TEE CI and
+CodeRabbit status; P07 had no inline findings. Status is not an independent audit.
+Clean export of implementation commit `4d4e1cd` at
+`/private/tmp/cinder-p08-export.cCxf6m` passed the same full pinned offline runner,
+without `work/`, `stays/` or Git metadata. Only handoff/publication notes follow.
+Unexpected: none requiring a new product decision. Numerical collateral profiles
+are explicit synthetic test parameters, not live leverage/fee approvals.
+Unexpected: the partial-receipt algebra needed an explicit unpaired contra-balance
+to avoid double backing when arrival precedes debit. P08 introduced a shared marked
+collateral prerequisite ahead of P09; pending orders still refuse this path until
+P09 supplies their bounded outcomes. Wire 3 / engine 4 reject old semantics.
+Next: P08 is ready as #32. Continue P09; inspect hosted checks/reviews at phase
+boundaries. No new live tests, merge or P15 authority is implied.
+PR: https://github.com/arnabnandikgp/cinder/pull/32
 Merge: none.
 
 ## P09 — Joined risk admission
 
-Work: not started.
-Verification: not run; acceptance in PLAN P09.
-Unexpected: none yet.
-Next: bound pending outcomes under one state cut; implement synthetic policy profiles without enabling live risk.
-PR: none.
+Review follow-up (2026-09-30): addressed CodeRabbit #4142787863/#4142787878.
+Accept inserts the candidate order before its atomic reserve/capacity evaluation;
+a rejected candidate still rolls back both. Risk reports build an active index once,
+preserve retired identities, and budget index construction plus actual active
+reservation/order/selection/scenario scans. Engine 11 rejects the former engine 5.
+The 20 risk groups pass, including opposing-pending admission, 350 released orders,
+reopen/idempotency and active-work-budget rejection; strict all-feature Clippy passes.
+No policy/capital-limit change or evidence pruning.
+
+Work: 2026-09-30 — implemented one joined derived risk report over ledger/shared holds,
+independent pending quantity intervals and adverse execution cost, capped private
+leverage, native margin, capital/concentration and location/deadline scenarios.
+Verification: pinned full offline runner passed 147 Rust tests in debug/release,
+two compile-fail doctests, 23 repository tests, formatting, strict Clippy and build.
+The 18-group risk suite includes 540 partial/price/order-ordering cases, replay,
+every-prefix capital, cap downgrade, actual shock, source-liquidity and shared
+payout tests. Self-review added a final-control-cut check to prevent exposure
+preceding a policy downgrade in the same atomic proposal, and evaluates each
+execution inside grouped scenarios. A conservative nested-work bound was tightened
+after that run; final clean-export verification follows below.
+Clean export of final implementation `9917561` at
+`/private/tmp/cinder-p09-export.qDNdq1` passed the same full runner (147 Rust tests
+per profile, two doctests and 23 repository tests), including the tightened bound.
+No `work/`, `stays/` or Git metadata was present; no Linux container or live call.
+P08 head `0049c26` passed hosted TEE CI and CodeRabbit status with no inline findings.
+Unexpected: no new product decision. The interval bound intentionally overestimates
+some combinations; finite stress paths are not a probability or universal guarantee.
+Unexpected: scenario execution/evidence errors fail qualification rather than
+vanishing into an empty safe report; old wire 3 / engine 4 are explicitly rejected
+for wire 4 / engine 5. No actual live policy or independent solvency proof claimed.
+Next: P09 is ready as #33. Continue P10 protection claims; inspect hosted checks
+and reviews at phase boundaries. Do not merge or enter P15.
+PR: https://github.com/arnabnandikgp/cinder/pull/33
 Merge: none.
 
 ## P10 — Protection claims
 
-Work: not started.
-Verification: not run; acceptance in PLAN P10.
-Unexpected: none yet.
-Next: port V06, remove single-default-episode assumptions and test repeated loss/recovery ownership.
-PR: none.
+Work: 2026-09-30 — added repeated loss episodes, distinct deficit/remediation
+recognition, designation/commitment/absorption, actual debt recovery and immutable
+collection history in the same ledger. Joined explicit coverage/allocation ports
+and global/per-customer lifetime caps to the journal and P09/P08 admission.
+Verification: full pinned offline runner passed 163 Rust tests in debug/release,
+two compile-fail doctests, 23 repository tests, formatting, strict Clippy and build.
+The 16 protection groups include V06, repeated/partial recoveries, depletion,
+remediation offsets, replay, authorization binding, pending commitments and an
+opposing-account extraction counterexample. Initial full runs found stale test
+constants for wire/engine revisions; updated the golden assertions and added old
+wire 4 / engine 5 rejection cases, then reran successfully. Final clean export of
+`b6c4787` at `/private/tmp/cinder-p10-export.wFxvkC` passed the same full runner,
+including all 163 Rust tests per profile, without ignored research or Git metadata.
+P09 head `85efc22` passed hosted TEE CI and CodeRabbit with no inline findings.
+Unexpected: removed the study's single-episode shortcut. Self-review additionally
+required quiet customer commitments before absorption. G02 still gates live
+coverage/priority; caps bound rather than prove away coordinated extraction.
+Ambiguous recovery during a reopened debt episode retains assets and a named
+containment fault; no discretionary clear-flags command. No outside fund shares.
+Review follow-up: verified CodeRabbit #4140440713. Protection stress transitions
+were incorrectly restricted to Economic keys although the kernel requires Request
+keys. Fixed per-variant key validation with deployment binding; added a scenario
+that recognizes, commits and absorbs across every prefix without mutating live
+claims. Also fixed the stale architecture status row (#4140440723). Full pinned
+runner passed again: 164 Rust tests per profile, two doctests, 23 repository tests,
+formatting, Clippy and build. This is a scenario integration fix, not a change to
+the coverage promise or actual loss-posting semantics.
+Next: P10 is ready as #34. Implement P11 bounded liquidation and
+late-close house exceptions. Native house capital payout remains disabled pending
+qualified custody integration; a designation release is not an external payout.
+PR: https://github.com/arnabnandikgp/cinder/pull/34
 Merge: none.
 
 ## P11 — Liquidation and exceptions
 
-Work: not started.
-Verification: not run; acceptance in PLAN P11.
-Unexpected: none yet.
-Next: implement bounded liquidation/unwind ports and late-close exception ownership before native dispatch.
-PR: none.
+Work: 2026-09-30 — implemented bounded liquidation/close allocation and exceptional
+house unwind, using the existing order status, shared holds and authoritative ledger.
+Qualified policy bounds size, price, fees, time and funded support. Actual partial,
+over-limit and late fills retain their economics without silently flipping users.
+Verification: clean tracked export of `3ad800f` at
+`/private/tmp/cinder-p11-export.OtlviF` passed the full pinned runner: 181 Rust
+tests per debug/release profile, two doctests, 23 repository tests, formatting,
+strict Clippy and build. The close suite has 17 groups including 432 long/short
+allocation cases, local-abandonment contradictions and a joined close scenario.
+P10 reviewed head `a1309af` also passed both hosted checks and CodeRabbit.
+Unexpected: split-owner execution must partition the whole exact native fill value
+before rounding, rather than require both artificial child notionals to be exact.
+Self-review added explicit never-exposed abandonment and final-cut authority
+revalidation; neither can release an exposed unknown action. P10 claim absorption
+now requires full order completion, including these house-only reserved exits.
+Native crisis recovery/incident resumption and live calibration remain gated; this
+controller is deliberately limited to funded, source-qualified bounded exits.
+Review follow-up at the P14 boundary: reproduced both new CodeRabbit findings
+locally before the production fixes. Extracted full exposure qualification and
+rechecked it at the final control cut, preserving scoped cancels. Moved depth
+expiry out of the general risk gate into order admission/dispatch; all other
+capacity/protection checks remain. Three regression groups cover both freeze
+orderings, generic/no-risk and emergency dispatch, cancel cleanup, fresh-capacity
+payouts/reservations/designation reductions and continued rejection of expired
+orders/overdraws. All 20 close tests and the full pinned runner pass: 184 Rust tests
+per debug/release profile, two doctests, 23 repository tests, strict Clippy,
+formatting and build. Engine revision 8
+explicitly rejects pre-correction history rather than reinterpreting it.
+
+Next: P11 is ready as #35; continue P12
+RF1/RF2 and bounded-resource quota scheduling. Do not merge or enter P15.
+PR: [#35](https://github.com/arnabnandikgp/cinder/pull/35).
 Merge: none.
 
 ## P12 — ADL and restoration
 
-Work: not started.
-Verification: not run; acceptance in PLAN P12.
-Unexpected: none yet.
-Next: promote RF2 compiler vectors, implement bounded-resource schedule and join actual RF1 restoration postings.
-PR: none.
+Review follow-up (2026-09-30): CodeRabbit #4142163504/#4142163522/#4142163544
+addressed. Wrong-route restoration receipts fault the matched order and preserve
+the unchanged rejected evidence instead of panicking/reclassifying. A single void
+no longer vetoes other fixed awards at prepare/bind/expose; all-void incidents
+still cannot authorize speculative house-only exposure. House-unwind labels do
+not void private awards. Engine 16 rejects previous interpretation. Targeted close,
+orders, restoration and risk suites pass 75 groups; strict all-feature Clippy passes.
+Regressions cover ordinary/close misrouting, both void timings, unchanged quotas,
+all-void containment, house versus private close, and durable replay.
+
+Work: 2026-09-30 — implemented qualified ADL observation/declaration, fixed
+proportional reduction and bounded exact-EDF quota compilation; joined funded
+RF1 replacement, original basis/refunds, private-intent voids, source-time bounds,
+house exceptions and terminal-history release to the existing ledger/order journal.
+Verification: clean export of `da74dae` at
+`/private/tmp/cinder-p12-export.IXE1mL` passed the full pinned runner: 204 Rust tests
+per debug/release profile, two doctests, 23 repository tests, formatting, strict
+Clippy and build (17 restoration groups total). P11 head `c702021` passed both hosted checks
+and CodeRabbit.
+Unexpected: the research per-lot tape cannot support arbitrary atomic quantities.
+The compiler now skips only affine-certified identical EDF blocks, with explicit
+owner/work/storage bounds and failure rather than an alternative allocation.
+Tests cover trillion-lot accepted profiles and an unsupported irregular profile.
+Source time, immutable cap/depth revisions and cumulative positive-cost limits
+are explicit. No live ADL source or margin-isolated subaccount claim was added.
+Next: implement P13 sanitized Pacifica observations using current primary docs.
+Do not enter P15. P12 is ready for review, not merged or live-qualified.
+PR: [#36](https://github.com/arnabnandikgp/cinder/pull/36), above #35.
 Merge: none.
 
 ## P13 — Pacifica observations
 
-Work: not started.
-Verification: not run; acceptance in PLAN P13.
-Unexpected: none yet.
-Next: promote sanitized VM-01–VM-09 mapping, recheck current docs and implement codecs/replay with fake transport.
-PR: none.
+Review follow-up (2026-10-01): addressed the remaining summary finding in #37:
+rejected pages now preserve accepted view/cursor/scan state on ingestion and replay,
+while retaining conservative gaps. Reproduced the failure before the change.
+Completed #29's P13 dependency with exact-input qualified resolution, not a reset:
+original commit/ordinal/fingerprint, source/epoch/cut/time, retained evidence and
+same-transaction effects bind one permanent result. Actual facts survive refused
+controls; retries never repost cash or clear unrelated faults. Seven journal
+resolution groups and all 14 observation groups pass locally, including restart,
+conflicts, duplicate-effect/hold isolation, restored exposure gating and work bounds.
+The new semantics/state commitment fence old histories with engine 19 (wire 8).
+Full assembled-stack checks passed at `1c3bd09` (see current handoff).
+Live authentication/completeness remain
+G01/P23 obligations; synthetic evidence hashes do not prove them.
+
+Review follow-up (2026-09-30): CodeRabbit #4141545400 addressed in two owning
+layers. P05 enforces the replay byte limit before append/exposure; P13 stores one
+exact response archive with compact hash/ordinal references in normalized and gap
+inputs. All 13 Pacifica observation groups and strict all-feature Clippy pass.
+The new 32-row/gap regression verifies exact archived bodies, reference resolution,
+bounded per-input overhead and restart reconstruction. Engine 17 carries the
+stacked semantic fences; this storage-deduplication change does not rewrite history.
+
+Work: 2026-09-30 — added the Pacifica crate, exact typed native schemas, immutable
+qualification profile, shared REST/WS identities, diagnostic views, bounded cursor
+replay and named containment. Raw provenance and economic inputs share one encrypted
+journal transaction. Promoted VM-01–VM-09 and rechecked current primary documentation.
+Verification: full pinned offline runner passed: 216 Rust tests per debug/release
+profile (12 adapter groups), two doctests, 23 repository tests, strict Clippy,
+formatting and build. Clean export `e2a9eb7` at
+`/private/tmp/cinder-p13-export.HEhqQa` passed the same runner. No live calls or wallets used.
+Unexpected: retained response attachments required an explicit journal wire/engine
+revision (8/9 initially, engine 10 after the P11 review correction). Public
+settlement/funding/completeness semantics remain insufficient;
+dependent capabilities stay disabled. Initial fixture missed the required location
+hold; corrected the fixture, not the production admission rule. One old engine
+golden assertion also needed the explicit version bump. P12's two hosted checks
+and CodeRabbit are green; no inline findings were present at this phase boundary.
+Next: P13 is ready for review; continue P14 bounded signing
+and shared API-credit admission. Stop before P15; preserve all open G01/G02 gates.
+PR: [#37](https://github.com/arnabnandikgp/cinder/pull/37), above #36.
 Merge: none.
 
 ## P14 — Pacifica execution
 
-Work: not started.
-Verification: not run; acceptance in PLAN P14.
-Unexpected: none yet.
-Next: bind signed attempts to durable admission and test unknown ACK/429/cancel against a fake server.
-PR: none.
+Review follow-up (2026-09-30): CodeRabbit #4141057824/#4141057830 addressed.
+Trusted read 429 reporting binds a persisted read reservation, records shared
+cooldown, supports late replies after key rotation, and deduplicates exact retries.
+Malformed post-send bodies/times persist bounded Unknown evidence with HTTP status
+and backoff instead of returning a pre-send-looking Codec error. Targeted Pacifica
+tests pass (2 unit, 15 execution, 13 observation groups), plus strict all-feature
+Clippy. New cases include restart, changed/unknown reservation rejection, repeated
+responses, short/huge retry durations, oversized 200/429 and regressing clocks.
+
+Work: 2026-09-30 — added exact native preimage persistence before signing, a scoped
+real Ed25519 signer, GTC/ALO/IOC and attributed cancel encoding, durable key epochs,
+shared API-credit/read admission and cleanup reserve, plus persisted unknown/429
+response handling. No arbitrary-message or money-moving signer is exposed.
+Verification: full pinned runner passed 230 Rust tests per debug/release profile,
+two doctests and initially 23 repository tests. After ACK parsing/dependency-identity
+hardening, the final clean tracked export of `0bd24d3` at
+`/private/tmp/cinder-p14-export.wlqXju` passed the full pinned runner: 230 Rust tests
+per debug/release profile, two doctests, all 24 repository tests, formatting, strict
+Clippy in both feature configurations and build. Includes 14 signing/execution groups.
+Unexpected: native signatures omit account/domain/epoch; bind them in the durable
+envelope and require independently scoped keys. Limits are one-sided and native
+agent authority is wider than trading; neither limitation is concealed. Read-credit
+reservations include bounded delivery time; rotation does not replenish them. P13
+hosted CI/CodeRabbit are green, no inline comments at this boundary.
+Follow-up: final stack review found two P11 issues; both were reproduced, fixed and
+verified in their owning branch (`9f1d2f8`), then restacked into this branch. Added
+three regressions and advanced distinct P11/P12/P13 engine revisions to 8/9/10.
+Final post-review clean export `2d15c16` at
+`/private/tmp/cinder-p14-reviewed.DLjQgv` passed the full pinned runner: 233 Rust
+tests per debug/release profile, two doctests, 24 repository tests, formatting,
+strict Clippy and build. No ignored research or wallets were included. This
+supersedes the earlier 230-test result for the assembled stack.
+Next: STOP BEFORE P15. Review the open stack bottom-up; await user authorization
+before merging or starting the Solana vault. Hosted checks for the final restack
+must be inspected separately; local success is not a claim that hosted CI is green.
+No merges, live calls, Solana vault work or new permissions in this run.
+PR: [#38](https://github.com/arnabnandikgp/cinder/pull/38), above #37.
 Merge: none.
 
 ## P15 — Solana vault
 
-Work: not started.
-Verification: not run; acceptance in PLAN P15.
-Unexpected: none yet.
-Next: promote M1 authority invariants; document program topology and build local SBF vault/payout tests.
-PR: none.
+Work: one cohesive Anchor 1.2.0 vault in the isolated `programs/` workspace;
+typed classic-token/PDA constraints, upgrade-authority bootstrap, public customer
+attribution, immutable deposit/operator receipts, allowlisted working-collateral
+release/return, ordinary payouts with shared lifetime paid/sequence counters,
+signed role handoff and epoch fence. Recovery authority only freezes; it cannot
+pay through the normal path or reset history. Generated IDL/types and an unsigned
+`@anchor-lang/core` 1.2.0 client are tracked. ADR 0015 promotes W04/W05 invariants
+without fixture keys or a second private financial ledger.
+Verification: all 25 signed SBF transaction tests passed locally in offline
+Surfpool via the complete vault runner. All financial-workspace checks passed:
+both strict Clippy configurations, all-target build, debug/release tests, doctests
+and 24 repository regressions. Debug symbols/incremental compilation were disabled
+to bound disk usage, not to disable debug assertions. Clean-export verification
+passed from `/private/tmp/cinder-p15-export.FVQoPZ` as well: complete vault and
+financial runners passed without `work/`, `stays/` or Git metadata, using only
+hydrated dependency/build caches. Strict vault Rust and TypeScript compilation
+passed. The reproducible runner checks exact tool and
+lock pins, generated-IDL equality and stack diagnostics, owns its localhost-only
+Surfpool lifecycle, and refuses occupied ports. A separate checksum-pinned CI job
+does not contact venues or RPCs during tests.
+Hosted checks for implementation head `74715cd` passed: plan/handoff consistency,
+offline Rust workspace and offline Anchor vault. This records that tested head,
+not automatic approval of later pushes or a deployment/recovery qualification.
+Unexpected: Anchor's token-init macro references its Token-2022 module even for
+typed classic Token; enabling that Rust module does not enable Token-2022 assets.
+Boxed account wrappers remove generated SBF stack overflows. Customer deposit IDs
+have a separate owner-bound namespace to prevent operator receipt squatting.
+Prefunded-PDA tests must supply the system-account rent minimum, not one lamport.
+Disk exhaustion required removing only reproducible debug artifacts, not source,
+research, wallets or unrelated files.
+Next: review ready PR #39 above #38 in the GitHub stack and check any later-head CI.
+Do not merge or begin another phase without user authorization.
+P16 joins finalized custody receipts/native funding to
+the existing authoritative journal; P17 adds funded final claims sharing these
+paid counters, not an independent payout program.
+PR: https://github.com/arnabnandikgp/cinder/pull/39.
 Merge: none.
 
 ## P16 — Funding coordinator
 
-Work: not started.
-Verification: not run; acceptance in PLAN P16.
-Unexpected: none yet.
-Next: port controller expose-before-send/crash scenarios onto the common journal and actual custody interfaces.
-PR: none.
+Review follow-up (2026-10-01): #4148900279 is relevant and reproduced locally:
+incomplete native funding incorrectly blocked a qualified emergency liquidation.
+Narrowed the readiness fence to Order/Generic/Restoration, preserving all existing
+emergency authority, freeze, evidence and funded-close checks. Added regressions
+for both control orderings, restart, ordinary/generic/restoration refusal and
+freeze under an incomplete-credit cut. Engine 20 fences changed replay semantics
+and incorporates P13's engine-19 exact-input resolution after restacking. Full
+assembled-stack verification passed at `1c3bd09`: 275 Rust tests plus two
+compile-fail doctests per profile, 24 repository tests and all 30 client/SBF tests.
+No container, external RPC/venue call, wallet access, deployment or delegation
+was used. Fixes are published and both actionable inline threads resolved; P08/P13
+summary replies explain their fixes. Hosted checks are running. P15's latest review has
+no concrete defect; its signer/deployment trust qualifications remain documented.
+
+Work: implemented the three-location funding controller, native credit-readiness
+fence, immutable original plans/UUIDs, exact signed-wire persistence, separate
+broker-owner signer with shared Gateway credits, causal receipt qualification,
+house-owned actual fees, payout wallet/counter binding, marginal allocation and
+residual reporting. Added the bounded unsigned Anchor client contract, instruction
+builder and exact-wire signature verification; see ADR 0016. No second ledger,
+new dependency, native account topology or custody/recovery promise introduced.
+Verification: final staged-only export `/private/tmp/cinder-p16-export.Ft5cJS`
+passes 262 Rust tests plus two compile-fail doctests in each debug/release profile,
+both strict Clippy configurations, all-target build, formatting and 24 repository
+tests. All 30 client/offline SBF tests pass with Anchor 1.2.0, locked generated-IDL
+equality and pinned Node/SBF/Surfpool. This includes 17 new coordinator/risk/crash
+regression groups, four real-signature codec groups and actual custody rail
+execution. The ignored
+child entry is actually invoked/killed by the parent regression. All 30 client/
+offline SBF tests also passed in the working tree. The export excludes `work/`,
+`stays/` and Git metadata and reuses only build/package caches. Only documentation
+verification/publication notes follow that tested source. No Linux container, external
+RPC, live venue call, deployment, wallet/cloud access or delegated review used.
+Unexpected: the old two-location ledger could not represent intermediate broker
+tokens honestly. Added that location to the same kernel, risk liquidity and replay
+commitment (revision 18); old semantics fail closed. Forecast now includes prepared
+ingress before exposure to avoid a reservation/dispatch double-allocation gap.
+The old experiment's one-off deposit-first bootstrap permission is not promoted:
+missing/lending-active accounts fail closed without a new approved manifest.
+Source-qualified native completion and chain finality remain trusted observation
+ports; the synthetic tests are not evidence of deployed production recognizers.
+Focused self-review tightened one-use wire capability consumption and final
+financial/authority checks before delivery, rejected noncanonical signed bytes,
+and retained a regression for every older journal revision including 17. This is
+not an independent security audit. The first whole-workspace run failed only the
+old revision-17 golden assertion; it was updated and both final profiles pass.
+Implementation commit: `c10354c`; only verification/PR-link handoff follows the
+clean-export tested source. Native GitHub stack #28 contains the new P16 layer;
+older PRs were unchanged. No merge was performed.
+Next: review ready PR #40 above #39 and its hosted checks/review. P17 adds final
+recovery claims/activation with preserved paid counters; stop before it until
+requested and do not merge the stack automatically.
+PR: https://github.com/arnabnandikgp/cinder/pull/40.
 Merge: none.
 
 ## P17 — Recovery program

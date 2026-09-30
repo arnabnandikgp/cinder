@@ -19,3 +19,4 @@ coverage/
 *.sqlite-wal
 
 work/
+.surfpool/

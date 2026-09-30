@@ -1,0 +1,6 @@
+{
+  "lockfiles": {
+    "programs/Cargo.lock": "cdf0fb3e8840a4f0e0020383d385634c8406cc981c57b37200fc84ea742701e8",
+    "clients/vault/package-lock.json": "3ff68b1a9d5778b96d24e3c62819520d65c69665608a07054e6006d211dba1a5"
+  }
+}

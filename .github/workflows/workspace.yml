@@ -27,5 +27,7 @@ jobs:
           node-version-file: .node-version
       - name: Install pinned build tools
         run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+      - name: Fetch locked storage dependencies
+        run: cargo fetch --locked
       - name: Offline build, lint and tests
         run: node scripts/check.mjs

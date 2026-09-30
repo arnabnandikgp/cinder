@@ -64,6 +64,11 @@ and an explicit distinction between a tested example and a production assumption
 - Use a shallow native GitHub stack, normally at most 2–3 open layers. First base is
   `product/tee-v1`; a dependent PR bases on the prior layer's branch. Independent
   phases can have separate stacks after shared dependencies land.
+  Run-specific exception, 2026-09-30: user explicitly authorized successive stacked
+  P06–P14 PRs while away. Keep each phase independently reviewable and verified;
+  do not merge any layer or start P15. Stop for material new policy/security choices
+  or external permissions. This supersedes the normal shallow-depth preference,
+  not any acceptance criterion or production gate.
 - Initial local setup: `gh stack init --base product/tee-v1 <branch>`. Inspect
   `gh stack view` before `gh stack submit`; submission can push every stack branch.
   Review the current CLI help before publishing. Do not accidentally open against
@@ -163,9 +168,14 @@ source normalization ports, explicit mismatch aging and restricted modes. Ingest
 actual losses despite limit breaches. Evidence: W01, W03; V04, gross/net funding,
 entry-time/partial-close/rounding and REST/WS duplicate vectors.
 
-- [ ] Funding and fees post once with per-user attribution; inclusive native PnL cannot double-charge fees.
-- [ ] Missing/corrupt sources create a named unresolved condition, never fabricated zero or house profit.
-- [ ] Stale marks and unexplained precision differences block dependent admission, not raw evidence retention.
+- [x] Funding and fees post once with per-user attribution; inclusive native PnL cannot double-charge fees.
+- [x] Missing/corrupt sources create a named unresolved condition, never fabricated zero or house profit.
+- [x] Stale marks and unexplained precision differences block dependent admission, not raw evidence retention.
+
+Implemented in-memory evidence gate and retained normalized observations are
+specified in [ADR 0004](../architecture/0004-funding-reconciliation.md). P09 composes
+the gate into full admission; P05/P13 own durable/raw-wire retention and native
+qualification. These checked technical criteria are not PR review/merge closure.
 
 <a id="p05"></a>
 ## P05 — Durable atomic journal and replay
@@ -177,9 +187,16 @@ evidence and deterministic rebuild. Serialize economic state changes with bounde
 CAS/retry semantics. Persist exact attempted action before capability exposure.
 Evidence: W01, W04–W05; process-kill tests at each commit/exposure boundary.
 
-- [ ] Restart yields the same state and consumed IDs; torn commit cannot credit without deduplication or vice versa.
-- [ ] Concurrent requests cannot spend the same entitlement/reserve; duplicate/conflicting receipts stay distinct.
-- [ ] Schema migration, audit replay and secret-safe evidence retention are tested; disk/commit failure stops dispatch.
+- [x] Restart yields the same state and consumed IDs; torn commit cannot credit without deduplication or vice versa.
+- [x] Concurrent requests cannot spend the same entitlement/reserve; duplicate/conflicting receipts stay distinct.
+- [x] Schema migration, audit replay and secret-safe evidence retention are tested; disk/commit failure stops dispatch.
+
+Technical evidence: [ADR 0005](../architecture/0005-durable-journal.md) and the
+journal tests. Secret-safe retention means opaque storage and redacted diagnostics
+behind a mandatory protection interface; it does not claim production encryption
+or hostile-host freshness. Those remain P06. Flat-capacity/one-attempt holds are
+the bounded P05 infrastructure slice, not full P07/P09 authorization/risk policy.
+Review and merge remain open in TRACKER.
 
 <a id="p06"></a>
 ## P06 — Encrypted durability and writer epochs
@@ -191,9 +208,13 @@ freshness-witness interfaces, restore procedure and writer fencing. A local fake
 witness tests the contract, not independence; production witness choice is G03.
 Evidence: W05–W06; corruption, stale valid ciphertext and split-writer kill tests.
 
-- [ ] Acknowledgement waits for specified durable commit; one replica loss restores, insufficient valid evidence fails closed.
-- [ ] Restoring an old authentic snapshot cannot silently roll back claims/paid counters or revive an old writer.
-- [ ] Host-visible files/logs exclude private plaintext; witness/key/availability assumptions are documented and testable.
+- [x] Acknowledgement waits for specified durable commit; one replica loss restores, insufficient valid evidence fails closed.
+- [x] Restoring an old authentic snapshot cannot silently roll back claims/paid counters or revive an old writer.
+- [x] Host-visible files/logs exclude private plaintext; witness/key/availability assumptions are documented and testable.
+
+Implementation and trusted-port limits: [ADR 0006](../architecture/0006-encrypted-durability.md).
+Witness independence, actual Nitro key release and native credential fencing are
+not established by local files/process tests; G03/P20 remain explicit gates.
 
 <a id="p07"></a>
 ## P07 — Order intents and shared reservations
@@ -205,9 +226,9 @@ outcome/reconciliation state machine; exact partial/cancel/unknown accounting.
 Join order, transfer, payout and capital commitments in one reservation API.
 Evidence: W01, W03; partial/cancel races, independent pending buy/sell outcomes.
 
-- [ ] ACK is not fill; cancel ACK is not complete history; unknown outcomes retain holds.
-- [ ] No new signed capability escapes before durable reservation and attempt record.
-- [ ] Changed request under an existing operation ID rejects; a real out-of-policy fill is booked and contained.
+- [x] ACK is not fill; cancel ACK is not complete history; unknown outcomes retain holds.
+- [x] No new signed capability escapes before durable reservation and attempt record.
+- [x] Changed request under an existing operation ID rejects; a real out-of-policy fill is booked and contained.
 
 <a id="p08"></a>
 ## P08 — Funds and payout state joined to trading
@@ -219,9 +240,9 @@ exposure holds and normal payout queue in the same state as positions. This
 replaces the flat-only study limitation; actual on-chain/venue sends remain ports.
 Evidence: W01, W04–W05; V01/V05, all 24 receipt permutations, fills versus payouts.
 
-- [ ] Final payment discharges its owner's claim once; source debit/transfer arrival creates no second deposit credit.
-- [ ] Late or out-of-order receipts reconcile after freezes; overpayment is a house obligation, not another customer's loss.
-- [ ] Free-collateral withdrawal with open positions uses shared holds; FIFO/partial-consent rules and total debit fees are explicit.
+- [x] Final payment discharges its owner's claim once; source debit/transfer arrival creates no second deposit credit.
+- [x] Late or out-of-order receipts reconcile after freezes; overpayment is a house obligation, not another customer's loss.
+- [x] Free-collateral withdrawal with open positions uses shared holds; FIFO/partial-consent rules and total debit fees are explicit.
 
 <a id="p09"></a>
 ## P09 — Joined admission, margin and capital envelope
@@ -233,9 +254,9 @@ margin, pending-outcome evaluation, peak-path capital depletion, concentration a
 location/deadline liquidity. Synthetic profiles exercise gates; no live calibration.
 Evidence: W01, W09; every-prefix shocks/recoveries, cap-change and reduce-only cases.
 
-- [ ] One atomic version/cut accounts for all existing commitments and proposed reachable outcomes.
-- [ ] Insolvency, illiquidity, margin breach and capital-target breach remain distinguishable; external shocks still ingest.
-- [ ] Unbounded/missing data restricts new risk; resource-location reuse and imagined future revenues cannot pass admission.
+- [x] One atomic version/cut accounts for all existing commitments and proposed reachable outcomes.
+- [x] Insolvency, illiquidity, margin breach and capital-target breach remain distinguishable; external shocks still ingest.
+- [x] Unbounded/missing data restricts new risk; resource-location reuse and imagined future revenues cannot pass admission.
 
 <a id="p10"></a>
 ## P10 — Protection claims and repeated deficit episodes
@@ -248,9 +269,13 @@ Remove the study's single-episode limitation. Live coverage/priority remains G02
 unsupported shortfalls preserve claims and halt preferential payout.
 Evidence: W01, W09; V06, repeated/adaptive loss, overpayment and recovery vectors.
 
-- [ ] Recognition/absorption/payment cannot consume the same free capital twice or create phantom assets.
-- [ ] Multiple episodes and later recoveries replenish the correct resource once; excess returns to the customer.
-- [ ] Capital providers cannot withdraw ahead of incurred obligations; coordinated insurance extraction is stress-tested and bounded or disabled.
+- [x] Recognition/absorption/payment cannot consume the same free capital twice or create phantom assets.
+- [x] Multiple episodes and later recoveries replenish the correct resource once; excess returns to the customer.
+- [x] Capital providers cannot withdraw ahead of incurred obligations; coordinated insurance extraction is stress-tested and bounded or disabled.
+
+The bounded implementation contract is [ADR 0010](../architecture/0010-protection-claims.md).
+G02 production coverage/priority and live capital calibration remain open; native
+house capital cash withdrawals are disabled, not misrepresented as customer payouts.
 
 <a id="p11"></a>
 ## P11 — Customer liquidation and late-close exceptions
@@ -262,9 +287,12 @@ partial execution and exception-house ownership/unwind. Distinguish private clos
 from native pooled reduce-only. No real market calibration or speculative trades.
 Evidence: W01, W03, W09; gaps, reduced depth, late private close after forced reduction.
 
-- [ ] Underfilled liquidation retains residual risk and obligations; timeout never manufactures a flat account.
-- [ ] Excess late close goes only to approved funded exception accounting, never silently reverses the customer.
-- [ ] House unwind failures, fees and repeated losses feed admission/claims; exhausted budget does not erase actual fills.
+- [x] Underfilled liquidation retains residual risk and obligations; timeout never manufactures a flat account.
+- [x] Excess late close goes only to approved funded exception accounting, never silently reverses the customer.
+- [x] House unwind failures, fees and repeated losses feed admission/claims; exhausted budget does not erase actual fills.
+
+[ADR 0011](../architecture/0011-liquidation-exceptions.md) defines the funded
+exit envelope, split-fill residue, local abandonment and containment limits.
 
 <a id="p12"></a>
 ## P12 — Native ADL and bounded RF1/RF2 restoration
@@ -276,9 +304,9 @@ schedule, original-basis restoration and risk-unit policy. Preserve different ev
 families. Native account splitting is enabled only with G01 evidence; one tested
 risk unit is sufficient initially. Evidence: W01, W03, W09; V07 and allocation bounds.
 
-- [ ] Actual restoration, ADL fee refund and signed basis implement RF1; no gap funding or promised fill on an unexecuted quantity.
-- [ ] Each prefix respects RF2 quotas and composed bounds; no per-atomic-lot unbounded loop, operator reweighting or historical-manifest bypass.
-- [ ] Changed close intent, partial/late fill, prior capital reservation and post-submission shock preserve already owed economics.
+- [x] Actual restoration, ADL fee refund and signed basis implement RF1; no gap funding or promised fill on an unexecuted quantity.
+- [x] Each prefix respects RF2 quotas and composed bounds; no per-atomic-lot unbounded loop, operator reweighting or historical-manifest bypass.
+- [x] Changed close intent, partial/late fill, prior capital reservation and post-submission shock preserve already owed economics.
 
 <a id="p13"></a>
 ## P13 — Pacifica observations and capability profile
@@ -290,9 +318,10 @@ account/order/fill/funding normalization and explicit capability states. Recheck
 current primary docs; use fake transport first. Do not inherit BULK fields or assume
 Last ID is a global complete journal. Evidence: W03; VM-01–VM-09 qualification map.
 
-- [ ] REST/WS overlap posts one economic fill; reversal legs remain separate and empty position snapshots mean flat.
-- [ ] Precision/PnL/funding gaps remain named and disabled for dependent use; the observed fee discrepancy is not auto-written off.
-- [ ] Pagination, gaps, corrections, stale snapshots and replay cuts have tested containment; raw evidence retains provenance.
+- [x] REST/WS overlap posts one economic fill; reversal legs remain separate and empty position snapshots mean flat.
+- [x] Precision/PnL/funding gaps remain named and disabled for dependent use; the observed fee discrepancy is not auto-written off.
+- [x] Pagination, gaps, corrections, stale snapshots and replay cuts have tested containment; raw evidence retains provenance.
+- [x] Qualified raw-input resolution binds the original CommitId/input ordinal and exact evidence fingerprint; normalized effects or an authenticated no-effect finding commit with resolution once. Wrong scope, conflicting/repeated resolution, restart and unrelated unresolved inputs cannot clear the exposure gate. No generic administrative reset is available.
 
 <a id="p14"></a>
 ## P14 — Pacifica signed execution boundary
@@ -304,9 +333,9 @@ matching, auth capability checks, rolling API-credit limits and cleanup reserve.
 No blanket modify/DCA/conditional-order support or pooled cancel-all exposure.
 Evidence: W03–W04; captured sanitized signing vectors and fake-server failure tests.
 
-- [ ] Signed domain/expiry/account/attempt matches the admitted action; replay and key-epoch changes fail safely.
-- [ ] Hidden ACK, 429, delayed response and cancel race reconcile before retry; cleanup capacity cannot be spent on new orders.
-- [ ] Native fund-moving permissions are explicitly contained by the custody design; no false trading-only credential claim.
+- [x] Signed domain/expiry/account/attempt matches the admitted action; replay and key-epoch changes fail safely. Native signature omissions are explicit and covered by local envelope/key-scope requirements, not misrepresented as native enforcement.
+- [x] Hidden ACK, 429, delayed response and cancel race reconcile before retry; cleanup capacity cannot be spent on new orders.
+- [x] Native fund-moving permissions are explicitly contained by the custody design; no false trading-only credential claim. P14 implements the narrow signer allowlist; onward vault custody and attested key release remain P15/P16/P20 gates.
 
 <a id="p15"></a>
 ## P15 — Solana vault and normal-path authorization
@@ -319,9 +348,9 @@ cohesive program unless a separate trust/upgrade boundary justifies another; rec
 the decision. Port M1 invariants, not disposable deployment identities.
 Evidence: W04–W05; local SBF tests against actual program instruction boundaries.
 
-- [ ] Correct owner/mint/program/PDA/recipient/signer checks; wrong domain/account substitutions and duplicate receipts reject.
-- [ ] Funding release/payout bounds and epoch/counter changes are atomic even if downstream token transfer fails.
-- [ ] Upgrade/rotation and normal/recovery authority boundaries are specified; deployment stays disabled without G03/G05.
+- [x] Correct owner/mint/program/PDA/recipient/signer checks; wrong domain/account substitutions and duplicate receipts reject.
+- [x] Funding release/payout bounds and epoch/counter changes are atomic even if downstream token transfer fails.
+- [x] Upgrade/rotation and normal/recovery authority boundaries are specified; deployment stays disabled without G03/G05.
 
 <a id="p16"></a>
 ## P16 — Funding coordinator and native round trip
@@ -333,9 +362,14 @@ controller, with one common journal and bounded bootstrap/config transitions.
 No automatic exposure to lending or unresolved native agent rights. Offline first;
 live test requires a current approved manifest. Evidence: W04 and V01/V05.
 
-- [ ] Marginal working collateral is funded once; unconfirmed venue credit cannot admit a trade.
-- [ ] Kill/restart after withdrawal POST exposure reconciles the original attempt without double withdrawal or payout.
-- [ ] Fees, partial/failed returns, bootstrap exceptions and cleanup residuals are attributed and reported, not hidden by retries.
+- [x] Marginal working collateral is funded once; unconfirmed venue credit cannot admit a trade.
+- [x] Kill/restart after withdrawal POST exposure reconciles the original attempt without double withdrawal or payout.
+- [x] Fees, partial/failed returns, bootstrap exceptions and cleanup residuals are attributed and reported, not hidden by retries.
+
+Offline implementation evidence is in ADR 0016 and TRACKER. Historical bootstrap
+exception permission is deliberately not a default; missing/lending-active setup
+refuses admission. Native completeness/RPC authentication, production key custody
+and any live manifest remain separate G01/G03/G05 qualification gates.
 
 <a id="p17"></a>
 ## P17 — Recovery claims and Solana payout program

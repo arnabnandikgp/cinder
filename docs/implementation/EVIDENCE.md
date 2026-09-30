@@ -57,8 +57,99 @@ source hashes, attribution boundary and promoted implementation tests. V01/V03
 and the winner/loser/default cases run against the Rust ledger; V02 now invokes
 the production fill transition. The [system architecture](../architecture.md)
 maps approved W01–W09 requirements to their future components without treating
-prototypes as deployed services. P04 onward still owns funding/fees, durable
-consumption, admission, full transfer lifecycle and native qualification.
+prototypes as deployed services. Later phases own durable consumption, admission,
+full transfer lifecycle and native qualification.
+
+### P04: funding, costs and discrepancy containment
+
+[ADR 0004](../architecture/0004-funding-reconciliation.md) promotes W01/W03 and the
+relevant W02 reconciliation cases onto the same Rust ledger. V04 and delayed
+funding-cut, fee-inclusive PnL, source mismatch, aging, correction and replay tests
+run without local research or endpoints. A synthetic normalization-port fixture
+checks REST/WS semantic equality and lossless/unknown fields; it is not native
+qualification. Exact source hashes and the still-unexplained Pacifica precision
+gap are recorded in the ADR. Durable raw evidence remains P05/P13, not the
+in-memory retained normalized observations delivered here.
+
+### P05: durable atomic transition and exposure boundary
+
+[ADR 0005](../architecture/0005-durable-journal.md) promotes W01 atomicity,
+W04 immutable attempts/unknown outcomes and W05 crash/rollback lessons into the
+tracked journal and synthetic process tests. Ten actual child kills cover five
+commit points for joined credit/hold/consumption and prepared-action exposure.
+Replay, concurrent capacity, schema migration, real SQLite disk-full, source
+evidence retention and secret-safe diagnostics no longer depend on ignored files.
+The valid-history rollback counterexample is retained for P06: the fixture
+protector and public hash chain are not cryptographic or freshness evidence.
+No funding prototype, wallet, signed live payload or M1/M2 authority was promoted.
+
+### P06: encrypted accepted tail and writer epochs
+
+[ADR 0006](../architecture/0006-encrypted-durability.md) promotes W05/W06 corruption,
+rollback, two-copy acceptance, orphans and writer-fencing cases into the same Rust
+journal. Real AEAD and local ciphertext file/crash tests replace toy protection
+for this path. The witness remains a trusted synthetic port; no independent remote
+witness, hardware evidence, live signing authority or experimental keys are promoted.
+
+### P07: bound intents and qualified terminal history
+
+[ADR 0007](../architecture/0007-order-lifecycle.md) promotes W01/W03 order-identity,
+partial/terminal, duplicate, bound-violation and independent pending-direction cases
+into the same durable journal. Its source hashes and trusted authentication/causal
+qualification boundaries are explicit. No reference ledger is added to assets.
+
+### P08: partial movements and collateral-aware payouts
+
+[ADR 0008](../architecture/0008-funds-payouts.md) promotes W01/W04–W05 partial
+receipt, FIFO, paid-counter and payout-race cases into the existing Rust ledger
+and journal. All 24 four-receipt permutations preserve each prefix's bridge,
+including arrival-before-debit. Open-position tests use qualified synthetic marks
+and explicit initial margin; pending-order outcomes remain P09's prerequisite.
+No fixture wallet, live authority, native finality or funding sender is promoted.
+
+### P09: joined bounded admission
+
+[ADR 0009](../architecture/0009-joined-risk.md) promotes W01/W09 leverage, gross/net,
+pending-order, every-prefix capital and location-liquidity cases into one derived
+report over the production ledger and shared holds. The source hashes, conservative
+interval derivation and finite-path limitations are explicit. No experimental
+ledger contributes assets, historical ADL candidate becomes policy, or synthetic
+limit becomes live calibration. P10–P12 extend scenario transitions in their layers.
+
+### P10: repeated protection episodes
+
+[ADR 0010](../architecture/0010-protection-claims.md) promotes W01/W09 and V06 into
+the same financial ledger, durable policy/decision controller and joined capital
+gate. The source hashes and single-episode limitation removed from the study are
+recorded. A tracked opposing-account counterexample demonstrates why aggregate
+reconciliation is not extraction resistance; global lifetime caps remain consumed
+across recoveries, account changes and policy revisions. G02 allocation approval,
+actual authentication and live insurance calibration are not simulated into truth.
+
+### P11: bounded liquidation and close exceptions
+
+[ADR 0011](../architecture/0011-liquidation-exceptions.md) promotes W01/W03/W09
+close/unwind economics into the existing lifecycle and ledger. Its 432 bounded
+long/short allocation cases include exact whole-fill conservation; dedicated
+fractional conversion tests retain split-owner residue. Actual adverse execution
+is not capped at a prior reserve. Synthetic depth, prices and support budgets
+are qualification inputs, not live calibration or an execution guarantee.
+
+### P12: original-basis restoration and bounded quota compilation
+
+[ADR 0012](../architecture/0012-adl-restoration.md) promotes W01/W03/W09 RF1/RF2
+into the single ledger/journal. Source reference hashes:
+`proportional-allocation.cjs` SHA-256
+`6d79cbe82ce9190741a10ae4bb0ecf80e18fe5409dcd14720d82151828ad2c3b`;
+`proportional-allocation-checks.cjs`
+`69b7f19ba330e2f05cb8c8204ae529ecfb0095fbb6c9cfa433f926323b6b325f`.
+The production compiler uses certified repeated blocks and explicit resource
+limits instead of the research per-lot tape. Tracked differential tests preserve
+the 3,905 small, 250 seeded, 10,000-lot and account-splitting vectors; additional
+large profiles and bounded failure are tested. Joined ledger tests cover actual
+basis/refunds, 1,024 long/short fill chunkings, native conversion residues, no gap
+funding, changed intent, terminal-history release and post-submission shocks.
+Synthetic policies are not calibration, independent review or universal solvency.
 
 ### Financial studies: rerun at P00
 
@@ -143,6 +234,60 @@ Upstream starting points (not newly requalified in P00):
 [trade history](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-trade-history),
 [orders](https://docs.pacifica.fi/api-documentation/api/rest-api/orders/create-limit-order),
 [rate limits](https://docs.pacifica.fi/api-documentation/api/rate-limits).
+
+## P13 native observation promotion
+
+2026-09-30: promoted [VM-01–VM-09](../venues/pacifica.md), an immutable qualification
+profile and lossless native schemas into `cinder-pacifica`. Twelve joined tests
+include a sanitized six-row numeric transcription, REST/WS dedup, reversal legs,
+whole-snapshot replacement, exact large IDs, funding/forced-event containment,
+cursor gaps and an explicit two-atom cash discrepancy. Raw bodies/provenance share
+the protected journal transaction; independent diagnostic views replay that history.
+See [ADR 0013](../architecture/0013-pacifica-observations.md). Current primary docs
+were checked; historical observations were not rerun or upgraded into live evidence.
+
+2026-10-01 review correction: malformed multi-row/pagination pages were reproduced
+as partially mutating replayed diagnostics; transactional inspection now retains
+only prior accepted progress plus named gaps. The exact-input raw-resolution port
+is offline-tested with seven synthetic groups and immutable evidence bindings.
+It does not supply a live authenticated complete-history/no-effect provider;
+that capability remains disabled pending G01/P23 qualification. See ADR 0013.
+
+## P14 native execution promotion
+
+2026-09-30: [ADR 0014](../architecture/0014-pacifica-execution.md) promotes official
+canonical signing and scoped create/cancel fields, actual Ed25519/base58, durable
+preimage/key binding and conservative shared API-credit accounting. Public docs
+were rechecked; the historical RFC8032/golden request vector is tracked in unit
+tests and cross-checked against Node/OpenSSL. Fake transport covers lost ACK,
+429/delay, cancellation races and commit/fencing faults. No live test, key import
+from a wallet, deployment or production capability promotion occurred. P13's hosted
+checks and CodeRabbit were green with no inline findings at this phase boundary.
+
+## P15 custody instruction promotion
+
+[ADR 0015](../architecture/0015-solana-vault.md) promotes W04's actual-transfer,
+asset/recipient/authority and rollback requirements, and W05's normal/recovery
+fence and permanent paid-history requirements. The original source hashes are
+recorded there. Tracked tests execute the new Anchor 1.2 SBF in offline Surfpool,
+not a copied one-run vault or mock instruction validator. Public custody evidence
+is not another financial ledger. No experimental deployment account, live signed
+payload, RPC key or customer private state is promoted. The venue controller,
+recovery proof/activation and live governance remain P16/P17/G03/G05 boundaries.
+
+## P16 funding-controller promotion
+
+[ADR 0016](../architecture/0016-funding-coordinator.md) promotes W04's durable
+original-attempt controller, causal credit/withdrawal correlation, actual-fee
+accounting and crash/cleanup requirements into the existing P08 journal. It
+records the original controller/binding/public-IDL hashes and a sanitized minimal
+deposit ABI. Broker custody is a separate location in the same financial state.
+The tracked client verifies exact signed wires and executes custody rails in SBF;
+the coordinator's actual killed-child test exercises POST-before-reply restart.
+None of these checks uses ignored research, wallet material, external endpoints,
+research account defaults or historical bootstrap permissions. Source-complete
+native settlement and authenticated chain finality remain qualified ports; codec
+and fake-observation tests do not upgrade them into live G01/P23 evidence.
 
 ## Requirement-to-phase traceability
 

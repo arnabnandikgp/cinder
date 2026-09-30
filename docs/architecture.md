@@ -24,16 +24,25 @@ implementation is a separate workstream, not the template for this architecture.
 | Component | In this PR / implementation status | Owning phase |
 | --- | --- | --- |
 | Build, typed amounts, IDs, canonical primitive encoding | Implemented and previously merged | P01–P02 |
-| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Implemented in this PR; pure in-memory proposals | P03 |
-| Funding, fees, source discrepancies | Planned next | P04 |
-| Durable journal, encrypted replicas, current-head witness | Planned; no production store yet | P05–P06 |
-| Intent/funds controllers, joined risk, protection, liquidation, ADL | Planned; no execution service yet | P07–P12 |
-| Pacifica observation and signing adapters | Planned; research evidence is not an implemented adapter | P13–P14 |
-| Solana custody, funding round trip, recovery claims | Planned; bounded prototypes remain evidence only | P15–P17 |
+| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Implemented in base PR; pure in-memory proposals | P03 |
+| Funding, fees, source discrepancies | Implemented in base stack; qualified normalized inputs, no live adapter | P04 |
+| Local atomic journal and replay | Implemented in base stack; opaque storage and mandatory protection interface | P05 |
+| Encrypted replicas, current-head witness and writer fencing | Implemented against a trusted witness port; no independently deployed witness or Nitro qualification | P06 |
+| Bound order intents, partial/terminal lifecycle and shared holds | Implemented against trusted authentication/source ports; no live execution | P07 |
+| Partial funds and FIFO payouts | Implemented with marked collateral and qualified receipt ports; no native sends | P08 |
+| Joined margin, capital and liquidity admission | Implemented with conservative pending bounds and finite synthetic stress paths; not calibrated | P09 |
+| House protection and repeated claims | Implemented in the same ledger with explicit coverage/allocation ports, lifetime caps and actual recovery; live terms remain gated | P10 |
+| Liquidation and close exceptions | Funded bounded customer liquidation, private-close excess allocation and existing-house unwind; no calibrated depth or general crisis authority | P11 |
+| Native ADL and RF1/RF2 restoration | Qualified cuts, bounded exact-EDF schedule and original-basis postings implemented; no live ADL recognizer or execution service | P12 |
+| Pacifica observations | Lossless bounded codecs, durable provenance/replay and explicit capability gaps implemented; no live qualification | P13 |
+| Pacifica signing adapter | Durable native preimages, scoped Ed25519 signer, shared credit reservation and fake transport implemented; no live-qualified deployment | P14 |
+| Solana custody vault and normal authorization | Anchor 1.2 program, public receipts/shared paid counters and offline signed SBF tests implemented; deployment gated | P15 |
+| Funding round trip | Durable three-location coordinator, original-wire/attempt reconciliation and shared credit budget tested offline; source/live qualification gated | P16 |
+| Recovery claims | Planned; bounded prototypes remain evidence only | P17 |
 | Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
-The P03 implementation is deliberately a single configured quote pool with one
+The P03/P04 implementation is deliberately a single configured quote pool with one
 native account, multiple linear-perp markets, private customer books, house and
 suspense. It is not a multi-venue clearing engine. It introduces no new native
 account topology or fee/insurance promise.
@@ -83,7 +92,7 @@ state. Reconciliation connects these domains; none substitutes for the others.
 
 ### Code ownership
 
-The current workspace has three Rust crates:
+The off-chain workspace has five Rust crates:
 
 - `cinder-kernel`: dependency-free, `no_std`, checked integer types and pure state
   transitions. No clock, database, signer, network or venue SDK imports.
@@ -91,12 +100,21 @@ The current workspace has three Rust crates:
   implementations or evidence that a venue supports an action.
 - `cinder-test-support`: deterministic clocks, stores and venue doubles for fault
   tests. It must not become a production store or enter the kernel dependency graph.
+- `cinder-journal`: versioned transactions, joined holds/attempts, exact replay and
+  opaque SQLite storage. Its pinned storage/hash dependencies stay outside the
+  kernel; [ADR 0005](architecture/0005-durable-journal.md) specifies the contract.
+- `cinder-pacifica`: native observation/signing codecs and durable adapter authority;
+  native execution remains separately qualified.
+
+The isolated `programs/` Anchor workspace owns public Solana custody, not private
+financial accounting. Its generated typed client is `clients/vault/`; neither
+adds Anchor dependencies to the kernel or the off-chain workspace.
 
 New packages are introduced when an owning phase implements a real boundary,
 with an architecture decision. Language/runtime pins are in
-[ADR 0001](architecture/0001-workspace.md). Databases, transport cryptography,
-program topology and production witness providers are not selected implicitly by
-this diagram. A controller may request a transition; it cannot maintain an
+[ADR 0001](architecture/0001-workspace.md). P05 selects local SQLite explicitly;
+transport cryptography and production witness providers are
+not selected implicitly by this diagram. A controller may request a transition; it cannot maintain an
 independently authoritative balance table.
 
 ## 3. Accounts, assets and authority
@@ -108,6 +126,7 @@ independently authoritative balance table.
 | House book | Protocol capital, explicit house exposures, income and obligations | A residual bucket for unexplained differences or customer assets |
 | Suspense | Named observations awaiting attribution/resolution | Spendable profit or permission to erase a missing customer's claim |
 | Solana vault | Program-enforced custody of tokens currently on Solana | PDA authority over an ordinary signed HTTP venue account |
+| Broker wallet tokens | Separate intermediate custody on the allowlisted route | Vault payout liquidity, venue margin, a second customer deposit, or automatic recovery access |
 | Transit receivable | One evidenced transfer leg between locations | Another deposit, immediately spendable tokens, or guaranteed recovery |
 
 Keep customer wallet/agent authorization, native trading authority, fund/recovery
@@ -123,17 +142,26 @@ it trading-only. The supported intermediate key-controlled funding account remai
 an explicit custody boundary. No Solana program, encrypted snapshot, or threshold
 signature is claimed to manufacture an unsupported native authorization interface.
 
-Prefer one cohesive Solana custody/recovery program unless an actual trust or
-upgrade boundary justifies several. P15/P17 own that decision and account schema;
-HyperLink's contract count is not a requirement for Cinder.
+P15 selects one cohesive Solana custody program; P17 will add recovery using its
+same token authority and preserved paid counters. [ADR 0015](architecture/0015-solana-vault.md)
+records the role/epoch fence, immutable receipts and bootstrap upgrade-authority
+check. Its public counters are not current private entitlements. HyperLink's
+contract count is not a requirement for Cinder.
+
+[ADR 0016](architecture/0016-funding-coordinator.md) joins this vault to native
+funding through the existing journal. Prepared physical allocations inform a
+forecast, not trading credit. Exact original wire/attempt identity persists before
+egress; HTTP acknowledgements cannot become settlement. Live source completeness,
+RPC trust and production key governance remain explicit qualification gates.
 
 ## 4. The financial state and its reconciliation
 
 The complete target state includes private and native books, physical locations,
 transfers, unsettled funding, reservations, claims/protection, operation/attempt
 identities, source cutoffs, policy revisions, writer epochs and recovery counters.
-They form one event-driven financial state. P03 implements only its position,
-cash/location, attribution and in-memory provenance foundation.
+They form one event-driven financial state. P03 implements its position,
+cash/location, attribution and in-memory provenance foundation. P04 adds unsettled
+funding, native/broker costs, frozen funding inventory and evidence containment.
 
 Customer and house cash can be negative: they are signed ledger quantities, not
 token-account balances. A native signed cash balance also excludes its unrealized
@@ -149,18 +177,22 @@ configured conversion to quote atoms per lot:
 e_i = c_i + Σ_m(q_im p_m - b_im) + a_i
 h   = c_H + Σ_m(q_Hm p_m - b_Hm) + a_H
 s   = c_S + Σ_m(q_Sm p_m - b_Sm) + a_S
-N   = vault + transit + native_cash + Σ_m(q_Vm p_m - b_Vm) + a_V
+N   = vault + broker + transit - unpaired_settlement
+    + native_cash + Σ_m(q_Vm p_m - b_Vm) + a_V
 q_Vm = Σ_i q_im + q_Hm + q_Sm
 N = Σ_i e_i + h + s
 ```
 
-This P03 form represents unattributed obligations in suspense, not also as a
+This implemented form represents unattributed obligations in suspense, not also as a
 second subtraction from assets. Later third-party liabilities must have a named
 representation and be subtracted exactly once. No generic balancing adjustment
 is allowed to hide a broken bridge.
+`unpaired_settlement` offsets an independently observed arrival whose matching
+debit has not yet arrived; it is not a second customer claim or spendable capital.
 
-P03 checks exposure and a price-independent cash-minus-basis identity after every
-distinct accepted event. Consequently the equity bridge holds at any common
+P03 checks exposure and a price-independent cash-minus-basis identity; P04 extends
+the intercept to include recognized funding after every distinct accepted event.
+Consequently the equity bridge holds at any common
 exactly representable mark. This is a hand-derived identity with implementation
 tests, not proof of authentic venue evidence or correctly supplied ownership.
 
@@ -211,6 +243,26 @@ conversion rather than guessing a venue rounding rule. See
 [ADR 0003](architecture/0003-unified-ledger.md) for implemented boundaries,
 transition algebra, test coverage and limitations.
 
+### Funding, costs and source evidence
+
+[ADR 0004](architecture/0004-funding-reconciliation.md) details the implemented
+P04 transitions. Funding uses positions frozen at a qualified boundary, not their
+values when a delayed message arrives. Known native funding waits in suspense
+until private allocation inputs qualify. Recognition adds unsettled funding;
+settlement moves that boundary's accrual to cash once. Derived rounding and
+unexplained native differences are separate; only the former may go to house.
+
+Actual signed fees/rebates follow the stored execution owner. Fee-inclusive native
+PnL normalizes once and is compared with native, not private, basis. Separate
+authorized broker fees move customer cash to house without a second venue debit.
+Named source corrections preserve history; they do not repeat fills or funding.
+
+Matching native snapshots compare components and cannot set balances. Resolving
+an old discrepancy requires named effects explaining all its known components,
+not just a later matching total. Missing/stale evidence restricts dependent views;
+aged issues and conflicts freeze that evidence gate. Qualified diagnostics still
+need current marks and do not replace P09 risk, capital or liquidity admission.
+
 ## 5. Events, persistence and execution ordering
 
 There are three different identities: customer request, exposed signed attempt,
@@ -221,8 +273,10 @@ can contain distinct native execution legs.
 The target normalized envelope binds network/deployment, native source account,
 semantic namespace, economic event/leg, operation/attempt, units/precision, source
 cut/observation time, authority, payload and policy versions. P02 defines the
-primitive keys; P03 compares exact normalized events in memory; P05/P13 complete
-the durable/source-qualified envelope. A matching identifier with changed payload
+primitive keys; P03 compares exact normalized events in memory; P04 ingestion also
+retains rejected/duplicate observations and injected arrival times. P05 persists
+the full envelope and raw evidence; P13 must still qualify its native source and
+causal meaning. A matching identifier with changed payload
 is a conflict, not an update to silently overwrite.
 
 Processing order is:
@@ -244,9 +298,19 @@ contain it until normalization is possible. Real adverse fills remain recordable
 when new orders would fail risk admission. A correction is an explicit auditable
 event, not mutation of history or a general-purpose admin balance setter.
 
-P03 clones state to propose a transition and exposes read-only projections. That
-is failure atomicity inside a pure function, not process-crash durability, a
-concurrent compare-and-swap, authentication, or a permission to send money.
+P03/P04 clone state to propose transitions and expose read-only projections. P04's
+ingestion path preserves named evidence even when an economic transition rejects;
+complete replay uses observation history, not only accepted financial events. This
+is failure atomicity inside a pure function. P05 wraps that function in a durable
+SQLite CAS transaction and replays complete observations, receipts, holds and
+attempts. Facts remain recordable when the accompanying all-or-none control
+proposal refuses. Bounded flat-cash reservations are not P09 margin approval;
+exactly one prepared attempt per hold can become possibly exposed, and a lost
+reply never regenerates its local delivery. Disk/uncertain commit errors poison
+the coordinator until explicit replay. This is not authentication or permission
+to send money. P06 adds [AEAD, replication and witnessed acceptance](architecture/0006-encrypted-durability.md).
+Its restore safety is conditional on the independently authenticated witness port;
+the P05-only protector/public chain still cannot detect complete valid rollback.
 
 ## 6. Normal operating flows
 
@@ -371,8 +435,9 @@ removed lots proportionally, and schedules restoration with monotone prefix quot
 Largest remainders and canonical identity break finite-lot ties. Composed residual
 allocation has a less-than-two-lot bound, not account-splitting immunity. Changed
 close intent voids remaining restoration for that customer, not an opportunity to
-reweight allocations opportunistically. P12 must implement a scalable schedule,
-not a loop per arbitrarily tiny atomic lot. House exception exposure is funded,
+reweight allocations opportunistically. [P12](architecture/0012-adl-restoration.md)
+uses a certified repeated-block schedule with explicit work/space limits; unsupported
+profiles are contained, not assigned an alternative allocation. House exception exposure is funded,
 hard-limited and explicitly unwound, never an unrestricted speculative strategy.
 
 ## 8. Confidential runtime, persistence and client verification

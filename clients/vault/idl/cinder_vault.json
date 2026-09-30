@@ -1,0 +1,1443 @@
+{
+  "address": "FMu4FVg4kWABgsPg8Q5Q8Z3wieTtVgtG2gapCSdGT7RX",
+  "metadata": {
+    "name": "cinder_vault",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "deposit",
+      "docs": [
+        "An immutable receipt is created only in the same transaction as actual token arrival."
+      ],
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "VaultConfig"
+              }
+            ]
+          },
+          "relations": [
+            "customer"
+          ]
+        },
+        {
+          "name": "customer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  109,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "customer"
+          ]
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "receipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "auth.operation"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "auth",
+          "type": {
+            "defined": {
+              "name": "Movement"
+            }
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "freeze",
+      "docs": [
+        "Emergency fence only. No heartbeat, root publication, recovery payout or resume path."
+      ],
+      "discriminator": [
+        255,
+        91,
+        207,
+        84,
+        251,
+        194,
+        254,
+        63
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "VaultConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "recovery",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "domain",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "expected_epoch",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Only this executable's actual loader upgrade authority can bootstrap custody."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "governance",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "funds",
+          "signer": true
+        },
+        {
+          "name": "recovery",
+          "signer": true
+        },
+        {
+          "name": "program",
+          "address": "FMu4FVg4kWABgsPg8Q5Q8Z3wieTtVgtG2gapCSdGT7RX"
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "broker_tokens"
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "domain"
+              },
+              {
+                "kind": "arg",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "domain",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "funding_cap",
+          "type": "u64"
+        },
+        {
+          "name": "payout_cap",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "normal_payout",
+      "docs": [
+        "Funds authority approves a ledger-qualified payout; deposits are NOT its entitlement cap.",
+        "Customer/asset paid totals and sequence survive authority rotation and later recovery."
+      ],
+      "discriminator": [
+        250,
+        168,
+        237,
+        93,
+        116,
+        74,
+        152,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "VaultConfig"
+              }
+            ]
+          },
+          "relations": [
+            "customer"
+          ]
+        },
+        {
+          "name": "funds",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "owner",
+          "relations": [
+            "customer"
+          ]
+        },
+        {
+          "name": "customer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  109,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "receipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  101,
+                  105,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "arg",
+                "path": "auth.operation"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "auth",
+          "type": {
+            "defined": {
+              "name": "Movement"
+            }
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "expected_paid",
+          "type": "u64"
+        },
+        {
+          "name": "expected_sequence",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "register_customer",
+      "docs": [
+        "Public wallet attribution only; never stores current trading equity or positions."
+      ],
+      "discriminator": [
+        211,
+        203,
+        193,
+        164,
+        198,
+        246,
+        27,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "VaultConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "customer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  109,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "domain",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "release_funding",
+      "docs": [
+        "Releases working collateral to one immutable, explicitly allowlisted broker route.",
+        "Epoch budget is gross cumulative release; returns do not silently replenish it."
+      ],
+      "discriminator": [
+        213,
+        91,
+        216,
+        103,
+        251,
+        46,
+        51,
+        145
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "VaultConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "funds",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "broker_tokens",
+          "writable": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "receipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  101,
+                  105,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "arg",
+                "path": "auth.operation"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "auth",
+          "type": {
+            "defined": {
+              "name": "Movement"
+            }
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "expected_sequence",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "return_funding",
+      "docs": [
+        "Returning custody does not credit a customer again. Permitted while frozen too."
+      ],
+      "discriminator": [
+        160,
+        22,
+        207,
+        81,
+        205,
+        5,
+        193,
+        157
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "VaultConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "broker",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "receipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  101,
+                  105,
+                  112,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "arg",
+                "path": "auth.operation"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "auth",
+          "type": {
+            "defined": {
+              "name": "Movement"
+            }
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "rotate",
+      "docs": [
+        "Atomic role handoff, signed by the old and new governance. Epoch invalidates old wires.",
+        "This changes no historical receipt or paid counter; it cannot revive a frozen pool."
+      ],
+      "discriminator": [
+        217,
+        166,
+        249,
+        176,
+        3,
+        217,
+        200,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "VaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "VaultConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "new_governance",
+          "signer": true
+        },
+        {
+          "name": "new_funds",
+          "signer": true
+        },
+        {
+          "name": "new_recovery",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "domain",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "expected_epoch",
+          "type": "u64"
+        },
+        {
+          "name": "funding_cap",
+          "type": "u64"
+        },
+        {
+          "name": "payout_cap",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CustomerCounter",
+      "discriminator": [
+        210,
+        46,
+        219,
+        50,
+        118,
+        203,
+        216,
+        24
+      ]
+    },
+    {
+      "name": "MovementReceipt",
+      "discriminator": [
+        55,
+        129,
+        93,
+        192,
+        203,
+        162,
+        232,
+        52
+      ]
+    },
+    {
+      "name": "VaultConfig",
+      "discriminator": [
+        99,
+        86,
+        43,
+        216,
+        184,
+        102,
+        119,
+        77
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Domain",
+      "msg": "Wrong deployment domain, authority epoch or empty identity"
+    },
+    {
+      "code": 6001,
+      "name": "Authority",
+      "msg": "Unauthorized account or non-signing role"
+    },
+    {
+      "code": 6002,
+      "name": "RoleAlias",
+      "msg": "Custody roles must be distinct"
+    },
+    {
+      "code": 6003,
+      "name": "Mint",
+      "msg": "Unsupported mint precision"
+    },
+    {
+      "code": 6004,
+      "name": "TokenAuthority",
+      "msg": "Delegated or externally closeable token account"
+    },
+    {
+      "code": 6005,
+      "name": "Mode",
+      "msg": "Invalid custody mode"
+    },
+    {
+      "code": 6006,
+      "name": "Bound",
+      "msg": "Custody amount exceeds its bound"
+    },
+    {
+      "code": 6007,
+      "name": "Counter",
+      "msg": "Stale funding or payout counter"
+    },
+    {
+      "code": 6008,
+      "name": "Expired",
+      "msg": "Movement authorization expired"
+    },
+    {
+      "code": 6009,
+      "name": "Recipient",
+      "msg": "Invalid recipient"
+    },
+    {
+      "code": 6010,
+      "name": "Arithmetic",
+      "msg": "Integer overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "CustomerCounter",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "deposited",
+            "type": "u64"
+          },
+          {
+            "name": "paid",
+            "docs": [
+              "Shared normal/recovery total, never reset on authority or recovery-root changes."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "payout_sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Movement",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "domain",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "operation",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "expires_at_slot",
+            "docs": [
+              "Latest acceptable execution slot, not evidence of external finality."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MovementReceipt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "operation",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "sequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schema",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "decimals",
+            "type": "u8"
+          },
+          {
+            "name": "domain",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "pool",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "governance",
+            "type": "pubkey"
+          },
+          {
+            "name": "funds",
+            "type": "pubkey"
+          },
+          {
+            "name": "recovery",
+            "type": "pubkey"
+          },
+          {
+            "name": "broker",
+            "type": "pubkey"
+          },
+          {
+            "name": "broker_tokens",
+            "type": "pubkey"
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "mode",
+            "type": "u8"
+          },
+          {
+            "name": "funding_cap",
+            "type": "u64"
+          },
+          {
+            "name": "payout_cap",
+            "type": "u64"
+          },
+          {
+            "name": "epoch_released",
+            "type": "u64"
+          },
+          {
+            "name": "funding_sequence",
+            "type": "u64"
+          },
+          {
+            "name": "deposited",
+            "type": "u64"
+          },
+          {
+            "name": "returned",
+            "type": "u64"
+          },
+          {
+            "name": "paid",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

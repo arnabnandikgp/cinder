@@ -72,12 +72,16 @@ toolchains implicitly or inherit the legacy Phoenix versions.
 ```sh
 node scripts/check.mjs
 node scripts/check.mjs --properties
+node scripts/check-vault.mjs # P15+: isolated Anchor/SBF + offline Surfpool check
 git diff --check
 ```
 
 The full runner already includes the property tests; the focused command is for
-iteration, not an additional proof. Cargo commands are locked/offline after
-toolchain installation. Financial conformance remains P02/P03 onward.
+iteration, not an additional proof. After toolchain installation and explicit
+`cargo fetch --locked`, Cargo checks are locked/offline. P05 introduces pinned
+storage/hash dependencies outside the kernel; update the dependency policy only
+with a reviewed architecture/dependency change. Never deploy with `test-hooks` or
+the journal tests' insecure fixture protection.
 
 Routine PRs use pinned local macOS checks and hosted Linux CI; a local Linux
 container run is not a pre-PR requirement. If CI fails, inspect its logs, test
@@ -89,6 +93,10 @@ qualification required by an owning phase remains a separate acceptance gate.
 Keep the kernel dependency-free and `no_std`; no I/O, clocks, venue SDKs or test
 doubles may leak into it. Extend the dependency guard only with an explicit
 architecture decision. Test-support is not a production service or durable store.
+The separate `programs/` workspace pins Anchor language/SPL/CLI 1.2.0, with
+`@anchor-lang/core` 1.2.0 in `clients/vault/`. Its setup and isolated SBF/toolchain
+pins are in [vault setup](programs/README.md). Use `NO_DNA=1` for Anchor/Surfpool
+commands; never inherit a configured wallet or deploy the fixed test identity.
 For Linux checks, export only intended tracked/staged source, mount it read-only
 with networking disabled, and write build outputs to container-local temporary
 storage. Never mount ignored research or wallet/cloud directories. Use Apple

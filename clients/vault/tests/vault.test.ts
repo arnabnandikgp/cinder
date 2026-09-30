@@ -1,0 +1,390 @@
+import assert from 'node:assert/strict';
+import { before, test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { AnchorProvider, BN, type Idl, type Wallet } from '@anchor-lang/core';
+import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SystemProgram, Transaction, type TransactionInstruction } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createMint, createAccount, mintTo, getAccount,
+  freezeAccount, thawAccount, approve, transfer } from '@solana/spl-token';
+import { customerAddress, depositReceiptAddress, identity, movement, receiptAddress, u64, vaultAddresses, vaultProgram } from '../src/index.ts';
+import { fundingInstruction, verifyFundingWire } from '../src/funding.ts';
+
+// In-memory disposable identities only; no wallet file, network URL or deployed key is inherited.
+const RPC_URL = 'http://127.0.0.1:18899';
+const connection = new Connection(RPC_URL, 'confirmed');
+const keys = () => Keypair.generate();
+const governance = keys();
+const id = (s: string) => createHash('sha256').update(`CINDER_VAULT_TEST:${s}`).digest();
+const idl: Idl = JSON.parse(readFileSync(new URL('../idl/cinder_vault.json', import.meta.url), 'utf8'));
+const programId = new PublicKey(idl.address);
+const loader = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
+const programData = PublicKey.findProgramAddressSync([programId.toBuffer()], loader)[0];
+// No Program.rpc()/ambient signing in the client under test: transaction signing stays in this fixture.
+const wallet = { publicKey: governance.publicKey,
+  signTransaction: async () => { throw new Error('No implicit signing'); },
+  signAllTransactions: async () => { throw new Error('No implicit signing'); },
+} as unknown as Wallet;
+const program = vaultProgram(new AnchorProvider(connection, wallet, { commitment: 'confirmed' }), idl);
+let number = 0;
+let transactionNumber = 0;
+
+async function rpc(method: string, params: unknown[]) {
+  const response = await fetch(RPC_URL, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+  const result = await response.json() as { error?: unknown; result: unknown };
+  if (result.error) throw new Error(JSON.stringify(result.error));
+  return result.result;
+}
+async function fund(k: Keypair) {
+  await rpc('surfnet_setAccount', [k.publicKey.toBase58(), { lamports: 5_000_000_000, owner: SystemProgram.programId.toBase58() }]);
+}
+async function send(ix: TransactionInstruction, signers: Keypair[]) {
+  const unique = [...new Map(signers.map(k => [k.publicKey.toBase58(), k])).values()];
+  const block = await connection.getLatestBlockhash();
+  // Distinct test wires make replay tests reach the program, not RPC signature deduplication.
+  const tx = new Transaction({ feePayer: unique[0].publicKey, ...block }).add(
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 + ++transactionNumber }), ix);
+  tx.sign(...unique);
+  // Preflight is deliberately off: failed instructions must actually execute in SBF,
+  // not only fail in simulation. Fees are excluded from token/state rollback comparisons.
+  const signature = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+  const status = await connection.confirmTransaction({ signature, ...block }, 'confirmed');
+  if (status.value.err) {
+    const detail = await connection.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 });
+    throw new Error(JSON.stringify({ error: status.value.err, logs: detail?.meta?.logMessages }));
+  }
+  return signature;
+}
+before(async () => {
+  await fund(governance);
+  // Loading and genesis setup are test cheatcodes. All vault mutations below use signed transactions.
+  await rpc('surfnet_writeProgram', [programId.toBase58(),
+    readFileSync(new URL('../../../programs/target/deploy/cinder_vault.so', import.meta.url)).toString('hex'),
+    0, governance.publicKey.toBase58()]);
+});
+
+async function fixture() {
+  const funds = keys(), recovery = keys(), broker = keys(), owner = keys(), outsider = keys();
+  await Promise.all([funds, recovery, broker, owner, outsider].map(fund));
+  const mint = await createMint(connection, governance, governance.publicKey, governance.publicKey, 6);
+  const brokerTokens = await createAccount(connection, governance, mint, broker.publicKey);
+  const source = await createAccount(connection, governance, mint, owner.publicKey);
+  const foreignTokens = await createAccount(connection, governance, mint, outsider.publicKey);
+  await mintTo(connection, governance, mint, source, governance, 1_000_000n);
+  const domain = id('deployment'), pool = id(`pool-${++number}`);
+  const { config, vault } = vaultAddresses(programId, domain, pool, mint);
+  const customer = customerAddress(programId, config, owner.publicKey);
+  const initAccounts = { governance: governance.publicKey, funds: funds.publicKey, recovery: recovery.publicKey,
+    program: programId, programData, mint, brokerTokens, config, vault,
+    tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId };
+  const initialize = (overrides = {}) => program.methods.initialize(identity(domain), identity(pool), u64(500_000n), u64(200_000n))
+    .accountsStrict({ ...initAccounts, ...overrides }).instruction();
+  await send(await initialize(), [governance, funds, recovery]);
+  await send(await program.methods.registerCustomer(identity(domain)).accountsStrict({
+    config, owner: owner.publicKey, customer, systemProgram: SystemProgram.programId,
+  }).instruction(), [owner]);
+  const auth = (tag: string, epoch = 1n) => movement(domain, epoch, id(`${number}-${tag}`), (1n << 64n) - 1n);
+  const receipt = (a: ReturnType<typeof movement>) => receiptAddress(programId, config, Uint8Array.from(a.operation));
+  const depositReceipt = (a: ReturnType<typeof movement>) => depositReceiptAddress(programId, config, owner.publicKey, Uint8Array.from(a.operation));
+  const common = { config, vault, mint, tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId };
+  const deposit = (a = auth('deposit'), amount = 400_000n, overrides = {}) => program.methods.deposit(a, u64(amount)).accountsStrict({
+    ...common, customer, owner: owner.publicKey, source, receipt: depositReceipt(a), ...overrides,
+  }).instruction();
+  const release = (a = auth('release'), amount = 100_000n, sequence = 0n, overrides = {}) => program.methods.releaseFunding(a, u64(amount), u64(sequence)).accountsStrict({
+    ...common, funds: funds.publicKey, brokerTokens, receipt: receipt(a), ...overrides,
+  }).instruction();
+  const payout = (a = auth('payout'), amount = 50_000n, paid = 0n, sequence = 0n, overrides = {}) => program.methods.normalPayout(a, u64(amount), u64(paid), u64(sequence)).accountsStrict({
+    ...common, funds: funds.publicKey, owner: owner.publicKey, customer, destination: source, receipt: receipt(a), ...overrides,
+  }).instruction();
+  const returned = (a = auth('return'), amount = 50_000n, overrides = {}) => program.methods.returnFunding(a, u64(amount)).accountsStrict({
+    ...common, broker: broker.publicKey, source: brokerTokens, receipt: receipt(a), ...overrides,
+  }).instruction();
+  const freeze = (epoch = 1n, overrides = {}) => program.methods.freeze(identity(domain), u64(epoch)).accountsStrict({
+    config, recovery: recovery.publicKey, ...overrides,
+  }).instruction();
+  const state = async () => ({ config: await program.account.vaultConfig.fetch(config),
+    customer: await program.account.customerCounter.fetch(customer),
+    vault: (await getAccount(connection, vault)).amount, source: (await getAccount(connection, source)).amount,
+    broker: (await getAccount(connection, brokerTokens)).amount });
+  return { funds, recovery, broker, owner, outsider, mint, source, brokerTokens, foreignTokens, domain, pool, config, vault,
+    customer, auth, receipt, depositReceipt, initialize, deposit, release, payout, returned, freeze, state };
+}
+type Fixture = Awaited<ReturnType<typeof fixture>>;
+test('funding codec executes the selected release, return and payout rails in SBF', async () => {
+  const f=await fixture(); await send(await f.deposit(),[f.owner]);
+  for (const rail of ['Release','Return','Payout']) {
+    const auth=f.auth(`codec-${rail}`), amount=rail==='Payout'?50_000n:100_000n;
+    const bytes=(p:PublicKey|Uint8Array)=>Array.from(p instanceof PublicKey?p.toBytes():p);
+    const c:Record<string,unknown>={schema:'cinder-vault-funding-v1',rail,network:bytes(id('offline-sandbox')),
+      program:bytes(programId),domain:bytes(f.domain),pool:bytes(f.pool),config:bytes(f.config),vault:bytes(f.vault),
+      mint:bytes(f.mint),funds:bytes(f.funds.publicKey),broker:bytes(f.broker.publicKey),broker_tokens:bytes(f.brokerTokens),
+      decimals:6,venue_program:bytes(f.outsider.publicKey),venue_vault:bytes(f.foreignTokens),epoch:'1',
+      operation:auth.operation,customer:bytes(f.owner.publicKey),amount:amount.toString(),sequence:'0',paid:'0',
+      recipient_tokens:rail==='Payout'?bytes(f.source):bytes(Buffer.alloc(32)),expires_at_slot:auth.expiresAtSlot.toString()};
+    const contract=Buffer.from(JSON.stringify(Object.fromEntries(Object.keys(c).sort().map(k=>[k,c[k]]))));
+    const built=await fundingInstruction(program,contract), signer=rail==='Return'?f.broker:f.funds;
+    const block=await connection.getLatestBlockhash();
+    const tx=new Transaction({feePayer:signer.publicKey,...block}).add(built.instruction);tx.sign(signer);
+    const verified=await verifyFundingWire(program,contract,tx.serialize());
+    const signature=await connection.sendRawTransaction(verified.wire,{skipPreflight:true});
+    assert.equal((await connection.confirmTransaction({signature,...block},'confirmed')).value.err,null);
+    const receipt=await program.account.movementReceipt.fetch(f.receipt(auth));
+    assert.equal(receipt.amount.toString(),amount.toString());
+    assert.equal(receipt.kind,rail==='Release'?1:rail==='Return'?2:3);
+  }
+  const state=await f.state();assert.equal(state.broker,0n);assert.equal(state.vault,350_000n);
+  assert.equal(state.customer.paid.toString(),'50000');
+});
+async function rejectsAtomic(f: Fixture, ix: TransactionInstruction, signers: Keypair[], receipt?: PublicKey, error?: RegExp) {
+  const before = await f.state();
+  if (error) await assert.rejects(send(ix, signers), error);
+  else await assert.rejects(send(ix, signers));
+  assert.deepEqual(await f.state(), before);
+  if (receipt) assert.equal(await connection.getAccountInfo(receipt), null);
+}
+
+test('SDK rejects inexact/out-of-domain integers and identities without network or signing', () => {
+  assert.equal(u64((1n << 64n) - 1n).toString(), '18446744073709551615');
+  for (const bad of [-1n, 1n << 64n, 1.2, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => u64(bad as bigint));
+  assert.throws(() => identity(Buffer.alloc(32)));
+  assert.throws(() => identity(Buffer.alloc(31, 1)));
+  assert.throws(() => movement(id('d'), 0n, id('o'), 10n));
+  const copied = identity(id('copy')); assert.equal(copied.length, 32);
+  const mint = keys().publicKey, pool = id('p');
+  assert.notDeepEqual(vaultAddresses(programId, id('d1'), pool, mint), vaultAddresses(programId, id('d2'), pool, mint));
+});
+
+test('deposit → pooled funding → return → partial payouts preserve public attribution', async () => {
+  const f = await fixture();
+  await send(await f.deposit(), [f.owner]);
+  await send(await f.release(), [f.funds]);
+  await send(await f.returned(), [f.broker]);
+  await send(await f.payout(), [f.funds]);
+  await send(await f.payout(f.auth('payout2'), 20_000n, 50_000n, 1n), [f.funds]);
+  const s = await f.state();
+  assert.equal(s.vault, 280_000n); assert.equal(s.broker, 50_000n);
+  assert.equal(s.config.deposited.toString(), '400000'); assert.equal(s.config.returned.toString(), '50000');
+  assert.equal(s.config.paid.toString(), '70000'); assert.equal(s.customer.paid.toString(), '70000');
+  assert.equal(s.customer.payoutSequence.toString(), '2');
+  const r = await program.account.movementReceipt.fetch(f.receipt(f.auth('payout2')));
+  assert.equal(r.amount.toString(), '20000'); assert.equal(r.kind, 3); assert.equal(r.sequence.toString(), '2');
+  assert.equal(r.owner.toBase58(), f.owner.publicKey.toBase58());
+});
+
+test('initialization cannot be repeated or hijacked by a non-upgrade-authority', async () => {
+  const f = await fixture();
+  await rejectsAtomic(f, await f.initialize(), [governance, f.funds, f.recovery]);
+  const pool = id('hijack'), addresses = vaultAddresses(programId, f.domain, pool, f.mint);
+  const ix = await program.methods.initialize(identity(f.domain), identity(pool), u64(100n), u64(100n)).accountsStrict({
+    governance: f.outsider.publicKey, funds: f.funds.publicKey, recovery: f.recovery.publicKey,
+    program: programId, programData, mint: f.mint, brokerTokens: f.brokerTokens, ...addresses,
+    tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
+  }).instruction();
+  await assert.rejects(send(ix, [f.outsider, f.funds, f.recovery]), /Authority/);
+  assert.equal(await connection.getAccountInfo(addresses.config), null);
+  assert.equal(await connection.getAccountInfo(addresses.vault), null);
+});
+
+for (const [name, modify] of [
+  ['wrong domain', (a: ReturnType<typeof movement>) => ({ ...a, domain: identity(id('wrong-domain')) })],
+  ['wrong epoch', (a: ReturnType<typeof movement>) => ({ ...a, epoch: new BN(2) })],
+  ['expired authorization', (a: ReturnType<typeof movement>) => ({ ...a, expiresAtSlot: new BN(0) })],
+] as const) test(`${name} rejects deposit atomically`, async () => {
+  const f = await fixture(), a = modify(f.auth('bad'));
+  await rejectsAtomic(f, await f.deposit(a), [f.owner], f.depositReceipt(a));
+});
+
+test('deposit requires the actual customer signer and source token owner', async () => {
+  const f = await fixture();
+  await rejectsAtomic(f, await f.deposit(f.auth('foreign-source'), 1n, { source: f.foreignTokens }), [f.owner]);
+  const ix = await f.deposit();
+  // Mark the required signer read-only/non-signing to exercise the Anchor Signer check itself.
+  ix.keys.find(meta => meta.pubkey.equals(f.owner.publicKey))!.isSigner = false;
+  await rejectsAtomic(f, ix, [f.outsider], undefined, /AccountNotSigner/);
+});
+
+test('wrong mint, token program, vault PDA, owner and discriminator all reject', async () => {
+  const f = await fixture();
+  const otherMint = await createMint(connection, governance, governance.publicKey, null, 6);
+  for (const [name, overrides] of [
+    ['mint', { mint: otherMint }], ['token2022', { tokenProgram: TOKEN_2022_PROGRAM_ID }],
+    ['program', { tokenProgram: SystemProgram.programId }], ['vault', { vault: f.source }],
+    ['customer', { customer: f.config }], ['config', { config: f.customer }],
+  ] as const) await rejectsAtomic(f, await f.deposit(f.auth(name), 1n, overrides), [f.owner]);
+  const info = (await connection.getAccountInfo(f.customer))!;
+  await rpc('surfnet_setAccount', [f.customer.toBase58(), { owner: SystemProgram.programId.toBase58() }]);
+  await assert.rejects(send(await f.deposit(f.auth('owner')), [f.owner]), /AccountOwnedByWrongProgram/);
+  await rpc('surfnet_setAccount', [f.customer.toBase58(), { owner: info.owner.toBase58() }]);
+});
+
+test('zero amounts and delegated source accounts reject', async () => {
+  const f = await fixture();
+  await rejectsAtomic(f, await f.deposit(f.auth('zero'), 0n), [f.owner], f.depositReceipt(f.auth('zero')));
+  await approve(connection, governance, f.source, f.outsider.publicKey, f.owner, 1n);
+  await rejectsAtomic(f, await f.deposit(), [f.owner], f.depositReceipt(f.auth('deposit')), /TokenAuthority/);
+});
+
+test('deposits cannot squat operator receipts; duplicate and cross-operator-kind receipts reject', async () => {
+  const f = await fixture(), a = f.auth('same');
+  await send(await f.deposit(a), [f.owner]);
+  await rejectsAtomic(f, await f.deposit(a), [f.owner]);
+  await send(await f.release(a), [f.funds]);
+  await rejectsAtomic(f, await f.payout(a), [f.funds]);
+});
+
+test('funding requires funds role, exact route and sequential bounded gross epoch budget', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]);
+  await rejectsAtomic(f, await f.release(f.auth('bad-role'), 10n, 0n, { funds: f.recovery.publicKey }), [f.recovery]);
+  await rejectsAtomic(f, await f.release(f.auth('bad-route'), 10n, 0n, { brokerTokens: f.foreignTokens }), [f.funds]);
+  await rejectsAtomic(f, await f.release(f.auth('bad-seq'), 10n, 1n), [f.funds]);
+  await rejectsAtomic(f, await f.release(f.auth('over-cap'), 500_001n), [f.funds]);
+  await send(await f.release(f.auth('first'), 400_000n), [f.funds]);
+  await send(await f.returned(f.auth('back'), 400_000n), [f.broker]);
+  await rejectsAtomic(f, await f.release(f.auth('gross'), 100_001n, 1n), [f.funds]);
+  assert.equal((await f.state()).config.epochReleased.toString(), '400000');
+});
+
+test('normal payouts bind customer, recipient owner, cap and both compare-and-swap counters', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]);
+  for (const ix of [
+    await f.payout(f.auth('recipient'), 1n, 0n, 0n, { destination: f.foreignTokens }),
+    await f.payout(f.auth('owner'), 1n, 0n, 0n, { owner: f.outsider.publicKey }),
+    await f.payout(f.auth('role'), 1n, 0n, 0n, { funds: f.recovery.publicKey }),
+    await f.payout(f.auth('cap'), 200_001n), await f.payout(f.auth('paid'), 1n, 1n),
+    await f.payout(f.auth('seq'), 1n, 0n, 1n),
+  ]) await rejectsAtomic(f, ix, ix.keys.some(k => k.pubkey.equals(f.recovery.publicKey)) ? [f.recovery] : [f.funds]);
+  await send(await f.payout(), [f.funds]);
+  await rejectsAtomic(f, await f.payout(f.auth('race'), 1n), [f.funds]);
+});
+
+test('profit payouts are not incorrectly capped at historical deposits; donations alone create no entitlement', async () => {
+  const f = await fixture(); await send(await f.deposit(f.auth('small'), 10n), [f.owner]);
+  await transfer(connection, governance, f.source, f.vault, f.owner, 100n);
+  const before = await f.state(); assert.equal(before.customer.deposited.toString(), '10');
+  await send(await f.payout(f.auth('profit'), 50n), [f.funds]);
+  assert.equal((await f.state()).customer.paid.toString(), '50');
+});
+
+for (const kind of ['deposit', 'release', 'return', 'payout'] as const) test(`real frozen-token CPI failure rolls back ${kind} counters and receipt`, async () => {
+  const f = await fixture();
+  if (kind !== 'deposit') await send(await f.deposit(), [f.owner]);
+  if (kind === 'return') await send(await f.release(), [f.funds]);
+  const account = kind === 'deposit' || kind === 'payout' ? f.source : f.brokerTokens;
+  await freezeAccount(connection, governance, account, f.mint, governance);
+  const a = f.auth(`cpi-${kind}`);
+  const ix = kind === 'deposit' ? await f.deposit(a) : kind === 'release' ? await f.release(a)
+    : kind === 'return' ? await f.returned(a) : await f.payout(a);
+  await rejectsAtomic(f, ix, kind === 'deposit' ? [f.owner] : kind === 'return' ? [f.broker] : [f.funds],
+    kind === 'deposit' ? f.depositReceipt(a) : f.receipt(a), /Tokenkeg.*invoke.*Account is frozen/);
+  // Same economic identity succeeds after resolving the external token freeze: no false consumption.
+  await thawAccount(connection, governance, account, f.mint, governance);
+  await send(ix, kind === 'deposit' ? [f.owner] : kind === 'return' ? [f.broker] : [f.funds]);
+});
+
+test('insufficient custody assets do not advance payout/funding counters or consume receipt', async () => {
+  const f = await fixture(), a = f.auth('empty');
+  await rejectsAtomic(f, await f.payout(a), [f.funds], f.receipt(a));
+  await rejectsAtomic(f, await f.release(a), [f.funds], f.receipt(a));
+});
+
+test('rotation fences old wires, preserves paid history and cannot reopen a frozen pool', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.payout(), [f.funds]);
+  const newFunds = keys(), newRecovery = keys(); await fund(newFunds); await fund(newRecovery);
+  const rotate = (epoch: bigint, overrides = {}) => program.methods.rotate(identity(f.domain), u64(epoch), u64(500_000n), u64(200_000n))
+    .accountsStrict({ config: f.config, governance: governance.publicKey, newGovernance: governance.publicKey,
+      newFunds: newFunds.publicKey, newRecovery: newRecovery.publicKey, ...overrides }).instruction();
+  await rejectsAtomic(f, await rotate(1n, { newRecovery: newFunds.publicKey }), [governance, newFunds], undefined, /RoleAlias/);
+  await send(await rotate(1n), [governance, newFunds, newRecovery]);
+  await rejectsAtomic(f, await rotate(1n), [governance, newFunds, newRecovery]);
+  await rejectsAtomic(f, await f.payout(f.auth('old'), 1n, 50_000n, 1n), [f.funds]);
+  await rejectsAtomic(f, await f.payout(f.auth('stale', 1n), 1n, 50_000n, 1n, { funds: newFunds.publicKey }), [newFunds]);
+  await send(await f.payout(f.auth('new', 2n), 1n, 50_000n, 1n, { funds: newFunds.publicKey }), [newFunds]);
+  assert.equal((await f.state()).customer.paid.toString(), '50001');
+  await send(await f.freeze(2n, { recovery: newRecovery.publicKey }), [newRecovery]);
+  await rejectsAtomic(f, await rotate(3n), [governance, newFunds, newRecovery]);
+  assert.equal((await f.state()).config.epoch.toString(), '3');
+});
+
+test('recovery role can only fence; normal paths stop, returned assets remain receivable', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.release(), [f.funds]);
+  await rejectsAtomic(f, await f.freeze(1n, { recovery: f.outsider.publicKey }), [f.outsider]);
+  await send(await f.freeze(), [f.recovery]);
+  for (const [ix, signer] of [
+    [await f.deposit(f.auth('frozen-deposit', 2n)), f.owner],
+    [await f.release(f.auth('frozen-release', 2n), 1n, 1n), f.funds],
+    [await f.payout(f.auth('frozen-pay', 2n)), f.funds],
+  ] as const) await rejectsAtomic(f, ix, [signer], undefined, /Mode/);
+  await send(await f.returned(f.auth('frozen-return', 2n)), [f.broker]);
+  assert.equal((await f.state()).config.mode, 1);
+  // No recovery payout or reactivation entry point is invented in P15.
+  assert(!idl.instructions.some(ix => ['claim', 'activate', 'resume'].includes(ix.name)));
+});
+
+test('two customers share one custody vault but never each other\'s deposit or payout counters', async () => {
+  const f = await fixture(), other = keys(); await fund(other);
+  const otherCustomer = customerAddress(programId, f.config, other.publicKey);
+  const otherTokens = await createAccount(connection, governance, f.mint, other.publicKey);
+  await mintTo(connection, governance, f.mint, otherTokens, governance, 100_000n);
+  await send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({
+    config: f.config, owner: other.publicKey, customer: otherCustomer, systemProgram: SystemProgram.programId,
+  }).instruction(), [other]);
+  const a = f.auth('shared-id');
+  await send(await f.deposit(a, 100_000n), [f.owner]);
+  await send(await f.deposit(a, 100_000n, { owner: other.publicKey, customer: otherCustomer, source: otherTokens,
+    receipt: depositReceiptAddress(programId, f.config, other.publicKey, Uint8Array.from(a.operation)) }), [other]);
+  await rejectsAtomic(f, await f.payout(f.auth('wrong-counter'), 1n, 0n, 0n, { customer: otherCustomer }), [f.funds]);
+  await send(await f.payout(), [f.funds]);
+  assert.equal((await program.account.customerCounter.fetch(otherCustomer)).paid.toString(), '0');
+  assert.equal((await f.state()).customer.paid.toString(), '50000');
+  assert.equal((await f.state()).vault, 150_000n);
+});
+
+test('prefunded PDAs initialize canonically and customer registration cannot reset paid history', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.payout(), [f.funds]);
+  const before = await f.state();
+  await assert.rejects(send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({
+    config: f.config, owner: f.owner.publicKey, customer: f.customer, systemProgram: SystemProgram.programId,
+  }).instruction(), [f.owner]));
+  assert.deepEqual(await f.state(), before);
+  const pool = id('prefunded'), addresses = vaultAddresses(programId, f.domain, pool, f.mint);
+  // Real system transfers, not forged initialized account data.
+  const systemRent = await connection.getMinimumBalanceForRentExemption(0);
+  await send(SystemProgram.transfer({ fromPubkey: governance.publicKey, toPubkey: addresses.config, lamports: systemRent }), [governance]);
+  await send(SystemProgram.transfer({ fromPubkey: governance.publicKey, toPubkey: addresses.vault, lamports: systemRent }), [governance]);
+  await send(await program.methods.initialize(identity(f.domain), identity(pool), u64(100n), u64(100n)).accountsStrict({
+    governance: governance.publicKey, funds: f.funds.publicKey, recovery: f.recovery.publicKey,
+    program: programId, programData, mint: f.mint, brokerTokens: f.brokerTokens, ...addresses,
+    tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
+  }).instruction(), [governance, f.funds, f.recovery]);
+  assert.equal((await getAccount(connection, addresses.vault)).owner.toBase58(), addresses.config.toBase58());
+});
+
+for (const field of ['paid', 'payoutSequence'] as const) test(`checked ${field} overflow rolls back actual payout instruction`, async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]);
+  const stored = await program.account.customerCounter.fetch(f.customer);
+  const max = (1n << 64n) - 1n;
+  const encoded = await program.coder.accounts.encode('customerCounter', { ...stored, [field]: u64(max) });
+  // Boundary-state fixture only. Subsequent failure goes through the actual compiled instruction.
+  await rpc('surfnet_setAccount', [f.customer.toBase58(), { data: encoded.toString('hex') }]);
+  const a = f.auth('overflow');
+  await rejectsAtomic(f, await f.payout(a, 1n, field === 'paid' ? max : 0n, field === 'payoutSequence' ? max : 0n),
+    [f.funds], f.receipt(a), /Arithmetic/);
+});
+
+test('failed freeze epoch increment restores mode and successful governance handoff revokes old governor', async () => {
+  const f = await fixture();
+  const before = await program.account.vaultConfig.fetch(f.config), max = (1n << 64n) - 1n;
+  const encoded = await program.coder.accounts.encode('vaultConfig', { ...before, epoch: u64(max) });
+  await rpc('surfnet_setAccount', [f.config.toBase58(), { data: encoded.toString('hex') }]);
+  await rejectsAtomic(f, await f.freeze(max), [f.recovery], undefined, /Arithmetic/);
+  const restored = await program.coder.accounts.encode('vaultConfig', before);
+  await rpc('surfnet_setAccount', [f.config.toBase58(), { data: restored.toString('hex') }]);
+  const newGovernance = keys(); await fund(newGovernance);
+  const rotate = (governor: PublicKey, epoch: bigint) => program.methods.rotate(identity(f.domain), u64(epoch), u64(100n), u64(100n)).accountsStrict({
+    config: f.config, governance: governor, newGovernance: newGovernance.publicKey,
+    newFunds: f.funds.publicKey, newRecovery: f.recovery.publicKey,
+  }).instruction();
+  await send(await rotate(governance.publicKey, 1n), [governance, newGovernance, f.funds, f.recovery]);
+  await rejectsAtomic(f, await rotate(governance.publicKey, 2n), [governance, newGovernance, f.funds, f.recovery]);
+  await send(await rotate(newGovernance.publicKey, 2n), [newGovernance, f.funds, f.recovery]);
+});

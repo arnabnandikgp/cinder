@@ -9,17 +9,20 @@ package boundaries and the deliberately small P01 scope.
 - Rust **1.97.1**, rustfmt and Clippy: `rust-toolchain.toml` controls this workspace.
 - Node **24.21.0**: `.node-version` controls scripts/CI. Use an existing version
   manager or the official release binaries; do not change global tools implicitly.
-- No Node package manager, registry crates, API keys, RPC endpoint, wallet,
-  Solana CLI, Anchor, database, Docker or AWS account is needed for current checks.
+- A C compiler builds the pinned bundled SQLite dependency; no database server
+  is needed. No Node package manager, API keys, RPC endpoint, wallet, Solana CLI,
+  Anchor, Docker or AWS account is needed for off-chain workspace checks.
 
-One-time installation of toolchains/CI actions/images needs network access. Once
-installed, source build/lint/tests are offline; Cargo runs with `--locked --offline`.
-The lockfile contains only the three local packages. This is not a promise that
-future dependencies arrive without a separately controlled hydration step.
+One-time installation of toolchains/CI actions and `cargo fetch --locked` needs
+network access. After hydration, source build/lint/tests are offline; Cargo runs
+with `--locked --offline`. P05 adds pinned SQLite/hash dependencies outside the
+kernel. The dependency policy checks exact versions/features/build exceptions and
+the full lockfile digest; see [ADR 0005](architecture/0005-durable-journal.md).
 
 ```sh
 rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
 node --version
+cargo fetch --locked
 node scripts/check.mjs
 ```
 
@@ -32,23 +35,50 @@ node scripts/check.mjs --properties
 cargo fmt --all
 ```
 
-No check sends venue requests. Rust tests cover exact financial primitives and
-canonical identities plus toy-counter/fault harnesses, not a funded account,
-real process crash or complete ledger. Do not count debug/release executions as independent mathematical proofs.
+No check sends venue requests. Rust tests cover exact financial primitives,
+joined ledger/evidence, canonical identities and local durable crash/replay paths,
+as well as the original toy harness. P05 includes ten actual killed child processes
+and SQLite disk-full tests; it does not qualify power loss or encrypted Nitro
+persistence. Do not count debug/release executions as independent mathematical proofs.
 The original 233 research groups remain separate evidence, not production coverage.
 
 ## Files and packages
+
+### Solana custody checks (P15)
+
+`programs/` is a separate Anchor 1.2.0 Cargo workspace with its own lockfile;
+`clients/vault/` pins `@anchor-lang/core` 1.2.0 and owns its generated IDL/types.
+Follow [vault setup](../programs/README.md), then run `node scripts/check-vault.mjs`.
+This separate CI job installs checksum-verified Anchor, Agave and Surfpool tools,
+hydrates locked dependencies, and runs signed SBF instructions only in offline
+localhost Surfpool. It never uses a configured CLI wallet or remote account fork.
+It checks IDL/source equality, strict Rust/TypeScript compilation and actual CPI
+rollback. Global tool replacements, external deployments and production key
+release are not automatic setup steps. See [ADR 0015](architecture/0015-solana-vault.md).
+
+### Off-chain ownership
 
 Kernel changes belong in `crates/kernel`; keep network, time, signing, persistence
 and venue SDKs outside it. Port contracts live in `crates/ports`; offline doubles
 in `crates/test-support`. Tests may inspect fake accepted/committed records, but
 controllers must reconcile through actual evidence rather than access that oracle.
+The local journal is `crates/journal`; its tests create and remove only uniquely
+named disposable temporary directories. `test-hooks` is a test-only feature used
+by the all-features runner, not a deployment feature. Its fixture protection is
+deliberately insecure and must never protect real data. P06 supplies an actual AEAD
+record path with a required trusted witness contract; tests of that path use local
+witness doubles, not production-independent infrastructure. See
+[ADR 0006](architecture/0006-encrypted-durability.md). There is no plaintext fallback.
 Add future packages only with documented ownership and an updated dependency guard.
+
+`crates/pacifica` owns native observation codecs and the narrow signing boundary.
+It uses tracked sanitized responses and fake egress for offline qualification;
+native signing is not permission to deploy or load real accounts.
 
 Ordinary tests must use tracked sanitized fixtures. Never mount ignored `work/`,
 wallet directories, cloud credentials or unrelated `stays/` into test containers.
 The exact types and codecs are described in [ADR 0002](architecture/0002-financial-primitives.md).
-The production ledger/durable journal, application API and native clients are still
+Encrypted durable deployment, the application API and live native transport remain
 future phases. `--properties` selects workspace tests prefixed `property_`.
 
 ## Routine PR verification
@@ -80,6 +110,9 @@ temporary container storage. Do not confuse ARM64 parity with x86-64 CI executio
 the hosted Linux x86-64 job remains separate evidence. If container tooling is
 unavailable, record it explicitly and never claim local Linux verification.
 
+The historical P01 run below predates registry dependencies. For P05 or later,
+also hydrate the pinned Cargo cache before disabling networking; the old recipe
+alone no longer bootstraps a fresh offline environment.
 The P01 run used the official base directly rather than a production container
 image. In a disposable **tool-only** directory, the verified Node distribution
 was `node-v24.21.0-linux-arm64/`; compiler archives were
