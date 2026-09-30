@@ -226,9 +226,9 @@ outcome/reconciliation state machine; exact partial/cancel/unknown accounting.
 Join order, transfer, payout and capital commitments in one reservation API.
 Evidence: W01, W03; partial/cancel races, independent pending buy/sell outcomes.
 
-- [ ] ACK is not fill; cancel ACK is not complete history; unknown outcomes retain holds.
-- [ ] No new signed capability escapes before durable reservation and attempt record.
-- [ ] Changed request under an existing operation ID rejects; a real out-of-policy fill is booked and contained.
+- [x] ACK is not fill; cancel ACK is not complete history; unknown outcomes retain holds.
+- [x] No new signed capability escapes before durable reservation and attempt record.
+- [x] Changed request under an existing operation ID rejects; a real out-of-policy fill is booked and contained.
 
 <a id="p08"></a>
 ## P08 — Funds and payout state joined to trading

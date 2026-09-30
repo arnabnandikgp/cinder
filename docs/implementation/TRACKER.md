@@ -36,13 +36,13 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p06-encrypted-durability`, created with `gh stack add` above
-P05 `48075d3fed669a5543f63867376640ccc36d561c` (PR #29). User authorized continuous
+Current branch: `tee/p07-order-intents`, created with `gh stack add` above
+P06 and restacked onto its reviewed storage follow-up `a2babf0` (PR #30). User authorized continuous
 stacked P06–P14 implementation while away, stopping before P15; no merges or new
 external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
 `work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
-new permissions or a genuine unresolved blocker. P06 supplies local crypto and
-trusted-service contracts, not a deployed witness or Nitro runtime.
+new permissions or a genuine unresolved blocker. P07 supplies durable order
+lifecycle with trusted authentication/source ports, not live signing or trading.
 
 Repository integration follow-up: the TEE trunk had no classic branch protection
 or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
@@ -408,15 +408,17 @@ partial fills, ACK/unknown/terminal history and adverse-fill containment in the
 same journal. Original/classified facts replay without changed ownership. A late
 terminal contradiction re-encumbers holds without erasing a valid customer fill.
 ADR 0007 defines the promoted contract and remaining P09/P13/P14/P18 ports.
-Verification: focused 13-test order suite and full offline runner in progress;
-includes 24 additive delivery/terminal permutations with SQLite reloads. No live
-venue calls or signatures. Final worktree/clean-export evidence follows publication.
+Verification: before restacking, full offline runner passed: 109 Rust tests in
+debug/release, two compile-fail doctests, 23 repository tests, fmt, strict Clippy
+and build. The 13-test order suite includes all 24 additive delivery/terminal
+permutations with real SQLite reloads. First full run correctly caught an obsolete
+wire-v1 golden header, updated explicitly for wire v2. Final restacked clean-export
+evidence follows below. No live venue calls or signatures.
 Unexpected: internal binding time exposed an old-receive-time rejection: financial
 projection now uses monotone commit time while retaining the original input time.
 Journal wire is explicitly revision 2 / engine 3; updated old-revision fixtures.
-P06 review found replica-redundancy and uncertain-witness-response cases; fix them
-in the owning base layer and restack before publishing this phase.
-Next: finish local validation/base review fixes, publish P07, then continue P08.
+P06 review fixes were made and tested in the owning layer, then P07 was restacked.
+Next: publish P07 after final restacked clean-export verification, then continue P08.
 PR: none.
 Merge: none.
 
