@@ -6,7 +6,7 @@ use cinder_kernel::{
     amounts::*,
     codec::Canonical,
     identity::*,
-    ledger::{economics::*, evidence::*, *},
+    ledger::{economics::*, evidence::*, funds::*, *},
     math::Rounding,
     position::*,
 };
@@ -27,7 +27,7 @@ impl Writer {
             valid: true,
         };
         s.raw(b"CINDER-J\0");
-        s.raw(&2_u16.to_be_bytes());
+        s.raw(&3_u16.to_be_bytes());
         s.byte(tag);
         s
     }
@@ -85,7 +85,7 @@ impl<'a> Reader<'a> {
         if r.take(9)? != b"CINDER-J\0" {
             return Err(Error::Codec);
         }
-        if r.array::<2>()? != 2_u16.to_be_bytes() {
+        if r.array::<2>()? != 3_u16.to_be_bytes() {
             return Err(Error::Version);
         }
         if r.byte()? != tag {
@@ -194,13 +194,13 @@ pub(crate) fn read_owner(r: &mut Reader<'_>) -> Result<Owner, Error> {
         _ => Err(Error::Codec),
     }
 }
-fn location(w: &mut Writer, l: Location) {
+pub(crate) fn location(w: &mut Writer, l: Location) {
     w.byte(match l {
         Location::Vault => 0,
         Location::Venue => 1,
     });
 }
-fn read_location(r: &mut Reader<'_>) -> Result<Location, Error> {
+pub(crate) fn read_location(r: &mut Reader<'_>) -> Result<Location, Error> {
     match r.byte()? {
         0 => Ok(Location::Vault),
         1 => Ok(Location::Venue),
@@ -323,6 +323,10 @@ pub fn encode_event(e: &Event) -> Result<Vec<u8>, Error> {
     w.item(&e.key);
     w.raw(&e.policy.get().to_be_bytes());
     match &e.change {
+        Change::Funds(change) => {
+            w.byte(7);
+            encode_funds(&mut w, change);
+        }
         Change::BindExecution { market: m, side } => {
             w.byte(0);
             market(&mut w, *m);
@@ -462,6 +466,7 @@ pub fn decode_event(bytes: &[u8]) -> Result<Event, Error> {
     let key = r.item()?;
     let policy = PolicyVersion::new(u32::from_be_bytes(r.array()?)).map_err(|_| Error::Codec)?;
     let change = match r.byte()? {
+        7 => Change::Funds(decode_funds(&mut r)?),
         0 => Change::BindExecution {
             market: read_market(&mut r)?,
             side: match r.byte()? {
@@ -584,19 +589,107 @@ pub(crate) fn head(w: &mut Writer, h: Head) {
     w.u64(h.sequence);
     w.raw(&h.hash);
 }
+
+pub(crate) fn destination(w: &mut Writer, d: Destination) {
+    match d {
+        Destination::Location(l) => {
+            w.byte(0);
+            location(w, l);
+        }
+        Destination::Recipient(key) => {
+            w.byte(1);
+            w.raw(&key);
+        }
+    }
+}
+pub(crate) fn read_destination(r: &mut Reader<'_>) -> Result<Destination, Error> {
+    match r.byte()? {
+        0 => Ok(Destination::Location(read_location(r)?)),
+        1 => Ok(Destination::Recipient(r.array()?)),
+        _ => Err(Error::Codec),
+    }
+}
+pub(crate) fn mandate(w: &mut Writer, m: &Mandate) {
+    w.item(&m.attempt);
+    location(w, m.source);
+    destination(w, m.destination);
+    w.item(&m.net);
+    w.item(&m.maximum_fee);
+    owner(w, m.fee_payer);
+}
+pub(crate) fn read_mandate(r: &mut Reader<'_>) -> Result<Mandate, Error> {
+    Ok(Mandate {
+        attempt: r.item()?,
+        source: read_location(r)?,
+        destination: read_destination(r)?,
+        net: r.item()?,
+        maximum_fee: r.item()?,
+        fee_payer: read_owner(r)?,
+    })
+}
+fn encode_funds(w: &mut Writer, f: &FundsChange) {
+    match f {
+        FundsChange::Authorize(m) => {
+            w.byte(0);
+            mandate(w, m);
+        }
+        FundsChange::Observe {
+            attempt,
+            leg,
+            amount,
+            fee,
+        } => {
+            w.byte(1);
+            w.item(attempt);
+            match leg {
+                Leg::Debit => w.byte(0),
+                Leg::Arrive(d) => {
+                    w.byte(1);
+                    destination(w, *d);
+                }
+                Leg::Return => w.byte(2),
+                Leg::Impair => w.byte(3),
+            }
+            w.item(amount);
+            w.item(fee);
+        }
+    }
+}
+fn decode_funds(r: &mut Reader<'_>) -> Result<FundsChange, Error> {
+    match r.byte()? {
+        0 => Ok(FundsChange::Authorize(read_mandate(r)?)),
+        1 => {
+            let attempt = r.item()?;
+            let leg = match r.byte()? {
+                0 => Leg::Debit,
+                1 => Leg::Arrive(read_destination(r)?),
+                2 => Leg::Return,
+                3 => Leg::Impair,
+                _ => return Err(Error::Codec),
+            };
+            Ok(FundsChange::Observe {
+                attempt,
+                leg,
+                amount: r.item()?,
+                fee: r.item()?,
+            })
+        }
+        _ => Err(Error::Codec),
+    }
+}
 pub(crate) fn read_head(r: &mut Reader<'_>) -> Result<Head, Error> {
     Ok(Head {
         sequence: r.u64()?,
         hash: r.array()?,
     })
 }
-fn scope(w: &mut Writer, s: EventScope) {
+pub(crate) fn scope(w: &mut Writer, s: EventScope) {
     domain(w, s.domain);
     w.raw(&s.venue.bytes());
     w.raw(&s.account.bytes());
     w.raw(&s.namespace.bytes());
 }
-fn read_scope(r: &mut Reader<'_>) -> Result<EventScope, Error> {
+pub(crate) fn read_scope(r: &mut Reader<'_>) -> Result<EventScope, Error> {
     Ok(EventScope {
         domain: read_domain(r)?,
         venue: VenueId::new(r.array()?).map_err(|_| Error::Codec)?,
@@ -676,9 +769,25 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
         w.u64(o.observed_at);
         w.blob(o.raw.as_bytes());
     }
+    w.count(tx.funds_observations.len());
+    for o in &tx.funds_observations {
+        w.item(&o.key);
+        crate::funds::encode_terminal(&mut w, &o.terminal);
+        w.u64(o.authority_epoch);
+        w.u64(o.observed_at);
+        w.blob(o.raw.as_bytes());
+    }
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Funds(action) => {
+                w.byte(6);
+                crate::funds::encode_action(&mut w, action);
+            }
+            Control::Collateral(cut) => {
+                w.byte(5);
+                crate::collateral::encode(&mut w, cut);
+            }
             Control::Order(action) => {
                 w.byte(4);
                 crate::orders::encode_action(&mut w, action);
@@ -743,6 +852,16 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             raw: PrivateBytes::new(r.blob()?.to_vec())?,
         });
     }
+    let mut funds_observations = Vec::new();
+    for _ in 0..r.count()? {
+        funds_observations.push(crate::funds::Observation {
+            key: r.item()?,
+            terminal: crate::funds::decode_terminal(&mut r)?,
+            authority_epoch: r.u64()?,
+            observed_at: r.u64()?,
+            raw: PrivateBytes::new(r.blob()?.to_vec())?,
+        });
+    }
     let mut controls = Vec::new();
     for _ in 0..r.count()? {
         controls.push(match r.byte()? {
@@ -759,6 +878,8 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             },
             3 => Control::Expose(r.item()?),
             4 => Control::Order(crate::orders::decode_action(&mut r)?),
+            5 => Control::Collateral(crate::collateral::decode(&mut r)?),
+            6 => Control::Funds(crate::funds::decode_action(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -769,6 +890,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
         at,
         inputs,
         order_observations,
+        funds_observations,
         controls,
     })
 }
@@ -847,6 +969,10 @@ pub(crate) fn receipt(r: &Receipt) -> Result<Vec<u8>, Error> {
             ControlError::Expired => 4,
         })
     });
+    w.count(r.funds_observations.len());
+    for ok in &r.funds_observations {
+        w.byte(u8::from(*ok));
+    }
     w.finish()
 }
 pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
@@ -857,9 +983,33 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     let mut w = Writer::new(5);
     w.u64(s.now);
     w.u64(s.raw_unresolved);
+    w.option(&s.collateral, crate::collateral::encode);
     w.u64(s.ledger.version());
     w.item(&s.ledger.vault());
     w.item(&s.ledger.in_transit().map_err(|_| Error::Invalid)?);
+    w.item(&s.ledger.unpaired().map_err(|_| Error::Invalid)?);
+    w.count(s.ledger.movements().len());
+    for m in s.ledger.movements() {
+        mandate(&mut w, &m.mandate);
+        for amount in [
+            m.debit,
+            m.settled,
+            m.arrived,
+            m.returned,
+            m.impaired,
+            m.fees,
+            m.customer_fees,
+            m.paid,
+            m.sent,
+        ] {
+            w.item(&amount);
+        }
+        w.byte(u8::from(m.faulted));
+        w.count(m.receipts.len());
+        for k in &m.receipts {
+            w.item(k);
+        }
+    }
     w.u64(s.ledger.unresolved_attribution() as u64);
     for b in s
         .config
@@ -890,6 +1040,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.count(s.attempts.len());
     for a in &s.attempts {
         w.byte(match a.kind {
+            AttemptKind::Funds => 3,
             AttemptKind::Generic => 0,
             AttemptKind::Order => 1,
             AttemptKind::Cancel => 2,
@@ -937,6 +1088,28 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     for (original, classified) in &s.order_fills {
         w.blob(&encode_event(original)?);
         w.blob(&encode_event(classified)?);
+    }
+    w.byte(u8::from(s.frozen));
+    w.count(s.funds.len());
+    for o in &s.funds {
+        crate::funds::encode_intent(&mut w, &o.intent);
+        w.option(&o.attempt, |w, a| w.item(a));
+        w.option(&o.proof, crate::funds::encode_terminal);
+        w.byte(u8::from(o.terminal));
+        w.byte(u8::from(o.faulted));
+    }
+    w.count(s.funds_observations.len());
+    for o in &s.funds_observations {
+        w.item(&o.key);
+        crate::funds::encode_terminal(&mut w, &o.terminal);
+        w.u64(o.authority_epoch);
+        w.u64(o.observed_at);
+        w.blob(o.raw.as_bytes());
+    }
+    w.count(s.funds_receipts.len());
+    for (k, c) in &s.funds_receipts {
+        w.item(k);
+        w.option(c, |w, c| w.u64(*c));
     }
     h.update(w.finish()?);
     h.update((s.ledger.events().len() as u64).to_be_bytes());

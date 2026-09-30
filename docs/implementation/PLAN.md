@@ -240,9 +240,9 @@ exposure holds and normal payout queue in the same state as positions. This
 replaces the flat-only study limitation; actual on-chain/venue sends remain ports.
 Evidence: W01, W04–W05; V01/V05, all 24 receipt permutations, fills versus payouts.
 
-- [ ] Final payment discharges its owner's claim once; source debit/transfer arrival creates no second deposit credit.
-- [ ] Late or out-of-order receipts reconcile after freezes; overpayment is a house obligation, not another customer's loss.
-- [ ] Free-collateral withdrawal with open positions uses shared holds; FIFO/partial-consent rules and total debit fees are explicit.
+- [x] Final payment discharges its owner's claim once; source debit/transfer arrival creates no second deposit credit.
+- [x] Late or out-of-order receipts reconcile after freezes; overpayment is a house obligation, not another customer's loss.
+- [x] Free-collateral withdrawal with open positions uses shared holds; FIFO/partial-consent rules and total debit fees are explicit.
 
 <a id="p09"></a>
 ## P09 — Joined admission, margin and capital envelope

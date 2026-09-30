@@ -15,10 +15,11 @@ Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
 without operator assistance. The planning foundation and pinned workspace are
 merged, including exact financial primitives and canonical event identities.
-P03's joined ledger is merged. The P04–P07 stack adds funding/fee accounting,
+P03's joined ledger is merged. The P04–P08 stack adds funding/fee accounting,
 evidence containment, atomic replay, AEAD ciphertext replication and writer fencing
 against a trusted witness port, plus bound order intents and terminal-history
-reconciliation. Independent witness/Nitro qualification, native
+reconciliation, plus partial funds movements and queued collateral-aware payouts.
+Independent witness/Nitro qualification, native
 adapters and deployed services remain later phases.
 
 ## Start here
@@ -37,6 +38,7 @@ adapters and deployed services remain later phases.
 12. [Durable journal and replay boundary](docs/architecture/0005-durable-journal.md)
 13. [Encrypted durability and writer epochs](docs/architecture/0006-encrypted-durability.md)
 14. [Bound order intents and completion](docs/architecture/0007-order-lifecycle.md)
+15. [Partial funds movements and payouts](docs/architecture/0008-funds-payouts.md)
 
 These tracked documents are sufficient to start the first implementation phase.
 Ignored `work/` contains the original local research; it is not a CI dependency.

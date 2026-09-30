@@ -10,7 +10,7 @@
 | [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
 | [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
 | [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), stacked above #30 |
-| [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
+| [P08 — Funds and payouts](PLAN.md#p08) | in progress | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | Local implementation above #31 |
 | [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
 | [P10 — Protection claims](PLAN.md#p10) | open | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | — |
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | open | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | — |
@@ -36,8 +36,8 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p07-order-intents`, created with `gh stack add` above
-P06 and restacked onto its reviewed storage follow-up `a2babf0` (PR #30). User authorized continuous
+Current branch: `tee/p08-funds-payouts`, created with `gh stack add` above
+P07 #31 (`8fd9651`). User authorized continuous
 stacked P06–P14 implementation while away, stopping before P15; no merges or new
 external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
 `work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
@@ -429,10 +429,29 @@ Merge: none.
 
 ## P08 — Funds and payouts
 
-Work: not started.
-Verification: not run; acceptance in PLAN P08.
-Unexpected: none yet.
-Next: join partial movement receipts to live position state and reserve total payout debit atomically.
+Work: 2026-09-30 — implemented kernel partial movements with transit/unpaired
+contra-balances, paid counters, explicit fee ownership and house overpayment;
+journal FIFO/partial consent, shared holds and terminal/source coverage. Initial
+marked-collateral prerequisite is joined for open-position withdrawals;
+P09 still owns pending-order outcomes, leverage selection and full capital envelope.
+Verification: focused 17-group funds suite passes, including all 24 four-leg receipt
+permutations with exact replay and every-prefix bridge checks. The initial full
+runner passed 127 Rust tests (15 new groups), debug/release, two compile-fail
+doctests, 23 repository tests, formatting, strict Clippy and build. Final full run
+with two additional certificate/consent regressions also passed: 129 Rust tests
+in each profile and the same other checks. Self-review
+checked claim discharge, actual adverse outcomes, source-specific coverage,
+hold consumption and replay commitments; no second financial ledger was added.
+At this boundary P06 `a2babf0` and P07 `8fd9651` both passed hosted TEE CI and
+CodeRabbit status; P07 had no inline findings. Status is not an independent audit.
+Unexpected: none requiring a new product decision. Numerical collateral profiles
+are explicit synthetic test parameters, not live leverage/fee approvals.
+Unexpected: the partial-receipt algebra needed an explicit unpaired contra-balance
+to avoid double backing when arrival precedes debit. P08 introduced a shared marked
+collateral prerequisite ahead of P09; pending orders still refuse this path until
+P09 supplies their bounded outcomes. Wire 3 / engine 4 reject old semantics.
+Next: finish final full/clean-export checks, publish P08 above #31 and continue
+P09. No new live tests, merge or P15 authority is implied.
 PR: none.
 Merge: none.
 

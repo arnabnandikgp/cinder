@@ -98,6 +98,15 @@ partial/terminal, duplicate, bound-violation and independent pending-direction c
 into the same durable journal. Its source hashes and trusted authentication/causal
 qualification boundaries are explicit. No reference ledger is added to assets.
 
+### P08: partial movements and collateral-aware payouts
+
+[ADR 0008](../architecture/0008-funds-payouts.md) promotes W01/W04–W05 partial
+receipt, FIFO, paid-counter and payout-race cases into the existing Rust ledger
+and journal. All 24 four-receipt permutations preserve each prefix's bridge,
+including arrival-before-debit. Open-position tests use qualified synthetic marks
+and explicit initial margin; pending-order outcomes remain P09's prerequisite.
+No fixture wallet, live authority, native finality or funding sender is promoted.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:

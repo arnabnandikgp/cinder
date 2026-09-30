@@ -443,6 +443,7 @@ impl Ledger {
             return Err(LedgerError::Evidence);
         }
         let mut restricted = !self.unresolved.is_empty()
+            || self.unresolved_funds() != 0
             || self
                 .evidence
                 .last_matching_check

@@ -212,7 +212,7 @@ impl State {
         &self.orders
     }
 
-    fn authority(&self, account: AccountId) -> Option<u64> {
+    pub(crate) fn authority(&self, account: AccountId) -> Option<u64> {
         self.authorities
             .iter()
             .find(|(a, _)| *a == account)
@@ -239,6 +239,9 @@ impl State {
                 approval,
                 reservations,
             } => {
+                if self.frozen {
+                    return Err(ControlError::Unqualified);
+                }
                 self.request(i.request)?;
                 if self.orders.len() >= MAX_ITEMS
                     || self.orders.iter().any(|o| o.intent.request == i.request)
@@ -435,7 +438,7 @@ impl State {
     }
 
     pub(crate) fn order_exposure(&self, attempt: &Attempt) -> Result<(), ControlError> {
-        if attempt.kind == AttemptKind::Generic {
+        if matches!(attempt.kind, AttemptKind::Generic | AttemptKind::Funds) {
             return Ok(());
         }
         let order = self

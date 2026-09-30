@@ -81,14 +81,15 @@ impl fmt::Debug for Input {
     }
 }
 
-/// Reserved capacity is not an asset. Full margin/capital envelopes arrive in P09.
+/// Reserved capacity is not an asset. P08 adds explicit marked collateral;
+/// full pending-outcome/capital envelopes arrive in P09.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Resource {
-    /// Flat customer's settled cash only; never negative debt or open-position equity.
+    /// Qualified private free collateral; legacy fallback is flat settled cash only.
     Customer(AccountId),
-    /// Flat house cash, not customer capital or an insurance-coverage decision.
+    /// Qualified house resources, not customer capital or a coverage decision.
     House,
-    /// Physical vault liquidity or flat native cash, separately from entitlements.
+    /// Physical vault liquidity or native free collateral, separate from claims.
     Location(Location),
 }
 /// One component of a shared reservation.
@@ -99,7 +100,8 @@ pub struct Reservation {
     /// Positive quote amount; no rounding or implicit netting.
     pub amount: QuoteAtoms,
 }
-/// One operation's immutable, multi-resource commitment.
+/// One operation's multi-resource commitment; exact settled legs consume its
+/// remaining components. Identity is immutable and cannot be reused.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hold {
     /// Operation identity, never reusable after release.
@@ -128,6 +130,8 @@ pub struct Attempt {
 /// Durable semantic scope for a one-shot exposure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttemptKind {
+    /// Exact admitted transfer/payout capability.
+    Funds,
     /// P05 abstract port, unavailable for an accepted order's request.
     Generic,
     /// Place the exact authorized order.
@@ -144,6 +148,10 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Ordered funds/withdrawal lifecycle in this same financial state.
+    Funds(crate::funds::Action),
+    /// Install explicitly configured collateral policy and fresh qualified marks.
+    Collateral(crate::collateral::Cut),
     /// Authorized private order lifecycle joined to these same reservations.
     Order(crate::orders::Action),
     /// Acquire unique resources under one compare-and-swap head.
@@ -188,6 +196,8 @@ pub struct Transaction {
     pub inputs: Vec<Input>,
     /// Qualified order statuses; no ACK here becomes a fill or releases a hold.
     pub order_observations: Vec<crate::orders::Observation>,
+    /// Qualified funds completion certificates, separate from transport ACKs.
+    pub funds_observations: Vec<crate::funds::Observation>,
     /// All-or-none control subproposal; actual external facts remain recordable.
     pub controls: Vec<Control>,
 }
@@ -228,6 +238,8 @@ pub struct Receipt {
     pub inputs: Vec<InputResult>,
     /// True for accepted or exact duplicate status; false is retained and contained.
     pub order_observations: Vec<bool>,
+    /// Accepted/duplicate versus retained/contained funds certificates.
+    pub funds_observations: Vec<bool>,
     /// None means all controls applied; Some means none applied.
     pub controls: Option<ControlError>,
     /// Resulting kernel proposal version, not the journal sequence.
@@ -245,6 +257,11 @@ pub struct State {
     pub(crate) authorities: Vec<(AccountId, u64)>,
     pub(crate) order_observations: Vec<crate::orders::Observation>,
     pub(crate) order_fills: Vec<(Event, Event)>,
+    pub(crate) collateral: Option<crate::collateral::Cut>,
+    pub(crate) funds: Vec<crate::funds::Operation>,
+    pub(crate) funds_observations: Vec<crate::funds::Observation>,
+    pub(crate) funds_receipts: Vec<(EventKey, Option<u64>)>,
+    pub(crate) frozen: bool,
     pub(crate) raw_unresolved: u64,
     pub(crate) now: u64,
 }
@@ -272,6 +289,11 @@ impl State {
             authorities: Vec::new(),
             order_observations: Vec::new(),
             order_fills: Vec::new(),
+            collateral: None,
+            funds: Vec::new(),
+            funds_observations: Vec::new(),
+            funds_receipts: Vec::new(),
+            frozen: false,
             raw_unresolved: 0,
             now: 0,
         })
@@ -303,7 +325,10 @@ impl State {
                 sum.checked_add(r.amount).map_err(|_| Error::Limit)
             })
     }
-    fn capacity(&self, resource: Resource) -> Result<QuoteAtoms, ControlError> {
+    pub(crate) fn capacity(&self, resource: Resource) -> Result<QuoteAtoms, ControlError> {
+        if self.collateral.is_some() {
+            return self.collateral_capacity(resource);
+        }
         let book = match resource {
             Resource::Location(Location::Vault) => return Ok(self.ledger.vault()),
             Resource::Location(Location::Venue) => self.ledger.venue(),
@@ -332,7 +357,7 @@ impl State {
             Ok(())
         }
     }
-    fn all_capacity(&self) -> Result<(), ControlError> {
+    pub(crate) fn all_capacity(&self) -> Result<(), ControlError> {
         for r in self
             .holds
             .iter()
@@ -352,6 +377,8 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Funds(action) => self.funds_action(action)?,
+            Control::Collateral(cut) => self.install_collateral(cut)?,
             Control::Order(action) => self.order_action(action)?,
             Control::Reserve {
                 request,
@@ -387,6 +414,9 @@ impl State {
             }
             Control::Release(request) => {
                 self.request(*request)?;
+                if self.funds.iter().any(|o| o.intent.request == *request) {
+                    return Err(ControlError::Unqualified);
+                }
                 if self
                     .orders
                     .iter()
@@ -415,6 +445,7 @@ impl State {
                 expires_at,
             } => {
                 if self.orders.iter().any(|o| o.intent.request == key.request)
+                    || self.funds.iter().any(|o| o.intent.request == key.request)
                     || self.attempts.iter().any(|a| a.key.request == key.request)
                 {
                     return Err(ControlError::Invalid);
@@ -434,13 +465,17 @@ impl State {
                     .find(|a| a.key == *key)
                     .ok_or(ControlError::Invalid)?;
                 self.order_exposure(attempt)?;
+                self.funds_exposure(attempt)?;
                 // Attributed cancellation grants no additional exposure. Permit
                 // cleanup even when a late fact/funding gap blocks new risk.
                 if attempt.kind != AttemptKind::Cancel {
-                    if self.raw_unresolved != 0
+                    if self.frozen
+                        || self.raw_unresolved != 0
                         || self.ledger.issues().iter().any(|i| i.open)
                         || self.ledger.unresolved_attribution() != 0
+                        || self.ledger.unresolved_funds() != 0
                         || self.orders.iter().any(|o| o.faulted)
+                        || self.funds.iter().any(|o| o.faulted)
                     {
                         return Err(ControlError::Unqualified);
                     }
@@ -490,6 +525,7 @@ impl State {
             || tx.inputs.len() > MAX_ITEMS
             || tx.controls.len() > MAX_ITEMS
             || tx.order_observations.len() > MAX_ITEMS
+            || tx.funds_observations.len() > MAX_ITEMS
         {
             return Err(Error::Invalid);
         }
@@ -517,6 +553,7 @@ impl State {
                         s.ledger = ingested.state;
                         if ingested.disposition == Disposition::Applied {
                             s.order_applied(e, input.source_cut)?;
+                            s.funds_applied(e, input.source_cut)?;
                         }
                         InputResult::Normalized(ingested.disposition)
                     }
@@ -537,11 +574,17 @@ impl State {
         for o in &tx.order_observations {
             order_observations.push(s.order_observe(o)?);
         }
+        let mut funds_observations = Vec::new();
+        for o in &tx.funds_observations {
+            funds_observations.push(s.funds_observe(o)?);
+        }
+        s.sync_funds()?;
         let mut candidate = s.clone();
         let mut controls = None;
         // A duplicate/conflicting fact cannot be reused to release new commitments.
         if !tx.controls.is_empty()
-            && (order_observations.iter().any(|ok| !ok)
+            && (funds_observations.iter().any(|ok| !ok)
+                || order_observations.iter().any(|ok| !ok)
                 || inputs
                     .iter()
                     .any(|i| !matches!(i, InputResult::Normalized(Disposition::Applied))))
@@ -562,6 +605,7 @@ impl State {
         let receipt = Receipt {
             inputs,
             order_observations,
+            funds_observations,
             controls,
             ledger_version: s.ledger.version(),
         };

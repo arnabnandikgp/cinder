@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 
 pub mod economics;
 pub mod evidence;
+pub mod funds;
 use economics::*;
 use evidence::*;
 
@@ -92,6 +93,8 @@ pub enum FillTarget {
 /// Phase-local transition schema. No outbound actions or risk admission are exposed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
+    /// Partial transfers and beneficiary settlement, sharing the same asset bridge.
+    Funds(funds::FundsChange),
     /// Qualified funding/fee economics, sharing this ledger and its replay keys.
     Economics(EconomicChange),
     /// Source reconciliation; never an external-equity balance setter.
@@ -256,6 +259,7 @@ pub struct Ledger {
     venue: Book,
     vault: QuoteAtoms,
     transfers: Vec<Transfer>,
+    movements: Vec<funds::Movement>,
     bindings: Vec<Binding>,
     events: Vec<Event>,
     unresolved: Vec<EventKey>,
@@ -269,7 +273,8 @@ pub struct Ledger {
 /// a proof of authentic assets, a liquidity report, or a claim of future solvency.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostics {
-    /// Signed external value: vault + transit + native cash/funding + marked PnL.
+    /// Signed external value: vault + transit - unpaired settlement + native
+    /// cash/funding and marked PnL. Transit is not spendable liquidity/capital.
     pub net_assets: QuoteAtoms,
     /// Individually positive customer entitlements only.
     pub customer_claims: QuoteAtoms,
@@ -328,6 +333,7 @@ impl Ledger {
             venue: Book::empty(&config),
             vault: QuoteAtoms::new(config.quote, 0),
             transfers: Vec::new(),
+            movements: Vec::new(),
             bindings: Vec::new(),
             events: Vec::new(),
             unresolved: Vec::new(),
@@ -376,14 +382,18 @@ impl Ledger {
     pub fn vault(&self) -> QuoteAtoms {
         self.vault
     }
-    /// Outstanding full-transfer receivables, counted once and not spendable cash.
+    /// Outstanding full/partial movement receivables, counted once and not cash.
     pub fn in_transit(&self) -> Result<QuoteAtoms, LedgerError> {
-        self.transfers
+        let legacy = self
+            .transfers
             .iter()
             .filter(|t| !t.arrived)
             .try_fold(QuoteAtoms::new(self.config.quote, 0), |a, t| {
-                Ok(a.checked_add(t.amount)?)
-            })
+                Ok::<_, LedgerError>(a.checked_add(t.amount)?)
+            })?;
+        self.movements
+            .iter()
+            .try_fold(legacy, |a, m| Ok(a.checked_add(m.transit()?)?))
     }
     /// Accepted normalized provenance. Ingest retains rejected observations too;
     /// durable/raw-wire retention belongs to P05/P13.
@@ -462,6 +472,7 @@ impl Ledger {
     }
     fn apply_distinct(&mut self, event: &Event) -> Result<(), LedgerError> {
         match &event.change {
+            Change::Funds(change) => self.apply_funds(&event.key, change)?,
             Change::Economics(change) => self.apply_economics(&event.key, change)?,
             Change::Reconcile(check) => self.apply_check(&event.key, check)?,
             Change::BindExecution { market, side } => {
@@ -594,10 +605,12 @@ impl Ledger {
                     sum.checked_sub(p.basis().atoms()).ok_or(Error::Overflow)
                 })
         };
+        let unpaired = self.unpaired()?;
         let native = self
             .vault
             .atoms()
             .checked_add(self.in_transit()?.atoms())
+            .and_then(|n| n.checked_sub(unpaired.atoms()))
             .and_then(|n| n.checked_add(self.venue.cash.atoms()))
             .and_then(|n| n.checked_add(self.venue.funding.atoms()))
             .ok_or(Error::Overflow)?;
@@ -651,6 +664,7 @@ impl Ledger {
         let net_assets = self
             .vault
             .checked_add(self.in_transit()?)?
+            .checked_sub(self.unpaired()?)?
             .checked_add(self.book_equity(&self.venue, marks)?)?;
         let mut claims = QuoteAtoms::new(self.config.quote, 0);
         let mut deficits = claims;
@@ -682,7 +696,7 @@ impl Ledger {
             suspense_equity,
             backing_margin,
             shortfall,
-            unresolved_events: self.unresolved.len(),
+            unresolved_events: self.unresolved.len() + self.unresolved_funds(),
         })
     }
 }

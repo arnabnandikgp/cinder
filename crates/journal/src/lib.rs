@@ -1,6 +1,8 @@
 //! Atomic private persistence. No native transport, signer or deployed witness.
 
+pub mod collateral;
 pub mod encrypted;
+pub mod funds;
 pub mod model;
 pub mod orders;
 pub mod replicated;
@@ -12,7 +14,7 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 // Order classification/authority/lifecycle changes replay semantics.
-const ENGINE_REVISION: u16 = 3;
+const ENGINE_REVISION: u16 = 4;
 
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
