@@ -514,7 +514,9 @@ The 16 protection groups include V06, repeated/partial recoveries, depletion,
 remediation offsets, replay, authorization binding, pending commitments and an
 opposing-account extraction counterexample. Initial full runs found stale test
 constants for wire/engine revisions; updated the golden assertions and added old
-wire 4 / engine 5 rejection cases, then reran successfully. Final clean export next.
+wire 4 / engine 5 rejection cases, then reran successfully. Final clean export of
+`b6c4787` at `/private/tmp/cinder-p10-export.wFxvkC` passed the same full runner,
+including all 163 Rust tests per profile, without ignored research or Git metadata.
 P09 head `85efc22` passed hosted TEE CI and CodeRabbit with no inline findings.
 Unexpected: removed the study's single-episode shortcut. Self-review additionally
 required quiet customer commitments before absorption. G02 still gates live
