@@ -7,7 +7,7 @@
 | [P02 — Financial types and identities](PLAN.md#p02) | closed | Exact units and canonical identities prevent precision loss, overflow and cross-domain replay. | [#25](https://github.com/arnabnandikgp/cinder/pull/25), merged `17a29e2` |
 | [P03 — Unified ledger](PLAN.md#p03) | closed | One attributed ledger reconciles user/house claims and external exposure without hiding deficits or double-counting assets. | [#26](https://github.com/arnabnandikgp/cinder/pull/26), merged `3bd8c12` |
 | [P04 — Funding, fees and reconciliation](PLAN.md#p04) | in progress | Funding and fees post once to the correct owner; unexplained differences remain visible and restrict dependent actions. | [#27](https://github.com/arnabnandikgp/cinder/pull/27), based on merged P03 |
-| [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | Local verification; stacked above #27 |
+| [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
 | [P06 — Encrypted durability](PLAN.md#p06) | open | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | — |
 | [P07 — Order intents and reservations](PLAN.md#p07) | open | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | — |
 | [P08 — Funds and payouts](PLAN.md#p08) | open | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | — |
@@ -53,7 +53,7 @@ reports deployment failure, but its build logs were not inspected; do not infer 
 specific build error from that status alone. These integrations were left unchanged.
 
 P03 is merged with user authorization. P04 is open as PR #27 on the TEE trunk;
-P05 is a dependent layer in GitHub stack #28 and carries its own handoff below.
+P05 is open as PR #29 above #27 in GitHub stack #28, with its handoff below.
 P04's full local checks passed again with the reviewed arithmetic fix. Review
 and merge the remaining layers only with authorization. Native execution and
 customer-funds deployment are not implied by this foundation. P19/P21/P22 support
@@ -321,16 +321,21 @@ independent review or machine proof is claimed. The same full runner passed from
 clean staged export tree `84b578e8174b3fbe078a3f1a200028ecc59e2432`, excluding
 `work/`, `stays/` and Git metadata; compiler/dependency caches were reused to
 conserve disk space. Only documentation handoff clarifications follow that tree.
+Implementation commit: `326e21cc17cdef03afafa8ab326e1f3130d0a3a9`.
+The final PR-link handoff is documentation-only. Hosted Linux CI and external
+reviews are separate evidence; inspect the final PR head before any authorized
+merge. Existing Vercel/repository integration settings remain unchanged.
 Unexpected: SQLite requires signed database integers; added checked conversions.
 Tests caught fixture type mismatches; strict Clippy required naming the test-hook
 type. Fixed before full verification. No production cipher is supplied: a mandatory
 protection seam and opaque storage keep P06's security work explicit. Flat-only
 capacity and one attempt per hold intentionally prevent inventing P07/P09 policy.
-Next: submit P05 above #27 with gh stack,
-then review bottom-up. P06 must close the valid-history rollback counterexample
+Next: review #26, #27 and #29 bottom-up; merge only with user authorization.
+If a parent changes, restack/retest descendants and update their evidence. Keep
+the stack shallow before starting another layer. P06 must close the valid-history rollback counterexample
 with AEAD, independent authenticated freshness and writer fencing; do not expose
 private data or real native actions using the test-only protector.
-PR: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/29
 Merge: none.
 
 ## P06 — Encrypted durability
