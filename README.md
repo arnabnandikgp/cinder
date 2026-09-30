@@ -15,11 +15,12 @@ Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
 without operator assistance. The planning foundation and pinned workspace are
 merged, including exact financial primitives and canonical event identities.
-P03's joined ledger is merged. The P04–P11 stack adds funding/fee accounting,
+P03's joined ledger is merged. The P04–P12 stack adds funding/fee accounting,
 evidence containment, atomic replay, AEAD ciphertext replication and writer fencing
 against a trusted witness port, plus bound order intents and terminal-history
 reconciliation, partial funds movements, queued collateral-aware payouts and
-joined bounded margin/capital/liquidity admission under synthetic policies.
+joined bounded margin/capital/liquidity admission under synthetic policies, plus
+bounded liquidation, close exceptions and RF1/RF2 ADL restoration.
 Independent witness/Nitro qualification, native
 adapters and deployed services remain later phases.
 

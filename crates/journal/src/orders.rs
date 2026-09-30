@@ -330,6 +330,21 @@ impl State {
                     faulted: false,
                     bound_violated: false,
                 });
+                if i.reduce_only
+                    && self.ledger.reductions().iter().any(|r| {
+                        r.quantity.unit() == i.quantity.unit()
+                            && r.rows.iter().any(|r| {
+                                r.owner == i.request.account && !r.void && r.restored < r.amount
+                            })
+                    })
+                {
+                    self.restoration_event(
+                        RecordKey::Request(i.request),
+                        cinder_kernel::ledger::restoration::RestorationChange::Void {
+                            market: i.quantity.unit(),
+                        },
+                    )?;
+                }
                 self.control(&Control::Reserve {
                     request: i.request,
                     reservations: reservations.clone(),
@@ -480,6 +495,7 @@ impl State {
             authority_epoch,
             expires_at,
             possibly_exposed: false,
+            exposed_at: None,
             kind,
         });
         Ok(())
@@ -500,14 +516,16 @@ impl State {
         if attempt.kind == AttemptKind::Order && self.liquidation.is_some() {
             self.close_limit(order.intent.quantity.unit())?;
         }
-        if matches!(attempt.kind, AttemptKind::Order | AttemptKind::Emergency)
-            && (order.faulted
-                || order.abandoned
-                || order.terminal.is_some()
-                || self
-                    .order_observations
-                    .iter()
-                    .any(|o| o.attempt == attempt.key))
+        if matches!(
+            attempt.kind,
+            AttemptKind::Order | AttemptKind::Emergency | AttemptKind::Restoration
+        ) && (order.faulted
+            || order.abandoned
+            || order.terminal.is_some()
+            || self
+                .order_observations
+                .iter()
+                .any(|o| o.attempt == attempt.key))
         {
             return Err(ControlError::Unqualified);
         }
@@ -603,6 +621,13 @@ impl State {
     }
 
     fn fault_order(&mut self, index: usize) {
+        if let Some(r) = self
+            .restorations
+            .iter_mut()
+            .find(|r| r.request == self.orders[index].intent.request)
+        {
+            r.contained = true;
+        }
         if let Some(c) = self
             .closes
             .iter_mut()
@@ -626,6 +651,15 @@ impl State {
     /// original classification, so a REST/WS duplicate cannot change ownership.
     pub(crate) fn order_fill(&mut self, input: &Input, e: &Event) -> Result<Event, Error> {
         let (attempt, q, price, fee) = match &e.change {
+            Change::Restoration(
+                cinder_kernel::ledger::restoration::RestorationChange::Receipt {
+                    attempt,
+                    quantity,
+                    price,
+                    fee,
+                    ..
+                },
+            ) => (*attempt, *quantity, *price, *fee),
             Change::Fill {
                 target: FillTarget::Customer(a),
                 quantity,
@@ -706,6 +740,66 @@ impl State {
             || (current.signum() != q.lots().signum()
                 && current.unsigned_abs() >= q.lots().unsigned_abs());
         let mut classified = e.clone();
+        if let Some(ri) = self
+            .restorations
+            .iter()
+            .position(|r| r.request == attempt.request)
+        {
+            let (pnl, time) = match &e.change {
+                Change::Restoration(
+                    cinder_kernel::ledger::restoration::RestorationChange::Receipt {
+                        pnl,
+                        executed_at,
+                        ..
+                    },
+                ) => (*pnl, Some(*executed_at)),
+                Change::Economics(EconomicChange::Execution { pnl, .. }) => (*pnl, None),
+                _ => (None, None),
+            };
+            let eligible = e.policy == order.intent.policy
+                && q.unit() == order.intent.quantity.unit()
+                && q.lots().signum() == order.intent.quantity.lots().signum()
+                && price.unit() == q.unit()
+                && fee.unit() == self.config.quote
+                && q.lots() != 0
+                && price.ticks() >= order.intent.minimum.ticks()
+                && price.ticks() <= order.intent.maximum.ticks()
+                && fee.atoms() >= 0
+                && order
+                    .intent
+                    .maximum_fee_per_lot
+                    .atoms()
+                    .checked_mul(i128::from(q.lots().unsigned_abs()))
+                    .is_some_and(|n| fee.atoms() <= n)
+                && time.is_some_and(|t| t <= order.intent.expires_at && t <= input.observed_at)
+                && input.source_cut.is_some()
+                && !terminal_contradiction
+                && !order.abandoned
+                && self.attempts.iter().any(|a| {
+                    a.key == attempt
+                        && a.possibly_exposed
+                        && a.exposed_at
+                            .is_some_and(|start| time.is_some_and(|t| t >= start))
+                });
+            if !eligible || !valid {
+                self.restorations[ri].contained = true;
+            }
+            if terminal_contradiction || order.abandoned {
+                self.fault_order(index);
+            }
+            classified.change = Change::Restoration(
+                cinder_kernel::ledger::restoration::RestorationChange::Execution {
+                    attempt,
+                    quantity: q,
+                    price,
+                    fee,
+                    pnl,
+                    eligible,
+                },
+            );
+            self.order_fills.push((e.clone(), classified.clone()));
+            return Ok(classified);
+        }
         if let Some(close_index) = self
             .closes
             .iter()
@@ -792,6 +886,13 @@ impl State {
         original: &Event,
         cut: Option<u64>,
     ) -> Result<(), Error> {
+        for r in &mut self.restorations {
+            if self.ledger.reductions().iter().any(|b| {
+                b.incident == r.incident && (b.excess > 0 || b.spent.atoms() > r.budget.atoms())
+            }) {
+                r.contained = true;
+            }
+        }
         for close in &mut self.closes {
             if self.ledger.closes().iter().any(|b| {
                 b.attempt.request == close.request
@@ -801,6 +902,13 @@ impl State {
             }
         }
         let (attempt, q) = match &original.change {
+            Change::Restoration(
+                cinder_kernel::ledger::restoration::RestorationChange::Receipt {
+                    attempt,
+                    quantity,
+                    ..
+                },
+            ) => (*attempt, *quantity),
             Change::Fill {
                 target: FillTarget::Customer(a),
                 quantity,

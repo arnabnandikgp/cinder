@@ -106,6 +106,7 @@ impl Ledger {
                     return Err(Error::InvalidSign.into());
                 }
                 let owner = Owner::Customer(attempt.request.account);
+                self.void_restorations(attempt.request.account, quantity.unit());
                 let current = self.book(owner)?.positions[index].quantity().lots();
                 let total = quantity.lots().unsigned_abs();
                 let customer = if !binding.house

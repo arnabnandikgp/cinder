@@ -204,6 +204,18 @@ impl State {
         Ok(())
     }
     fn claim_owner_quiet(&self, id: AccountId) -> Result<(), ControlError> {
+        if self.ledger.reductions().iter().any(|r| {
+            r.rows
+                .iter()
+                .any(|row| row.owner == id && !row.void && row.restored < row.amount)
+                && r.attempt.is_some_and(|a| {
+                    self.orders
+                        .iter()
+                        .any(|o| o.attempt == Some(a) && !o.complete())
+                })
+        }) {
+            return Err(ControlError::Unqualified);
+        }
         // A flat snapshot is not a completed close if another order or funds
         // movement can still change this debtor's balance after absorption.
         if self

@@ -27,7 +27,7 @@ impl Writer {
             valid: true,
         };
         s.raw(b"CINDER-J\0");
-        s.raw(&6_u16.to_be_bytes());
+        s.raw(&7_u16.to_be_bytes());
         s.byte(tag);
         s
     }
@@ -95,7 +95,7 @@ impl<'a> Reader<'a> {
         if r.take(9)? != b"CINDER-J\0" {
             return Err(Error::Codec);
         }
-        if r.array::<2>()? != 6_u16.to_be_bytes() {
+        if r.array::<2>()? != 7_u16.to_be_bytes() {
             return Err(Error::Version);
         }
         if r.byte()? != tag {
@@ -235,7 +235,7 @@ fn read_target(r: &mut Reader<'_>) -> Result<FillTarget, Error> {
         _ => Err(Error::Codec),
     }
 }
-fn pnl(w: &mut Writer, p: NativePnl) {
+pub(crate) fn pnl(w: &mut Writer, p: NativePnl) {
     match p {
         NativePnl::Gross(v) => {
             w.byte(0);
@@ -247,7 +247,7 @@ fn pnl(w: &mut Writer, p: NativePnl) {
         }
     }
 }
-fn read_pnl(r: &mut Reader<'_>) -> Result<NativePnl, Error> {
+pub(crate) fn read_pnl(r: &mut Reader<'_>) -> Result<NativePnl, Error> {
     match r.byte()? {
         0 => Ok(NativePnl::Gross(r.item()?)),
         1 => Ok(NativePnl::NetOfFee(r.item()?)),
@@ -333,6 +333,10 @@ pub fn encode_event(e: &Event) -> Result<Vec<u8>, Error> {
     w.item(&e.key);
     w.raw(&e.policy.get().to_be_bytes());
     match &e.change {
+        Change::Restoration(c) => {
+            w.byte(10);
+            crate::restoration::encode_change(&mut w, c);
+        }
         Change::Close(change) => {
             w.byte(9);
             match change {
@@ -506,6 +510,7 @@ pub fn decode_event(bytes: &[u8]) -> Result<Event, Error> {
     let key = r.item()?;
     let policy = PolicyVersion::new(u32::from_be_bytes(r.array()?)).map_err(|_| Error::Codec)?;
     let change = match r.byte()? {
+        10 => Change::Restoration(crate::restoration::decode_change(&mut r)?),
         9 => Change::Close(match r.byte()? {
             0 => close::CloseChange::Bind {
                 house: r.bool()?,
@@ -900,6 +905,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Restoration(a) => {
+                w.byte(10);
+                crate::restoration::encode_action(&mut w, a);
+            }
             Control::Liquidation(action) => {
                 w.byte(9);
                 crate::liquidation::encode_action(&mut w, action);
@@ -1015,6 +1024,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             7 => Control::Risk(crate::risk::decode_action(&mut r)?),
             8 => Control::Protection(crate::protection::decode_action(&mut r)?),
             9 => Control::Liquidation(crate::liquidation::decode_action(&mut r)?),
+            10 => Control::Restoration(crate::restoration::decode_action(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -1122,6 +1132,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.option(&s.risk, crate::risk::encode_policy);
     w.option(&s.protection_policy, crate::protection::encode_policy);
     w.option(&s.liquidation, crate::liquidation::encode_policy);
+    crate::restoration::encode_state(&mut w, s);
     w.count(s.closes.len());
     for c in &s.closes {
         crate::liquidation::encode_close(&mut w, c);
@@ -1223,6 +1234,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.count(s.attempts.len());
     for a in &s.attempts {
         w.byte(match a.kind {
+            AttemptKind::Restoration => 5,
             AttemptKind::Emergency => 4,
             AttemptKind::Funds => 3,
             AttemptKind::Generic => 0,
@@ -1234,6 +1246,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
         w.u64(a.authority_epoch);
         w.u64(a.expires_at);
         w.byte(u8::from(a.possibly_exposed));
+        w.option(&a.exposed_at, |w, t| w.u64(*t));
     }
     w.count(s.authorities.len());
     for (a, epoch) in &s.authorities {

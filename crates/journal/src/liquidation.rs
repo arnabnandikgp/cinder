@@ -120,9 +120,19 @@ impl State {
                     .closes
                     .iter()
                     .any(|c| c.request == o.intent.request && c.contained)
+                && !self
+                    .restorations
+                    .iter()
+                    .any(|r| r.request == o.intent.request && r.contained)
         })
     }
     pub(crate) fn order_authority(&self, request: RequestKey, epoch: u64) -> bool {
+        if self.restorations.iter().any(|r| r.request == request) {
+            return self
+                .liquidation
+                .as_ref()
+                .is_some_and(|p| p.authority_epoch == epoch);
+        }
         if self
             .closes
             .iter()
@@ -335,6 +345,11 @@ impl State {
                         .closes()
                         .iter()
                         .any(|b| b.excess > 0 && b.quantity.unit() == p.market)
+                    && !self
+                        .ledger
+                        .reductions()
+                        .iter()
+                        .any(|r| r.excess > 0 && r.quantity.unit() == p.market)
                 {
                     return Err(ControlError::Unqualified);
                 }

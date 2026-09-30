@@ -33,7 +33,7 @@ implementation is a separate workstream, not the template for this architecture.
 | Joined margin, capital and liquidity admission | Implemented with conservative pending bounds and finite synthetic stress paths; not calibrated | P09 |
 | House protection and repeated claims | Implemented in the same ledger with explicit coverage/allocation ports, lifetime caps and actual recovery; live terms remain gated | P10 |
 | Liquidation and close exceptions | Funded bounded customer liquidation, private-close excess allocation and existing-house unwind; no calibrated depth or general crisis authority | P11 |
-| Native ADL and RF1/RF2 restoration | Planned; no execution service yet | P12 |
+| Native ADL and RF1/RF2 restoration | Qualified cuts, bounded exact-EDF schedule and original-basis postings implemented; no live ADL recognizer or execution service | P12 |
 | Pacifica observation and signing adapters | Planned; research evidence is not an implemented adapter | P13–P14 |
 | Solana custody, funding round trip, recovery claims | Planned; bounded prototypes remain evidence only | P15–P17 |
 | Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
@@ -414,8 +414,9 @@ removed lots proportionally, and schedules restoration with monotone prefix quot
 Largest remainders and canonical identity break finite-lot ties. Composed residual
 allocation has a less-than-two-lot bound, not account-splitting immunity. Changed
 close intent voids remaining restoration for that customer, not an opportunity to
-reweight allocations opportunistically. P12 must implement a scalable schedule,
-not a loop per arbitrarily tiny atomic lot. House exception exposure is funded,
+reweight allocations opportunistically. [P12](architecture/0012-adl-restoration.md)
+uses a certified repeated-block schedule with explicit work/space limits; unsupported
+profiles are contained, not assigned an alternative allocation. House exception exposure is funded,
 hard-limited and explicitly unwound, never an unrestricted speculative strategy.
 
 ## 8. Confidential runtime, persistence and client verification

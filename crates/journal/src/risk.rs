@@ -244,6 +244,7 @@ fn value(m: Market, q: i128, p: PriceTicks) -> Result<i128> {
 // Build once per report. Retained identities still prevent replay, but released
 // history must not multiply the work of every customer/scenario prefix.
 struct ActiveRisk<'a> {
+    requests: BTreeSet<(NetworkId, DeploymentId, AccountId, RequestId)>,
     holds: Vec<&'a Hold>,
     order_holds: Vec<&'a Hold>,
     orders: Vec<&'a crate::orders::Order>,
@@ -271,6 +272,7 @@ impl<'a> ActiveRisk<'a> {
             .filter(|o| o.remaining() != 0 && hold_ids.contains(&request_index(o.intent.request)))
             .collect();
         Self {
+            requests: hold_ids,
             holds,
             order_holds,
             orders,
@@ -420,6 +422,25 @@ impl State {
                     // hoped-for rebates, fees earned from customers or rewritten snapshots.
                     let key_ok = match &e.change {
                         Change::Fill { .. } => matches!(e.key, RecordKey::Economic(_)),
+                        Change::Restoration(
+                            cinder_kernel::ledger::restoration::RestorationChange::Observe {
+                                fee,
+                                ..
+                            }
+                            | cinder_kernel::ledger::restoration::RestorationChange::Execution {
+                                fee,
+                                ..
+                            },
+                        ) if fee.atoms() >= 0 => matches!(e.key, RecordKey::Economic(_)),
+                        Change::Restoration(
+                            cinder_kernel::ledger::restoration::RestorationChange::Declare {
+                                ..
+                            }
+                            | cinder_kernel::ledger::restoration::RestorationChange::Void { .. },
+                        ) => matches!(e.key, RecordKey::Request(_)),
+                        Change::Restoration(
+                            cinder_kernel::ledger::restoration::RestorationChange::Bind { .. },
+                        ) => matches!(e.key, RecordKey::Attempt(_)),
                         Change::Close(cinder_kernel::ledger::close::CloseChange::Bind {
                             ..
                         }) => matches!(e.key, RecordKey::Attempt(_)),
@@ -473,6 +494,10 @@ impl State {
             o.intent.quantity.unit() == market.unit()
                 && owner.is_none_or(|id| {
                     id == o.intent.request.account
+                        && !self
+                            .restorations
+                            .iter()
+                            .any(|r| r.request == o.intent.request)
                         && !self.closes.iter().any(|c| {
                             c.request == o.intent.request
                                 && c.kind == crate::liquidation::Kind::HouseUnwind
@@ -509,6 +534,39 @@ impl State {
                         .ok_or(ControlError::Capacity)?,
                 )?,
             )?;
+        }
+        if let Some(owner) = owner {
+            for r in self.ledger.reductions().iter().filter(|r| {
+                r.quantity.unit() == market.unit()
+                    && r.attempt
+                        .is_some_and(|a| active.requests.contains(&request_index(a.request)))
+            }) {
+                let Some(row) = r.rows.iter().find(|r| r.owner == owner && !r.void) else {
+                    continue;
+                };
+                // Independent row maxima deliberately overbound correlated quota
+                // outcomes; never assume a favorable partial-fill order.
+                let q = i128::from((row.amount - row.restored).min(r.target - r.consumed));
+                let edge = if r.quantity.lots() < 0 {
+                    buys = add(buys, q)?;
+                    r.price.ticks().saturating_sub(mark.ticks())
+                } else {
+                    sells = add(sells, q)?;
+                    mark.ticks().saturating_sub(r.price.ticks())
+                };
+                let (n, d) = market.conversion();
+                let loss = mul_div(
+                    q.checked_mul(i128::from(edge))
+                        .ok_or(ControlError::Capacity)?,
+                    n,
+                    d,
+                    Rounding::Ceil,
+                )
+                .map_err(|_| ControlError::Capacity)?;
+                if q > 0 {
+                    cost = add(cost, add(loss, 2)?)?;
+                }
+            }
         }
         Ok((buys, sells, cost))
     }
@@ -770,7 +828,11 @@ impl State {
         let work = (self.config.customers.len() + 3)
             .saturating_mul(self.config.markets.len())
             .saturating_mul(
-                active.orders.len().saturating_mul(self.closes.len() + 1)
+                active
+                    .orders
+                    .len()
+                    .saturating_mul(self.closes.len() + self.restorations.len() + 1)
+                    + self.ledger.reductions().len().saturating_mul(97)
                     + 4 * reservations
                     + 2 * self.selections.len()
                     + 4 * self.config.markets.len()
@@ -787,6 +849,25 @@ impl State {
         if work > 1_000_000 {
             return Err(ControlError::Unqualified);
         }
+        let scheduler_work = policy
+            .paths
+            .iter()
+            .flat_map(|p| &p.steps)
+            .flat_map(|s| &s.events)
+            .fold(0usize, |n, e| {
+                n.saturating_add(match &e.change {
+                    Change::Restoration(
+                        cinder_kernel::ledger::restoration::RestorationChange::Declare { .. },
+                    ) => 2_000_000,
+                    Change::Restoration(
+                        cinder_kernel::ledger::restoration::RestorationChange::Execution { .. },
+                    ) => 131_072,
+                    _ => 0,
+                })
+            });
+        if work.saturating_add(scheduler_work) > 8_000_000 {
+            return Err(ControlError::Unqualified);
+        }
         let current = self.risk_snapshot(
             &active,
             &self.ledger,
@@ -797,6 +878,7 @@ impl State {
         let f = &current.flags;
         let mut admissible = !self.frozen
             && !self.close_contained()
+            && !self.restorations.iter().any(|r| r.contained)
             && self.protection_ready().is_ok()
             && !f.insolvent
             && !f.illiquid
@@ -865,7 +947,7 @@ impl State {
         })
     }
     pub(crate) fn risk_gate(&self) -> Result<()> {
-        if self.close_contained() {
+        if self.close_contained() || self.restorations.iter().any(|r| r.contained) {
             return Err(ControlError::Unqualified);
         }
         self.protection_ready()?;
@@ -904,6 +986,7 @@ impl State {
                 }
                 Control::Protection(_) => false,
                 Control::Liquidation(_) => false,
+                Control::Restoration(a) => matches!(a, crate::restoration::Action::Prepare { .. }),
                 Control::Order(orders) => !matches!(
                     orders,
                     crate::orders::Action::AdvanceAuthority { .. }

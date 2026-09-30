@@ -14,7 +14,7 @@
 | [P09 — Joined risk admission](PLAN.md#p09) | in progress | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | [#33](https://github.com/arnabnandikgp/cinder/pull/33), stacked above #32 |
 | [P10 — Protection claims](PLAN.md#p10) | in progress | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | [#34](https://github.com/arnabnandikgp/cinder/pull/34), stacked above #33 |
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | in progress | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | [#35](https://github.com/arnabnandikgp/cinder/pull/35), stacked above #34 |
-| [P12 — ADL and restoration](PLAN.md#p12) | open | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | — |
+| [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | Local implementation above #35 |
 | [P13 — Pacifica observations](PLAN.md#p13) | open | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | — |
 | [P14 — Pacifica execution](PLAN.md#p14) | open | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | — |
 | [P15 — Solana vault](PLAN.md#p15) | open | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | — |
@@ -575,10 +575,23 @@ Merge: none.
 
 ## P12 — ADL and restoration
 
-Work: not started.
-Verification: not run; acceptance in PLAN P12.
-Unexpected: none yet.
-Next: promote RF2 compiler vectors, implement bounded-resource schedule and join actual RF1 restoration postings.
+Work: 2026-09-30 — implemented qualified ADL observation/declaration, fixed
+proportional reduction and bounded exact-EDF quota compilation; joined funded
+RF1 replacement, original basis/refunds, private-intent voids, source-time bounds,
+house exceptions and terminal-history release to the existing ledger/order journal.
+Verification: full pinned runner passed 203 Rust tests per debug/release profile,
+two doctests, 23 repository tests, formatting, strict Clippy and build. A final
+joined restoration stress-replay test also passes (17 restoration groups total);
+clean export including it is pending. P11 head `c702021` passed both hosted checks
+and CodeRabbit.
+Unexpected: the research per-lot tape cannot support arbitrary atomic quantities.
+The compiler now skips only affine-certified identical EDF blocks, with explicit
+owner/work/storage bounds and failure rather than an alternative allocation.
+Tests cover trillion-lot accepted profiles and an unsupported irregular profile.
+Source time, immutable cap/depth revisions and cumulative positive-cost limits
+are explicit. No live ADL source or margin-isolated subaccount claim was added.
+Next: finish full/offline and clean-export verification, publish P12, then implement
+P13 sanitized Pacifica observations using current primary docs. Do not enter P15.
 PR: none.
 Merge: none.
 

@@ -126,10 +126,14 @@ pub struct Attempt {
     pub expires_at: u64,
     /// Once true, reconciliation is required even if no reply reached the caller.
     pub possibly_exposed: bool,
+    /// Durable injected time of possible exposure, not transport acknowledgement.
+    pub exposed_at: Option<u64>,
 }
 /// Durable semantic scope for a one-shot exposure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttemptKind {
+    /// Funded original-basis replacement after one qualified native ADL event.
+    Restoration,
     /// Policy-qualified liquidation or existing house-exception unwind.
     Emergency,
     /// Exact admitted transfer/payout capability.
@@ -150,6 +154,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Fixed ADL declaration and funded RF1/RF2 replacement lifecycle.
+    Restoration(crate::restoration::Action),
     /// Funded bounded liquidation and exceptional house cleanup.
     Liquidation(crate::liquidation::Action),
     /// Explicit house coverage policy and authenticated allocation decisions.
@@ -270,6 +276,8 @@ pub struct State {
     pub(crate) protection_policy: Option<crate::protection::Policy>,
     pub(crate) liquidation: Option<crate::liquidation::Policy>,
     pub(crate) closes: Vec<crate::liquidation::Close>,
+    pub(crate) restorations: Vec<crate::restoration::Replacement>,
+    pub(crate) restoration_limit: Option<(PolicyVersion, QuoteAtoms)>,
     pub(crate) selections: Vec<crate::risk::Selection>,
     pub(crate) funds: Vec<crate::funds::Operation>,
     pub(crate) funds_observations: Vec<crate::funds::Observation>,
@@ -307,6 +315,8 @@ impl State {
             protection_policy: None,
             liquidation: None,
             closes: Vec::new(),
+            restorations: Vec::new(),
+            restoration_limit: None,
             selections: Vec::new(),
             funds: Vec::new(),
             funds_observations: Vec::new(),
@@ -402,6 +412,7 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Restoration(action) => self.restoration_action(action)?,
             Control::Liquidation(action) => self.liquidation_action(action)?,
             Control::Protection(action) => self.protection_action(action)?,
             Control::Risk(action) => self.risk_action(action)?,
@@ -491,6 +502,7 @@ impl State {
                     .ok_or(ControlError::Invalid)?;
                 self.order_exposure(attempt)?;
                 self.close_exposure(attempt)?;
+                self.restoration_exposure(attempt)?;
                 self.funds_exposure(attempt)?;
                 self.exposure_qualified(attempt)?;
                 let a = self
@@ -512,6 +524,7 @@ impl State {
                     return Err(ControlError::Invalid);
                 }
                 a.possibly_exposed = true;
+                a.exposed_at = Some(self.now);
             }
         }
         Ok(())
@@ -569,6 +582,8 @@ impl State {
         let mut inputs = Vec::new();
         for input in &tx.inputs {
             let valid = input.authority_epoch != 0
+                && !input.event.as_ref().is_some_and(|e| matches!(&e.change,Change::Restoration(c) if !matches!(c,
+                    cinder_kernel::ledger::restoration::RestorationChange::Observe{..}|cinder_kernel::ledger::restoration::RestorationChange::Receipt{..})))
                 && !input.event.as_ref().is_some_and(|e|matches!(&e.change,Change::Close(_)))
                 && !input.event.as_ref().is_some_and(|e| matches!(&e.change,
                     Change::Protection(c) if !matches!(c, cinder_kernel::ledger::protection::ProtectionChange::Recognize{..})))
@@ -649,6 +664,7 @@ impl State {
                         controls = candidate
                             .order_exposure(a)
                             .and_then(|()| candidate.close_exposure(a))
+                            .and_then(|()| candidate.restoration_exposure(a))
                             .and_then(|()| candidate.funds_exposure(a))
                             .and_then(|()| candidate.exposure_qualified(a))
                             .err();

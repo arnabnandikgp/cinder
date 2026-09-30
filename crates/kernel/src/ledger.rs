@@ -10,6 +10,7 @@ pub mod economics;
 pub mod evidence;
 pub mod funds;
 pub mod protection;
+pub mod restoration;
 use economics::*;
 use evidence::*;
 
@@ -95,6 +96,8 @@ pub enum FillTarget {
 /// Phase-local transition schema. No outbound actions or risk admission are exposed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
+    /// Qualified native ADL and original-basis bounded restoration economics.
+    Restoration(restoration::RestorationChange),
     /// Qualified bounded-close allocation and actual exceptional house execution.
     Close(close::CloseChange),
     /// House protection recognition and reclassification, not separate fund assets.
@@ -268,6 +271,7 @@ pub struct Ledger {
     movements: Vec<funds::Movement>,
     protection: protection::Protection,
     closes: Vec<close::Binding>,
+    reductions: Vec<restoration::Reduction>,
     bindings: Vec<Binding>,
     events: Vec<Event>,
     unresolved: Vec<EventKey>,
@@ -344,6 +348,7 @@ impl Ledger {
             movements: Vec::new(),
             protection: protection::Protection::new(config.quote),
             closes: Vec::new(),
+            reductions: Vec::new(),
             bindings: Vec::new(),
             events: Vec::new(),
             unresolved: Vec::new(),
@@ -482,6 +487,7 @@ impl Ledger {
     }
     fn apply_distinct(&mut self, event: &Event) -> Result<(), LedgerError> {
         match &event.change {
+            Change::Restoration(change) => self.apply_restoration(&event.key, change)?,
             Change::Close(change) => self.apply_close(&event.key, change)?,
             Change::Protection(change) => self.apply_protection(&event.key, change)?,
             Change::Funds(change) => self.apply_funds(&event.key, change)?,
@@ -586,6 +592,9 @@ impl Ledger {
             FillTarget::House => Owner::House,
             FillTarget::Unattributed => Owner::Suspense,
         };
+        if let Owner::Customer(account) = owner {
+            self.void_restorations(account, quantity.unit());
+        }
         self.book_mut(owner)?
             .execute(index, market, quantity, price)?;
         let realized = self.venue.execute(index, market, quantity, price)?;

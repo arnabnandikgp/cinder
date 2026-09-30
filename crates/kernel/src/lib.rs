@@ -13,6 +13,7 @@ pub mod identity;
 pub mod ledger;
 pub mod math;
 pub mod position;
+pub mod quota;
 
 /// Explicit primitive rejection; none of these errors mutates a ledger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

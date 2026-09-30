@@ -135,6 +135,22 @@ fractional conversion tests retain split-owner residue. Actual adverse execution
 is not capped at a prior reserve. Synthetic depth, prices and support budgets
 are qualification inputs, not live calibration or an execution guarantee.
 
+### P12: original-basis restoration and bounded quota compilation
+
+[ADR 0012](../architecture/0012-adl-restoration.md) promotes W01/W03/W09 RF1/RF2
+into the single ledger/journal. Source reference hashes:
+`proportional-allocation.cjs` SHA-256
+`6d79cbe82ce9190741a10ae4bb0ecf80e18fe5409dcd14720d82151828ad2c3b`;
+`proportional-allocation-checks.cjs`
+`69b7f19ba330e2f05cb8c8204ae529ecfb0095fbb6c9cfa433f926323b6b325f`.
+The production compiler uses certified repeated blocks and explicit resource
+limits instead of the research per-lot tape. Tracked differential tests preserve
+the 3,905 small, 250 seeded, 10,000-lot and account-splitting vectors; additional
+large profiles and bounded failure are tested. Joined ledger tests cover actual
+basis/refunds, 1,024 long/short fill chunkings, native conversion residues, no gap
+funding, changed intent, terminal-history release and post-submission shocks.
+Synthetic policies are not calibration, independent review or universal solvency.
+
 ### Financial studies: rerun at P00
 
 Command from the existing research worktree:
