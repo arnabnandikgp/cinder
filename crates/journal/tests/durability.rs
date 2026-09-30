@@ -44,9 +44,18 @@ fn replay_rejects_corrupt_bytes_versions_and_recomputed_wrong_projection() {
         Journal::open(Playback(corrupt), FixtureProtection, config()).unwrap_err(),
         Error::Codec
     );
-    for index in [10, 13] {
+    // Wire revisions and financial-engine revisions are distinct. Both genesis
+    // and transactions must reject old engine 1 rather than reinterpret history.
+    for (record, index, revision) in [
+        (0, 10, 99),
+        (0, 13, 99),
+        (0, 13, 1),
+        (1, 10, 99),
+        (1, 13, 99),
+        (1, 13, 1),
+    ] {
         let mut modified = frames.clone();
-        let f = &mut modified[1];
+        let f = &mut modified[record];
         let context = RecordContext {
             domain: config().domain,
             sequence: f.head.sequence,
@@ -57,7 +66,8 @@ fn replay_rejects_corrupt_bytes_versions_and_recomputed_wrong_projection() {
             .unwrap()
             .as_bytes()
             .to_vec();
-        bytes[index] = 99;
+        assert_eq!(&bytes[12..14], &2_u16.to_be_bytes());
+        bytes[index] = revision;
         f.opaque = FixtureProtection.seal(context, &bytes).unwrap();
         rehash(f);
         assert_eq!(

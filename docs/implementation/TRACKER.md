@@ -330,7 +330,19 @@ Tests caught fixture type mismatches; strict Clippy required naming the test-hoo
 type. Fixed before full verification. No production cipher is supplied: a mandatory
 protection seam and opaque storage keep P06's security work explicit. Flat-only
 capacity and one attempt per hold intentionally prevent inventing P07/P09 policy.
-Next: review #26, #27 and #29 bottom-up; merge only with user authorization.
+Review restack, 2026-09-30: inherited the merged P03 whole-fill fix and new
+regressions via P04. Only tracker handoff text conflicted during rebase; retained
+P03's merge evidence and P05's implementation record. Advanced financial-engine
+revision to 2 so earlier journal semantics cannot be silently replayed under the
+corrected arithmetic. Genesis and transaction tests reject revision 1; wire and
+SQLite schema versions are unchanged. No production migration or P06 work is
+implied. Full pinned local offline revalidation passed on tree
+`8c8a13acd86edd58dca6f2f4a5d6efdf2f6ac7ab`: 85 Rust tests plus 2 compile-fail
+doctests in debug/release, 23 script tests, formatting, both strict Clippy profiles
+and build. The process-kill parents still exercise the intentionally ignored
+worker. Only this verification note follows the tested tree; no additional
+clean-export, container or live qualification is claimed for this follow-up.
+Next: review #27 and #29 bottom-up; merge only with user authorization.
 If a parent changes, restack/retest descendants and update their evidence. Keep
 the stack shallow before starting another layer. P06 must close the valid-history rollback counterexample
 with AEAD, independent authenticated freshness and writer fencing; do not expose

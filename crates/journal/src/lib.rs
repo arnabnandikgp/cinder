@@ -9,6 +9,9 @@ use model::*;
 use sha2::{Digest, Sha256};
 use std::fmt;
 
+// Whole-fill reversal allocation changes replay semantics; reject revision 1.
+const ENGINE_REVISION: u16 = 2;
+
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Head {
@@ -191,7 +194,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             return Err(Error::Conflict);
         }
         let mut w = wire::Writer::new(10);
-        w.raw(&1_u16.to_be_bytes());
+        w.raw(&ENGINE_REVISION.to_be_bytes());
         w.blob(&wire::encode_config(&config)?);
         let context = RecordContext {
             domain: config.domain,
@@ -274,7 +277,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             };
             let bytes = self.protection.open(context, &frame.opaque)?;
             let mut r = wire::Reader::new(bytes.as_bytes(), if n == 0 { 10 } else { 11 })?;
-            if r.array::<2>()? != 1_u16.to_be_bytes() {
+            if r.array::<2>()? != ENGINE_REVISION.to_be_bytes() {
                 return Err(Error::Version);
             }
             if n == 0 {
@@ -336,7 +339,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
         }
         let (state, receipt) = self.state.advance(&tx)?;
         let mut w = wire::Writer::new(11);
-        w.raw(&1_u16.to_be_bytes());
+        w.raw(&ENGINE_REVISION.to_be_bytes());
         w.blob(&bytes);
         w.blob(&wire::receipt(&receipt)?);
         w.raw(&wire::state_commitment(&state)?);

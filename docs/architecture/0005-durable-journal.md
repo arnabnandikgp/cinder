@@ -140,7 +140,7 @@ Canonical frames use `CINDER-J\0`, big-endian u16 wire version 1, and a record t
 | 5 / 6 / 7 | State / observation / issue commitment components |
 | 10 / 11 | Protected genesis / protected committed transaction |
 
-Tags 10/11 also carry financial-engine revision 1. Lengths are bounded u64s;
+Tags 10/11 also carry financial-engine revision 2. Lengths are bounded u64s;
 option tags are exactly 0/1; primitive financial encodings retain P02 versions and
 units. Trailing bytes, truncation and unknown revisions reject. Every P03/P04 event
 variant, including all native PnL and funding conventions, is encoded losslessly.
@@ -151,8 +151,14 @@ SQLite application ID is `0x43494e44`, current layout version 2. An explicit
 `V1ToV2` migration transaction preserves opaque bodies and adds the CAS head plus
 immutability guards. V1 is a **synthetic compatibility fixture**, not a claim that
 an earlier production journal existed. Unknown schemas reject; failed migration
-leaves the old schema/records intact. Future financial semantics must not silently
-reuse engine revision 1; introduce an explicit reviewed migration/version path.
+leaves the old schema/records intact. Engine revision 2 incorporates P03's reviewed
+whole-fill reversal allocation; old revision 1 records reject, even if a particular
+history would happen to replay identically. This is separate from wire version 1
+and SQLite layout 2. No automatic financial migration is supplied and no production
+journal is claimed to exist. Disposable fixtures can be recreated; any retained
+revision 1 evidence requires an explicitly reviewed migration before reuse. Future
+financial semantics must likewise advance the engine revision rather than silently
+reinterpreting history.
 
 Opaque frame hashes bind sequence, predecessor, body length and body. Replay checks
 the contiguous chain, independently expected configuration, unique transaction
