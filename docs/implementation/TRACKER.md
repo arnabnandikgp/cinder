@@ -543,11 +543,12 @@ Work: 2026-09-30 — implemented bounded liquidation/close allocation and except
 house unwind, using the existing order status, shared holds and authoritative ledger.
 Qualified policy bounds size, price, fees, time and funded support. Actual partial,
 over-limit and late fills retain their economics without silently flipping users.
-Verification: initial full pinned runner passed 178 Rust tests per profile, two
-doctests, 23 repository tests, formatting, strict Clippy and build. Then added a
-local-abandonment contradiction regression and restacked on the P10 reviewed fix;
-the final focused close suite passes 17 groups including 432 long/short allocation
-cases and a joined close scenario. Final clean-export full verification follows.
+Verification: clean tracked export of `3ad800f` at
+`/private/tmp/cinder-p11-export.OtlviF` passed the full pinned runner: 181 Rust
+tests per debug/release profile, two doctests, 23 repository tests, formatting,
+strict Clippy and build. The close suite has 17 groups including 432 long/short
+allocation cases, local-abandonment contradictions and a joined close scenario.
+P10 reviewed head `a1309af` also passed both hosted checks and CodeRabbit.
 Unexpected: split-owner execution must partition the whole exact native fill value
 before rounding, rather than require both artificial child notionals to be exact.
 Self-review added explicit never-exposed abandonment and final-cut authority
@@ -555,7 +556,7 @@ revalidation; neither can release an exposed unknown action. P10 claim absorptio
 now requires full order completion, including these house-only reserved exits.
 Native crisis recovery/incident resumption and live calibration remain gated; this
 controller is deliberately limited to funded, source-qualified bounded exits.
-Next: complete clean-export verification, publish P11 above #34, then continue P12
+Next: publish P11 above #34, then continue P12
 RF1/RF2 and bounded-resource quota scheduling. Do not merge or enter P15.
 PR: none.
 Merge: none.
