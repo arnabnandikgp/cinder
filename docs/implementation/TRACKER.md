@@ -36,8 +36,8 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p11-liquidation-exceptions`, created with `gh stack add` above
-P10 #34 (`a1309af`, including reviewed scenario-key fix). User authorized continuous
+Current branch: `tee/p12-adl-restoration`, created with `gh stack add` above
+P11 #35 (`c702021`). User authorized continuous
 stacked P06–P14 implementation while away, stopping before P15; no merges or new
 external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
 `work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
@@ -579,10 +579,10 @@ Work: 2026-09-30 — implemented qualified ADL observation/declaration, fixed
 proportional reduction and bounded exact-EDF quota compilation; joined funded
 RF1 replacement, original basis/refunds, private-intent voids, source-time bounds,
 house exceptions and terminal-history release to the existing ledger/order journal.
-Verification: full pinned runner passed 203 Rust tests per debug/release profile,
-two doctests, 23 repository tests, formatting, strict Clippy and build. A final
-joined restoration stress-replay test also passes (17 restoration groups total);
-clean export including it is pending. P11 head `c702021` passed both hosted checks
+Verification: clean export of `da74dae` at
+`/private/tmp/cinder-p12-export.IXE1mL` passed the full pinned runner: 204 Rust tests
+per debug/release profile, two doctests, 23 repository tests, formatting, strict
+Clippy and build (17 restoration groups total). P11 head `c702021` passed both hosted checks
 and CodeRabbit.
 Unexpected: the research per-lot tape cannot support arbitrary atomic quantities.
 The compiler now skips only affine-certified identical EDF blocks, with explicit
@@ -590,7 +590,7 @@ owner/work/storage bounds and failure rather than an alternative allocation.
 Tests cover trillion-lot accepted profiles and an unsupported irregular profile.
 Source time, immutable cap/depth revisions and cumulative positive-cost limits
 are explicit. No live ADL source or margin-isolated subaccount claim was added.
-Next: finish full/offline and clean-export verification, publish P12, then implement
+Next: publish P12, then implement
 P13 sanitized Pacifica observations using current primary docs. Do not enter P15.
 PR: none.
 Merge: none.

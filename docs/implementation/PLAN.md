@@ -304,9 +304,9 @@ schedule, original-basis restoration and risk-unit policy. Preserve different ev
 families. Native account splitting is enabled only with G01 evidence; one tested
 risk unit is sufficient initially. Evidence: W01, W03, W09; V07 and allocation bounds.
 
-- [ ] Actual restoration, ADL fee refund and signed basis implement RF1; no gap funding or promised fill on an unexecuted quantity.
-- [ ] Each prefix respects RF2 quotas and composed bounds; no per-atomic-lot unbounded loop, operator reweighting or historical-manifest bypass.
-- [ ] Changed close intent, partial/late fill, prior capital reservation and post-submission shock preserve already owed economics.
+- [x] Actual restoration, ADL fee refund and signed basis implement RF1; no gap funding or promised fill on an unexecuted quantity.
+- [x] Each prefix respects RF2 quotas and composed bounds; no per-atomic-lot unbounded loop, operator reweighting or historical-manifest bypass.
+- [x] Changed close intent, partial/late fill, prior capital reservation and post-submission shock preserve already owed economics.
 
 <a id="p13"></a>
 ## P13 — Pacifica observations and capability profile
