@@ -18,7 +18,7 @@
 | [P13 — Pacifica observations](PLAN.md#p13) | in progress | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | [#37](https://github.com/arnabnandikgp/cinder/pull/37), stacked above #36 |
 | [P14 — Pacifica execution](PLAN.md#p14) | in progress | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), stacked above #37 |
 | [P15 — Solana vault](PLAN.md#p15) | in progress | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), stacked above #38 |
-| [P16 — Funding coordinator](PLAN.md#p16) | in progress | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | `tee/p16-funding-coordinator`, above #39; publication pending |
+| [P16 — Funding coordinator](PLAN.md#p16) | in progress | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), stacked above #39 |
 | [P17 — Recovery program](PLAN.md#p17) | open | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | — |
 | [P18 — Private API and SDK](PLAN.md#p18) | open | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | — |
 | [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
@@ -36,11 +36,11 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p16-funding-coordinator`, above ready P15 PR #39. The user's
+Current branch: `tee/p16-funding-coordinator`, ready PR #40 above P15 #39. The user's
 latest request authorizes this next implementation/stacked PR, not a merge,
 deployment, external transaction or P17. Preserve unrelated `stays/` and ignored
 `work/`. P16's final clean-export debug/release runner and codec/SBF checks pass;
-publication is next. Production source qualification, identity and
+hosted checks/review are pending. Production source qualification, identity and
 key governance remain G01/G03/G05 gates. See the P16 log below.
 Prior stack-wide CodeRabbit triage confirmed eight
 unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
@@ -795,9 +795,13 @@ financial/authority checks before delivery, rejected noncanonical signed bytes,
 and retained a regression for every older journal revision including 17. This is
 not an independent security audit. The first whole-workspace run failed only the
 old revision-17 golden assertion; it was updated and both final profiles pass.
-Next: publish P16
-above #39. Stop before P17 until requested; do not merge the stack automatically.
-PR: none.
+Implementation commit: `c10354c`; only verification/PR-link handoff follows the
+clean-export tested source. Native GitHub stack #28 contains the new P16 layer;
+older PRs were unchanged. No merge was performed.
+Next: review ready PR #40 above #39 and its hosted checks/review. P17 adds final
+recovery claims/activation with preserved paid counters; stop before it until
+requested and do not merge the stack automatically.
+PR: https://github.com/arnabnandikgp/cinder/pull/40.
 Merge: none.
 
 ## P17 — Recovery program
