@@ -10,7 +10,7 @@
 | [P05 — Durable journal](PLAN.md#p05) | in progress | Postings, holds and consumed-event keys commit atomically and rebuild identically after a crash. | [#29](https://github.com/arnabnandikgp/cinder/pull/29), stacked above #27 |
 | [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
 | [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), stacked above #30 |
-| [P08 — Funds and payouts](PLAN.md#p08) | in progress | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | Local implementation above #31 |
+| [P08 — Funds and payouts](PLAN.md#p08) | in progress | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | [#32](https://github.com/arnabnandikgp/cinder/pull/32), stacked above #31 |
 | [P09 — Joined risk admission](PLAN.md#p09) | open | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | — |
 | [P10 — Protection claims](PLAN.md#p10) | open | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | — |
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | open | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | — |
@@ -453,9 +453,9 @@ Unexpected: the partial-receipt algebra needed an explicit unpaired contra-balan
 to avoid double backing when arrival precedes debit. P08 introduced a shared marked
 collateral prerequisite ahead of P09; pending orders still refuse this path until
 P09 supplies their bounded outcomes. Wire 3 / engine 4 reject old semantics.
-Next: finish final full/clean-export checks, publish P08 above #31 and continue
-P09. No new live tests, merge or P15 authority is implied.
-PR: none.
+Next: P08 is ready as #32. Continue P09; inspect hosted checks/reviews at phase
+boundaries. No new live tests, merge or P15 authority is implied.
+PR: https://github.com/arnabnandikgp/cinder/pull/32
 Merge: none.
 
 ## P09 — Joined risk admission
