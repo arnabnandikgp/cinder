@@ -12,7 +12,7 @@
 | [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), stacked above #30 |
 | [P08 — Funds and payouts](PLAN.md#p08) | in progress | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | [#32](https://github.com/arnabnandikgp/cinder/pull/32), stacked above #31 |
 | [P09 — Joined risk admission](PLAN.md#p09) | in progress | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | [#33](https://github.com/arnabnandikgp/cinder/pull/33), stacked above #32 |
-| [P10 — Protection claims](PLAN.md#p10) | in progress | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | Local implementation above #33 |
+| [P10 — Protection claims](PLAN.md#p10) | in progress | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | [#34](https://github.com/arnabnandikgp/cinder/pull/34), stacked above #33 |
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | open | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | — |
 | [P12 — ADL and restoration](PLAN.md#p12) | open | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | — |
 | [P13 — Pacifica observations](PLAN.md#p13) | open | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | — |
@@ -523,10 +523,10 @@ required quiet customer commitments before absorption. G02 still gates live
 coverage/priority; caps bound rather than prove away coordinated extraction.
 Ambiguous recovery during a reopened debt episode retains assets and a named
 containment fault; no discretionary clear-flags command. No outside fund shares.
-Next: publish the verified P10 layer, then implement P11 bounded liquidation and
+Next: P10 is ready as #34. Implement P11 bounded liquidation and
 late-close house exceptions. Native house capital payout remains disabled pending
 qualified custody integration; a designation release is not an external payout.
-PR: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/34
 Merge: none.
 
 ## P11 — Liquidation and exceptions
