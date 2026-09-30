@@ -37,15 +37,17 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
 Current branch: `tee/p16-funding-coordinator`, ready PR #40 above P15 #39. The user's
-latest request authorizes this next implementation/stacked PR, not a merge,
+latest request authorizes stack-wide review fixes including P15/P16, not a merge,
 deployment, external transaction or P17. Preserve unrelated `stays/` and ignored
-`work/`. P16's final clean-export debug/release runner and codec/SBF checks pass;
-hosted checks/review are pending. Production source qualification, identity and
-key governance remain G01/G03/G05 gates. See the P16 log below.
+`work/`. Four relevant findings are fixed on their owning branches and locally
+restacked: P05's acceptance contract/P13 exact-input resolution, P08 cancellation,
+P13 rejected-page diagnostics, and P16 emergency exits. Focused regression checks
+pass; the new combined clean-export run and publication are pending. Production
+source qualification, identity and key governance remain G01/G03/G05 gates.
 Prior stack-wide CodeRabbit triage confirmed eight
 unresolved findings were confirmed across P09/P12/P13/P14; fixes are on their owning
 branches (with P13's cumulative byte-budget fix in P05) and locally restacked.
-Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14/P15=17, P16=18; older revisions
+Engine revisions are P09=11, P10=12, P11=13, P12=16, P13/P14/P15=19, P16=20; older revisions
 fail closed. Final clean-export verification of code head `dc0ee4b` at
 `/private/tmp/cinder-stack-review.3fhk3G` passed the complete pinned offline runner:
 245 Rust tests per debug/release profile, two compile-fail doctests per profile,
@@ -57,6 +59,18 @@ Private authentication, native completeness, hardware attestation and deployment
 remain their own gates; this is an offline-qualified implementation stack.
 
 ### CodeRabbit coverage snapshot (2026-09-30)
+
+Latest triage, 2026-10-01 (supersedes the historical rows below): P04/P07 now have
+completed full reviews with no actionable finding. P05 #4147277655 is addressed
+by its explicit P13 acceptance contract and P13's bounded qualified resolution
+port. P08's later summary finding is reproduced/fixed with cancellation retaining
+faulted holds. P13's later summary finding is reproduced/fixed with transactional
+diagnostic inspection. P15's latest full review has no concrete defect; optional
+runtime hardening is not a new offline acceptance requirement. P16 #4148900279
+is reproduced/fixed without weakening ordinary/restoration risk fences. The 14
+older resolved threads were checked for bot confirmation; remaining unchanged
+layers have no new relevant actionable finding. New hosted reviews after the
+upcoming push are not implied by this snapshot.
 
 | Phase / PR | Existing review disposition |
 | --- | --- |
