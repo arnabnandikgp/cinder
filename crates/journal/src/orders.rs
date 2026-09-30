@@ -497,6 +497,9 @@ impl State {
         if !self.order_authority(attempt.key.request, attempt.authority_epoch) {
             return Err(ControlError::Invalid);
         }
+        if attempt.kind == AttemptKind::Order && self.liquidation.is_some() {
+            self.close_limit(order.intent.quantity.unit())?;
+        }
         if matches!(attempt.kind, AttemptKind::Order | AttemptKind::Emergency)
             && (order.faulted
                 || order.abandoned

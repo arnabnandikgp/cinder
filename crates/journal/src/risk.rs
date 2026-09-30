@@ -865,13 +865,6 @@ impl State {
         })
     }
     pub(crate) fn risk_gate(&self) -> Result<()> {
-        if self
-            .liquidation
-            .as_ref()
-            .is_some_and(|p| p.valid_until <= self.now)
-        {
-            return Err(ControlError::Expired);
-        }
         if self.close_contained() {
             return Err(ControlError::Unqualified);
         }
@@ -885,6 +878,15 @@ impl State {
     /// Recheck the final control cut, including policy changes later in the same
     /// proposal. Cleanup/configuration alone may record a restricted state.
     pub(crate) fn risk_controls(&self, controls: &[Control]) -> Result<()> {
+        // Depth qualification constrains order admission, not unrelated free
+        // collateral payouts. Recheck even if policy changes follow acceptance.
+        if self.liquidation.is_some() {
+            for c in controls {
+                if let Control::Order(crate::orders::Action::Accept { intent, .. }) = c {
+                    self.close_limit(intent.quantity.unit())?;
+                }
+            }
+        }
         if self.risk.is_none() {
             return Ok(());
         }

@@ -492,27 +492,7 @@ impl State {
                 self.order_exposure(attempt)?;
                 self.close_exposure(attempt)?;
                 self.funds_exposure(attempt)?;
-                // Attributed cancellation grants no additional exposure. Permit
-                // cleanup even when a late fact/funding gap blocks new risk.
-                if attempt.kind != AttemptKind::Cancel {
-                    if self.frozen
-                        || self.raw_unresolved != 0
-                        || self.ledger.issues().iter().any(|i| i.open)
-                        || self.ledger.unresolved_attribution() != 0
-                        || self.ledger.unresolved_funds() != 0
-                        || (attempt.kind != AttemptKind::Emergency
-                            && self.orders.iter().any(|o| o.faulted))
-                        || self.unexplained_order_fault()
-                        || self.funds.iter().any(|o| o.faulted)
-                    {
-                        return Err(ControlError::Unqualified);
-                    }
-                    if attempt.kind == AttemptKind::Emergency {
-                        self.emergency_gate()?;
-                    } else {
-                        self.all_capacity()?;
-                    }
-                }
+                self.exposure_qualified(attempt)?;
                 let a = self
                     .attempts
                     .iter_mut()
@@ -535,6 +515,29 @@ impl State {
             }
         }
         Ok(())
+    }
+    fn exposure_qualified(&self, attempt: &Attempt) -> Result<(), ControlError> {
+        // Attributed cancellation grants no additional exposure. Permit cleanup
+        // under freeze or late evidence, including at the final proposal cut.
+        if attempt.kind == AttemptKind::Cancel {
+            return Ok(());
+        }
+        if self.frozen
+            || self.raw_unresolved != 0
+            || self.ledger.issues().iter().any(|i| i.open)
+            || self.ledger.unresolved_attribution() != 0
+            || self.ledger.unresolved_funds() != 0
+            || (attempt.kind != AttemptKind::Emergency && self.orders.iter().any(|o| o.faulted))
+            || self.unexplained_order_fault()
+            || self.funds.iter().any(|o| o.faulted)
+        {
+            return Err(ControlError::Unqualified);
+        }
+        if attempt.kind == AttemptKind::Emergency {
+            self.emergency_gate()
+        } else {
+            self.all_capacity()
+        }
     }
     pub(crate) fn advance(&self, tx: &Transaction) -> Result<(Self, Receipt), Error> {
         let observations = self
@@ -647,6 +650,7 @@ impl State {
                             .order_exposure(a)
                             .and_then(|()| candidate.close_exposure(a))
                             .and_then(|()| candidate.funds_exposure(a))
+                            .and_then(|()| candidate.exposure_qualified(a))
                             .err();
                         if controls.is_some() {
                             break;

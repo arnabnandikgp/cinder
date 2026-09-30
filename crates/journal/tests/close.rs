@@ -461,6 +461,218 @@ fn final_policy_and_authority_cut_cannot_be_changed_after_exposure_in_same_commi
 }
 
 #[test]
+fn freeze_at_either_control_cut_blocks_generic_and_emergency_exposure() {
+    for emergency in [false, true] {
+        for freeze_first in [false, true] {
+            let t = Temp::new();
+            let mut s = if emergency {
+                live(&t, 5, 81)
+            } else {
+                let mut s = t.create();
+                seed(&mut s);
+                s
+            };
+            let controls = if emergency {
+                vec![proposal(&s, 20, lc::Kind::Liquidation)]
+            } else {
+                vec![reserve(20, 1), prepare(20)]
+            };
+            assert_eq!(run(&mut s, vec![], controls).receipt.controls, None);
+            let mut controls = vec![
+                Control::Expose(attempt(20)),
+                Control::Funds(cinder_journal::funds::Action::Freeze),
+            ];
+            if freeze_first {
+                controls.reverse();
+            }
+            let result = run(&mut s, vec![], controls);
+            assert_eq!(result.receipt.controls, Some(ControlError::Unqualified));
+            assert!(result.exposures.is_empty());
+            assert!(!s.state().unwrap().attempts()[0].possibly_exposed);
+            assert!(!s.state().unwrap().frozen()); // failed controls are atomic
+        }
+    }
+}
+
+#[test]
+fn scoped_cancel_remains_allowed_at_a_frozen_final_cut() {
+    let t = Temp::new();
+    let mut s = live(&t, 2, 100);
+    private(&mut s, 20);
+    let cancel = AttemptKey {
+        request: request(20),
+        attempt: AttemptId::new([21; 32]).unwrap(),
+    };
+    let result = run(
+        &mut s,
+        vec![],
+        vec![
+            Control::Order(orders::Action::PrepareCancel {
+                attempt: cancel,
+                authority_epoch: 1,
+                expires_at: 100,
+            }),
+            Control::Expose(cancel),
+            Control::Funds(cinder_journal::funds::Action::Freeze),
+        ],
+    );
+    assert_eq!(result.receipt.controls, None);
+    assert_eq!(result.exposures.len(), 1);
+    assert!(s.state().unwrap().frozen());
+    assert!(s.state().unwrap().holds()[0].active);
+}
+
+#[test]
+fn expired_liquidation_depth_blocks_orders_not_qualified_free_collateral_payouts() {
+    use cinder_journal::{funds, protection};
+    use cinder_kernel::ledger::funds::Destination;
+    let t = Temp::new();
+    let mut s = live(&t, 0, 100);
+    let mut depth = limits();
+    depth.revision = PolicyVersion::new(2).unwrap();
+    depth.valid_until = 11;
+    install(&mut s, depth);
+    let accept_order = |n| {
+        let intent = orders::Intent {
+            request: request(n),
+            time_in_force: orders::TimeInForce::GoodTilCancelled,
+            quantity: q(1),
+            minimum: p(99),
+            maximum: p(101),
+            maximum_fee_per_lot: cash(0),
+            reduce_only: false,
+            policy: config().policy,
+            authority_epoch: 1,
+            expires_at: 100,
+        };
+        Control::Order(orders::Action::Accept {
+            approval: orders::Approval {
+                account: user(1),
+                authority_epoch: 1,
+                intent_hash: intent.digest().unwrap(),
+            },
+            intent: Box::new(intent),
+            reservations: vec![
+                Reservation {
+                    resource: Resource::Customer(user(1)),
+                    amount: cash(1),
+                },
+                Reservation {
+                    resource: Resource::Location(Location::Venue),
+                    amount: cash(1),
+                },
+            ],
+        })
+    };
+    assert_eq!(
+        run(
+            &mut s,
+            vec![],
+            vec![
+                accept_order(20),
+                Control::Order(orders::Action::Prepare {
+                    attempt: attempt(20)
+                })
+            ]
+        )
+        .receipt
+        .controls,
+        None
+    );
+    let policy = protection::Policy {
+        revision: config().policy,
+        authority_epoch: 1,
+        valid_until: 100,
+        lifetime_limit: cash(100),
+        customer_limit: cash(100),
+        coverage: [1; 32],
+    };
+    let install = Control::Protection(protection::Action::Install {
+        expected_version: s.state().unwrap().ledger().version(),
+        policy: Box::new(policy),
+    });
+    assert_eq!(run(&mut s, vec![], vec![install]).receipt.controls, None);
+    let designation = |s: &Store, n, amount| {
+        let decision = protection::Decision {
+            request: request(n),
+            expected_version: s.state().unwrap().ledger().version(),
+            policy: config().policy,
+            authority_epoch: 1,
+            expires_at: 100,
+            change: ProtectionChange::Designate {
+                delta: cash(amount),
+            },
+        };
+        Control::Protection(protection::Action::Apply {
+            authenticated_digest: decision.digest().unwrap(),
+            decision: Box::new(decision),
+        })
+    };
+    let designate = designation(&s, 30, 100);
+    assert_eq!(run(&mut s, vec![], vec![designate]).receipt.controls, None);
+    let later = |s: &mut Store, controls| {
+        let mut tx = transaction(
+            s.head(),
+            u8::try_from(s.head().sequence + 1).unwrap(),
+            vec![],
+            controls,
+        );
+        tx.at = 12; // only liquidation depth expired; marks/risk/coverage are fresh
+        s.commit(tx).unwrap()
+    };
+    assert_eq!(
+        later(&mut s, vec![accept_order(21)]).receipt.controls,
+        Some(ControlError::Expired)
+    );
+    let rejected = later(&mut s, vec![Control::Expose(attempt(20))]);
+    assert_eq!(rejected.receipt.controls, Some(ControlError::Expired));
+    assert!(rejected.exposures.is_empty());
+    assert_eq!(later(&mut s, vec![reserve(40, 1)]).receipt.controls, None);
+    let release_designation = designation(&s, 31, -1);
+    assert_eq!(
+        later(&mut s, vec![release_designation]).receipt.controls,
+        None
+    );
+    let intent = funds::Intent {
+        request: request(50),
+        source: Location::Venue,
+        destination: Destination::Recipient([1; 32]),
+        net: cash(5),
+        maximum_fee: cash(0),
+        fee_payer: Owner::Customer(user(1)),
+        allow_partial: false,
+        policy: config().policy,
+        authority_epoch: 1,
+        expires_at: 100,
+    };
+    let accept = Control::Funds(funds::Action::Accept {
+        approval: orders::Approval {
+            account: user(1),
+            authority_epoch: 1,
+            intent_hash: intent.digest().unwrap(),
+        },
+        intent: Box::new(intent),
+    });
+    let result = later(
+        &mut s,
+        vec![
+            accept,
+            Control::Funds(funds::Action::Prepare {
+                attempt: attempt(50),
+                net: cash(5),
+            }),
+            Control::Expose(attempt(50)),
+        ],
+    );
+    assert_eq!(result.receipt.controls, None);
+    assert_eq!(result.exposures.len(), 1);
+    assert_eq!(
+        later(&mut s, vec![reserve(60, 10000)]).receipt.controls,
+        Some(ControlError::Capacity)
+    );
+}
+
+#[test]
 fn house_budget_is_shared_not_a_fresh_allowance_per_cleanup_request() {
     let t = Temp::new();
     let mut s = live(&t, 2, 100);

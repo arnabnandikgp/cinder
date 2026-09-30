@@ -67,6 +67,14 @@ dispatch. Final-proposal checks revalidate authority and policy after **all**
 controls, preventing exposure followed by revocation/downgrade in the same commit.
 Ordinary risk cannot piggyback on the emergency exception.
 
+The final cut repeats the complete exposure qualification, including freeze and
+evidence gates even when no risk policy is installed. Scoped cancellation remains
+the narrow cleanup exception. Liquidation-depth expiry is checked for order
+admission/dispatch, not in the general financial gate: free-collateral payouts,
+reservations and designation reductions retain all their own risk/capacity checks
+without requiring unused trading-depth data. The review correction advances the
+journal engine to revision 8; older semantics require an explicit migration.
+
 ## Actual execution and split ownership
 
 The journal retains the original observation and its deterministic classification.

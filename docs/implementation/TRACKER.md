@@ -556,6 +556,18 @@ revalidation; neither can release an exposed unknown action. P10 claim absorptio
 now requires full order completion, including these house-only reserved exits.
 Native crisis recovery/incident resumption and live calibration remain gated; this
 controller is deliberately limited to funded, source-qualified bounded exits.
+Review follow-up at the P14 boundary: reproduced both new CodeRabbit findings
+locally before the production fixes. Extracted full exposure qualification and
+rechecked it at the final control cut, preserving scoped cancels. Moved depth
+expiry out of the general risk gate into order admission/dispatch; all other
+capacity/protection checks remain. Three regression groups cover both freeze
+orderings, generic/no-risk and emergency dispatch, cancel cleanup, fresh-capacity
+payouts/reservations/designation reductions and continued rejection of expired
+orders/overdraws. All 20 close tests and the full pinned runner pass: 184 Rust tests
+per debug/release profile, two doctests, 23 repository tests, strict Clippy,
+formatting and build. Engine revision 8
+explicitly rejects pre-correction history rather than reinterpreting it.
+
 Next: P11 is ready as #35; continue P12
 RF1/RF2 and bounded-resource quota scheduling. Do not merge or enter P15.
 PR: [#35](https://github.com/arnabnandikgp/cinder/pull/35).
