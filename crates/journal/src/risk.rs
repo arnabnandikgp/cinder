@@ -418,20 +418,26 @@ impl State {
                 for e in &step.events {
                     // Scenarios execute existing economics; cannot inject future capital,
                     // hoped-for rebates, fees earned from customers or rewritten snapshots.
-                    match &e.change {
-                        Change::Fill { .. } => {}
+                    let key_ok = match &e.change {
+                        Change::Fill { .. } => matches!(e.key, RecordKey::Economic(_)),
                         Change::Protection(
                             cinder_kernel::ledger::protection::ProtectionChange::Recognize {
                                 ..
                             }
                             | cinder_kernel::ledger::protection::ProtectionChange::Commit { .. }
                             | cinder_kernel::ledger::protection::ProtectionChange::Absorb { .. },
-                        ) => {}
+                        ) => matches!(e.key, RecordKey::Request(_)),
                         Change::Economics(EconomicChange::Execution { fee, .. })
-                            if fee.atoms() >= 0 => {}
+                            if fee.atoms() >= 0 =>
+                        {
+                            matches!(e.key, RecordKey::Economic(_))
+                        }
                         _ => return Err(ControlError::Invalid),
-                    }
-                    if !matches!(e.key, RecordKey::Economic(_)) || e.policy != self.config.policy {
+                    };
+                    if !key_ok
+                        || e.key.require_domain(self.config.domain).is_err()
+                        || e.policy != self.config.policy
+                    {
                         return Err(ControlError::Invalid);
                     }
                 }

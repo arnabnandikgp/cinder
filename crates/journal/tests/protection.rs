@@ -133,7 +133,7 @@ fn earmark_absorb(
         },
     )
 }
-fn join_risk(s: &mut Store, buffer: i128) {
+fn join_risk(s: &mut Store, buffer: i128) -> risk::Policy {
     use cinder_kernel::ledger::evidence::*;
     let l = s.state().unwrap().ledger();
     let e = event(
@@ -209,9 +209,48 @@ fn join_risk(s: &mut Store, buffer: i128) {
     };
     let c = Control::Risk(risk::Action::Install {
         expected_version: s.state().unwrap().ledger().version(),
-        policy: Box::new(p),
+        policy: Box::new(p.clone()),
     });
     assert_eq!(run(s, vec![], vec![c]).receipt.controls, None);
+    p
+}
+
+#[test]
+fn protection_scenario_uses_request_keys_replays_every_prefix_and_does_not_mutate_live_claims() {
+    let t = Temp::new();
+    let mut s = store(&t, 100);
+    actual_loss(&mut s, 1, 100);
+    let mut policy = join_risk(&mut s, 0);
+    policy.revision = PolicyVersion::new(2).unwrap();
+    policy.paths[0].steps[0].events = vec![
+        recognize(1, 30, 20, Kind::Deficit),
+        commit_claim(31, request(30), 20),
+        absorb(32, &[(request(30), 20)]),
+    ];
+    let install = Control::Risk(risk::Action::Install {
+        expected_version: s.state().unwrap().ledger().version(),
+        policy: Box::new(policy.clone()),
+    });
+    assert_eq!(run(&mut s, vec![], vec![install]).receipt.controls, None);
+    let report = s.state().unwrap().risk_report().unwrap();
+    let rows = &report.paths[0].prefixes;
+    assert_eq!(rows.len(), 5);
+    assert!(rows.iter().all(|p| p.free_capital == cash(80)));
+    assert_eq!(rows[0].customers[0].equity, cash(-20));
+    assert_eq!(rows[4].customers[0].equity, cash(0));
+    assert!(s.state().unwrap().ledger().protection().claims.is_empty());
+    assert_eq!(s.state().unwrap().ledger().protection().reserve, cash(100));
+    // A venue key is not interchangeable with the protection request namespace.
+    policy.revision = PolicyVersion::new(3).unwrap();
+    policy.paths[0].steps[0].events[0].key = RecordKey::Economic(key(700));
+    let install = Control::Risk(risk::Action::Install {
+        expected_version: s.state().unwrap().ledger().version(),
+        policy: Box::new(policy),
+    });
+    assert_eq!(
+        run(&mut s, vec![], vec![install]).receipt.controls,
+        Some(ControlError::Invalid)
+    );
 }
 
 #[test]

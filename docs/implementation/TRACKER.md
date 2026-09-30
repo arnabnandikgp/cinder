@@ -523,6 +523,14 @@ required quiet customer commitments before absorption. G02 still gates live
 coverage/priority; caps bound rather than prove away coordinated extraction.
 Ambiguous recovery during a reopened debt episode retains assets and a named
 containment fault; no discretionary clear-flags command. No outside fund shares.
+Review follow-up: verified CodeRabbit #4140440713. Protection stress transitions
+were incorrectly restricted to Economic keys although the kernel requires Request
+keys. Fixed per-variant key validation with deployment binding; added a scenario
+that recognizes, commits and absorbs across every prefix without mutating live
+claims. Also fixed the stale architecture status row (#4140440723). Full pinned
+runner passed again: 164 Rust tests per profile, two doctests, 23 repository tests,
+formatting, Clippy and build. This is a scenario integration fix, not a change to
+the coverage promise or actual loss-posting semantics.
 Next: P10 is ready as #34. Implement P11 bounded liquidation and
 late-close house exceptions. Native house capital payout remains disabled pending
 qualified custody integration; a designation release is not an external payout.
