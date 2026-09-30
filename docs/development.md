@@ -57,10 +57,14 @@ witness doubles, not production-independent infrastructure. See
 [ADR 0006](architecture/0006-encrypted-durability.md). There is no plaintext fallback.
 Add future packages only with documented ownership and an updated dependency guard.
 
+`crates/pacifica` owns native observation codecs and the narrow signing boundary.
+It uses tracked sanitized responses and fake egress for offline qualification;
+native signing is not permission to deploy or load real accounts.
+
 Ordinary tests must use tracked sanitized fixtures. Never mount ignored `work/`,
 wallet directories, cloud credentials or unrelated `stays/` into test containers.
 The exact types and codecs are described in [ADR 0002](architecture/0002-financial-primitives.md).
-Encrypted durable deployment, the application API and native clients remain
+Encrypted durable deployment, the application API and live native transport remain
 future phases. `--properties` selects workspace tests prefixed `property_`.
 
 ## Routine PR verification

@@ -16,7 +16,7 @@
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | in progress | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | [#35](https://github.com/arnabnandikgp/cinder/pull/35), stacked above #34 |
 | [P12 — ADL and restoration](PLAN.md#p12) | in progress | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | [#36](https://github.com/arnabnandikgp/cinder/pull/36), stacked above #35 |
 | [P13 — Pacifica observations](PLAN.md#p13) | in progress | Native observations normalize losslessly with explicit provenance, completeness limits and capability qualification. | [#37](https://github.com/arnabnandikgp/cinder/pull/37), stacked above #36 |
-| [P14 — Pacifica execution](PLAN.md#p14) | in progress | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | Local implementation above #37 |
+| [P14 — Pacifica execution](PLAN.md#p14) | in progress | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), stacked above #37 |
 | [P15 — Solana vault](PLAN.md#p15) | open | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | — |
 | [P16 — Funding coordinator](PLAN.md#p16) | open | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | — |
 | [P17 — Recovery program](PLAN.md#p17) | open | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | — |
@@ -36,13 +36,14 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at merged P03 `3bd8c12`.
-Current branch: `tee/p14-pacifica-execution`, created with `gh stack add` above
-P13 #37 (`17072f9`). User authorized continuous
-stacked P06–P14 implementation while away, stopping before P15; no merges or new
-external tests/deployments are authorized. Preserve unrelated `stays/` and ignored
-`work/`. Keep phase tests/PRs/handoffs current; stop only for substantive decisions,
-new permissions or a genuine unresolved blocker. P07 supplies durable order
-lifecycle with trusted authentication/source ports, not live signing or trading.
+Current branch: `tee/p14-pacifica-execution`, PR #38 above P13 #37. The authorized
+continuous P06–P14 run is at its final verification/handoff boundary. STOP BEFORE
+P15: resume only after the user asks. Nine new phase PRs (#30–#38) are stacked;
+none was merged and no new external test/deployment was performed. Preserve
+unrelated `stays/` and ignored `work/`. P11's late review corrections are propagated
+through P12–P14 with explicit engine revisions, not silently reinterpreted history.
+Private authentication, native completeness, hardware attestation and deployment
+remain their own gates; this is an offline-qualified implementation stack.
 
 Repository integration follow-up: the TEE trunk had no classic branch protection
 or applicable rulesets at P00. CodeRabbit skipped P00's non-default-base review;
@@ -665,9 +666,14 @@ envelope and require independently scoped keys. Limits are one-sided and native
 agent authority is wider than trading; neither limitation is concealed. Read-credit
 reservations include bounded delivery time; rotation does not replenish them. P13
 hosted CI/CodeRabbit are green, no inline comments at this boundary.
-Next: open ready stacked P14, then STOP BEFORE
-P15. No merges, live calls, Solana vault work or new permissions in this run.
-PR: none.
+Follow-up: final stack review found two P11 issues; both were reproduced, fixed and
+verified in their owning branch (`9f1d2f8`), then restacked into this branch. Added
+three regressions and advanced distinct P11/P12/P13 engine revisions to 8/9/10.
+The assembled post-review clean-export check is pending; do not reuse the earlier
+230-test result as evidence of the changed head.
+Next: finish post-review verification, mark #38 ready and STOP BEFORE P15.
+No merges, live calls, Solana vault work or new permissions in this run.
+PR: [#38](https://github.com/arnabnandikgp/cinder/pull/38), above #37.
 Merge: none.
 
 ## P15 — Solana vault
