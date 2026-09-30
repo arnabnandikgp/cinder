@@ -11,7 +11,7 @@
 | [P06 — Encrypted durability](PLAN.md#p06) | in progress | Private state survives qualified failures without plaintext leakage, silent rollback or revived stale writers. | [#30](https://github.com/arnabnandikgp/cinder/pull/30), stacked above #29 |
 | [P07 — Order intents and reservations](PLAN.md#p07) | in progress | Durable reservations precede dispatch; acknowledgements and timeouts cannot fabricate fills or release unknown commitments. | [#31](https://github.com/arnabnandikgp/cinder/pull/31), stacked above #30 |
 | [P08 — Funds and payouts](PLAN.md#p08) | in progress | Partial money movements reconcile by location; only final payment discharges a user claim, exactly once. | [#32](https://github.com/arnabnandikgp/cinder/pull/32), stacked above #31 |
-| [P09 — Joined risk admission](PLAN.md#p09) | in progress | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | Local implementation above #32 |
+| [P09 — Joined risk admission](PLAN.md#p09) | in progress | New actions pass user, pool, capital and location-liquidity checks across bounded pending outcomes. | [#33](https://github.com/arnabnandikgp/cinder/pull/33), stacked above #32 |
 | [P10 — Protection claims](PLAN.md#p10) | open | House protection absorbs eligible losses once; repeated defaults and recoveries preserve ownership and unpaid claims. | — |
 | [P11 — Liquidation and exceptions](PLAN.md#p11) | open | Bounded liquidation and late-close handling record residual risk without silently reversing customers or erasing losses. | — |
 | [P12 — ADL and restoration](PLAN.md#p12) | open | Qualified ADL/restoration obeys RF1 basis economics and RF2 proportional quotas within funded execution limits. | — |
@@ -488,9 +488,9 @@ some combinations; finite stress paths are not a probability or universal guaran
 Unexpected: scenario execution/evidence errors fail qualification rather than
 vanishing into an empty safe report; old wire 3 / engine 4 are explicitly rejected
 for wire 4 / engine 5. No actual live policy or independent solvency proof claimed.
-Next: final clean verification and publication above #32, then P10 protection
-claims. Continue the authorized stack without merging or entering P15.
-PR: none.
+Next: P09 is ready as #33. Continue P10 protection claims; inspect hosted checks
+and reviews at phase boundaries. Do not merge or enter P15.
+PR: https://github.com/arnabnandikgp/cinder/pull/33
 Merge: none.
 
 ## P10 — Protection claims
