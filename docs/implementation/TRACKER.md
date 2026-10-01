@@ -56,30 +56,26 @@ doctests per debug/release profile, 24 repository tests, strict Clippy/format/bu
 and 30 offline client/SBF tests with generated-IDL equality. This is evidence for
 the merged stack, not a green result for future P17 changes.
 
-P17 implementation now passes both pinned offline runners in this working tree:
-the same 275 Rust tests/two compile-fail doctests per profile, 24 repository tests,
-and **51/51** client/SBF checks including 17 new recovery transaction groups and
-four pure codec groups. Strict Rust/TypeScript checks, generated-IDL equality and
-SBF stack diagnostics pass. Ready PR #41 is published from implementation commit
-`e1b820b322ac2d87c31a4478aaacff5bcf44818e` directly above the merged TEE trunk;
-this following commit only records publication. No hosted CI/review result is claimed.
-P18 now passes the pinned complete offline runner from a clean staged-source
-export without `work/`, `stays/` or local credentials: 294 Rust tests plus two
-compile-fail doctests per debug/release profile, 24 repository tests, strict
-formatting/Clippy/all-target build and 9 TypeScript SDK tests. This is local macOS
-evidence, not a hosted Linux result, attestation qualification or independent audit.
-The Solana program/SDK are unchanged in P18; their P17 51-test SBF result was not
-rerun or relabeled as a new P18 run. No external Cargo version/feature changed.
-Ready P18 PR #42 is published above P17 #41 using native `gh stack` (stack #43),
-from implementation commit `f6b2e84bced022135a3601e4f7211bf59f552525`.
-This following commit records publication only; no implementation changed after
-the full check. Hosted checks/review are separate evidence and not claimed green.
-Hosted snapshot checked 2026-10-01: P17 #41 at `3a26573` and P18 #42 at `5ba8915`
-both have successful plan/handoff, offline Rust and Anchor/SBF/Surfpool jobs.
-CodeRabbit's status is also successful on both; that status is not disposition of
-its individual findings. Both PRs are ready/open and still need review triage.
-New documentation/review-fix commits must obtain their own checks; no future-head
-CI result or merge is claimed here.
+Latest review follow-up, 2026-10-01: P17 #41's recovery-total finding is fixed in
+published commit `8868749f8805a49945bcaa2dcfe4e30044f4d6b2`; the author reply and
+thread resolution are recorded on GitHub. The original program failed all three
+new regressions; the rebuilt program passes **53/53** offline client/SBF checks.
+P18 #42 has been restacked above that exact fix with native `gh stack` (stack #43).
+Its history-scan finding uses an account/request-ID set without changing ordered
+replay or weakening duplicate rejection. Full clean staged-source verification
+passes **296 Rust tests plus two compile-fail doctests per debug/release profile**,
+24 repository tests, both strict Clippy configurations, formatting, all-target
+build and **9/9 private SDK tests**. P18's program/client sources are identical to
+the verified P17 fix; its 53-check SBF evidence is reused, not relabeled a new run.
+These are local macOS tests, not hardware qualification or an independent audit.
+
+Planning updates were pushed to #42 first as `55830d5`, then preserved by restack
+as `24abe7d`. Earlier implementation/publication evidence remains in each owning
+phase below. Hosted snapshot for P17 at `8868749`: plan/handoff and offline Rust
+jobs successful, Anchor/SBF/Surfpool still running; CodeRabbit status successful.
+P18's new review-fix publication requires its own hosted checks. Green checks at
+old heads do not qualify new commits, and CodeRabbit status is not thread closure.
+Both phases remain `in progress`; neither open PR has been merged in this pass.
 
 User-approved planning clarification, 2026-10-01: P19 now owns a runnable parent
 relay/private-service slice and SDK process tests; P20 assembles and qualifies the
@@ -90,9 +86,10 @@ Self-service private onboarding/browser-agent UX/terminal remain explicit follow
 product work, not quietly included in backend qualification. The local
 `docs/user-journey.md` and unrelated `stays/` remain untracked and outside commits.
 
-Next: publish these planning/tracker updates on P18, address relevant findings in
-P17/P18 with owning-layer tests and stack updates, then begin the clarified P19
-when authorized. Neither PR is merged by this handoff.
+Next agent: verify the stack's remote heads, review-thread disposition and
+current-head hosted checks before proposing a merge. Review/merge is a separate
+user action; begin the clarified P19 only when authorized. No further runtime
+phase, live test or merge is authorized by this documentation/review pass.
 Actual ledger-to-claim finalization/independent delivery remains P21; source/hardware
 and live release gates remain explicit. No new economic policy was adopted.
 
@@ -972,8 +969,31 @@ PLAN/architecture/contributor handoffs; no runtime is implemented by those edits
 Documentation-only verification: `node scripts/check-implementation-plan.mjs`,
 the 12 validator self-tests and `git diff --check`. No Rust/SBF rerun is claimed
 for this planning-only update; review code changes will receive owning-layer checks.
-Next: publish that docs-only clarification on #42, then review/fix both open layers
-and record new checks. Keep each phase in progress until its actual merge.
+Review follow-up: 2026-10-01 — addressed CodeRabbit comment
+[4150398996](https://github.com/arnabnandikgp/cinder/pull/42#discussion_r4150398996).
+Replaced per-record scans of all earlier API records with a standard-library
+`BTreeSet` keyed by account and request ID. Duplicate detection is now O(R log R)
+rather than O(R²); the history is still replayed on each request, and the returned
+record vector preserves journal order. No cache, dependency, alternate journal or
+authorization/economic change was introduced. Added encrypted-SQLite regressions
+for shared request IDs across accounts, ordered private operation replay, and
+duplicate retained evidence failing closed without mutation before/after restart.
+
+Verification: clean staged export `/private/tmp/cinder-p18-review.OTmNJw` passed the
+complete pinned offline runner: **296 Rust tests and two compile-fail doctests in
+each debug/release profile**, 24 repository tests, both strict Clippy configurations,
+format/build and **9/9 SDK tests**. The focused API run also passes 19 lifecycle
+groups and two interop groups. The first new test compile caught a moved expected
+receipt; the assertion now borrows it, without a production-code workaround.
+Only tracker/report publication follows that tested source; documentation and
+whitespace checks run again before publication. P17's source-identical 53-check
+SBF result covers the inherited recovery fix, not a second P18 SBF run. No live
+venue/RPC, deployment, AWS, configured wallet, container or agent was used.
+
+Next agent: verify publication above P17 `8868749`, the review reply/resolution
+and new-head hosted checks. Keep P18 in progress until its actual merge. The
+runnable P19 service is a new phase, not implemented by these planning or
+API-review changes.
 P19 owns real attested transport, a runnable service slice and client verification;
 P20 hardware, P21 integrated recovery and G01–G05 remain explicit gates. No live
 venue/RPC, deployment, AWS, configured wallet, container or agent was used.

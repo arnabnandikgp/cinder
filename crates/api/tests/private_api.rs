@@ -303,6 +303,72 @@ fn exact_retry_survives_restart_and_new_session_without_new_native_attempt() {
     );
 }
 #[test]
+fn request_ids_are_account_scoped_and_replay_preserves_history_order() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    let first = receipt(call(&mut s, &owner_request(40, order())).unwrap());
+    let second = receipt(call(&mut s, &request(40, 2, 1, order(), &wallet(2), [8; 32])).unwrap());
+    assert_eq!(first.outcome, Outcome::Accepted);
+    assert_eq!(second.outcome, Outcome::Accepted);
+    let next = receipt(call(&mut s, &owner_request(41, grant(&wallet(3)))).unwrap());
+    let head = s.head();
+    drop(s);
+    let mut s = open(&t);
+    for (customer, expected) in [(1, &first), (2, &second)] {
+        assert_eq!(
+            receipt(
+                call(
+                    &mut s,
+                    &request(
+                        42,
+                        customer,
+                        1,
+                        Command::Operation(RequestId::new([40; 32]).unwrap()),
+                        &wallet(customer),
+                        [7; 32],
+                    ),
+                )
+                .unwrap(),
+            ),
+            *expected,
+        );
+    }
+    let Response::View(view) = call(&mut s, &owner_request(43, Command::View)).unwrap() else {
+        panic!("expected account view");
+    };
+    assert_eq!(view.operations, vec![first.id, next.id]);
+    assert_eq!(s.head(), head);
+}
+#[test]
+fn duplicate_retained_api_record_fails_closed_before_and_after_restart() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    call(&mut s, &owner_request(40, order())).unwrap();
+    let duplicate = s
+        .transactions()
+        .flat_map(|tx| &tx.evidence)
+        .find(|e| e.as_bytes().starts_with(b"CINDER-API-RECORD-1\0"))
+        .unwrap()
+        .as_bytes()
+        .to_vec();
+    let mut tx = support::transaction(s.head(), 50, vec![], vec![]);
+    tx.evidence.push(PrivateBytes::new(duplicate).unwrap());
+    assert!(s.commit(tx).unwrap().receipt.controls.is_none());
+    let head = s.head();
+    assert_eq!(
+        call(&mut s, &owner_request(41, Command::View)),
+        Err(Error::Unavailable),
+    );
+    assert_eq!(s.head(), head);
+    drop(s);
+    let mut s = open(&t);
+    assert_eq!(
+        call(&mut s, &owner_request(41, Command::View)),
+        Err(Error::Unavailable),
+    );
+    assert_eq!(s.head(), head);
+}
+#[test]
 fn authentication_precedes_dedupe_query_and_foreign_cancel() {
     let t = Temp::new();
     let mut s = seed(&t);

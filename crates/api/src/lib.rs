@@ -11,7 +11,7 @@ use cinder_kernel::{
 };
 use ed25519_dalek::{Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
 use wire::{Command, Request, Writer};
 
 const INIT: &[u8] = b"CINDER-API-CONTRACT-1\0";
@@ -350,6 +350,7 @@ impl<A: Admission> Service<A> {
         );
         let mut installed = false;
         let mut records = Vec::new();
+        let mut seen = BTreeSet::new();
         for tx in journal.transactions() {
             let accepted = journal
                 .transaction_receipt(tx.id)
@@ -368,9 +369,7 @@ impl<A: Admission> Service<A> {
                     }
                     let request = Request::decode(tail.get(32..).ok_or(Error::Unavailable)?)
                         .map_err(|_| Error::Unavailable)?;
-                    if records.iter().any(|r: &Record| {
-                        r.request.account == request.account && r.request.id == request.id
-                    }) {
+                    if !seen.insert((request.account.bytes(), request.id.bytes())) {
                         return Err(Error::Unavailable);
                     }
                     records.push(Record { request, accepted });
