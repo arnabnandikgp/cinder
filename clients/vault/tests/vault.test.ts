@@ -610,7 +610,41 @@ test('overdeclared final sum does not erase surplus obligations or close the epo
   const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
   const c = { ...r.claims[0]!, amount: 99n }, statement = { ...r.statement, root: recoveryLeaf(recoveryContextHash(r.context, r.statement), c) };
   await send(await r.stage(statement), [governance]); await send(await r.activate(undefined, undefined, statement.root), [f.recovery]);
-  await r.rejects(await r.claim(c, []), [f.owner], r.receipt(), /RecoveryTotal/);
+  const before = await getAccount(connection, f.source);
+  await send(await r.claim(c, []), [f.owner]);
+  assert.equal((await getAccount(connection, f.source)).amount - before.amount, 99n);
+  const after = await r.state();
+  assert.equal(after.epoch!.remaining.toString(), '1'); assert.equal(after.epoch!.claimedCount, 1);
+  assert.equal(after.custody.config.mode, 3); assert.equal(after.custody.customer.paid.toString(), '99');
+  assert.equal(after.custody.customer.payoutSequence.toString(), '1');
+  await r.rejects(await r.claim(c, []), [f.owner]);
+  await r.rejects(await f.payout(f.auth('normal', 2n)), [f.funds], undefined, /Mode/);
+});
+
+for (const order of [[0, 1], [1, 0]]) test(`overdeclared two-leaf estate pays both valid owners in order ${order} and retains the remainder`, async () => {
+  const f = await fixture(), second = keys(); await fund(second);
+  const destination = await createAccount(connection, governance, f.mint, second.publicKey);
+  await send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({ config: f.config, owner: second.publicKey,
+    customer: customerAddress(programId, f.config, second.publicKey), systemProgram: SystemProgram.programId }).instruction(), [second]);
+  await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]);
+  const cs: RecoveryClaim[] = [f.owner, second].map((owner, index) => ({ index, owner: owner.publicKey,
+    destination: index === 0 ? f.source : destination, amount: index === 0 ? 40n : 59n,
+    paidBase: 0n, payoutSequenceBase: 0n, claimId: id(`overdeclared-claim-${index}`), salt: id(`overdeclared-salt-${index}`) }));
+  const r = await recoveryFixture(f, cs), statement = { ...r.statement, total: 100n };
+  // Bypass checked packaging: a valid inclusion proof does not establish the published total.
+  const context = recoveryContextHash(r.context, statement), leaves = cs.map(c => recoveryLeaf(context, c));
+  const root = createHash('sha256').update(Uint8Array.of(1)).update(leaves[0]!).update(leaves[1]!).digest();
+  await send(await r.stage({ ...statement, root }), [governance]);
+  await send(await r.activate(undefined, undefined, root), [f.recovery]);
+  for (const index of order) {
+    const c = cs[index]!, before = await getAccount(connection, c.destination);
+    await send(await r.claim(c, [leaves[1 - index]!]), [[f.owner, second][index]!]);
+    assert.equal((await getAccount(connection, c.destination)).amount - before.amount, c.amount);
+  }
+  const after = await r.state();
+  assert.equal(after.epoch!.remaining.toString(), '1'); assert.equal(after.epoch!.claimedCount, 2);
+  assert.equal(after.custody.config.mode, 3); assert.equal(after.custody.config.paid.toString(), '99');
+  for (const index of order) await r.rejects(await r.claim(cs[index], [leaves[1 - index]!]), [[f.owner, second][index]!]);
 });
 
 test('a malicious duplicate-owner tree cannot pay twice even with an advanced second baseline', async () => {

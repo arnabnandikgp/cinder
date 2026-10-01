@@ -152,8 +152,11 @@ An ordinary Merkle tree proves membership, **not** that totals match all leaves
 or that every entitled customer appears. Checked packaging prevents accidental
 sum/owner mistakes, but the contract retains deliberate dishonest-publisher
 counterexamples: understated total blocks an otherwise included claim; an
-overstated total blocks terminal close rather than silently destroying the
-remainder; a duplicate-owner tree cannot pay twice. Incomplete estates stay
+overstated total still pays each valid, fully backed included claim, including the
+last claimant, but blocks terminal close rather than silently destroying the
+remainder. The epoch stays ACTIVE with its unexplained remaining amount; ordinary
+payouts remain fenced and paid claims cannot replay. A duplicate-owner tree cannot
+pay twice. Incomplete estates stay
 contained and require a separately reviewed remediation, not a root-reset escape.
 
 ## Evidence and implementation boundaries

@@ -889,6 +889,27 @@ Do not deploy, call live venues or activate a real recovery estate from this han
 PR: https://github.com/arnabnandikgp/cinder/pull/41.
 Merge: none.
 
+Review follow-up: 2026-10-01 — addressed CodeRabbit comment
+[4149944472](https://github.com/arnabnandikgp/cinder/pull/41#discussion_r4149944472).
+An overstated recovery total must prevent terminal closure, not payment of the
+last valid included claim. Removed that payment gate; closure now requires both
+all declared leaves consumed and exactly zero remainder. Full-estate backing,
+owner signatures, lifetime counters, permanent receipts and ordinary-path fencing
+are unchanged. ADR 0017 records the retained ACTIVE remainder and separately
+reviewed remediation requirement; there is no root-reset escape.
+
+Verification: reproduced the original SBF failure locally with the new regressions
+(**50 passed / 3 failed**, each at the original `RecoveryTotal` gate). Rebuilt the
+corrected program with the pinned Anchor 1.2.0/Node 24 toolchain; the complete
+offline vault runner passes **53/53** checks, including the one-owner case and
+both two-owner claim orders, exact token payouts, replay rejection, existing
+backing/overflow/CPI rollback tests, strict Rust/TypeScript and locked SBF/IDL
+checks. Clean staged-source documentation checks pass (25 phases, 27 documents,
+12 validator tests). No configured wallet, remote RPC, deployment, container,
+live venue, AWS or agent was used. Hosted checks for this new revision are pending;
+the original head's green checks are not evidence for the fix. P17 remains
+`in progress` until merged; carry this fix into P18 with the native stack workflow.
+
 ## P18 — Private API and SDK
 
 Work: not started.

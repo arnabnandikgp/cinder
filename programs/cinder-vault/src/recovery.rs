@@ -171,10 +171,6 @@ pub(crate) fn claim(
         .checked_add(1)
         .ok_or_else(|| error!(VaultError::Arithmetic))?;
     require!(count <= r.statement.tree_size, VaultError::RecoveryTotal);
-    require!(
-        count != r.statement.tree_size || remaining == 0,
-        VaultError::RecoveryTotal
-    );
     let paid = add(claim.paid_base, claim.amount)?;
     let sequence = add(claim.payout_sequence_base, 1)?;
     let total = add(c.paid, claim.amount)?;
@@ -191,7 +187,9 @@ pub(crate) fn claim(
     ctx.accounts.config.paid = total;
     ctx.accounts.recovery_epoch.remaining = remaining;
     ctx.accounts.recovery_epoch.claimed_count = count;
-    if count == ctx.accounts.recovery_epoch.statement.tree_size {
+    // Pay valid claims even when the publisher overstates the total. Keep the
+    // unexplained remainder visible; only an exactly reconciled estate closes.
+    if count == ctx.accounts.recovery_epoch.statement.tree_size && remaining == 0 {
         ctx.accounts.config.mode = CLOSED;
     }
     let receipt = &mut ctx.accounts.claim_receipt;
