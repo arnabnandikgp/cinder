@@ -86,7 +86,7 @@ Self-service private onboarding/browser-agent UX/terminal remain explicit follow
 product work, not quietly included in backend qualification. The local
 `docs/user-journey.md` and unrelated `stays/` remain untracked and outside commits.
 
-Next agent: verify the stack's remote heads, review-thread disposition and
+Next: verify the stack's remote heads, review-thread disposition and
 current-head hosted checks before proposing a merge. Review/merge is a separate
 user action; begin the clarified P19 only when authorized. No further runtime
 phase, live test or merge is authorized by this documentation/review pass.
@@ -990,7 +990,7 @@ whitespace checks run again before publication. P17's source-identical 53-check
 SBF result covers the inherited recovery fix, not a second P18 SBF run. No live
 venue/RPC, deployment, AWS, configured wallet, container or agent was used.
 
-Next agent: verify publication above P17 `8868749`, the review reply/resolution
+Next: verify publication above P17 `8868749`, the review reply/resolution
 and new-head hosted checks. Keep P18 in progress until its actual merge. The
 runnable P19 service is a new phase, not implemented by these planning or
 API-review changes.
