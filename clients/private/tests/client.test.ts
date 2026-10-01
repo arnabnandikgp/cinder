@@ -92,3 +92,13 @@ test('finite precision is enforced without floats, negative fees, ambiguous TIF 
   }
   assert.throws(() => signingMessage({ ...envelope(c), epoch: 1 as unknown as bigint }));
 });
+
+test('Node Buffers never alias retained identifiers or zeroized reply scratch', () => {
+  const e = envelope(commands[2]);
+  const b: Envelope = { ...e, domain: { network: Buffer.from(e.domain.network), deployment: Buffer.from(e.domain.deployment) },
+    account: Buffer.from(e.account), id: Buffer.from(e.id), signer: Buffer.from(e.signer), session: Buffer.from(e.session) };
+  const before = Buffer.from(b.session); assert.equal(hex(signingMessage(b)), hex(signingMessage(e))); assert.deepEqual(b.session, before);
+  const bytes = Buffer.from(reply); const out = decodeResponse(bytes); assert.equal(out.kind, 'receipt'); if (out.kind !== 'receipt') throw new Error();
+  const originalId = out.id.slice(), originalDigest = out.digest.slice(); bytes.fill(0);
+  assert.deepEqual(out.id, originalId); assert.deepEqual(out.digest, originalDigest);
+});

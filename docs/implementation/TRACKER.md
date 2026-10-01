@@ -21,7 +21,7 @@
 | [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
 | [P17 — Recovery program](PLAN.md#p17) | closed | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), merged `1f750b0` |
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
-| [P19 — Attested transport and runnable service](PLAN.md#p19) | open | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | — |
+| [P19 — Attested transport and runnable service](PLAN.md#p19) | in progress | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | — |
 | [P20 — Nitro application qualification](PLAN.md#p20) | open | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
@@ -37,8 +37,11 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
 `1f750b059f39e9f409ae10fe2f4e070c2e0aa428`.
-Current branch: `tee/p19-attested-service`, a local documentation-only preparation
-branch above the synced trunk. P19 implementation and its next PR have not started.
+Current branch: `tee/p19-attested-service`. P19 implements the TLS 1.3 service/relay
+slice, strict pinned-root quote verifier and Node automation channel. The fixture
+processes use the real P18 API and P06 encrypted replicated journal. Full offline
+verification passed in a staged-source export without research/local-only files.
+PR publication is next; nothing has been deployed.
 
 P17 #41 and P18 #42 merged atomically through `gh stack merge --yes --merge`
 on 2026-10-01 after explicit user authorization. Both GitHub receipts report the
@@ -61,12 +64,11 @@ compile-fail doctests per debug/release profile, 24 repository tests, strict
 Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
 receipts remain in the owning phases below.
 
-Next: begin the clarified P19 when requested: select channel/crypto/server-runtime
-choices and deliver the SDK-driven parent-relay/confidential-service slice.
+Next: finish P19 verification and publish its PR through native `gh stack`.
 P20 assembles/qualifies Nitro; P21 joins recovery to the journal; P22/P23 reuse
 workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
 separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
-unrelated `stays/`. Keep P19 open until work begins; local fixtures do not establish
+unrelated `stays/`. Keep P19 in progress until actual merge; local fixtures do not establish
 hardware qualification or authorize live keys, tests or deployment.
 
 ### CodeRabbit coverage snapshot (2026-09-30)
@@ -991,10 +993,10 @@ Next: P19 attested transport and runnable service; implementation is not started
 
 ## P19 — Attested transport and runnable service
 
-Work: not started.
-Verification: not run; acceptance in PLAN P19.
-Unexpected: none yet.
-Next: record channel/crypto/server-runtime choices; build parent relay and private-service entry points wired to P18/protected journal. Drive signed SDK requests over the real local processes with explicit quote/venue fixtures; test hostile relay, disconnect/restart, bounds/backpressure and client release risks. No AWS hardware claim from this slice.
+Work: ADR 0019 selects enclave-terminated TLS 1.3, bounded synchronous listeners and the independently distributed public-data quote verifier. New service/relay/fixture entrypoints wire P18 to the real P06 cipher/replica journal. Node SDK gates private requests on the exact socket SPKI/exporter, fresh challenge, expected release/domain and short expiry. Default builds exclude fixture attester/key providers; production verifier never accepts fixture roots. Exact dependency/feature/build-script policy is updated; no financial policy, native signing or Solana program change.
+Verification: 2026-10-01 pinned full offline checks passed on macOS ARM64, including a staged-source export excluding work/, user-journey.md and stays/. Each debug/release profile passed 303 Rust tests plus two compile-fail doctests; 25 repository tests and 17 SDK tests passed (seven use actual local service/relay/verifier processes). Default/all-feature Clippy, format, build, exact dependency policy and strict TypeScript checks passed. Relay ciphertext corruption cannot forge a request; a corrupted committed reply reconciles after process death without another attempt. No AWS, RPC, wallet, funding, container or agent used; SBF not rerun because on-chain source is unchanged. Local CA/clock/witness/venue evidence is synthetic, not NSM or independent storage qualification.
+Unexpected: real transport exposed Darwin inherited nonblocking sockets and Node Buffer.slice aliasing in the P18 SDK. Explicit worker socket mode and copy-safe IDs/reply decoding fix both; tracked regression tests retain them. A client TLS protocol accessor reports configured legacy version even on rejected handshakes, so the downgrade test checks secureConnect was never reached rather than that accessor.
+Next: publish the bounded P19 PR and record its actual URL/check status. P20 supplies measured application entrypoint, actual vsock/NSM, secure entropy/time, key release, qualified storage witness and enclave-side egress. No production or hardware claim from this slice; remain in progress until reviewed/merged, do not begin live qualification without G03/G05 authorization.
 PR: none.
 Merge: none.
 

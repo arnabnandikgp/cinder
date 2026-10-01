@@ -33,8 +33,10 @@ operator activation, owner-signed claims and shared lifetime payout counters.
 Its joined finalization/private delivery workflow remains P21; passing membership
 checks is not evidence of complete liabilities or full solvency.
 P18 adds protected-journal wallet/agent authorization, account-private operation
-views and an exact-integer client SDK. Actual attested transport remains P19;
-there is no deployed private API or plaintext network fallback.
+views and an exact-integer client SDK. P19 adds a runnable TLS 1.3 relay/service
+slice and attestation-gated Node channel, tested with explicit local fixtures.
+Actual Nitro/NSM/key-release qualification remains P20; no deployed private API,
+plaintext fallback or live trading readiness is implied.
 
 ## Start here
 
@@ -62,6 +64,7 @@ there is no deployed private API or plaintext network fallback.
 22. [Solana custody vault and normal authorization](docs/architecture/0015-solana-vault.md)
 23. [Funding coordinator and exact round-trip settlement](docs/architecture/0016-funding-coordinator.md)
 24. [Private API, grants and operation semantics](docs/architecture/0018-private-api.md)
+25. [Attested TLS, service entrypoints and trust boundaries](docs/architecture/0019-attested-service.md)
 
 Resume implementation from the current handoff in the tracker.
 Ignored `work/` contains the original local research; it is not a CI dependency.

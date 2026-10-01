@@ -457,11 +457,11 @@ not approval of a production protocol. Qualify local positive/negative quote
 fixtures; no hardware claim from mocks. Evidence: W06–W08; SDK-driven process tests,
 replay/measurement/key substitution and hostile relay/host-observation tests.
 
-- [ ] AWS chain, approved measurements, freshness and session-key binding all validate before private exchange.
-- [ ] Downgrade, replay, wrong release and error/stream paths cannot expose private plaintext to parent/relay.
-- [ ] Client distribution threat and key rotation are documented; logged/host-visible metadata is explicitly bounded.
-- [ ] Thin SDK reaches actual relay/service processes; an authenticated intent commits durably and its private response/query survives disconnect/restart without a second native attempt. Native venue I/O can remain an explicit fixture in this slice.
-- [ ] Connection/request/stream bounds, deadlines, backpressure, shutdown and failure behaviour are tested. Parent logs/errors/storage never receive private plaintext; test attestation/key providers cannot silently enable a production service.
+- [x] AWS chain, approved measurements, freshness and session-key binding all validate before private exchange. The AWS-root production path is implemented; positive current-session evidence is synthetic, not NSM hardware qualification.
+- [x] Downgrade, replay, wrong release and error/stream paths cannot expose private plaintext to parent/relay. This profile supplies bounded snapshots, not network subscriptions.
+- [x] Client distribution threat and key rotation are documented; logged/host-visible metadata is explicitly bounded.
+- [x] Thin SDK reaches actual relay/service processes; an authenticated intent commits durably and its private response/query survives disconnect/restart without a second native attempt. Native venue I/O remains an explicit fixture in this slice, including a lost committed reply.
+- [x] Connection/request/stream bounds, deadlines, backpressure, shutdown and failure behaviour are tested. Designated parent logs/errors/replica storage receive no private plaintext; test attestation/key providers cannot silently enable a production service. Local fixture process memory/stdin are not Nitro isolation evidence.
 
 <a id="p20"></a>
 ## P20 — Nitro runtime and key/storage qualification

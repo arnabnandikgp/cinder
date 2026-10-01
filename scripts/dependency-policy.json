@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "d62b8a53c790a55a8927db31a3437fad81382d1bdf686424db2aa43139a05d6b",
+  "lockfileSha256": "95333dc97a074916346afd5d71e2e9da1472a0ffb94f849ebfeecd811ac0950c",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
     {
@@ -13,11 +13,49 @@
       ]
     },
     {
+      "name": "android_system_properties",
+      "version": "0.1.6",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "autocfg",
+      "version": "1.5.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-nitro-enclaves-cose",
+      "version": "0.5.2",
+      "buildScript": false,
+      "features": [
+        "default",
+        "key_openssl_pkey",
+        "openssl"
+      ]
+    },
+    {
+      "name": "base64",
+      "version": "0.23.1",
+      "buildScript": false,
+      "features": [
+        "alloc"
+      ]
+    },
+    {
       "name": "base64ct",
       "version": "1.8.3",
       "buildScript": false,
       "features": [
         "alloc"
+      ]
+    },
+    {
+      "name": "bitflags",
+      "version": "1.3.2",
+      "buildScript": false,
+      "features": [
+        "default"
       ]
     },
     {
@@ -40,6 +78,14 @@
         "alloc",
         "default",
         "std"
+      ]
+    },
+    {
+      "name": "bumpalo",
+      "version": "3.20.3",
+      "buildScript": false,
+      "features": [
+        "default"
       ]
     },
     {
@@ -74,6 +120,21 @@
       ]
     },
     {
+      "name": "chrono",
+      "version": "0.4.45",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "clock",
+        "iana-time-zone",
+        "now",
+        "serde",
+        "std",
+        "winapi",
+        "windows-link"
+      ]
+    },
+    {
       "name": "cipher",
       "version": "0.4.4",
       "buildScript": false,
@@ -86,6 +147,15 @@
       "version": "0.9.6",
       "buildScript": false,
       "features": []
+    },
+    {
+      "name": "core-foundation-sys",
+      "version": "0.8.7",
+      "buildScript": false,
+      "features": [
+        "default",
+        "link"
+      ]
     },
     {
       "name": "cpufeatures",
@@ -121,6 +191,50 @@
       "features": []
     },
     {
+      "name": "darling",
+      "version": "0.24.1",
+      "buildScript": false,
+      "features": [
+        "default",
+        "suggestions"
+      ]
+    },
+    {
+      "name": "darling_core",
+      "version": "0.24.1",
+      "buildScript": false,
+      "features": [
+        "strsim",
+        "suggestions"
+      ]
+    },
+    {
+      "name": "darling_macro",
+      "version": "0.24.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "defmt",
+      "version": "1.1.1",
+      "buildScript": true,
+      "features": [
+        "alloc"
+      ]
+    },
+    {
+      "name": "defmt-macros",
+      "version": "1.1.1",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "defmt-parser",
+      "version": "1.0.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "der",
       "version": "0.7.10",
       "buildScript": false,
@@ -129,6 +243,15 @@
         "oid",
         "std",
         "zeroize"
+      ]
+    },
+    {
+      "name": "deranged",
+      "version": "0.5.8",
+      "buildScript": false,
+      "features": [
+        "default",
+        "serde"
       ]
     },
     {
@@ -142,6 +265,12 @@
         "default",
         "std"
       ]
+    },
+    {
+      "name": "dyn-clone",
+      "version": "1.0.20",
+      "buildScript": false,
+      "features": []
     },
     {
       "name": "ed25519",
@@ -162,6 +291,12 @@
         "std",
         "zeroize"
       ]
+    },
+    {
+      "name": "equivalent",
+      "version": "1.0.2",
+      "buildScript": false,
+      "features": []
     },
     {
       "name": "fallible-iterator",
@@ -191,6 +326,46 @@
       "features": []
     },
     {
+      "name": "foreign-types",
+      "version": "0.3.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "foreign-types-shared",
+      "version": "0.1.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "futures-core",
+      "version": "0.3.34",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
+      "name": "futures-task",
+      "version": "0.3.34",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
+      "name": "futures-util",
+      "version": "0.3.34",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "slab",
+        "std"
+      ]
+    },
+    {
       "name": "generic-array",
       "version": "0.14.7",
       "buildScript": true,
@@ -207,6 +382,73 @@
       ]
     },
     {
+      "name": "half",
+      "version": "1.8.3",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "hashbrown",
+      "version": "0.12.3",
+      "buildScript": false,
+      "features": [
+        "raw"
+      ]
+    },
+    {
+      "name": "hashbrown",
+      "version": "0.17.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "hex",
+      "version": "0.4.3",
+      "buildScript": false,
+      "features": [
+        "alloc"
+      ]
+    },
+    {
+      "name": "iana-time-zone",
+      "version": "0.1.65",
+      "buildScript": false,
+      "features": [
+        "fallback"
+      ]
+    },
+    {
+      "name": "iana-time-zone-haiku",
+      "version": "0.1.2",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "ident_case",
+      "version": "1.0.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "indexmap",
+      "version": "1.9.3",
+      "buildScript": true,
+      "features": [
+        "serde",
+        "serde-1",
+        "std"
+      ]
+    },
+    {
+      "name": "indexmap",
+      "version": "2.14.2",
+      "buildScript": false,
+      "features": [
+        "serde",
+        "std"
+      ]
+    },
+    {
       "name": "inout",
       "version": "0.1.4",
       "buildScript": false,
@@ -219,10 +461,67 @@
       "features": []
     },
     {
+      "name": "jiff",
+      "version": "0.2.37",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std",
+        "tz-system",
+        "tzdb-bundle-platform",
+        "tzdb-concatenated",
+        "tzdb-zoneinfo"
+      ]
+    },
+    {
+      "name": "jiff-core",
+      "version": "0.1.1",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std",
+        "tz-fat"
+      ]
+    },
+    {
+      "name": "jiff-static",
+      "version": "0.2.37",
+      "buildScript": false,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "jiff-tzdb",
+      "version": "0.1.8",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "jiff-tzdb-platform",
+      "version": "0.1.3",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "js-sys",
+      "version": "0.3.106",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std",
+        "unsafe-eval"
+      ]
+    },
+    {
       "name": "libc",
       "version": "0.2.189",
       "buildScript": true,
-      "features": []
+      "features": [
+        "default",
+        "std"
+      ]
     },
     {
       "name": "libsqlite3-sys",
@@ -239,6 +538,15 @@
       ]
     },
     {
+      "name": "log",
+      "version": "0.4.34",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
       "name": "memchr",
       "version": "2.8.3",
       "buildScript": false,
@@ -248,8 +556,52 @@
       ]
     },
     {
+      "name": "num-conv",
+      "version": "0.2.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "num-traits",
+      "version": "0.2.19",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "once_cell",
+      "version": "1.21.4",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "opaque-debug",
       "version": "0.3.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "openssl",
+      "version": "0.10.81",
+      "buildScript": true,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "openssl-macros",
+      "version": "0.1.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "openssl-sys",
+      "version": "0.9.117",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "pin-project-lite",
+      "version": "0.2.17",
       "buildScript": false,
       "features": []
     },
@@ -271,6 +623,28 @@
     {
       "name": "poly1305",
       "version": "0.8.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "portable-atomic",
+      "version": "1.15.0",
+      "buildScript": true,
+      "features": [
+        "require-cas"
+      ]
+    },
+    {
+      "name": "portable-atomic-util",
+      "version": "0.2.8",
+      "buildScript": true,
+      "features": [
+        "alloc"
+      ]
+    },
+    {
+      "name": "powerfmt",
+      "version": "0.2.0",
       "buildScript": false,
       "features": []
     },
@@ -303,6 +677,18 @@
       ]
     },
     {
+      "name": "ref-cast",
+      "version": "1.0.27",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "ref-cast-impl",
+      "version": "1.0.27",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "rusqlite",
       "version": "0.40.2",
       "buildScript": false,
@@ -316,6 +702,28 @@
       "version": "0.4.1",
       "buildScript": false,
       "features": []
+    },
+    {
+      "name": "rustversion",
+      "version": "1.0.23",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "schemars",
+      "version": "0.9.0",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "schemars",
+      "version": "1.2.2",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
     },
     {
       "name": "semver",
@@ -336,6 +744,25 @@
         "derive",
         "serde_derive",
         "std"
+      ]
+    },
+    {
+      "name": "serde_bytes",
+      "version": "0.11.19",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_cbor",
+      "version": "0.11.2",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std",
+        "tags"
       ]
     },
     {
@@ -361,9 +788,33 @@
       "version": "1.0.151",
       "buildScript": true,
       "features": [
+        "alloc",
         "default",
         "std"
       ]
+    },
+    {
+      "name": "serde_repr",
+      "version": "0.1.21",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "serde_with",
+      "version": "3.24.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "macros",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_with_macros",
+      "version": "3.24.0",
+      "buildScript": false,
+      "features": []
     },
     {
       "name": "sha2",
@@ -393,6 +844,14 @@
       ]
     },
     {
+      "name": "slab",
+      "version": "0.4.12",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
       "name": "smallvec",
       "version": "1.16.1",
       "buildScript": false,
@@ -408,6 +867,12 @@
       ]
     },
     {
+      "name": "strsim",
+      "version": "0.11.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "subtle",
       "version": "2.6.1",
       "buildScript": false,
@@ -421,6 +886,7 @@
         "clone-impls",
         "default",
         "derive",
+        "extra-traits",
         "full",
         "parsing",
         "printing",
@@ -433,10 +899,59 @@
       "buildScript": false,
       "features": [
         "clone-impls",
+        "default",
         "derive",
+        "extra-traits",
+        "full",
         "parsing",
         "printing",
-        "proc-macro"
+        "proc-macro",
+        "visit",
+        "visit-mut"
+      ]
+    },
+    {
+      "name": "thiserror",
+      "version": "2.0.21",
+      "buildScript": true,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "thiserror-impl",
+      "version": "2.0.21",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "time",
+      "version": "0.3.55",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "formatting",
+        "parsing",
+        "serde",
+        "serde-well-known",
+        "std"
+      ]
+    },
+    {
+      "name": "time-core",
+      "version": "0.1.9",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "time-macros",
+      "version": "0.2.32",
+      "buildScript": false,
+      "features": [
+        "formatting",
+        "parsing",
+        "serde"
       ]
     },
     {
@@ -484,6 +999,76 @@
       "version": "0.11.1+wasi-snapshot-preview1",
       "buildScript": false,
       "features": []
+    },
+    {
+      "name": "wasm-bindgen",
+      "version": "0.2.129",
+      "buildScript": true,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "wasm-bindgen-macro",
+      "version": "0.2.129",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "wasm-bindgen-macro-support",
+      "version": "0.2.129",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "wasm-bindgen-shared",
+      "version": "0.2.129",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "windows-core",
+      "version": "0.62.2",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "windows-implement",
+      "version": "0.60.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "windows-interface",
+      "version": "0.59.3",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "windows-link",
+      "version": "0.2.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "windows-result",
+      "version": "0.4.1",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "windows-strings",
+      "version": "0.5.1",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
     },
     {
       "name": "zeroize",

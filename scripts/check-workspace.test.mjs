@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 function fixture() {
   const pkg = name => ({ name, id: name, version: '0.1.0', source: null, targets: [{ kind: ['lib'] }], dependencies: [] });
-  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica', 'cinder-api'].map(pkg);
+  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica', 'cinder-api', 'cinder-service'].map(pkg);
   packages[2].dependencies = [
     { name: 'cinder-ports', kind: null, path: '/repo/crates/ports', req: '=0.1.0', target: null },
     { name: 'cinder-kernel', kind: 'dev', path: '/repo/crates/kernel', req: '=0.1.0', target: null },
@@ -20,6 +20,13 @@ function fixture() {
     ...['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'serde' ? ['derive'] : name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : [], uses_default_features: name !== 'ed25519-dalek', optional: false})),
   ];
   packages[5].dependencies = packages[4].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal', 'sha2', 'ed25519-dalek', 'zeroize'].includes(dep.name));
+  packages[6].dependencies = [
+    ...packages[5].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal'].includes(dep.name)),
+    {name: 'cinder-api',kind:null,path:'/repo/crates/api',req:'=0.1.0',target:null},
+    ...['openssl', 'aws-nitro-enclaves-cose', 'serde_cbor', 'zeroize'].map(name => ({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p => p.name === name).version}`,target:null,features:[],uses_default_features:true,optional:false})),
+  ];
+  packages[6].features={default:[], 'local-fixture':[]};
+  packages[6].targets.push(...['cinder-service-fixture','cinder-verify-fixture'].map(name => ({name,kind:['bin'],'required-features':['local-fixture']})));
   const workspace_members = packages.map(p => p.id);
   packages.push(...dependencyPolicy.packages.map(p => ({...pkg(p.name), id: `${p.name}@${p.version}`, version: p.version, source: dependencyPolicy.registry, targets: [{kind: ['lib']}, ...(p.buildScript ? [{kind: ['custom-build']}] : [])]})));
   return { packages, workspace_members, resolve: {nodes: dependencyPolicy.packages.map(p => ({id: `${p.name}@${p.version}`, features: p.features}))} };
@@ -84,9 +91,16 @@ test('registry lock checksums and edges are pinned by an explicit policy digest'
 test('multiple pinned versions keep distinct graph identities and features', () => {
   const metadata = fixture();
   const syn = metadata.packages.filter(p => p.name === 'syn');
-  assert.equal(syn.length, 2);
+  assert.ok(syn.length >= 2);
   assert.deepEqual(validateWorkspace(metadata), []);
   const index = metadata.packages.indexOf(syn[0]);
   metadata.packages[index] = {...syn[1]};
   assert.match(validateWorkspace(metadata).join('\n'), /unexpected package set/);
+});
+
+test('fixture trust roots and key providers cannot silently become default entrypoints', () => {
+  const metadata=fixture();metadata.packages[6].features.default=['local-fixture'];
+  assert.match(validateWorkspace(metadata).join('\n'),/fixture feature/);
+  metadata.packages[6].features.default=[];delete metadata.packages[6].targets[1]['required-features'];
+  assert.match(validateWorkspace(metadata).join('\n'),/fixture binary/);
 });

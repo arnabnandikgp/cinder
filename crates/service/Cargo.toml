@@ -1,0 +1,41 @@
+[package]
+name = "cinder-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# No fixture attester, root, storage key or policy in the default build.
+local-fixture = []
+
+[dependencies]
+cinder-kernel.workspace = true
+cinder-journal = { path = "../journal", version = "=0.1.0" }
+cinder-api = { path = "../api", version = "=0.1.0" }
+openssl = "=0.10.81"
+aws-nitro-enclaves-cose = "=0.5.2"
+serde_cbor = "=0.11.2"
+zeroize = "=1.8.2"
+
+[[bin]]
+name = "cinder-service-fixture"
+path = "src/bin/fixture.rs"
+required-features = ["local-fixture"]
+
+[[bin]]
+name = "cinder-verify-quote"
+path = "src/bin/verify.rs"
+
+[[bin]]
+name = "cinder-verify-fixture"
+path = "src/bin/verify-fixture.rs"
+required-features = ["local-fixture"]
+
+[[bin]]
+name = "cinder-relay"
+path = "src/bin/relay.rs"
+
+[lints]
+workspace = true

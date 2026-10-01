@@ -10,7 +10,8 @@ package boundaries and the deliberately small P01 scope.
 - Node **24.21.0**: `.node-version` controls scripts/CI. Use an existing version
   manager or the official release binaries; do not change global tools implicitly.
 - A C compiler builds the pinned bundled SQLite dependency; no database server
-  is needed. P18 uses npm only to install locked SDK check tools; no API keys, RPC endpoint, wallet, Solana CLI,
+  is needed. P19 also requires OpenSSL headers/libraries (Homebrew OpenSSL on macOS;
+  `pkg-config libssl-dev` on Ubuntu). npm only installs locked SDK check tools; no API keys, RPC endpoint, wallet, Solana CLI,
   Anchor, Docker or AWS account is needed for off-chain workspace checks.
 
 One-time installation of toolchains/CI actions, `cargo fetch --locked` and
@@ -81,8 +82,40 @@ native signing is not permission to deploy or load real accounts.
 Ordinary tests must use tracked sanitized fixtures. Never mount ignored `work/`,
 wallet directories, cloud credentials or unrelated `stays/` into test containers.
 The exact types and codecs are described in [ADR 0002](architecture/0002-financial-primitives.md).
-Encrypted durable deployment, the application API and live native transport remain
-future phases. `--properties` selects workspace tests prefixed `property_`.
+Actual Nitro deployment and live native transport remain later qualification gates.
+`--properties` selects workspace tests prefixed `property_`.
+
+### Runnable private slice (P19)
+
+```sh
+cargo build -p cinder-service --all-features --locked --offline
+node scripts/check-private-client.mjs
+```
+
+This invokes separate `cinder-service-fixture`, `cinder-relay` and quote-verifier
+processes through the Node SDK, not just Rust handler calls. `CARGO_TARGET_DIR`,
+if set, selects their build directory. The fixture attester, clock, local witness,
+policy and venue are explicitly synthetic. Tests create/remove uniquely named
+temporary ciphertext replicas, retain a disposable journal key in the trusted
+harness, kill/restart the service and verify no second economic attempt. There
+are no external network requests; localhost sockets are necessary for these tests.
+
+Manual entrypoints: `cinder-relay LISTEN_IP:PORT TARGET_IP:PORT` accepts only
+loopback sockets and prints its bound address. `cinder-service-fixture LISTEN
+EMPTY_OR_EXISTING_FIXTURE_STORE OWNER_PUBLIC_KEY_HEX` additionally reads exactly
+32 journal-key bytes from trusted harness stdin, prints its address/public fixture
+CA, and starts the encrypted handler. Keep stdin open; EOF shuts down both slice
+entrypoints. Do not use real wallet keys/data with either fixture. Tests automate
+this bootstrap; no shell-based key-file example or production secret loader ships.
+
+`cinder-verify-quote` verifies one bounded public-data request on stdin against the
+pinned AWS root. `cinder-verify-fixture ROOT_DER_HEX` is a different binary requiring
+`local-fixture`; it cannot be selected by a production-verifier flag. The default
+build provides relay/verifier and reusable service ports, not a fake production
+enclave entrypoint. See [ADR 0019](architecture/0019-attested-service.md) for wire,
+client trust/distribution and the P20 isolation/freshness boundaries. No browser
+transport, terminal, complete workflow acceptance or hardware qualification is
+claimed by the local slice.
 
 ## Routine PR verification
 
