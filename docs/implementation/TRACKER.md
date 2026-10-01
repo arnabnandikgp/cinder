@@ -21,11 +21,11 @@
 | [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
 | [P17 — Recovery program](PLAN.md#p17) | in progress | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), based on merged P16 |
 | [P18 — Private API and SDK](PLAN.md#p18) | in progress | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), stacked above #41 |
-| [P19 — Attested transport](PLAN.md#p19) | open | Clients bind approved code, fresh attestation and session keys before sending private data through an untrusted relay. | — |
-| [P20 — Nitro qualification](PLAN.md#p20) | open | Actual enclave, key-release, egress and storage/fencing behavior is qualified; mocks cannot stand in for hardware evidence. | — |
+| [P19 — Attested transport and runnable service](PLAN.md#p19) | open | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | — |
+| [P20 — Nitro application qualification](PLAN.md#p20) | open | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
-| [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | Joined production components preserve accounting and authority under reproducible faults, races and adverse financial paths. | — |
-| [P23 — Live integration qualification](PLAN.md#p23) | open | Approved bounded live runs verify the actual implementation and fully reconcile test positions, orders and funds. | — |
+| [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
+| [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-01. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -74,7 +74,25 @@ Ready P18 PR #42 is published above P17 #41 using native `gh stack` (stack #43),
 from implementation commit `f6b2e84bced022135a3601e4f7211bf59f552525`.
 This following commit records publication only; no implementation changed after
 the full check. Hosted checks/review are separate evidence and not claimed green.
-Next: review P18, then P19 attested transport/release verification. Neither PR is merged.
+Hosted snapshot checked 2026-10-01: P17 #41 at `3a26573` and P18 #42 at `5ba8915`
+both have successful plan/handoff, offline Rust and Anchor/SBF/Surfpool jobs.
+CodeRabbit's status is also successful on both; that status is not disposition of
+its individual findings. Both PRs are ready/open and still need review triage.
+New documentation/review-fix commits must obtain their own checks; no future-head
+CI result or merge is claimed here.
+
+User-approved planning clarification, 2026-10-01: P19 now owns a runnable parent
+relay/private-service slice and SDK process tests; P20 assembles and qualifies the
+actual Nitro application; P21 recovery joins its accepted journal; P22/P23 reuse
+full workflow assertions offline/live respectively. Framework choice stays in the
+P19 ADR. Economics, custody, release gates and external permissions are unchanged.
+Self-service private onboarding/browser-agent UX/terminal remain explicit follow-up
+product work, not quietly included in backend qualification. The local
+`docs/user-journey.md` and unrelated `stays/` remain untracked and outside commits.
+
+Next: publish these planning/tracker updates on P18, address relevant findings in
+P17/P18 with owning-layer tests and stack updates, then begin the clarified P19
+when authorized. Neither PR is merged by this handoff.
 Actual ledger-to-claim finalization/independent delivery remains P21; source/hardware
 and live release gates remain explicit. No new economic policy was adopted.
 
@@ -897,6 +915,9 @@ Next: ready P17 PR #41 targets merged `product/tee-v1`; review its hosted
 checks/findings before any merge. P18 adds private owner/agent API/SDK grants and
 operation semantics above P17, with confidential transport ports pending P19.
 Do not deploy, call live venues or activate a real recovery estate from this handoff.
+2026-10-01 publication refresh: head `3a26573`, ready/open, all three hosted protocol
+jobs successful. CodeRabbit comments await triage; its green status is not review
+closure. Preserve these dated results when review fixes create a new head.
 PR: https://github.com/arnabnandikgp/cinder/pull/41.
 Merge: none.
 
@@ -944,28 +965,36 @@ with signature exposure, and cancel-status routing with the cancel attempt rathe
 than its original order. Corrected the fixtures without weakening the actual
 authority/terminal gates. Tightened grant dispatch expiry and trade-only replay
 ownership during self-review. No new economic policy or production limit adopted.
-Next: ready P18 PR #42 targets P17 #41; review its hosted checks/findings before merge.
-P19 owns real attested transport, stream framing and client release verification;
+2026-10-01 publication refresh: head `5ba8915`, ready/open, all three hosted protocol
+jobs successful; CodeRabbit comments await triage. Planning clarification adds
+explicit runnable backend deliverables and the SDK/service integration ladder to
+PLAN/architecture/contributor handoffs; no runtime is implemented by those edits.
+Documentation-only verification: `node scripts/check-implementation-plan.mjs`,
+the 12 validator self-tests and `git diff --check`. No Rust/SBF rerun is claimed
+for this planning-only update; review code changes will receive owning-layer checks.
+Next: publish that docs-only clarification on #42, then review/fix both open layers
+and record new checks. Keep each phase in progress until its actual merge.
+P19 owns real attested transport, a runnable service slice and client verification;
 P20 hardware, P21 integrated recovery and G01–G05 remain explicit gates. No live
 venue/RPC, deployment, AWS, configured wallet, container or agent was used.
 PR: https://github.com/arnabnandikgp/cinder/pull/42.
 Merge: none.
 
-## P19 — Attested transport
+## P19 — Attested transport and runnable service
 
 Work: not started.
 Verification: not run; acceptance in PLAN P19.
 Unexpected: none yet.
-Next: review protocol/library choices and bind attestation freshness/release/session keys; test hostile relay and client release risks.
+Next: record channel/crypto/server-runtime choices; build parent relay and private-service entry points wired to P18/protected journal. Drive signed SDK requests over the real local processes with explicit quote/venue fixtures; test hostile relay, disconnect/restart, bounds/backpressure and client release risks. No AWS hardware claim from this slice.
 PR: none.
 Merge: none.
 
-## P20 — Nitro qualification
+## P20 — Nitro application qualification
 
 Work: not started.
 Verification: not run; acceptance in PLAN P20.
 Unexpected: none yet.
-Next: build deterministic packaging locally, then request any missing G03/G05 authority before real hardware/KMS/witness qualification.
+Next: compose existing controllers/adapters into the confidential application and parent relay, wire gated production ports/scheduling, build deterministic packaging locally, then obtain G03/G05 authority for actual Nitro/key-release/egress/freshness qualification. Disabled native capabilities stay disabled; no automatic retries after restart.
 PR: none.
 Merge: none.
 
@@ -974,7 +1003,7 @@ Merge: none.
 Work: not started.
 Verification: not run; acceptance in PLAN P21.
 Unexpected: none yet.
-Next: join custody unwind, fencing, final claims and independent kit delivery offline; use explicit hardware/witness doubles.
+Next: recover the runnable service's accepted journal, fence/reconcile/unwind/return funds, finalize backed claims and independently deliver/submit kits with the ordinary API unavailable. Keep explicit hardware/witness doubles and actual local SBF evidence distinct.
 PR: none.
 Merge: none.
 
@@ -983,7 +1012,7 @@ Merge: none.
 Work: not started.
 Verification: not run; acceptance in PLAN P22.
 Unexpected: none yet.
-Next: run production components through recorded adversarial paths and persist reproducible seeds/counterexamples.
+Next: drive complete deposit/trade/partial-cancel/funding/close/return/payout and recovery paths through the actual SDK/service/controllers with offline external fixtures. Assert claims, exposure, locations, reservations and payment at each boundary; kill/restart service processes and preserve reproducible seeds/counterexamples. No live endpoints in ordinary CI.
 PR: none.
 Merge: none.
 
@@ -992,7 +1021,7 @@ Merge: none.
 Work: not started.
 Verification: not run; acceptance in PLAN P23.
 Unexpected: none yet.
-Next: prepare the bounded G05 manifest after P20/P22; qualify actual implementation on approved environments, with cleanup reconciliation.
+Next: prepare the bounded G05 manifest after P20/P22; run the same workflow assertions through actual SDK/relay/Nitro/program/venue rails, verify current capabilities and receipts, and reconcile all cleanup. No mock or historical replay counts as live qualification.
 PR: none.
 Merge: none.
 

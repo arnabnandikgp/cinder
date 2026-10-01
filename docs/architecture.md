@@ -121,6 +121,35 @@ transport cryptography and production witness providers are
 not selected implicitly by this diagram. A controller may request a transition; it cannot maintain an
 independently authoritative balance table.
 
+### Runnable application assembly and evidence levels
+
+The existing Rust crates are libraries, not six deployed services. The approved
+2026-10-01 implementation clarification assigns **P19** a minimal executable parent
+relay and confidential service, with actual local SDK/process tests over P18 and
+the protected journal. P19's ADR selects the channel/crypto/server runtime; no HTTP
+framework is selected by this architecture update. Only encrypted private frames
+and bounded declared metadata may cross the parent boundary.
+
+**P20** composes the private API, financial/journal controllers and venue/funding
+adapters into the measured enclave application, wires gated network/storage/key
+ports and qualifies actual Nitro execution. Local process or image-building tests
+cannot establish hardware attestation, key release or independent fresh storage.
+Real AWS use remains separately authorized. Private policy and signing must not
+move to the parent as a shortcut to make the service runnable.
+
+**P21** joins recovery to that application's accepted history. **P22** exercises
+complete SDK/service-driven funding/trading/payout/recovery workflows with controlled
+external ports and per-step accounting assertions. **P23** carries the same workflow
+contract onto approved real Nitro/chain/venue infrastructure and obtains new receipts.
+Unit/component integration, local SBF execution, process tests, full offline workflow
+acceptance and live qualification are distinct evidence levels, not interchangeable
+claims of readiness. Ordinary CI stays offline.
+
+Initial end-to-end tests use the SDK/CLI and explicitly configured test accounts.
+Self-service private onboarding, browser-agent key UX and the terminal are separate
+product-integration follow-ups, not automatically provided by backend qualification.
+See [PLAN's application assembly ladder](implementation/PLAN.md#application-assembly-and-the-integration-test-ladder).
+
 ## 3. Accounts, assets and authority
 
 | Identity / state | What it owns or controls | What it does not imply |
