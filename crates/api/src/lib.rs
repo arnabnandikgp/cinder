@@ -278,15 +278,9 @@ impl<A: Admission> Service<A> {
         }
         Sha256::digest(&*w.0).into()
     }
-    /// One explicit governed installation, committed with initial authority epochs.
-    /// A changed contract needs an explicit migration; it cannot overwrite history.
-    pub fn initialize<B: Backend, P: Protection>(
-        &self,
-        journal: &mut Journal<B, P>,
-        now: u64,
-    ) -> Result<(), Error> {
-        journal.verified_state().map_err(|_| Error::Unavailable)?;
-        let config = journal.configuration();
+    /// Commitment to this loaded API contract, using the journal's exact domain
+    /// and policy. This is a release-manifest component, not a solvency proof.
+    pub fn release_commitment(&self, config: &Config) -> Result<[u8; 32], Error> {
         if config.customers.len() != self.contract.owners.len()
             || self
                 .contract
@@ -296,7 +290,23 @@ impl<A: Admission> Service<A> {
         {
             return Err(Error::Invalid);
         }
-        let fingerprint = self.fingerprint(config.domain, config.policy);
+        Ok(self.fingerprint(config.domain, config.policy))
+    }
+    /// Private-runtime configuration access for matching the loaded custody
+    /// beneficiaries. This is not a customer API or public owner directory.
+    pub fn owner_bindings(&self) -> &[OwnerBinding] {
+        &self.contract.owners
+    }
+    /// One explicit governed installation, committed with initial authority epochs.
+    /// A changed contract needs an explicit migration; it cannot overwrite history.
+    pub fn initialize<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        now: u64,
+    ) -> Result<(), Error> {
+        journal.verified_state().map_err(|_| Error::Unavailable)?;
+        let config = journal.configuration();
+        let fingerprint = self.release_commitment(config)?;
         let marker = [INIT, &fingerprint].concat();
         for tx in journal.transactions() {
             for e in &tx.evidence {

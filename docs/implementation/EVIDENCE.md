@@ -43,6 +43,17 @@ upload the entire local research tree to make links work.
 
 ## Verified evidence versus new work
 
+### P20: loaded-policy and NSM first slice
+
+[ADR 0020](../architecture/0020-nitro-runtime.md) implements actual loaded-policy
+commitments and AWS's pinned NSM driver boundary. W06–W08's no-host-approval,
+exact-release, role-separation and no-fallback requirements have offline regression
+tests. The default build cannot construct an injected fixture NSM device. Tests
+cover synthetic NSM protocol replies and the ordinary-host refusal path, not
+real enclave attestation or entropy. This is not a complete runtime manifest,
+runnable Nitro financial application, KMS release or fresh-witness qualification.
+No native capability is activated and no experimental authority is promoted.
+
 ### P19: attestation-gated runnable service slice
 
 [ADR 0019](../architecture/0019-attested-service.md) promotes W06–W08's exact-key

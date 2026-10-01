@@ -3,6 +3,8 @@
 pub mod attestation;
 #[cfg(feature = "local-fixture")]
 pub mod fixture;
+pub mod nsm;
+pub mod release;
 pub mod transport;
 pub mod verifier;
 

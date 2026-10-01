@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "95333dc97a074916346afd5d71e2e9da1472a0ffb94f849ebfeecd811ac0950c",
+  "lockfileSha256": "ec0bcc2bdf43de5b4b6db78a2b0a160e67b910a8d54c87a1752fb66a779aaf93",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
     {
@@ -32,6 +32,15 @@
         "default",
         "key_openssl_pkey",
         "openssl"
+      ]
+    },
+    {
+      "name": "aws-nitro-enclaves-nsm-api",
+      "version": "0.5.2",
+      "buildScript": false,
+      "features": [
+        "default",
+        "nix"
       ]
     },
     {
@@ -97,6 +106,12 @@
     {
       "name": "cfg-if",
       "version": "1.0.5",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "cfg_aliases",
+      "version": "0.2.2",
       "buildScript": false,
       "features": []
     },
@@ -520,6 +535,7 @@
       "buildScript": true,
       "features": [
         "default",
+        "extra_traits",
         "std"
       ]
     },
@@ -553,6 +569,15 @@
       "features": [
         "alloc",
         "std"
+      ]
+    },
+    {
+      "name": "nix",
+      "version": "0.31.3",
+      "buildScript": true,
+      "features": [
+        "default",
+        "ioctl"
       ]
     },
     {

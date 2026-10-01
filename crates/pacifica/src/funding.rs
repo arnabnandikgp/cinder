@@ -540,6 +540,19 @@ impl Controller {
             contract: h.finalize().into(),
         })
     }
+    /// Release component from the actual loaded profile, custody route and signer.
+    /// Refuse a controller belonging to a different authoritative journal.
+    pub fn release_commitment(&self, config: &Config) -> Result<[u8; 32], Error> {
+        if &self.profile.config != config {
+            return Err(Error::Qualification);
+        }
+        Ok(self.contract)
+    }
+    /// Private-runtime route access for checking loaded owner/key-role bindings.
+    /// No seed is returned and this must not become a customer API response.
+    pub fn route(&self) -> &Route {
+        &self.route
+    }
     fn evidence(&self, record: Record) -> Result<PrivateBytes, Error> {
         let mut bytes = MAGIC.to_vec();
         bytes.extend(

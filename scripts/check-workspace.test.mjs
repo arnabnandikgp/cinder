@@ -23,7 +23,8 @@ function fixture() {
   packages[6].dependencies = [
     ...packages[5].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal'].includes(dep.name)),
     {name: 'cinder-api',kind:null,path:'/repo/crates/api',req:'=0.1.0',target:null},
-    ...['openssl', 'aws-nitro-enclaves-cose', 'serde_cbor', 'zeroize'].map(name => ({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p => p.name === name).version}`,target:null,features:[],uses_default_features:true,optional:false})),
+    {name: 'cinder-pacifica',kind:null,path:'/repo/crates/pacifica',req:'=0.1.0',target:null},
+    ...['openssl', 'aws-nitro-enclaves-cose', 'aws-nitro-enclaves-nsm-api', 'serde_cbor', 'zeroize'].map(name => ({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p => p.name === name).version}`,target:null,features:[],uses_default_features:true,optional:false})),
   ];
   packages[6].features={default:[], 'local-fixture':[]};
   packages[6].targets.push(...['cinder-service-fixture','cinder-verify-fixture'].map(name => ({name,kind:['bin'],'required-features':['local-fixture']})));
@@ -103,4 +104,12 @@ test('fixture trust roots and key providers cannot silently become default entry
   assert.match(validateWorkspace(metadata).join('\n'),/fixture feature/);
   metadata.packages[6].features.default=[];delete metadata.packages[6].targets[1]['required-features'];
   assert.match(validateWorkspace(metadata).join('\n'),/fixture binary/);
+});
+
+test('NSM driver features, pin and platform cannot silently select another provider', () => {
+  for (const change of [dep => { dep.req = '^0.5'; }, dep => { dep.features = ['test-hooks']; }, dep => { dep.uses_default_features = false; }, dep => { dep.target = 'cfg(unix)'; }]) {
+    const metadata = fixture();
+    change(metadata.packages[6].dependencies.find(dep => dep.name === 'aws-nitro-enclaves-nsm-api'));
+    assert.match(validateWorkspace(metadata).join('\n'), /transport dependency configuration not approved/);
+  }
 });

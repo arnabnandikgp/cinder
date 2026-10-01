@@ -14,8 +14,10 @@ local-fixture = []
 cinder-kernel.workspace = true
 cinder-journal = { path = "../journal", version = "=0.1.0" }
 cinder-api = { path = "../api", version = "=0.1.0" }
+cinder-pacifica = { path = "../pacifica", version = "=0.1.0" }
 openssl = "=0.10.81"
 aws-nitro-enclaves-cose = "=0.5.2"
+aws-nitro-enclaves-nsm-api = "=0.5.2"
 serde_cbor = "=0.11.2"
 zeroize = "=1.8.2"
 

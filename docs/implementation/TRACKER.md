@@ -22,7 +22,7 @@
 | [P17 — Recovery program](PLAN.md#p17) | closed | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), merged `1f750b0` |
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | in progress | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), open |
-| [P20 — Nitro application qualification](PLAN.md#p20) | open | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | — |
+| [P20 — Nitro application qualification](PLAN.md#p20) | in progress | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | Local branch `tee/p20-nitro-runtime`; no PR yet |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
@@ -37,13 +37,20 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
 `1f750b059f39e9f409ae10fe2f4e070c2e0aa428`.
-Current branch: `tee/p19-attested-service`. P19 implements the TLS 1.3 service/relay
-slice, strict pinned-root quote verifier and Node automation channel. The fixture
-processes use the real P18 API and P06 encrypted replicated journal. Full offline
-verification passed in a staged-source export without research/local-only files.
-Ready-for-review [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44) is open
-on the TEE trunk through native `gh stack`. Hosted CI/review is pending; nothing
-has been deployed or merged in this phase.
+Current branch: `tee/p20-nitro-runtime`, registered above P19 through native
+`gh stack add`, based on `1aeef179b6f963649954f2e1a2da8eab1b6690d6`.
+P20's first local slice adds actual loaded-application policy commitments and the
+fail-closed AWS NSM adapter; see [ADR 0020](../architecture/0020-nitro-runtime.md).
+These are not yet a runnable Nitro financial application or a complete runtime
+manifest. P19's full offline results below remain evidence for its own exact
+head, not this new code. [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44)
+remains open on the TEE trunk; no merge is authorized by starting P20.
+
+AWS: initial disposable test allowance **$5**, profile `cinder-dev`, region
+`us-east-1`, no mainnet/customer funds. Read-only STS reports account root, so
+provisioning waits for a suitable non-root identity. No billable resource has
+been created and test spend is $0. The host has about 2.6 GiB free and no existing
+Apple container images; do not start a large image pull without a space plan.
 
 P17 #41 and P18 #42 merged atomically through `gh stack merge --yes --merge`
 on 2026-10-01 after explicit user authorization. Both GitHub receipts report the
@@ -74,8 +81,9 @@ plan jobs passed at `1aeef17`. CodeRabbit's one valid minor finding was the
 unlabeled P18 baseline above; this documentation-only fix preserves historical
 evidence without attributing it to P19. No runtime or test source changes.
 
-Next: review P19 #44 and its hosted checks; keep it in progress until actual merge.
-P20 assembles/qualifies Nitro; P21 joins recovery to the journal; P22/P23 reuse
+Next: finish and verify P20's local assembly, then run only authorized bounded
+hardware tests once the non-root AWS identity and test topology are ready. Keep
+P19 in progress until actual merge. P21 joins recovery to the journal; P22/P23 reuse
 workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
 separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
 unrelated `stays/`. Keep P19 in progress until actual merge; local fixtures do not establish
@@ -1012,10 +1020,10 @@ Merge: none.
 
 ## P20 — Nitro application qualification
 
-Work: not started.
-Verification: not run; acceptance in PLAN P20.
-Unexpected: none yet.
-Next: compose existing controllers/adapters into the confidential application and parent relay, wire gated production ports/scheduling, build deterministic packaging locally, then obtain G03/G05 authority for actual Nitro/key-release/egress/freshness qualification. Disabled native capabilities stay disabled; no automatic retries after restart.
+Work: in progress on `tee/p20-nitro-runtime`, above P19 head `1aeef179b6f963649954f2e1a2da8eab1b6690d6`. Application-policy commitment derives from the actual journal/API/execution/funding objects, not a supplied hash; rejects conflicting beneficiaries, mismatched configurations and reused trading/funds key roles. Actual NSM adapter pins AWS's 0.5.2 driver, opens Linux hardware only, checks locked nonzero exact PCR0/1/2 and known SHA384 profile, requires bounded entropy, and verifies fresh connection-bound quotes with the production AWS-root verifier. Dependency/feature/lock guards retain a closed graph. No economics, history codec, Solana source or native capability activation changes. ADR 0020 records the partial implementation and remaining boundaries.
+Verification: 2026-10-01 final-source pinned offline runner passes on macOS ARM64: 310 Rust tests plus two compile-fail doctests in each debug/release profile, 26 repository tests, all 17 SDK tests (including the seven real local-process tests), default/all-feature strict Clippy, format, build and TypeScript checks. Four new NSM tests and three loaded-contract tests pass; dependency guard includes the new driver feature/pin/platform refusal test. Linux driver path and actual hardware tests are still pending; local NSM protocol exchanges are synthetic, not hardware evidence. None of the four complete P20 acceptance criteria is marked satisfied. On-chain source is unchanged, so SBF is not rerun.
+Unexpected: current `cinder-dev` STS identity is account root; the same ARN was freshly confirmed after the user's IAM clarification. Provisioning is blocked pending the intended non-root credentials, independently of local implementation. User approves at most $5 for the initial disposable session; no resources or billable spend. Host disk is tight (~2.6 GiB free before the final checks) and Apple containers have no cached images. Container services/images were inspected read-only; no wallet, venue, RPC, AWS write, agent or Linux container was used.
+Next: complete consumed-runtime manifest, qualified clock/entropy, vsock/egress, recipient KMS key release, independent freshness/restore and bounded controller scheduling. Obtain the intended non-root AWS login, then perform explicitly bounded hardware/revocation/restore rehearsals under the approved $5 session with cleanup receipts. Do not promote P19's fake dispatch or fixed fixture holds; unknown attempts cannot auto-retry. Keep P20 in progress, not ready/complete from this first slice. No PR is published yet.
 PR: none.
 Merge: none.
 

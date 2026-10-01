@@ -19,7 +19,7 @@ const allowed = new Map([
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
   ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'ed25519-dalek:normal', 'bs58:normal', 'zeroize:normal']],
   ['cinder-api', ['cinder-kernel:normal', 'cinder-journal:normal', 'sha2:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
-  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'serde_cbor:normal', 'zeroize:normal']],
+  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
@@ -54,7 +54,7 @@ export function validateWorkspace(metadata) {
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
-      if (pkg.name === 'cinder-service' && ['openssl', 'aws-nitro-enclaves-cose', 'serde_cbor', 'zeroize'].includes(dep.name)) {
+      if (pkg.name === 'cinder-service' && ['openssl', 'aws-nitro-enclaves-cose', 'aws-nitro-enclaves-nsm-api', 'serde_cbor', 'zeroize'].includes(dep.name)) {
         const expected = dependencyPolicy.packages.find(p => p.name === dep.name && dep.req === `=${p.version}`);
         if (!expected || dep.source !== dependencyPolicy.registry || dep.path || dep.target != null || dep.optional || !dep.uses_default_features || dep.features.length !== 0) errors.push('cinder-service: transport dependency configuration not approved');
         continue;
