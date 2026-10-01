@@ -38,6 +38,7 @@ assert.equal(metadata.packages.length, 1, 'Unexpected Solana workspace package')
 assert.equal(metadata.packages[0].name, 'cinder-vault');
 assert.deepEqual(metadata.packages[0].dependencies.map(d => [d.name, d.req, d.kind, d.uses_default_features, d.features]), [
   ['anchor-lang', '=1.2.0', null, true, []], ['anchor-spl', '=1.2.0', null, false, ['token', 'token_2022']],
+  ['solana-sha256-hasher', '=3.1.0', null, true, ['sha2']],
 ], 'Review any vault dependency-boundary change');
 const manifest = JSON.parse(readFileSync(resolve(client, 'package.json'), 'utf8'));
 assert.deepEqual(manifest.dependencies, { '@anchor-lang/core': '1.2.0', '@solana/web3.js': '1.99.0' });
@@ -93,7 +94,7 @@ try {
   }
   assert(ready, `Surfpool startup timeout: ${serverLog}`);
   // Asynchronous child keeps the parent available to supervise/clean up the sandbox.
-  const tests = spawn(process.execPath, ['--test', '--test-concurrency=1', 'tests/funding.test.ts', 'tests/vault.test.ts'], { cwd: client, env, stdio: 'inherit' });
+  const tests = spawn(process.execPath, ['--test', '--test-concurrency=1', 'tests/funding.test.ts', 'tests/recovery.test.ts', 'tests/vault.test.ts'], { cwd: client, env, stdio: 'inherit' });
   await new Promise((accept, reject) => {
     tests.on('error', reject); tests.on('exit', (code, signal) => code === 0 ? accept() : reject(new Error(`Vault tests failed: ${code ?? signal}`)));
   });

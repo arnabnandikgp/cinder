@@ -302,7 +302,32 @@ and fake-observation tests do not upgrade them into live G01/P23 evidence.
 | B07, R01–R04 | P17, P21 | V08–V09; funded final claims, shared counters, independent package delivery |
 | R05, G01–G05 | P22–P24 | Joined fault suite, bounded live evidence, completeness/exit limits and explicit approvals |
 
+## P17 final-claim contract promotion
+
+2026-10-01: [ADR 0017](../architecture/0017-recovery-claims.md) promotes W05/W07's
+strict final-root/normal-paid basis, independent operator activation, ordered odd-tree
+membership and rollback/containment requirements into the existing Anchor 1.2 vault.
+V08 now executes actual normal payment 20 and final claims 45/200, preserving total
+lifetime payments 65/200; the 35 loss is an explicit local fixture, not venue evidence.
+P17 replaces M2's 64-bit bitmap with permanent owner/config claim receipts and a
+bounded 16-sibling verifier. Salts in tests are deterministic only. It preserves
+false-total and duplicate-owner counterexamples: ordinary inclusion proves neither
+complete liabilities nor solvency. No experimental account, live endpoint, key or
+separate balance projection is promoted. P21 owns actual finalization/settlement and
+independent encrypted package delivery; G01/G03/G05 remain qualification gates.
+New test outcomes are recorded in TRACKER after verification, not inferred from M2.
+
 ## Source fingerprints
+
+P18 promotion: [ADR 0018](../architecture/0018-private-api.md) extracts W06's
+canonical capabilities, confidential transport seam, current-epoch authorization
+before replay/query, durable operation IDs and secret-safe projections. Tracked
+Rust tests use actual encrypted SQLite records and synthetic qualified policies;
+eight independent-binding wire vectors and TypeScript tests cover every method.
+No native credential, ignored research, RPC/venue call or live wallet is required.
+Numerical admission and channel/attestation implementations remain qualified ports,
+not promoted from a fake transport or illustrative hold amount. No external Cargo
+version/feature changed; the local API dependency/lockfile policy is explicit.
 
 SHA-256 of the selected local inputs when the baseline was extracted. Originals
 remain unchanged; later source revisions require a dated promotion note, not silent

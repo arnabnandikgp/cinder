@@ -15,7 +15,8 @@ Research and bounded prototypes support starting implementation. They are not a
 production deployment, audit, universal solvency proof, or guarantee of exit
 without operator assistance. The planning foundation and pinned workspace are
 merged, including exact financial primitives and canonical event identities.
-P03's joined ledger is merged. The P04–P14 stack adds funding/fee accounting,
+P03's joined ledger and the reviewed P04–P16 stack are merged into `product/tee-v1`.
+P04–P14 add funding/fee accounting,
 evidence containment, atomic replay, AEAD ciphertext replication and writer fencing
 against a trusted witness port, plus bound order intents and terminal-history
 reconciliation, partial funds movements, queued collateral-aware payouts and
@@ -27,6 +28,13 @@ Independent witness/Nitro qualification, live native qualification and deployed
 services remain later phases.
 P15/P16 add the Anchor 1.2 custody vault and a durable vault/broker/venue funding
 coordinator with original-attempt reconciliation and offline signed SBF tests.
+P17 extends the same vault with immutable final recovery statements, separate
+operator activation, owner-signed claims and shared lifetime payout counters.
+Its joined finalization/private delivery workflow remains P21; passing membership
+checks is not evidence of complete liabilities or full solvency.
+P18 adds protected-journal wallet/agent authorization, account-private operation
+views and an exact-integer client SDK. Actual attested transport remains P19;
+there is no deployed private API or plaintext network fallback.
 
 ## Start here
 
@@ -53,6 +61,7 @@ coordinator with original-attempt reconciliation and offline signed SBF tests.
 21. [Durable native signing and API credits](docs/architecture/0014-pacifica-execution.md)
 22. [Solana custody vault and normal authorization](docs/architecture/0015-solana-vault.md)
 23. [Funding coordinator and exact round-trip settlement](docs/architecture/0016-funding-coordinator.md)
+24. [Private API, grants and operation semantics](docs/architecture/0018-private-api.md)
 
 Resume implementation from the current handoff in the tracker.
 Ignored `work/` contains the original local research; it is not a CI dependency.
@@ -61,17 +70,18 @@ relying on them. No wallets, credentials, signed live requests or private custom
 data belong in the repository.
 
 After installing Rust 1.97.1 with rustfmt/Clippy, a C compiler and Node 24.21.0,
-prepare pinned dependencies with `cargo fetch --locked`, then run all checks
+prepare pinned dependencies with `cargo fetch --locked` and
+`npm ci --ignore-scripts --prefix clients/private`, then run all checks
 offline with the same command used in CI:
 
 ```sh
 node scripts/check.mjs
 ```
 
-The five local crates are `cinder-kernel`, `cinder-ports`, `cinder-test-support`,
-`cinder-journal` and `cinder-pacifica`. Storage, cryptography and native JSON/signing
+The six local crates are `cinder-kernel`, `cinder-ports`, `cinder-test-support`,
+`cinder-journal`, `cinder-pacifica` and `cinder-api`. Storage, cryptography and native JSON/signing
 dependencies stay outside the dependency-free kernel. No check uses live endpoints.
-Node runs repository checks, not the financial runtime.
+Node runs repository/SDK checks, not the financial runtime.
 
 The isolated Anchor 1.2 workspace in `programs/` and unsigned TypeScript client
 in `clients/vault/` are verified separately with `node scripts/check-vault.mjs`.

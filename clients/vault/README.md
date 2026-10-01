@@ -15,3 +15,13 @@ share a permanent operator namespace across authority rotation.
 The tests deliberately sign/submit only to the check-owned offline localhost
 Surfpool, using fresh in-memory identities. That fixture is not a production
 wallet implementation. [Vault contract](../../docs/architecture/0015-solana-vault.md).
+
+`src/recovery.ts` packages already-final positive claims, hashes the domain-bound
+statement, constructs ordered Merkle paths and encodes Anchor recovery arguments.
+It is not an entitlement calculator, full-solvency verifier or automatic activation
+service. Authenticate the actual active statement/configuration and paid-counter
+basis before using inclusion results. Use the generated `stageRecovery`,
+`activateRecovery` and `claimRecovery` methods with explicit strict accounts;
+normal and recovery payments share lifetime counters. Claim delivery/encryption
+and the standalone recovery workflow are P21, not ambient SDK behavior.
+See [recovery contract](../../docs/architecture/0017-recovery-claims.md).

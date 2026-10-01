@@ -343,6 +343,10 @@ impl State {
     pub fn ledger(&self) -> &Ledger {
         &self.ledger
     }
+    /// Last durable logical clock cut for trusted runtime freshness checks.
+    pub fn logical_time(&self) -> u64 {
+        self.now
+    }
     /// Read-only commitments, including released records.
     pub fn holds(&self) -> &[Hold] {
         &self.holds

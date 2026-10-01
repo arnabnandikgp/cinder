@@ -10,10 +10,11 @@ package boundaries and the deliberately small P01 scope.
 - Node **24.21.0**: `.node-version` controls scripts/CI. Use an existing version
   manager or the official release binaries; do not change global tools implicitly.
 - A C compiler builds the pinned bundled SQLite dependency; no database server
-  is needed. No Node package manager, API keys, RPC endpoint, wallet, Solana CLI,
+  is needed. P18 uses npm only to install locked SDK check tools; no API keys, RPC endpoint, wallet, Solana CLI,
   Anchor, Docker or AWS account is needed for off-chain workspace checks.
 
-One-time installation of toolchains/CI actions and `cargo fetch --locked` needs
+One-time installation of toolchains/CI actions, `cargo fetch --locked` and
+`npm ci --ignore-scripts --prefix clients/private` needs
 network access. After hydration, source build/lint/tests are offline; Cargo runs
 with `--locked --offline`. P05 adds pinned SQLite/hash dependencies outside the
 kernel. The dependency policy checks exact versions/features/build exceptions and
@@ -23,11 +24,13 @@ the full lockfile digest; see [ADR 0005](architecture/0005-durable-journal.md).
 rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
 node --version
 cargo fetch --locked
+npm ci --ignore-scripts --prefix clients/private
 node scripts/check.mjs
 ```
 
 The runner fails on a wrong Node/Rust version. It validates docs and package edges,
-runs script regressions, formatting, Clippy, build, and debug/release Rust tests.
+runs script regressions, formatting, Clippy, build, debug/release Rust tests and
+strict TypeScript/private SDK tests. The client has no runtime npm dependencies.
 The same command runs in CI. For focused property-harness work:
 
 ```sh

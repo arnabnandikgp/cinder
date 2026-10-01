@@ -83,6 +83,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cinder-api"
+version = "0.1.0"
+dependencies = [
+ "cinder-journal",
+ "cinder-kernel",
+ "ed25519-dalek",
+ "sha2",
+ "zeroize",
+]
+
+[[package]]
 name = "cinder-journal"
 version = "0.1.0"
 dependencies = [

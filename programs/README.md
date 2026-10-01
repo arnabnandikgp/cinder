@@ -23,4 +23,7 @@ All identities are disposable in-memory local fixtures; no wallet file is loaded
 The normal financial workspace checks remain `node scripts/check.mjs`.
 
 Do not deploy the fixed local identity or unused generated keypair. External
-deployment requires G03/G05 approval; recovery claim activation is P17, not here.
+deployment requires G03/G05 approval. P17 extends the same program with
+[immutable final recovery claims](../docs/architecture/0017-recovery-claims.md),
+separate operator activation and the existing shared payout counters. Actual
+ledger reconciliation, native fencing and private claim delivery remain P21.

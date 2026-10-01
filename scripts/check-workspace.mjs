@@ -18,6 +18,7 @@ const allowed = new Map([
   ['cinder-test-support', ['cinder-ports:normal', 'cinder-kernel:dev']],
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
   ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'ed25519-dalek:normal', 'bs58:normal', 'zeroize:normal']],
+  ['cinder-api', ['cinder-kernel:normal', 'cinder-journal:normal', 'sha2:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
@@ -46,7 +47,7 @@ export function validateWorkspace(metadata) {
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
-      if (pkg.name === 'cinder-pacifica' && ['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].includes(dep.name)) {
+      if (['cinder-pacifica', 'cinder-api'].includes(pkg.name) && ['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].includes(dep.name)) {
         const expected = dependencyPolicy.packages.find(p => p.name === dep.name && dep.req === `=${p.version}`);
         const features = dep.name === 'serde' ? ['derive'] : dep.name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : [];
         if (!expected || dep.source !== dependencyPolicy.registry || dep.path || dep.target != null || dep.optional || dep.uses_default_features !== (dep.name !== 'ed25519-dalek') || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: adapter dependency configuration not approved`);
@@ -89,6 +90,6 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
     for (const error of errors) process.stderr.write(`${error}\n`);
     process.exitCode = 1;
   } else {
-    process.stdout.write('Workspace boundaries OK: 5 local packages; kernel remains dependency-free; pinned storage/crypto/JSON dependencies only.\n');
+    process.stdout.write('Workspace boundaries OK: 6 local packages; kernel remains dependency-free; pinned storage/crypto/JSON dependencies only.\n');
   }
 }

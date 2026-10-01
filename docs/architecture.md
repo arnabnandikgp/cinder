@@ -1,6 +1,6 @@
 # Cinder architecture
 
-Architecture baseline: 2026-09-30. This document describes the intended product
+Architecture baseline: 2026-10-01. This document describes the intended product
 and maps it to the implementation sequence; it is not a deployment claim.
 [BASELINE](implementation/BASELINE.md) controls approved economic/security policy;
 [PLAN](implementation/PLAN.md) controls phase scope; [TRACKER](implementation/TRACKER.md)
@@ -24,9 +24,9 @@ implementation is a separate workstream, not the template for this architecture.
 | Component | In this PR / implementation status | Owning phase |
 | --- | --- | --- |
 | Build, typed amounts, IDs, canonical primitive encoding | Implemented and previously merged | P01–P02 |
-| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Implemented in base PR; pure in-memory proposals | P03 |
-| Funding, fees, source discrepancies | Implemented in base stack; qualified normalized inputs, no live adapter | P04 |
-| Local atomic journal and replay | Implemented in base stack; opaque storage and mandatory protection interface | P05 |
+| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Merged; pure in-memory proposals | P03 |
+| Funding, fees, source discrepancies | Merged; qualified normalized inputs, no live adapter | P04 |
+| Local atomic journal and replay | Merged; opaque storage and mandatory protection interface | P05 |
 | Encrypted replicas, current-head witness and writer fencing | Implemented against a trusted witness port; no independently deployed witness or Nitro qualification | P06 |
 | Bound order intents, partial/terminal lifecycle and shared holds | Implemented against trusted authentication/source ports; no live execution | P07 |
 | Partial funds and FIFO payouts | Implemented with marked collateral and qualified receipt ports; no native sends | P08 |
@@ -38,8 +38,9 @@ implementation is a separate workstream, not the template for this architecture.
 | Pacifica signing adapter | Durable native preimages, scoped Ed25519 signer, shared credit reservation and fake transport implemented; no live-qualified deployment | P14 |
 | Solana custody vault and normal authorization | Anchor 1.2 program, public receipts/shared paid counters and offline signed SBF tests implemented; deployment gated | P15 |
 | Funding round trip | Durable three-location coordinator, original-wire/attempt reconciliation and shared credit budget tested offline; source/live qualification gated | P16 |
-| Recovery claims | Planned; bounded prototypes remain evidence only | P17 |
-| Private API/SDK, attested client channel, actual Nitro runtime | Planned | P18–P20 |
+| Recovery claims | Implemented for offline review in the same vault; immutable statements, funded activation, owner claims/shared counters; actual joined preparation/delivery remains P21 | P17 |
+| Private API/SDK | Implemented against trusted confidential-channel/admission ports; encrypted journal auth/replay, no public plaintext listener | P18 |
+| Attested client channel, actual Nitro runtime | Planned qualification | P19–P20 |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one
@@ -92,7 +93,7 @@ state. Reconciliation connects these domains; none substitutes for the others.
 
 ### Code ownership
 
-The off-chain workspace has five Rust crates:
+The off-chain workspace has six Rust crates:
 
 - `cinder-kernel`: dependency-free, `no_std`, checked integer types and pure state
   transitions. No clock, database, signer, network or venue SDK imports.
@@ -105,6 +106,9 @@ The off-chain workspace has five Rust crates:
   kernel; [ADR 0005](architecture/0005-durable-journal.md) specifies the contract.
 - `cinder-pacifica`: native observation/signing codecs and durable adapter authority;
   native execution remains separately qualified.
+- `cinder-api`: customer signatures, scoped Cinder grants and private projections
+  over the same journal. It cannot sign native pooled-account commands. Its
+  exact-integer SDK lives in `clients/private`; transport qualification remains P19.
 
 The isolated `programs/` Anchor workspace owns public Solana custody, not private
 financial accounting. Its generated typed client is `clients/vault/`; neither
@@ -116,6 +120,35 @@ with an architecture decision. Language/runtime pins are in
 transport cryptography and production witness providers are
 not selected implicitly by this diagram. A controller may request a transition; it cannot maintain an
 independently authoritative balance table.
+
+### Runnable application assembly and evidence levels
+
+The existing Rust crates are libraries, not six deployed services. The approved
+2026-10-01 implementation clarification assigns **P19** a minimal executable parent
+relay and confidential service, with actual local SDK/process tests over P18 and
+the protected journal. P19's ADR selects the channel/crypto/server runtime; no HTTP
+framework is selected by this architecture update. Only encrypted private frames
+and bounded declared metadata may cross the parent boundary.
+
+**P20** composes the private API, financial/journal controllers and venue/funding
+adapters into the measured enclave application, wires gated network/storage/key
+ports and qualifies actual Nitro execution. Local process or image-building tests
+cannot establish hardware attestation, key release or independent fresh storage.
+Real AWS use remains separately authorized. Private policy and signing must not
+move to the parent as a shortcut to make the service runnable.
+
+**P21** joins recovery to that application's accepted history. **P22** exercises
+complete SDK/service-driven funding/trading/payout/recovery workflows with controlled
+external ports and per-step accounting assertions. **P23** carries the same workflow
+contract onto approved real Nitro/chain/venue infrastructure and obtains new receipts.
+Unit/component integration, local SBF execution, process tests, full offline workflow
+acceptance and live qualification are distinct evidence levels, not interchangeable
+claims of readiness. Ordinary CI stays offline.
+
+Initial end-to-end tests use the SDK/CLI and explicitly configured test accounts.
+Self-service private onboarding, browser-agent key UX and the terminal are separate
+product-integration follow-ups, not automatically provided by backend qualification.
+See [PLAN's application assembly ladder](implementation/PLAN.md#application-assembly-and-the-integration-test-ladder).
 
 ## 3. Accounts, assets and authority
 
@@ -511,7 +544,8 @@ membership path, domain/epoch/asset/recipient, amount and counter/cutoff data, n
 other customers' private statements. The approved recovery runtime prepares it,
 encrypts it to the customer's wallet-authorized encryption key, and makes it
 retrievable without the ordinary API. A root cannot reconstruct missing packages.
-P17/P21 qualify exact encoding, construction, delivery and lost-key procedures.
+P17 defines [exact encoding and the immutable payout contract](architecture/0017-recovery-claims.md).
+P21 integrates authoritative finalization, private delivery and lost-key procedures.
 
 Normal and recovery payout paths share claim capacity and paid-counter semantics.
 Prior settled payouts are subtracted once; exposed unknown payouts remain held.

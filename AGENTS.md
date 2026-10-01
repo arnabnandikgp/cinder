@@ -18,6 +18,9 @@ legacy code, account invariants, toolchain pins or website work by default.
    test evidence, deviations and exact next step current in the tracker.
 5. Run offline checks before pushing. Do not call a phase closed until its
    acceptance criteria pass, relevant reviews are resolved and its PR is merged.
+6. On PR publication, review/fix push and merge, refresh the owning phase and tip
+   handoff with actual heads/bases, CI/review evidence and the next action. Dated
+   earlier results are not checks for a new head; preserve them without stale claims.
 
 ## Non-negotiable boundaries
 
@@ -42,6 +45,11 @@ legacy code, account invariants, toolchain pins or website work by default.
   durable private disk. Host plaintext must not carry private customer data or keys.
 - Native account authority is a capability boundary. An app's trading-only policy
   cannot narrow a venue credential that natively permits money movement.
+- P19 owns a runnable parent-relay/private-service slice with SDK process tests;
+  P20 assembles and qualifies the Nitro application. P22/P23 join offline/live
+  workflows respectively. A library interface, fixture or image build is not a
+  deployed service, and the parent must never become a plaintext financial backend.
+  Self-service private onboarding and terminal UX require separate explicit scope.
 
 ## Permissions, evidence and reviews
 

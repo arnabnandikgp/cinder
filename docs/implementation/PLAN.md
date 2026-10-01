@@ -1,6 +1,6 @@
 # Implementation plan
 
-2026-09-30. Canonical scope and acceptance criteria; actual progress lives in
+Updated 2026-10-01. Canonical scope and acceptance criteria; actual progress lives in
 [TRACKER](TRACKER.md). Read [BASELINE](BASELINE.md) for approved policy and
 [EVIDENCE](EVIDENCE.md) for research/prototype provenance and regression obligations.
 P00 establishes this foundation; it does not implement or deploy the broker.
@@ -56,6 +56,40 @@ and golden vectors; then implement one joined state. Promote precise research
 material just in time, with source date/hash, license check for third-party content,
 and an explicit distinction between a tested example and a production assumption.
 
+<a id="application-assembly-and-the-integration-test-ladder"></a>
+## Application assembly and the integration test ladder
+
+Scope clarification approved 2026-10-01: implemented libraries are not a runnable
+backend. P19 must introduce a minimal **parent relay + confidential application
+service** and an SDK-driven local process test. P20 assembles and qualifies that
+application on actual Nitro. The parent accepts connections and relays ciphertext;
+private decryption, authentication, accounting, admission and signing stay inside
+the confidential service. Record server/async-runtime choices with the channel ADR;
+no HTTP framework or concrete deployment is selected by this plan update.
+
+| Evidence level | Owning phase | Required boundary / limitation |
+| --- | --- | --- |
+| Unit and component integration | P02–P18 and every later change | Existing financial/journal/API/adapter tests and actual local SBF instructions; not a complete deployed workflow |
+| Local executable service slice | P19 | SDK → real relay/service processes → signed request → protected journal → private response, with explicit attestation/infrastructure fixtures; not Nitro evidence |
+| Actual confidential runtime | P20 | Same service packaged into an enclave, authenticated egress, key release and fresh encrypted restore; actual AWS use requires G03/G05 |
+| Independent recovery workflow | P21 | Fence/reconcile/return/finalize/activate/claim delivery; fake hardware allowed, actual claim instruction evidence remains distinct |
+| Joined offline workflows | P22 | Production SDK/service/controllers/adapters with deterministic external ports, recorded failure seeds and per-boundary accounting assertions; no live venue/RPC in routine CI |
+| Actual end-to-end qualification | P23 | Tagged implementation on approved Nitro + Solana devnet + venue test environment, current capability evidence, receipts and cleanup; no mainnet inference |
+
+Start vertical integration in P19/P20, not after all phases finish. Carry the same
+workflow manifest and expected financial outcomes into P22/P23; external receipts
+and capability checks replace simulation assumptions, not the financial engine.
+A failed or unsupported capability stays named and disabled. P24 reviews the
+evidence and remaining release gates; it is not a substitute for runnable services.
+
+Use the thin SDK/CLI and explicitly preconfigured disposable accounts for initial
+application tests. Self-service private-account onboarding, browser-agent key UX,
+public market-data UI and a trading terminal are **separate product-integration
+follow-ups** requiring their own scope/acceptance before public user access. They
+are not implicitly delivered by P19–P24 or an imported Phoenix website. Do not
+block backend testing on a frontend or claim configured fixture accounts prove
+runtime account creation.
+
 ## PR and stack workflow
 
 - Work in `cinder-tee`; TEE trunk is `product/tee-v1`, not legacy `main`.
@@ -82,6 +116,10 @@ and an explicit distinction between a tested example and a production assumption
 - Tracker PR fields carry the actual URL and merge commit once known. The next
   authorized branch records a completed predecessor's merge; do not forge a merge
   hash inside an unmerged PR to satisfy the status rules.
+- On publication, review/fix push and merge, refresh the current handoff and owning
+  phase with exact checked head, PR base/URL, CI/review disposition and next action.
+  For a stack, the tip must summarize its open predecessors as well. Preserve dated
+  earlier evidence; pending checks at a new head are not inherited green results.
 
 Native stacks are a public-preview workflow checked on 2026-09-30; same-repository
 branches and non-default trunks are supported. References:
@@ -381,9 +419,16 @@ authority and shared normal/recovery paid-counter semantics in the justified
 program topology. Ordinary snapshots are not active recovery roots.
 Evidence: W05, W07; V08 plus local SBF adversarial claim tests.
 
-- [ ] Heartbeat alone cannot activate; wrong recipient/epoch/domain/mint, duplicate proof and root reset attacks reject.
-- [ ] Prior ordinary payments and reservations cannot be paid again; failed downstream payout rolls back claim consumption.
-- [ ] Underfunded/uncertain activation fails; late deposits and post-activation impairment retain claims with safe containment.
+- [x] Heartbeat alone cannot activate; wrong recipient/epoch/domain/mint, duplicate proof and root reset attacks reject.
+- [x] Prior ordinary payments and reservations cannot be paid again; failed downstream payout rolls back claim consumption.
+- [x] Underfunded/uncertain activation fails; late deposits and post-activation impairment retain claims with safe containment.
+
+P17 evidence: [ADR 0017](../architecture/0017-recovery-claims.md), pure recovery
+codec tests and actual signed offline SBF tests, including V08. The program rejects
+explicitly unresolved qualification assertions and shares actual lifetime payout
+counters. P21 still owns deriving/independently qualifying those assertions from
+the authoritative ledger and venue history; membership/zero fields are not a
+complete-liability or solvency proof. No live integration/deployment is implied.
 
 <a id="p18"></a>
 ## P18 — Private API and client operation semantics
@@ -394,39 +439,51 @@ Deliver: customer/agent grants, canonical auth, private views, operation/query
 semantics and thin SDK. Use local encrypted-transport interfaces pending P19;
 do not expose a public plaintext fallback. Evidence: W06; auth/replay/ownership tests.
 
-- [ ] Authenticate before dedupe/private lookup; one customer's order or operation cannot be queried/cancelled by another.
-- [ ] Grants enforce methods, domain, expiry, limits and epoch; native authority is never exposed to customers.
-- [ ] ACK/fill/unknown and partial/fee semantics are explicit in SDK results; logging/errors do not leak private payloads.
+- [x] Authenticate before dedupe/private lookup; one customer's order or operation cannot be queried/cancelled by another.
+- [x] Grants enforce methods, domain, expiry, limits and epoch; native authority is never exposed to customers.
+- [x] ACK/fill/unknown and partial/fee semantics are explicit in SDK results; logging/errors do not leak private payloads.
 
 <a id="p19"></a>
-## P19 — Attested transport and client release verification
+## P19 — Attested transport, runnable service and client release verification
 
 Depends on: P06, P18.
 
-Deliver: reviewed channel protocol/crypto-library ADR, attestation verification,
-fresh session binding and independently verifiable client releases. Earlier Noise
-experiments are candidates, not approval of a production protocol. Qualify local
-positive/negative quote fixtures; no hardware claim from mocks.
-Evidence: W06–W08; replay/measurement/key substitution and host-observation tests.
+Deliver: reviewed channel/crypto/server-runtime ADR, attestation verification,
+fresh session binding, independently verifiable clients and a minimal runnable
+parent relay/confidential service wired to P18 and the protected journal. Document
+actual entry points and local startup/test commands when implemented; do not ship
+only another injected transport interface. Earlier Noise experiments are candidates,
+not approval of a production protocol. Qualify local positive/negative quote
+fixtures; no hardware claim from mocks. Evidence: W06–W08; SDK-driven process tests,
+replay/measurement/key substitution and hostile relay/host-observation tests.
 
 - [ ] AWS chain, approved measurements, freshness and session-key binding all validate before private exchange.
 - [ ] Downgrade, replay, wrong release and error/stream paths cannot expose private plaintext to parent/relay.
 - [ ] Client distribution threat and key rotation are documented; logged/host-visible metadata is explicitly bounded.
+- [ ] Thin SDK reaches actual relay/service processes; an authenticated intent commits durably and its private response/query survives disconnect/restart without a second native attempt. Native venue I/O can remain an explicit fixture in this slice.
+- [ ] Connection/request/stream bounds, deadlines, backpressure, shutdown and failure behaviour are tested. Parent logs/errors/storage never receive private plaintext; test attestation/key providers cannot silently enable a production service.
 
 <a id="p20"></a>
 ## P20 — Nitro runtime and key/storage qualification
 
-Depends on: P06, P14, P19.
+Depends on: P06, P14, P16, P19.
 
-Deliver: reproducible enclave packaging, authenticated egress, key release,
-measurement policy, sealed state restore and independent freshness integration.
-Local packaging first; actual AWS launch/spend needs G03/G05 approval. Do not close
-hardware qualification with a mocked attestation document.
+Deliver: compose the API, journal/financial controllers and venue/funding adapters
+into a runnable confidential application; package it reproducibly with the parent
+relay, authenticated egress, key release, measurement policy, sealed state restore
+and independent freshness integration. Wire real network/chain/storage ports only
+under explicit qualified capability/configuration gates. Include bounded event and
+dispatch loops, startup/restart/shutdown and secret-safe health/runbook contracts;
+do not introduce a second ledger or plaintext host policy/signing service.
+Local assembly/packaging first; actual AWS launch/spend needs G03/G05 approval.
+Do not close hardware qualification with a mocked attestation document. A working
+Nitro service is not already a live venue workflow; that remains P23.
 Evidence: W06, W08; real attested runtime evidence and failure/revocation rehearsal.
 
 - [ ] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected.
 - [ ] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled.
 - [ ] Accepted encrypted state survives qualified failure/restore; witness loss and split writer fail safely, with costs/limits recorded.
+- [ ] A tagged enclave executable and parent relay run the same SDK operation contract; controller scheduling and persisted unknown attempts cannot bypass qualification or auto-retry after restart. Local fixture acceptance and actual hardware evidence are recorded separately.
 
 <a id="p21"></a>
 ## P21 — Integrated recovery and independent claim delivery
@@ -439,6 +496,10 @@ claimant. Pending claims/fees/late actions all use the same financial journal.
 Evidence: W04–W08; live-like offline outage rehearsal. Use explicit fake hardware/
 witness ports here; actual P20 runtime and live qualification join in P23. Do not
 block offline recovery engineering on AWS access or label it hardware-qualified.
+Exercise the runnable service/SDK's accepted tail and existing payout history, not
+an independently seeded recovery ledger. Claim delivery/submission must still work
+with the ordinary service unavailable; representative final payouts use the actual
+local compiled custody/recovery program or an explicitly separately checked SBF path.
 
 - [ ] No ordinary writer/payout/escaped capability can race an activated root; unresolved native outcomes prevent unsafe activation.
 - [ ] Claimants obtain and verify kits without the ordinary API; package loss, stale package and privacy are tested.
@@ -447,16 +508,24 @@ block offline recovery engineering on AWS access or label it hardware-qualified.
 <a id="p22"></a>
 ## P22 — Joined offline adversarial acceptance suite
 
-Depends on: P09, P12, P16, P17, P18, P21.
+Depends on: P09, P12, P16, P17, P18, P19, P21.
 
-Deliver: deterministic end-to-end fake venue/chain/time harness driving production
-components; differential/reference conformance, bounded state exploration, fuzz,
-reverse stress and process crash tests. Bring failures back to owning phases.
+Deliver: deterministic end-to-end fake venue/chain/time harness driving the actual
+SDK, runnable relay/private service, protected journal and production controllers/
+adapters. Cover deposit → credit → native funding → order → partial fills/cancel →
+funding/fees → close → return → beneficiary payout, plus outage/recovery/claim.
+Specify per-step customer/house claims, external exposure, physical locations,
+reservations, source cuts and payment expectations; a successful HTTP response is
+not the oracle. Qualify representative chain/recovery effects against actual local
+SBF and distinguish that evidence from deterministic fake receipts. Add differential/
+reference conformance, bounded state exploration, fuzz, reverse stress and real
+service-process crash tests. Bring failures back to owning phases.
 Evidence: all W IDs and V01–V10; fresh-checkout repeatable seed manifest.
 
 - [ ] Opposing winners/defaults, ADL gaps, funding boundaries, house exhaustion, inaccessible cash and payout races preserve attribution/claims.
 - [ ] Duplicate/conflicting/late events, restart, rollback and malicious ordering cannot double-spend or silently omit loss.
 - [ ] Test bounds, counterexamples and unresolved proofs are explicit; measurements meet declared load/resource budgets without weakening economics.
+- [ ] Normal, partial/cancel and recovery workflows start through the SDK/service boundary, not only direct Rust method calls. Fresh-checkout offline CI reruns the recorded manifest with no live API/RPC/AWS dependency.
 
 <a id="p23"></a>
 ## P23 — Bounded devnet/testnet integration qualification
@@ -466,6 +535,10 @@ Depends on: P20, P22.
 Deliver: current G05-approved account/funding/environment/cleanup manifest, tagged
 release tests using the actual program, adapter, enclave and recovery path. Reuse
 M1/M2 scenarios but obtain new implementation evidence. No mainnet inference.
+Carry P22's SDK/service workflow assertions onto actual approved infrastructure;
+verify implementation receipts and current native authority/precision/completeness,
+not a replay labeled as live integration. Use bounded scenarios and preconfigured
+test accounts; an unavailable capability is a named blocker, not a simulated pass.
 Evidence: W03–W08; sanitized receipts and failure/cleanup reports linked to commit.
 
 - [ ] Deposit, trade lifecycle, funding observations, ordinary return/payout and recovery execute or expose a named blocking capability.
@@ -494,3 +567,6 @@ exact test commands/results/environment/commit, PR/review state, unexpected work
 unresolved decisions and one concrete next action. Record skipped/failed checks
 honestly. Never use only a chat summary as the handoff. Technical acceptance may
 be complete while status stays `in progress` pending review/merge.
+Every publication/fix/merge handoff records the affected PR heads and their own
+CI/review state, including open predecessors. Never overwrite historical test
+evidence or mark an unmerged phase closed just to make the progress table look current.

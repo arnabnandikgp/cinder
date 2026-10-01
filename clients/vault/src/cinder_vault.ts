@@ -13,6 +13,381 @@ export type CinderVault = {
   },
   "instructions": [
     {
+      "name": "activateRecovery",
+      "docs": [
+        "A separate recovery operator activates the immutable statement against actual custody."
+      ],
+      "discriminator": [
+        162,
+        213,
+        177,
+        112,
+        118,
+        254,
+        6,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "vaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "vaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "vaultConfig"
+              }
+            ]
+          },
+          "relations": [
+            "recoveryEpoch"
+          ]
+        },
+        {
+          "name": "recovery",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "recoveryEpoch",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  111,
+                  118,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "domain",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "type": "u64"
+        },
+        {
+          "name": "expectedRoot",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "claimRecovery",
+      "docs": [
+        "Owner-signed full claim; ordinary and recovery payments share lifetime counters."
+      ],
+      "discriminator": [
+        60,
+        85,
+        49,
+        148,
+        254,
+        62,
+        210,
+        222
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "vaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "vaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "vaultConfig"
+              }
+            ]
+          },
+          "relations": [
+            "recoveryEpoch",
+            "customer"
+          ]
+        },
+        {
+          "name": "recoveryEpoch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  111,
+                  118,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "customer"
+          ]
+        },
+        {
+          "name": "customer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  117,
+                  115,
+                  116,
+                  111,
+                  109,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "claimReceipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  111,
+                  118,
+                  101,
+                  114,
+                  121,
+                  95,
+                  112,
+                  97,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "domain",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "type": "u64"
+        },
+        {
+          "name": "claim",
+          "type": {
+            "defined": {
+              "name": "recoveryClaim"
+            }
+          }
+        },
+        {
+          "name": "proof",
+          "type": {
+            "vec": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "docs": [
         "An immutable receipt is created only in the same transaction as actual token arrival."
@@ -200,7 +575,7 @@ export type CinderVault = {
     {
       "name": "freeze",
       "docs": [
-        "Emergency fence only. No heartbeat, root publication, recovery payout or resume path."
+        "Emergency fence only. It does not publish or activate any payable root."
       ],
       "discriminator": [
         255,
@@ -1125,6 +1500,111 @@ export type CinderVault = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "stageRecovery",
+      "docs": [
+        "Publish one final, qualified recovery statement after ordinary paths are fenced."
+      ],
+      "discriminator": [
+        246,
+        245,
+        211,
+        14,
+        69,
+        214,
+        14,
+        62
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  110,
+                  100,
+                  101,
+                  114,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config.domain",
+                "account": "vaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.pool",
+                "account": "vaultConfig"
+              },
+              {
+                "kind": "account",
+                "path": "config.mint",
+                "account": "vaultConfig"
+              }
+            ]
+          }
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "recoveryEpoch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  99,
+                  111,
+                  118,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "statement",
+          "type": {
+            "defined": {
+              "name": "recoveryStatement"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1152,6 +1632,32 @@ export type CinderVault = {
         162,
         232,
         52
+      ]
+    },
+    {
+      "name": "recoveryClaimReceipt",
+      "discriminator": [
+        118,
+        70,
+        170,
+        64,
+        107,
+        144,
+        226,
+        243
+      ]
+    },
+    {
+      "name": "recoveryEpoch",
+      "discriminator": [
+        137,
+        13,
+        238,
+        156,
+        58,
+        251,
+        15,
+        95
       ]
     },
     {
@@ -1223,6 +1729,26 @@ export type CinderVault = {
       "code": 6010,
       "name": "arithmetic",
       "msg": "Integer overflow"
+    },
+    {
+      "code": 6011,
+      "name": "recoveryQualification",
+      "msg": "Recovery statement is not qualified, complete or final"
+    },
+    {
+      "code": 6012,
+      "name": "recoveryProof",
+      "msg": "Recovery claim does not match the immutable ordered root"
+    },
+    {
+      "code": 6013,
+      "name": "recoveryBacking",
+      "msg": "Recovery custody cannot back all remaining claims"
+    },
+    {
+      "code": 6014,
+      "name": "recoveryTotal",
+      "msg": "Final recovery claim count and declared total disagree"
     }
   ],
   "types": [
@@ -1339,6 +1865,271 @@ export type CinderVault = {
           {
             "name": "sequence",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "recoveryClaim",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u32"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "paidBase",
+            "type": "u64"
+          },
+          {
+            "name": "payoutSequenceBase",
+            "type": "u64"
+          },
+          {
+            "name": "claimId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "salt",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "recoveryClaimReceipt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "index",
+            "type": "u32"
+          },
+          {
+            "name": "claimId",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "leaf",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "paid",
+            "type": "u64"
+          },
+          {
+            "name": "payoutSequence",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "recoveryEpoch",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "config",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "statement",
+            "type": {
+              "defined": {
+                "name": "recoveryStatement"
+              }
+            }
+          },
+          {
+            "name": "contextHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "remaining",
+            "type": "u64"
+          },
+          {
+            "name": "claimedCount",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "recoveryQualification",
+      "docs": [
+        "Publisher assertions must be independently qualified by the activating operator.",
+        "The program checks their shape and rejects explicitly unresolved state; these are",
+        "NOT an on-chain proof of external venue fencing, completeness or private accounting."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "unresolvedOperations",
+            "type": "u64"
+          },
+          {
+            "name": "outstandingReservations",
+            "type": "u64"
+          },
+          {
+            "name": "unresolvedInputs",
+            "type": "u64"
+          },
+          {
+            "name": "venueExposureZero",
+            "type": "bool"
+          },
+          {
+            "name": "claimsAvailable",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "recoveryStatement",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "domain",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "treeSize",
+            "type": "u32"
+          },
+          {
+            "name": "total",
+            "docs": [
+              "Sum of final unpaid claims, already net of ordinary payouts and settled losses."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "journalCutoff",
+            "type": "u64"
+          },
+          {
+            "name": "journalHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "evidenceHash",
+            "docs": [
+              "Binds reconciliation, venue fencing/settlement, backing and claim-delivery evidence."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "policyHash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "normalPaid",
+            "type": "u64"
+          },
+          {
+            "name": "fundingSequence",
+            "type": "u64"
+          },
+          {
+            "name": "qualification",
+            "type": {
+              "defined": {
+                "name": "recoveryQualification"
+              }
+            }
           }
         ]
       }

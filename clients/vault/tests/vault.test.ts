@@ -5,9 +5,11 @@ import { createHash } from 'node:crypto';
 import { AnchorProvider, BN, type Idl, type Wallet } from '@anchor-lang/core';
 import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SystemProgram, Transaction, type TransactionInstruction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createMint, createAccount, mintTo, getAccount,
-  freezeAccount, thawAccount, approve, transfer } from '@solana/spl-token';
+  freezeAccount, thawAccount, approve, transfer, burn } from '@solana/spl-token';
 import { customerAddress, depositReceiptAddress, identity, movement, receiptAddress, u64, vaultAddresses, vaultProgram } from '../src/index.ts';
 import { fundingInstruction, verifyFundingWire } from '../src/funding.ts';
+import { buildRecoveryTree, recoveryAddress, recoveryReceiptAddress, recoveryClaimWire, recoveryStatementWire,
+  recoveryContextHash, recoveryLeaf, type RecoveryClaim, type RecoveryStatement } from '../src/recovery.ts';
 
 // In-memory disposable identities only; no wallet file, network URL or deployed key is inherited.
 const RPC_URL = 'http://127.0.0.1:18899';
@@ -316,8 +318,8 @@ test('recovery role can only fence; normal paths stop, returned assets remain re
   ] as const) await rejectsAtomic(f, ix, [signer], undefined, /Mode/);
   await send(await f.returned(f.auth('frozen-return', 2n)), [f.broker]);
   assert.equal((await f.state()).config.mode, 1);
-  // No recovery payout or reactivation entry point is invented in P15.
-  assert(!idl.instructions.some(ix => ['claim', 'activate', 'resume'].includes(ix.name)));
+  // Freeze alone still creates no payable root, and there is no heartbeat/resume/reset instruction.
+  assert(!idl.instructions.some(ix => /heartbeat|resume|reset|checkpoint/i.test(ix.name)));
 });
 
 test('two customers share one custody vault but never each other\'s deposit or payout counters', async () => {
@@ -387,4 +389,281 @@ test('failed freeze epoch increment restores mode and successful governance hand
   await send(await rotate(governance.publicKey, 1n), [governance, newGovernance, f.funds, f.recovery]);
   await rejectsAtomic(f, await rotate(governance.publicKey, 2n), [governance, newGovernance, f.funds, f.recovery]);
   await send(await rotate(newGovernance.publicKey, 2n), [newGovernance, f.funds, f.recovery]);
+});
+
+async function recoveryFixture(f: Fixture, supplied?: RecoveryClaim[]) {
+  const cfg = await program.account.vaultConfig.fetch(f.config), customer = await program.account.customerCounter.fetch(f.customer);
+  const claims: RecoveryClaim[] = supplied ?? [{ index: 0, owner: f.owner.publicKey, destination: f.source, amount: 100n,
+    paidBase: BigInt(customer.paid.toString()), payoutSequenceBase: BigInt(customer.payoutSequence.toString()),
+    claimId: id(`claim-${f.config}`), salt: id(`salt-${f.config}`) }];
+  const context = { program: programId, config: f.config, domain: f.domain, pool: f.pool, mint: f.mint, decimals: 6 };
+  let statement: RecoveryStatement = { domain: f.domain, epoch: BigInt(cfg.epoch.toString()), root: id('unused-root'),
+    treeSize: claims.length, total: claims.reduce((v, c) => v + c.amount, 0n), journalCutoff: 100n,
+    journalHash: id('final-journal'), evidenceHash: id('qualified-evidence'), policyHash: id('recovery-policy'),
+    normalPaid: BigInt(cfg.paid.toString()), fundingSequence: BigInt(cfg.fundingSequence.toString()),
+    qualification: { unresolvedOperations: 0n, outstandingReservations: 0n, unresolvedInputs: 0n,
+      venueExposureZero: true, claimsAvailable: true } };
+  const tree = buildRecoveryTree(context, statement, claims); statement = { ...statement, root: tree.root };
+  const address = recoveryAddress(programId, f.config);
+  const receipt = (owner = f.owner.publicKey) => recoveryReceiptAddress(programId, f.config, owner);
+  const stage = (s = statement, overrides = {}) => program.methods.stageRecovery(recoveryStatementWire(s)).accountsStrict({
+    config: f.config, governance: governance.publicKey, recoveryEpoch: address, systemProgram: SystemProgram.programId, ...overrides,
+  }).instruction();
+  const activate = (domain = f.domain, epoch = statement.epoch, root = statement.root, overrides = {}) => program.methods
+    .activateRecovery(identity(domain), u64(epoch), identity(root)).accountsStrict({ config: f.config, recovery: f.recovery.publicKey,
+      recoveryEpoch: address, vault: f.vault, tokenProgram: TOKEN_PROGRAM_ID, ...overrides }).instruction();
+  const claim = (c = claims[0]!, proof = tree.proof(c.index), domain = f.domain, epoch = statement.epoch, overrides = {}) => program.methods
+    .claimRecovery(identity(domain), u64(epoch), recoveryClaimWire(c), proof.map(identity)).accountsStrict({
+      config: f.config, recoveryEpoch: address, owner: c.owner, customer: customerAddress(programId, f.config, c.owner),
+      destination: c.destination, vault: f.vault, mint: f.mint, claimReceipt: receipt(c.owner),
+      tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId, ...overrides,
+    }).instruction();
+  const state = async () => ({ custody: await f.state(), epoch: await program.account.recoveryEpoch.fetchNullable(address) });
+  const rejects = async (ix: TransactionInstruction, signers: Keypair[], absent?: PublicKey, error?: RegExp) => {
+    const before = await state();
+    if (error) await assert.rejects(send(ix, signers), error); else await assert.rejects(send(ix, signers));
+    assert.deepEqual(await state(), before);
+    if (absent) assert.equal(await connection.getAccountInfo(absent), null);
+  };
+  return { context, statement, tree, claims, address, receipt, stage, activate, claim, state, rejects };
+}
+
+test('recovery requires an explicit fence, publisher and separate operator; heartbeat/time alone never suffices', async () => {
+  const f = await fixture(), normal = await recoveryFixture(f);
+  await normal.rejects(await normal.stage(), [governance], normal.address, /Mode/);
+  await send(await f.freeze(), [f.recovery]);
+  const r = await recoveryFixture(f);
+  await r.rejects(await r.claim(), [f.owner], r.receipt());
+  await r.rejects(await r.activate(), [f.recovery]);
+  await r.rejects(await r.stage(undefined, { governance: f.outsider.publicKey }), [f.outsider], r.address);
+  await send(await r.stage(), [governance]);
+  await r.rejects(await r.activate(undefined, undefined, undefined, { recovery: governance.publicKey }), [governance]);
+  await r.rejects(await r.claim(), [f.owner], r.receipt(), /Mode/);
+  await r.rejects(await r.activate(), [f.recovery], undefined, /RecoveryBacking/);
+  assert.equal((await f.state()).config.mode, 2);
+});
+
+test('uncertain finalization, stale counters and malformed final statements reject without publishing an epoch', async () => {
+  const f = await fixture(); await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  for (const qualification of [{ unresolvedOperations: 1n }, { outstandingReservations: 1n }, { unresolvedInputs: 1n },
+    { venueExposureZero: false }, { claimsAvailable: false }]) {
+    await r.rejects(await r.stage({ ...r.statement, qualification: { ...r.statement.qualification, ...qualification } }),
+      [governance], r.address, /RecoveryQualification/);
+  }
+  for (const change of [{ normalPaid: 1n }, { fundingSequence: 1n }, { domain: id('wrong-domain') }, { epoch: 1n },
+    { total: 0n }, { journalCutoff: 0n }]) await r.rejects(await r.stage({ ...r.statement, ...change }), [governance], r.address);
+  const zeroHash = recoveryStatementWire(r.statement); zeroHash.evidenceHash = Array(32).fill(0);
+  await r.rejects(await program.methods.stageRecovery(zeroHash).accountsStrict({ config: f.config, governance: governance.publicKey,
+    recoveryEpoch: r.address, systemProgram: SystemProgram.programId }).instruction(), [governance], r.address);
+});
+
+test('V08 final settled claims preserve ordinary payment history without paying stale amounts or subtracting twice', async () => {
+  const f = await fixture(), bob = keys(); await fund(bob);
+  const bobCustomer = customerAddress(programId, f.config, bob.publicKey), bobTokens = await createAccount(connection, governance, f.mint, bob.publicKey);
+  await mintTo(connection, governance, f.mint, bobTokens, governance, 200n);
+  await send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({ config: f.config, owner: bob.publicKey,
+    customer: bobCustomer, systemProgram: SystemProgram.programId }).instruction(), [bob]);
+  await send(await f.deposit(f.auth('alice'), 100n), [f.owner]);
+  const a = f.auth('bob'); await send(await f.deposit(a, 200n, { owner: bob.publicKey, source: bobTokens, customer: bobCustomer,
+    receipt: depositReceiptAddress(programId, f.config, bob.publicKey, Uint8Array.from(a.operation)) }), [bob]);
+  await send(await f.payout(f.auth('ordinary'), 20n), [f.funds]);
+  // Explicit loss fixture: actual working collateral release and token burn represent
+  // the 35-atom settled external loss. This is NOT Pacifica execution evidence.
+  await send(await f.release(f.auth('loss'), 35n), [f.funds]);
+  await burn(connection, governance, f.brokerTokens, f.mint, f.broker, 35n);
+  await send(await f.freeze(), [f.recovery]);
+  const cs: RecoveryClaim[] = [
+    { index: 0, owner: f.owner.publicKey, destination: f.source, amount: 45n, paidBase: 20n, payoutSequenceBase: 1n, claimId: id('alice'), salt: id('alice-salt') },
+    { index: 1, owner: bob.publicKey, destination: bobTokens, amount: 200n, paidBase: 0n, payoutSequenceBase: 0n, claimId: id('bob'), salt: id('bob-salt') },
+  ];
+  const r = await recoveryFixture(f, cs); await send(await r.stage(), [governance]); await send(await r.activate(), [f.recovery]);
+  await r.rejects(await r.claim({ ...cs[0]!, amount: 100n }), [f.owner], r.receipt(), /RecoveryProof/);
+  await r.rejects(await r.claim({ ...cs[0]!, amount: 25n }), [f.owner], r.receipt(), /RecoveryProof/);
+  await send(await r.claim(cs[0]), [f.owner]);
+  await r.rejects(await r.claim(cs[0]), [f.owner]);
+  await send(await r.claim(cs[1]), [bob]);
+  assert.equal((await f.state()).customer.paid.toString(), '65');
+  assert.equal((await program.account.customerCounter.fetch(bobCustomer)).paid.toString(), '200');
+  const state = await r.state(); assert.equal(state.custody.config.paid.toString(), '265');
+  assert.equal(state.custody.vault, 0n); assert.equal(state.epoch!.remaining.toString(), '0'); assert.equal(state.custody.config.mode, 4);
+});
+
+test('active root rejects wrong domain, epoch, asset, recipient, owner, counters and malformed or oversized proof', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]);
+  const r = await recoveryFixture(f); await send(await r.stage(), [governance]);
+  await r.rejects(await r.activate(id('other')), [f.recovery]); await r.rejects(await r.activate(undefined, 1n), [f.recovery]);
+  await r.rejects(await r.activate(undefined, undefined, id('other')), [f.recovery]); await send(await r.activate(), [f.recovery]);
+  const c = r.claims[0]!, otherDestination = await createAccount(connection, governance, f.mint, f.owner.publicKey, keys());
+  const otherMint = await createMint(connection, governance, governance.publicKey, null, 6);
+  for (const ix of [await r.claim(c, [], id('other')), await r.claim(c, [], undefined, 1n),
+    await r.claim({ ...c, destination: otherDestination }), await r.claim({ ...c, salt: id('other') }),
+    await r.claim({ ...c, claimId: id('other') }), await r.claim({ ...c, paidBase: 1n }),
+    await r.claim({ ...c, payoutSequenceBase: 1n }), await r.claim({ ...c, index: 1 }, []),
+    await r.claim(c, [id('extra')]), await r.claim(c, Array(17).fill(id('extra'))),
+    await r.claim(c, [], undefined, undefined, { mint: otherMint }),
+    await r.claim(c, [], undefined, undefined, { destination: f.foreignTokens }),
+    await r.claim(c, [], undefined, undefined, { tokenProgram: TOKEN_2022_PROGRAM_ID }),
+    await r.claim(c, [], undefined, undefined, { vault: f.source }),
+    await r.claim(c, [], undefined, undefined, { recoveryEpoch: f.customer }),
+  ]) await r.rejects(ix, [f.owner], r.receipt());
+  await r.rejects(await r.claim(c, [], undefined, undefined, { owner: f.outsider.publicKey }), [f.outsider]);
+  const unsigned = await r.claim(); unsigned.keys.find(k => k.pubkey.equals(f.owner.publicKey))!.isSigner = false;
+  await r.rejects(unsigned, [f.outsider], r.receipt(), /AccountNotSigner/);
+  await approve(connection, governance, f.source, f.outsider.publicKey, f.owner, 1n);
+  await r.rejects(await r.claim(), [f.owner], r.receipt(), /TokenAuthority/);
+});
+
+test('CPI failure leaves root, shared counters and receipt unconsumed; identical claim succeeds after repair', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  await send(await r.stage(), [governance]); await send(await r.activate(), [f.recovery]);
+  await freezeAccount(connection, governance, f.source, f.mint, governance);
+  await r.rejects(await r.claim(), [f.owner], r.receipt(), /Tokenkeg.*invoke.*Account is frozen/);
+  await thawAccount(connection, governance, f.source, f.mint, governance); await send(await r.claim(), [f.owner]);
+  assert.equal((await f.state()).customer.paid.toString(), '100');
+});
+
+test('funded but frozen custody cannot activate; repaired custody preserves the same final statement', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  await send(await r.stage(), [governance]); await freezeAccount(connection, governance, f.vault, f.mint, governance);
+  await r.rejects(await r.activate(), [f.recovery], undefined, /RecoveryBacking/);
+  await thawAccount(connection, governance, f.vault, f.mint, governance); await send(await r.activate(), [f.recovery]);
+  await send(await r.claim(), [f.owner]);
+});
+
+test('backing impairment blocks even the first small claim without deleting obligations; returned backing permits retry', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.release(), [f.funds]);
+  await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  await send(await r.stage(), [governance]); await send(await r.activate(), [f.recovery]);
+  const info = (await connection.getAccountInfo(f.vault))!, impaired = Buffer.from(info.data);
+  // Test-only external custody impairment; not an instruction capable of spending vault tokens.
+  impaired.writeBigUInt64LE(99n, 64); await rpc('surfnet_setAccount', [f.vault.toBase58(), { data: impaired.toString('hex') }]);
+  await r.rejects(await r.claim(), [f.owner], r.receipt(), /RecoveryBacking/);
+  assert.equal((await r.state()).epoch!.remaining.toString(), '100');
+  await send(await f.returned(f.auth('repair', 2n), 1n), [f.broker]); await send(await r.claim(), [f.owner]);
+});
+
+test('root cannot be replaced or counters reset; ordinary deposits/payouts stay fenced and late returns create no new claims', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.release(), [f.funds]);
+  await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  await send(await r.stage(), [governance]); await r.rejects(await r.stage({ ...r.statement, root: id('other') }), [governance]);
+  await send(await r.activate(), [f.recovery]); await r.rejects(await r.activate(), [f.recovery]);
+  await r.rejects(await f.payout(f.auth('normal', 2n)), [f.funds], undefined, /Mode/);
+  await r.rejects(await f.deposit(f.auth('late', 2n), 1n), [f.owner], f.depositReceipt(f.auth('late', 2n)), /Mode/);
+  await r.rejects(await f.release(f.auth('outgoing', 2n), 1n, 1n), [f.funds], undefined, /Mode/);
+  await send(await f.returned(f.auth('late-return', 2n), 50n), [f.broker]);
+  await transfer(connection, governance, f.source, f.vault, f.owner, 1n); // Unsolicited token arrival, not admission.
+  assert.equal((await r.state()).epoch!.remaining.toString(), '100');
+  assert.equal((await f.state()).customer.deposited.toString(), '400000');
+  await send(await r.claim(), [f.owner]); await r.rejects(await r.stage(), [governance]);
+  await r.rejects(await f.freeze(2n), [f.recovery], undefined, /Mode/);
+});
+
+for (const n of [1, 3, 5]) test(`actual SBF validates every leaf of ordered ${n}-leaf tree, including odd right-edge paths`, async () => {
+  const f = await fixture(), signers = [f.owner], cs: RecoveryClaim[] = [];
+  await send(await f.deposit(), [f.owner]);
+  for (let index = 0; index < n; index++) {
+    const owner = index === 0 ? f.owner : keys();
+    const destination = index === 0 ? f.source : await createAccount(connection, governance, f.mint, owner.publicKey);
+    if (index !== 0) {
+      await fund(owner); signers.push(owner);
+      await send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({ config: f.config, owner: owner.publicKey,
+        customer: customerAddress(programId, f.config, owner.publicKey), systemProgram: SystemProgram.programId }).instruction(), [owner]);
+    }
+    cs.push({ index, owner: owner.publicKey, destination, amount: 10n, paidBase: 0n, payoutSequenceBase: 0n,
+      claimId: id(`claim${index}`), salt: id(`salt${index}`) });
+  }
+  await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f, cs);
+  await send(await r.stage(), [governance]); await send(await r.activate(), [f.recovery]);
+  for (let i = n - 1; i >= 0; i--) {
+    const p = r.tree.proof(i);
+    if (p.length) await r.rejects(await r.claim(cs[i], p.slice(1)), [signers[i]!], r.receipt(cs[i]!.owner));
+    await send(await r.claim(cs[i]), [signers[i]!]);
+  }
+  assert.equal((await f.state()).config.mode, 4); assert.equal((await r.state()).epoch!.claimedCount, n);
+});
+
+test('maximum bounded proof fits one real transaction and executes in SBF within the test compute limit', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]);
+  const cs: RecoveryClaim[] = Array.from({ length: 65_536 }, (_, index) => ({ index,
+    owner: index === 0 ? f.owner.publicKey : new PublicKey(id(`max-owner${index}`)), destination: f.source,
+    amount: 1n, paidBase: 0n, payoutSequenceBase: 0n, claimId: id(`max-claim${index}`), salt: id(`max-salt${index}`) }));
+  const r = await recoveryFixture(f, cs); await send(await r.stage(), [governance]); await send(await r.activate(), [f.recovery]);
+  const signature = await send(await r.claim(cs[0]), [f.owner]);
+  const tx = (await connection.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }))!;
+  assert(tx.meta!.computeUnitsConsumed! < 200_000);
+  const block = await connection.getLatestBlockhash(), wire = new Transaction({ feePayer: f.owner.publicKey, ...block }).add(await r.claim(cs[0]));
+  wire.sign(f.owner); assert(wire.serialize().length <= 1232);
+  console.log(`Recovery capacity fixture: ${wire.serialize().length} bytes; ${tx.meta!.computeUnitsConsumed} CU; 16 siblings`);
+});
+
+test('ordinary Merkle inclusion is not a total/completeness proof: a publisher-understated sum preserves the unpaid remainder', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  const c = { ...r.claims[0]!, amount: 101n }, contextHash = recoveryContextHash(r.context, r.statement);
+  const statement = { ...r.statement, root: recoveryLeaf(contextHash, c) };
+  // Deliberately bypass the checked packager to demonstrate the trusted publisher boundary.
+  await send(await r.stage(statement), [governance]); await send(await r.activate(undefined, undefined, statement.root), [f.recovery]);
+  await r.rejects(await r.claim(c, []), [f.owner], r.receipt(), /RecoveryBacking/);
+  assert.equal((await r.state()).epoch!.remaining.toString(), '100');
+});
+
+test('overdeclared final sum does not erase surplus obligations or close the epoch after the last leaf', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  const c = { ...r.claims[0]!, amount: 99n }, statement = { ...r.statement, root: recoveryLeaf(recoveryContextHash(r.context, r.statement), c) };
+  await send(await r.stage(statement), [governance]); await send(await r.activate(undefined, undefined, statement.root), [f.recovery]);
+  const before = await getAccount(connection, f.source);
+  await send(await r.claim(c, []), [f.owner]);
+  assert.equal((await getAccount(connection, f.source)).amount - before.amount, 99n);
+  const after = await r.state();
+  assert.equal(after.epoch!.remaining.toString(), '1'); assert.equal(after.epoch!.claimedCount, 1);
+  assert.equal(after.custody.config.mode, 3); assert.equal(after.custody.customer.paid.toString(), '99');
+  assert.equal(after.custody.customer.payoutSequence.toString(), '1');
+  await r.rejects(await r.claim(c, []), [f.owner]);
+  await r.rejects(await f.payout(f.auth('normal', 2n)), [f.funds], undefined, /Mode/);
+});
+
+for (const order of [[0, 1], [1, 0]]) test(`overdeclared two-leaf estate pays both valid owners in order ${order} and retains the remainder`, async () => {
+  const f = await fixture(), second = keys(); await fund(second);
+  const destination = await createAccount(connection, governance, f.mint, second.publicKey);
+  await send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({ config: f.config, owner: second.publicKey,
+    customer: customerAddress(programId, f.config, second.publicKey), systemProgram: SystemProgram.programId }).instruction(), [second]);
+  await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]);
+  const cs: RecoveryClaim[] = [f.owner, second].map((owner, index) => ({ index, owner: owner.publicKey,
+    destination: index === 0 ? f.source : destination, amount: index === 0 ? 40n : 59n,
+    paidBase: 0n, payoutSequenceBase: 0n, claimId: id(`overdeclared-claim-${index}`), salt: id(`overdeclared-salt-${index}`) }));
+  const r = await recoveryFixture(f, cs), statement = { ...r.statement, total: 100n };
+  // Bypass checked packaging: a valid inclusion proof does not establish the published total.
+  const context = recoveryContextHash(r.context, statement), leaves = cs.map(c => recoveryLeaf(context, c));
+  const root = createHash('sha256').update(Uint8Array.of(1)).update(leaves[0]!).update(leaves[1]!).digest();
+  await send(await r.stage({ ...statement, root }), [governance]);
+  await send(await r.activate(undefined, undefined, root), [f.recovery]);
+  for (const index of order) {
+    const c = cs[index]!, before = await getAccount(connection, c.destination);
+    await send(await r.claim(c, [leaves[1 - index]!]), [[f.owner, second][index]!]);
+    assert.equal((await getAccount(connection, c.destination)).amount - before.amount, c.amount);
+  }
+  const after = await r.state();
+  assert.equal(after.epoch!.remaining.toString(), '1'); assert.equal(after.epoch!.claimedCount, 2);
+  assert.equal(after.custody.config.mode, 3); assert.equal(after.custody.config.paid.toString(), '99');
+  for (const index of order) await r.rejects(await r.claim(cs[index], [leaves[1 - index]!]), [[f.owner, second][index]!]);
+});
+
+test('a malicious duplicate-owner tree cannot pay twice even with an advanced second baseline', async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]); await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  const s = { ...r.statement, treeSize: 2, total: 200n }, context = recoveryContextHash(r.context, s);
+  const first = r.claims[0]!, second = { ...first, index: 1, claimId: id('second'), paidBase: 100n, payoutSequenceBase: 1n };
+  const l = recoveryLeaf(context, first), right = recoveryLeaf(context, second);
+  const root = createHash('sha256').update(Uint8Array.of(1)).update(l).update(right).digest();
+  await send(await r.stage({ ...s, root }), [governance]); await send(await r.activate(undefined, undefined, root), [f.recovery]);
+  await send(await r.claim(first, [right]), [f.owner]); await r.rejects(await r.claim(second, [l]), [f.owner]);
+  assert.equal((await r.state()).epoch!.remaining.toString(), '100');
+});
+
+for (const field of ['paidBase', 'payoutSequenceBase'] as const) test(`recovery checked ${field} overflow rolls back proof consumption and CPI`, async () => {
+  const f = await fixture(); await send(await f.deposit(), [f.owner]);
+  const stored = await program.account.customerCounter.fetch(f.customer), max = 2n ** 64n - 1n;
+  const encoded = await program.coder.accounts.encode('customerCounter', { ...stored, [field === 'paidBase' ? 'paid' : 'payoutSequence']: u64(max) });
+  await rpc('surfnet_setAccount', [f.customer.toBase58(), { data: encoded.toString('hex') }]);
+  await send(await f.freeze(), [f.recovery]); const r = await recoveryFixture(f);
+  await send(await r.stage(), [governance]); await send(await r.activate(), [f.recovery]);
+  await r.rejects(await r.claim(), [f.owner], r.receipt(), /Arithmetic/);
 });
