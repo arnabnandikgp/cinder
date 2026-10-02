@@ -210,8 +210,11 @@ a hard spending cap. On 2026-10-02 a fresh STS call verified the IAM user
 `cinder_new`, and read-only EC2 inspection confirmed `c6g.large` supports enclaves
 with two vCPUs and 4096 MiB. The prior root-identity blocker is resolved. No
 billable test resources have been created. The user now requests completion of
-all pre-hardware work and a stop **before hardware testing**. Do not provision or
-launch from this branch until that work is resumed. Refresh pricing/permissions
+all pre-hardware work and a stop **before hardware testing**. That software handoff
+is complete; on 2026-10-02 the user resumed the existing $5 hardware session.
+Fresh authentication succeeds, but IAM/KMS/DynamoDB inspection and pricing/SSM/
+quota reads are denied; no resources were created. Resolve the administrator
+permission prerequisite before launching. Refresh pricing/permissions
 and record the exact disposable resources before spend; the earlier $5 limit is
 not permission for a larger or unattended deployment.
 

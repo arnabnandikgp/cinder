@@ -85,9 +85,12 @@ compile-fail doctests per debug/release profile, 24 repository tests, strict
 Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
 receipts remain in the owning phases below.
 
-Next: **stop before hardware testing**, per the current user instruction. Resume
-only the bounded hardware session after refreshing pricing/permission/cleanup
-checks; do not provision from the completed software handoff. Keep
+Next: user resumed the bounded hardware session on 2026-10-02, still at **$5**.
+Fresh authentication succeeds, but IAM/KMS/DynamoDB inspection and pricing/SSM/
+quota reads are denied. Verify test and cleanup authority before provisioning;
+current next action is administrator attachment of the local scoped prerequisite
+policies described in the P20 continuation below. No AWS resource or IAM change
+has been made. Keep
 P19 in progress until actual merge. P21 joins recovery to the journal; P22/P23 reuse
 workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
 separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
@@ -1139,6 +1142,35 @@ hardware work. Final documentation handoff export
 `695f7110a6f13c1bc5e679de5b9fb19fc257ceef` passes link/progress checks without
 ignored work, local-only user journey or unrelated stays. Runtime/build sources
 match the Linux tested tree; final receipt edits are documentation-only.
+
+### Hardware resumption / IAM prerequisite (2026-10-02)
+
+Work: user authorizes resuming the existing $5 disposable session. Fresh STS
+confirms `arn:aws:iam::588966314654:user/cinder_new`, region us-east-1. Verified
+preserved Linux artifacts and c6g.large's two ARM64 CPUs/4096 MiB/enclave support.
+EC2 describes the default VPC and latest Amazon-owned ARM64 AL2023 image; S3
+metadata read works. No root profile or customer wallet used.
+
+Verification: KMS ListKeys, DynamoDB ListTables, IAM own-policy inspection,
+Pricing GetProducts, SSM public parameter and EC2 quota lookup return AccessDenied.
+These are read denials, not proof every Create action is denied. No blind creation
+probe or partial paid deployment was attempted without known cleanup authority.
+The IAM prerequisite is separate from an attestation or application-code failure.
+
+Unexpected: authenticated IAM identity has insufficient permission visibility for
+the previously planned KMS/witness topology. Prepared account/session-scoped
+operator and fixed runtime-boundary policies in ignored local
+`work/experiments/p20-hardware/permissions/`, with administrator setup instructions.
+They grant no IAM user management, policy versioning or boundary removal; new
+roles require the fixed administrator-created ceiling. No arbitrary existing KMS
+tagging is granted. Syntax/managed-policy size are checked, not effective AWS
+authorization; the added policy does not subtract existing attached rights.
+
+Next: user applies the two managed policies using an administrator console,
+attaches only CinderP20Operator to cinder_new, then we verify effective test/cleanup
+permissions, current prices and quotas before launch. No AdministratorAccess or
+root CLI is requested. No AWS writes/resources/test compute spend; four hardware
+criteria remain open. Current application/executable sources are unchanged.
 
 ## P21 — Recovery integration
 

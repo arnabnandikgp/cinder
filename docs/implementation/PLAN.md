@@ -490,8 +490,9 @@ Use [ADR 0020](../architecture/0020-nitro-runtime.md) and the
 build rejects native trading/funding/read activation, rather than fabricating
 unqualified observations or chain authority. P22/P23 own those joined workflows.
 Final disposable resource identities, EIF/PCRs and KMS/SDK measurement approval
-are hardware-session outputs. Current instruction: finish software and **stop
-before hardware testing**; no provisioning or spend from the handoff alone.
+are hardware-session outputs. The pre-hardware stop was lifted by the user on
+2026-10-02 for the existing $5 disposable session. Authentication is verified;
+test/cleanup permissions, prices and quotas still precede any provisioning.
 
 - [ ] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected.
 - [ ] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled.
