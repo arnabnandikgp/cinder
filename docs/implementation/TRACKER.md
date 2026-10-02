@@ -21,8 +21,8 @@
 | [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
 | [P17 — Recovery program](PLAN.md#p17) | closed | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), merged `1f750b0` |
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
-| [P19 — Attested transport and runnable service](PLAN.md#p19) | in progress | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), open |
-| [P20 — Nitro application qualification](PLAN.md#p20) | in progress | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), open above #44 |
+| [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
+| [P20 — Nitro application qualification](PLAN.md#p20) | in progress | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), open on `product/tee-v1` |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
@@ -36,13 +36,14 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
-`1f750b059f39e9f409ae10fe2f4e070c2e0aa428`.
-Current branch: `tee/p20-nitro-runtime`, registered above P19 through native
-`gh stack add`, based on `1aeef179b6f963649954f2e1a2da8eab1b6690d6`.
-[P20 #45](https://github.com/arnabnandikgp/cinder/pull/45) is published above
-[P19 #44](https://github.com/arnabnandikgp/cinder/pull/44) in native GitHub
-stack #46. Code/evidence checkpoint: `b6e0f4c`; only publication handoff text
-follows it. Hosted CI and CodeRabbit at the published tip remain pending; local
+`dc5f01ddadb6730886f939693b2b6c0c7d642caf`.
+Current branch: `tee/p20-nitro-runtime`. Native stack #46 originally placed
+[P20 #45](https://github.com/arnabnandikgp/cinder/pull/45) above
+[P19 #44](https://github.com/arnabnandikgp/cinder/pull/44); P19 is now merged and
+P20 is rebased directly on the updated TEE trunk. Code/evidence checkpoint
+`b6e0f4c` was rebased to `adf42ea`; only tracker/publication text differs from the
+previous P20 tip `58abe8b`. All non-documentation source and qualified code-export
+inputs remain identical. Hosted CI and CodeRabbit at the new tip are pending; local
 and hardware results are recorded for their actual source, not inherited hosted
 checks. Pre-hardware assembly is `b67f3947b6eda241bd56912003b22ee90107857f`;
 real AWS compatibility fixes are `37487ca`. Preserve that earlier provenance.
@@ -56,8 +57,9 @@ supervisor; see [ADR 0020](../architecture/0020-nitro-runtime.md) and the
 fixture dispatch or alternate ledger is promoted. Native trading, funding and
 reads are deliberately disabled until qualified G01/G02/P23 ports and policy.
 Local assembly is not a completed hardware criterion. Dated results below apply
-to their exact source, not a later change. [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44)
-remains open on the TEE trunk; no merge is authorized by starting P20.
+to their exact source, not a later change. P19's authorized merge, exact checked
+head and review disposition are recorded in its owning phase below. P20 remains
+open; no P20 merge or production activation is authorized.
 
 AWS: initial disposable test allowance **$5**, replacement profile `cinder_new`,
 region `us-east-1`, no mainnet/customer funds. Fresh STS on 2026-10-02 verifies
@@ -67,14 +69,15 @@ remaining qualifications. After the user's explicit Paid-plan upgrade, the actua
 disposable Nitro session now has positive application/KMS/SDK and encrypted
 restore/fault receipts; see [hardware evidence](../operations/nitro-hardware-2026-10-02.md).
 The former Free-plan/no-resource/$0 blocker is historical. Three real AWS format
-compatibility fixes are implemented and verified on macOS and Linux; complete
-P20 hardware acceptance is still open. The evidence page records verified teardown
+compatibility fixes are implemented and verified on macOS and Linux; that first
+session's partial matrix is completed by the follow-up below. Review/merge remains
+open. The evidence page records verified teardown
 and conservative spend below $0.50 (not a finalized bill). No native trading/funding/read capability
 was enabled. Do not delete source/research or use broad container pruning.
 
 P17 #41 and P18 #42 merged atomically through `gh stack merge --yes --merge`
 on 2026-10-01 after explicit user authorization. Both GitHub receipts report the
-trunk commit above. Checked source heads were P17
+historical merge `1f750b059f39e9f409ae10fe2f4e070c2e0aa428`. Checked source heads were P17
 `8868749f8805a49945bcaa2dcfe4e30044f4d6b2` and P18
 `70641e322f8555eb3bfe671ca2fed5e460b762fb`. Plan/handoff, offline Rust and
 Anchor/SBF/Surfpool jobs were successful at both exact heads; CodeRabbit statuses
@@ -94,7 +97,7 @@ compile-fail doctests per debug/release profile, 24 repository tests, strict
 Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
 receipts remain in the owning phases below.
 
-Next: review hosted CI and CodeRabbit on P20 #45 above the unchanged P19 #44;
+Next: review hosted CI and CodeRabbit on rebased P20 #45, now on the TEE trunk;
 see [follow-up evidence](../operations/nitro-hardware-followup-2026-10-02.md).
 The complete security batch now has an actual independently verified attested
 PASS, including recipient/upstream TLS negatives and journal recovery. A real
@@ -116,11 +119,11 @@ their actual hardware results and limits are recorded separately. The
 scoped prerequisite policies and user-selected Paid upgrade resolved the prior
 IAM/account-plan blockers. Technical P20 criteria are satisfied in the bounded
 disabled-native profile; review/merge remains pending. No automatic merge or
-production-key approval. Keep
-P19 in progress until actual merge. P21 joins recovery to the journal; P22/P23 reuse
+production-key approval. P19 is closed after verified merge. P21 joins recovery
+to the journal; P22/P23 reuse
 workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
 separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
-unrelated `stays/`. Keep P19 in progress until actual merge; local fixtures do not establish
+unrelated `stays/`. Local fixtures alone do not establish
 hardware qualification or authorize live keys, tests or deployment.
 Second-session teardown is verified: termination requested at 17:04:07 UTC,
 test EBS/buckets/table/runtime roles/SSH/security group absent, five fresh KMS
@@ -1062,13 +1065,24 @@ unlabeled P18 baseline in the current handoff; the documentation-only correction
 preserves historical evidence without attributing it to P19. No runtime or test
 source changes. These P19 details belong in their owning phase rather than being
 presented as verification of P20's later source.
-Next: P19 #44 is ready for review through native gh stack on product/tee-v1; hosted CI/CodeRabbit are pending. Review/merge only with authorization. P20 supplies measured application entrypoint, actual vsock/NSM, secure entropy/time, actual-config manifest binding, key release, qualified storage witness and enclave-side egress. No production or hardware claim from this slice; remain in progress until reviewed/merged, do not begin live qualification without G03/G05 authorization.
+Historical next action (superseded by the merge below): P19 #44 was ready for review through native gh stack on product/tee-v1; P20 supplies actual Nitro qualification, separately from P19's local service evidence.
 PR: https://github.com/arnabnandikgp/cinder/pull/44.
-Merge: none.
+Merge: dc5f01ddadb6730886f939693b2b6c0c7d642caf.
+
+Merge follow-up — 2026-10-02: one valid minor CodeRabbit finding was fixed in
+`486de5319cd4538b82012dfe65beb03e972b2491`, with a public fix reply and resolved
+thread. Planning validation, its 12 tests and diff checks pass locally. All
+three hosted jobs (Rust, Anchor/SBF/Surfpool and plan consistency) pass at that
+exact head. CodeRabbit's original completed review remains the source review;
+the latest status is rate-limited, not a fresh completed review of the doc fix.
+After explicit user authorization, `gh stack merge 44 --yes --merge` merged only
+P19 at 17:26:30 UTC, leaving P20 open. Local trunk fast-forwarded to the receipt
+above. P19 is now `closed`; legacy main, wallets and cloud resources are untouched.
+Next: review P20 #45 on the updated TEE trunk; no automatic upper-layer merge.
 
 ## P20 — Nitro application qualification
 
-Work: in progress on `tee/p20-nitro-runtime`, above P19 head `1aeef179b6f963649954f2e1a2da8eab1b6690d6`. Application-policy commitment derives from the actual journal/API/execution/funding objects, not a supplied hash; rejects conflicting beneficiaries, mismatched configurations and reused trading/funds key roles. Actual NSM adapter pins AWS's 0.5.2 driver, opens Linux hardware only, checks locked nonzero exact PCR0/1/2 and known SHA384 profile, requires bounded entropy, and verifies fresh connection-bound quotes with the production AWS-root verifier. Dependency/feature/lock guards retain a closed graph. No economics, history codec, Solana source or native capability activation changes. ADR 0020 records the partial implementation and remaining boundaries.
+Initial work (historical): `tee/p20-nitro-runtime` above P19 head `1aeef179b6f963649954f2e1a2da8eab1b6690d6`; the current branch is now rebased on the merged trunk. Application-policy commitment derives from the actual journal/API/execution/funding objects, not a supplied hash; rejects conflicting beneficiaries, mismatched configurations and reused trading/funds key roles. Actual NSM adapter pins AWS's 0.5.2 driver, opens Linux hardware only, checks locked nonzero exact PCR0/1/2 and known SHA384 profile, requires bounded entropy, and verifies fresh connection-bound quotes with the production AWS-root verifier. Dependency/feature/lock guards retain a closed graph. No economics, history codec, Solana source or native capability activation changes. ADR 0020 records the partial implementation and remaining boundaries.
 Verification: 2026-10-01 final-source pinned offline runner passes on macOS ARM64: 310 Rust tests plus two compile-fail doctests in each debug/release profile, 26 repository tests, all 17 SDK tests (including the seven real local-process tests), default/all-feature strict Clippy, format, build and TypeScript checks. Four new NSM tests and three loaded-contract tests pass; dependency guard includes the new driver feature/pin/platform refusal test. Linux driver path and actual hardware tests are still pending; local NSM protocol exchanges are synthetic, not hardware evidence. None of the four complete P20 acceptance criteria is marked satisfied. On-chain source is unchanged, so SBF is not rerun.
 Unexpected: current `cinder-dev` STS identity is account root; the same ARN was freshly confirmed after the user's IAM clarification. Provisioning is blocked pending the intended non-root credentials, independently of local implementation. User approves at most $5 for the initial disposable session; no resources or billable spend. Host disk is tight (~2.6 GiB free before the final checks) and Apple containers have no cached images. Container services/images were inspected read-only; no wallet, venue, RPC, AWS write, agent or Linux container was used.
 Initial next action (2026-10-01; superseded below): finish local runtime ports and obtain non-root authentication before bounded hardware tests. No P19 fixture promotion or automatic unknown retry.
@@ -1350,12 +1364,16 @@ scripts remain ignored local research. Verified exact cloud teardown and
 45-file disposable-secret cleanup preserve operator/public evidence and user
 wallets, AWS profiles, research and unrelated files. The task container is removed.
 
-Next: P20 #45 is published above P19 #44 in stack #46. Implementation/evidence
-commit is `b6e0f4c`; this publication-only tracker update follows it. Hosted CI
-and CodeRabbit are pending at the new tip. Review their actual results before
-authorized bottom-up merge. No further hardware categories without discussion.
-P20 stays `in progress` until review/merge; P19 stays open. No automatic merge,
-native activation or production-key authorization.
+Next: P19 #44 is merged; P20 #45 is rebased on `dc5f01d` and remains open.
+Implementation/evidence commit `b6e0f4c` is now `adf42ea`; code-export inputs are
+unchanged and only tracker/publication text differs from the original P20 tip.
+The rebase conflicts were documentation-only: preserve the P18 baseline label
+and keep P19-specific verification in its owning phase. Current plan validation,
+its 12 tests and diff checks pass; hosted CI/review must be checked at the new
+published tip. No further hardware categories without discussion. P20 stays
+`in progress` until review/merge; no native activation or production approval.
+PR: https://github.com/arnabnandikgp/cinder/pull/45.
+Merge: none.
 
 ## P21 — Recovery integration
 
