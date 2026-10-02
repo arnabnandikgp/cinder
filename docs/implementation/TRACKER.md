@@ -61,10 +61,18 @@ main is untouched. Production policy, source qualification, keys and deployment
 remain G01–G05 gates. No AWS, live venue/RPC, funding, configured wallet, container
 or agent was used for this merge.
 
-Local source evidence remains 53/53 client/SBF checks and 296 Rust tests plus two
+Historical P18 trunk baseline, not verification of the P19 tip: 53/53 client/SBF
+checks and 296 Rust tests plus two
 compile-fail doctests per debug/release profile, 24 repository tests, strict
 Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
 receipts remain in the owning phases below.
+
+P19's source verification is 303 Rust tests plus two compile-fail doctests per
+debug/release profile, 25 repository tests and 17 SDK tests, with strict
+Clippy/format/build and TypeScript checks. Hosted Rust, Anchor/SBF/Surfpool and
+plan jobs passed at `1aeef17`. CodeRabbit's one valid minor finding was the
+unlabeled P18 baseline above; this documentation-only fix preserves historical
+evidence without attributing it to P19. No runtime or test source changes.
 
 Next: review P19 #44 and its hosted checks; keep it in progress until actual merge.
 P20 assembles/qualifies Nitro; P21 joins recovery to the journal; P22/P23 reuse
