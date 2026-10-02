@@ -19,6 +19,7 @@ const allowed = new Map([
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
   ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'ed25519-dalek:normal', 'bs58:normal', 'zeroize:normal']],
   ['cinder-api', ['cinder-kernel:normal', 'cinder-journal:normal', 'sha2:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
+  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'serde_cbor:normal', 'zeroize:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
@@ -43,10 +44,21 @@ export function validateWorkspace(metadata) {
     if (!members.has(pkg.id)) errors.push(`${pkg.name}: package outside workspace`);
     if (pkg.source != null || pkg.version !== '0.1.0') errors.push(`${pkg.name}: expected local exact package`);
     if (pkg.targets?.some(target => target.kind.includes('custom-build'))) errors.push(`${pkg.name}: build scripts are not approved`);
+    if (pkg.name === 'cinder-service') {
+      if (JSON.stringify(pkg.features) !== JSON.stringify({default: [], 'local-fixture': []})) errors.push('cinder-service: fixture feature must not enable by default or expand dependencies');
+      for (const name of ['cinder-service-fixture', 'cinder-verify-fixture']) {
+        if (JSON.stringify(pkg.targets?.find(t => t.name === name)?.['required-features']) !== JSON.stringify(['local-fixture'])) errors.push('cinder-service: fixture binary must require explicit feature');
+      }
+    }
     const actual = (pkg.dependencies ?? []).map(dep => `${dep.name}:${dep.kind ?? 'normal'}`).sort();
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
+      if (pkg.name === 'cinder-service' && ['openssl', 'aws-nitro-enclaves-cose', 'serde_cbor', 'zeroize'].includes(dep.name)) {
+        const expected = dependencyPolicy.packages.find(p => p.name === dep.name && dep.req === `=${p.version}`);
+        if (!expected || dep.source !== dependencyPolicy.registry || dep.path || dep.target != null || dep.optional || !dep.uses_default_features || dep.features.length !== 0) errors.push('cinder-service: transport dependency configuration not approved');
+        continue;
+      }
       if (['cinder-pacifica', 'cinder-api'].includes(pkg.name) && ['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].includes(dep.name)) {
         const expected = dependencyPolicy.packages.find(p => p.name === dep.name && dep.req === `=${p.version}`);
         const features = dep.name === 'serde' ? ['derive'] : dep.name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : [];
@@ -90,6 +102,6 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
     for (const error of errors) process.stderr.write(`${error}\n`);
     process.exitCode = 1;
   } else {
-    process.stdout.write('Workspace boundaries OK: 6 local packages; kernel remains dependency-free; pinned storage/crypto/JSON dependencies only.\n');
+    process.stdout.write('Workspace boundaries OK: 7 local packages; dependency-free kernel; pinned storage/crypto/JSON/transport graph; fixture-only binaries gated.\n');
   }
 }

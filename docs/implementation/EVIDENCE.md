@@ -43,6 +43,30 @@ upload the entire local research tree to make links work.
 
 ## Verified evidence versus new work
 
+### P19: attestation-gated runnable service slice
+
+[ADR 0019](../architecture/0019-attested-service.md) promotes W06–W08's exact-key
+binding, no early private identity, bounded framing, independent client release
+and opaque-parent requirements. The new Node/TLS/service tests run over actual
+processes and the existing AEAD replicated journal, including service death,
+reconnection, original-operation query, changed-economics conflict and hostile
+channel substitutions. The pinned public AWS root is checked against its published
+DER fingerprint; positive quotes use a fresh synthetic ECDSA/X.509 CA, not NSM.
+Fixture trust has a separate feature/entrypoint; production verifier rejects it.
+Trusted entropy/time/NSM/key release/vsock/independent witness and live egress stay
+P20 gates. No private audit source, experimental key, website or native account
+is promoted. Local process memory isolation is not a TEE security result.
+
+Source fingerprints at promotion (SHA-256; research is not a build dependency):
+W06 `private-api-runtime.md`:
+`6ee0084666c8681f9b894a9d1a9c645997aa10d0bf352b257053f74798b03522`;
+TEE handoff:
+`11c0d09f2d1bb75f46b69ab14db28f217e2bcba16382927199abc69ba24ce1e4`;
+W08 Nitro qualification:
+`819297c008072b07599a75dbad233c70afce2185c88c451812e600dd50c69e71`;
+D14 experiment README:
+`4dfd26b3a44d862e7d5b9d0ddf122c6f556fd165879667e9bc5e34fad2e8d0c8`.
+
 ### P02: initial production primitive promotion
 
 [ADR 0002](../architecture/0002-financial-primitives.md) records exact source

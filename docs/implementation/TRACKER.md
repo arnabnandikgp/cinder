@@ -19,9 +19,9 @@
 | [P14 — Pacifica execution](PLAN.md#p14) | closed | Only authorized, reserved actions are signed; unknown outcomes reconcile before retry and cleanup capacity stays available. | [#38](https://github.com/arnabnandikgp/cinder/pull/38), merged `95fe3b7` |
 | [P15 — Solana vault](PLAN.md#p15) | closed | Vault movements enforce asset, authority, recipient, epoch and atomic payout-counter boundaries. | [#39](https://github.com/arnabnandikgp/cinder/pull/39), merged `95fe3b7` |
 | [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
-| [P17 — Recovery program](PLAN.md#p17) | in progress | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), based on merged P16 |
-| [P18 — Private API and SDK](PLAN.md#p18) | in progress | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), stacked above #41 |
-| [P19 — Attested transport and runnable service](PLAN.md#p19) | open | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | — |
+| [P17 — Recovery program](PLAN.md#p17) | closed | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), merged `1f750b0` |
+| [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
+| [P19 — Attested transport and runnable service](PLAN.md#p19) | in progress | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), open |
 | [P20 — Nitro application qualification](PLAN.md#p20) | open | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
@@ -35,63 +35,51 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Worktree: `cinder-tee`. Trunk: `product/tee-v1` at `95fe3b7395ac62d8c91554e27fa9a3032d3d26b9`.
-Current branch: `tee/p18-private-api`, stacked above `tee/p17-recovery-claims` (#41), based on
-that merged trunk. The user authorized merging the reviewed stack and continuing
-implementation. P04–P16 merged atomically through `gh stack merge --yes --merge`
-on 2026-10-01; all 13 PR receipts report that exact commit. Local trunk was
-fast-forwarded and its tree was checked identical to tested P16 head
-`ce91dd1c319c4c831de03190b0d546b10b663a8f` (also an ancestor of the merge).
-Protocol CI passed at the reviewed heads; no unresolved review threads remained.
-The existing P04 Vercel preview failure was disclosed and is not protocol CI.
-No branch protections/deployment settings were changed; legacy main is untouched.
+Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
+`1f750b059f39e9f409ae10fe2f4e070c2e0aa428`.
+Current branch: `tee/p19-attested-service`. P19 implements the TLS 1.3 service/relay
+slice, strict pinned-root quote verifier and Node automation channel. The fixture
+processes use the real P18 API and P06 encrypted replicated journal. Full offline
+verification passed in a staged-source export without research/local-only files.
+Ready-for-review [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44) is open
+on the TEE trunk through native `gh stack`. Hosted CI/review is pending; nothing
+has been deployed or merged in this phase.
 
-P17 extends the existing custody program with immutable final claims, explicit
-publisher/operator authority, funded activation and shared payout counters.
-Offline fixtures only: no live venue/RPC, devnet deployment/funding, AWS or customer
-funds are authorized by this continuation. Preserve unrelated `stays/` and ignored
-`work/`. Source qualification, release governance and deployment remain G01/G03/G05.
-The prior final source verification passed 275 Rust tests plus two compile-fail
-doctests per debug/release profile, 24 repository tests, strict Clippy/format/build
-and 30 offline client/SBF tests with generated-IDL equality. This is evidence for
-the merged stack, not a green result for future P17 changes.
+P17 #41 and P18 #42 merged atomically through `gh stack merge --yes --merge`
+on 2026-10-01 after explicit user authorization. Both GitHub receipts report the
+trunk commit above. Checked source heads were P17
+`8868749f8805a49945bcaa2dcfe4e30044f4d6b2` and P18
+`70641e322f8555eb3bfe671ca2fed5e460b762fb`. Plan/handoff, offline Rust and
+Anchor/SBF/Surfpool jobs were successful at both exact heads; CodeRabbit statuses
+were successful and both actionable threads had author replies and were resolved.
+Local trunk fast-forwarded to that commit; its tree is identical to the tested P18
+tip, which is also an ancestor. P17/P18 are now `closed`; no future P19 CI is implied.
 
-Latest review follow-up, 2026-10-01: P17 #41's recovery-total finding is fixed in
-published commit `8868749f8805a49945bcaa2dcfe4e30044f4d6b2`; the author reply and
-thread resolution are recorded on GitHub. The original program failed all three
-new regressions; the rebuilt program passes **53/53** offline client/SBF checks.
-P18 #42 has been restacked above that exact fix with native `gh stack` (stack #43).
-Its history-scan finding uses an account/request-ID set without changing ordered
-replay or weakening duplicate rejection. Full clean staged-source verification
-passes **296 Rust tests plus two compile-fail doctests per debug/release profile**,
-24 repository tests, both strict Clippy configurations, formatting, all-target
-build and **9/9 private SDK tests**. P18's program/client sources are identical to
-the verified P17 fix; its 53-check SBF evidence is reused, not relabeled a new run.
-These are local macOS tests, not hardware qualification or an independent audit.
+The TEE trunk has no branch protection or branch rules configured. Passing checks
+and resolved reviews were verified manually; no settings were changed and legacy
+main is untouched. Production policy, source qualification, keys and deployment
+remain G01–G05 gates. No AWS, live venue/RPC, funding, configured wallet, container
+or agent was used for this merge.
 
-Planning updates were pushed to #42 first as `55830d5`, then preserved by restack
-as `24abe7d`. Earlier implementation/publication evidence remains in each owning
-phase below. Hosted snapshot for P17 at `8868749`: plan/handoff and offline Rust
-jobs successful, Anchor/SBF/Surfpool still running; CodeRabbit status successful.
-P18's new review-fix publication requires its own hosted checks. Green checks at
-old heads do not qualify new commits, and CodeRabbit status is not thread closure.
-Both phases remain `in progress`; neither open PR has been merged in this pass.
+Historical P18 trunk baseline, not verification of the P19 tip: 53/53 client/SBF
+checks and 296 Rust tests plus two
+compile-fail doctests per debug/release profile, 24 repository tests, strict
+Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
+receipts remain in the owning phases below.
 
-User-approved planning clarification, 2026-10-01: P19 now owns a runnable parent
-relay/private-service slice and SDK process tests; P20 assembles and qualifies the
-actual Nitro application; P21 recovery joins its accepted journal; P22/P23 reuse
-full workflow assertions offline/live respectively. Framework choice stays in the
-P19 ADR. Economics, custody, release gates and external permissions are unchanged.
-Self-service private onboarding/browser-agent UX/terminal remain explicit follow-up
-product work, not quietly included in backend qualification. The local
-`docs/user-journey.md` and unrelated `stays/` remain untracked and outside commits.
+P19's source verification is 303 Rust tests plus two compile-fail doctests per
+debug/release profile, 25 repository tests and 17 SDK tests, with strict
+Clippy/format/build and TypeScript checks. Hosted Rust, Anchor/SBF/Surfpool and
+plan jobs passed at `1aeef17`. CodeRabbit's one valid minor finding was the
+unlabeled P18 baseline above; this documentation-only fix preserves historical
+evidence without attributing it to P19. No runtime or test source changes.
 
-Next: verify the stack's remote heads, review-thread disposition and
-current-head hosted checks before proposing a merge. Review/merge is a separate
-user action; begin the clarified P19 only when authorized. No further runtime
-phase, live test or merge is authorized by this documentation/review pass.
-Actual ledger-to-claim finalization/independent delivery remains P21; source/hardware
-and live release gates remain explicit. No new economic policy was adopted.
+Next: review P19 #44 and its hosted checks; keep it in progress until actual merge.
+P20 assembles/qualifies Nitro; P21 joins recovery to the journal; P22/P23 reuse
+workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
+separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
+unrelated `stays/`. Keep P19 in progress until actual merge; local fixtures do not establish
+hardware qualification or authorize live keys, tests or deployment.
 
 ### CodeRabbit coverage snapshot (2026-09-30)
 
@@ -916,7 +904,7 @@ Do not deploy, call live venues or activate a real recovery estate from this han
 jobs successful. CodeRabbit comments await triage; its green status is not review
 closure. Preserve these dated results when review fixes create a new head.
 PR: https://github.com/arnabnandikgp/cinder/pull/41.
-Merge: none.
+Merge: 1f750b059f39e9f409ae10fe2f4e070c2e0aa428.
 
 Review follow-up: 2026-10-01 — addressed CodeRabbit comment
 [4149944472](https://github.com/arnabnandikgp/cinder/pull/41#discussion_r4149944472).
@@ -938,6 +926,12 @@ checks. Clean staged-source documentation checks pass (25 phases, 27 documents,
 live venue, AWS or agent was used. Hosted checks for this new revision are pending;
 the original head's green checks are not evidence for the fix. P17 remains
 `in progress` until merged; carry this fix into P18 with the native stack workflow.
+
+Merge follow-up: 2026-10-01 — P17 #41 is now closed. Its checked final head
+`8868749` passed all three hosted protocol jobs; the recovery-total review thread
+was replied to and resolved. Atomic merge with P18 produced the receipt above.
+Earlier pending/ready notes are historical, not the current status. P21 still owns
+actual ledger finalization and independent claim delivery; merge is not deployment.
 
 ## P18 — Private API and SDK
 
@@ -998,15 +992,22 @@ P19 owns real attested transport, a runnable service slice and client verificati
 P20 hardware, P21 integrated recovery and G01–G05 remain explicit gates. No live
 venue/RPC, deployment, AWS, configured wallet, container or agent was used.
 PR: https://github.com/arnabnandikgp/cinder/pull/42.
-Merge: none.
+Merge: 1f750b059f39e9f409ae10fe2f4e070c2e0aa428.
+
+Merge follow-up: 2026-10-01 — P18 #42 is now closed. Its checked final head
+`70641e3` passed all three hosted protocol jobs; the history-scan review thread
+was replied to and resolved. Atomic merge with P17 produced the receipt above.
+The local trunk tree exactly matches that tested tip. This next-branch handoff
+only records the actual merge, with no runtime changes or new test claims.
+Next: P19 attested transport and runnable service; implementation is not started.
 
 ## P19 — Attested transport and runnable service
 
-Work: not started.
-Verification: not run; acceptance in PLAN P19.
-Unexpected: none yet.
-Next: record channel/crypto/server-runtime choices; build parent relay and private-service entry points wired to P18/protected journal. Drive signed SDK requests over the real local processes with explicit quote/venue fixtures; test hostile relay, disconnect/restart, bounds/backpressure and client release risks. No AWS hardware claim from this slice.
-PR: none.
+Work: ADR 0019 selects enclave-terminated TLS 1.3, bounded synchronous listeners and the independently distributed public-data quote verifier. New service/relay/fixture entrypoints wire P18 to the real P06 cipher/replica journal. Node SDK gates private requests on the exact socket SPKI/exporter, fresh challenge, expected release/domain and short expiry. Default builds exclude fixture attester/key providers; production verifier never accepts fixture roots. Exact dependency/feature/build-script policy is updated; no financial policy, native signing or Solana program change.
+Verification: 2026-10-01 pinned full offline checks passed on macOS ARM64, including a staged-source export excluding work/, user-journey.md and stays/. Each debug/release profile passed 303 Rust tests plus two compile-fail doctests; 25 repository tests and 17 SDK tests passed (seven use actual local service/relay/verifier processes). Default/all-feature Clippy, format, build, exact dependency policy and strict TypeScript checks passed. Relay ciphertext corruption cannot forge a request; a corrupted committed reply reconciles after process death without another attempt. No AWS, RPC, wallet, funding, container or agent used; SBF not rerun because on-chain source is unchanged. Local CA/clock/witness/venue evidence is synthetic, not NSM or independent storage qualification.
+Unexpected: real transport exposed Darwin inherited nonblocking sockets and Node Buffer.slice aliasing in the P18 SDK. Explicit worker socket mode and copy-safe IDs/reply decoding fix both; tracked regression tests retain them. A client TLS protocol accessor reports configured legacy version even on rejected handshakes, so the downgrade test checks secureConnect was never reached rather than that accessor.
+Next: P19 #44 is ready for review through native gh stack on product/tee-v1; hosted CI/CodeRabbit are pending. Review/merge only with authorization. P20 supplies measured application entrypoint, actual vsock/NSM, secure entropy/time, actual-config manifest binding, key release, qualified storage witness and enclave-side egress. No production or hardware claim from this slice; remain in progress until reviewed/merged, do not begin live qualification without G03/G05 authorization.
+PR: https://github.com/arnabnandikgp/cinder/pull/44.
 Merge: none.
 
 ## P20 — Nitro application qualification

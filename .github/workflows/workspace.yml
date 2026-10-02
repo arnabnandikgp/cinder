@@ -27,6 +27,8 @@ jobs:
           node-version-file: .node-version
       - name: Install pinned build tools
         run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+      - name: Install TLS build headers
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libssl-dev
       - name: Fetch locked storage dependencies
         run: cargo fetch --locked
       - name: Install locked private-client check tools

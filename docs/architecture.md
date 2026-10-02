@@ -40,7 +40,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Funding round trip | Durable three-location coordinator, original-wire/attempt reconciliation and shared credit budget tested offline; source/live qualification gated | P16 |
 | Recovery claims | Implemented for offline review in the same vault; immutable statements, funded activation, owner claims/shared counters; actual joined preparation/delivery remains P21 | P17 |
 | Private API/SDK | Implemented against trusted confidential-channel/admission ports; encrypted journal auth/replay, no public plaintext listener | P18 |
-| Attested client channel, actual Nitro runtime | Planned qualification | P19–P20 |
+| Attested client channel and runnable service | TLS 1.3/pinned-root verification and actual local SDK/relay/API/journal processes; fixture attestation/time/witness only | P19 |
+| Actual Nitro runtime | Measured application/key release/vsock/NSM and independent storage qualification remain gated | P20 |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one
@@ -123,11 +124,14 @@ independently authoritative balance table.
 
 ### Runnable application assembly and evidence levels
 
-The existing Rust crates are libraries, not six deployed services. The approved
+The Rust crates are packages, not seven independently deployed services. The approved
 2026-10-01 implementation clarification assigns **P19** a minimal executable parent
 relay and confidential service, with actual local SDK/process tests over P18 and
-the protected journal. P19's ADR selects the channel/crypto/server runtime; no HTTP
-framework is selected by this architecture update. Only encrypted private frames
+the protected journal. [ADR 0019](architecture/0019-attested-service.md) selects
+enclave-terminated TLS 1.3 and bounded synchronous listeners, without an HTTP
+framework. Its Node channel verifies attestation against the exact carrying socket.
+The local slice has separate relay, service-fixture and public-data verifier
+entrypoints; default builds cannot enable fixture trust implicitly. Only encrypted private frames
 and bounded declared metadata may cross the parent boundary.
 
 **P20** composes the private API, financial/journal controllers and venue/funding
@@ -479,7 +483,8 @@ Private requests, responses, error paths and streams terminate cryptographically
 inside the enclave. Outer HTTPS/WSS may terminate at a relay only while the private
 payload remains encrypted to the verified enclave session. Outbound venue TLS is
 validated inside the enclave too; host-decrypted account responses are not trusted
-inputs. The final channel protocol and pinned crypto library need P19 review.
+inputs. [ADR 0019](architecture/0019-attested-service.md) specifies the P19 transport
+and exact dependencies; production ports and actual enclave qualification remain P20.
 
 Verify attestation chain/signature, approved nondebug measurement, freshness and
 exact session-key binding before releasing private data. Bind customer authentication

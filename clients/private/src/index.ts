@@ -41,7 +41,9 @@ const utf8 = new TextEncoder();
 function fail(): never { throw new Error('Invalid private protocol'); }
 function id(v: Id): Uint8Array {
   if (!(v instanceof Uint8Array) || v.length !== 32 || v.every(b => b === 0)) fail();
-  return v.slice();
+  // Buffer is a Uint8Array too, but Buffer.slice() aliases its input. Always
+  // copy before zeroizing wire scratch buffers or retaining private identities.
+  return new Uint8Array(v);
 }
 function equal(a: Uint8Array, b: Uint8Array) { return a.length === b.length && a.every((v, i) => v === b[i]); }
 class Writer {
@@ -116,7 +118,7 @@ class Reader {
     if (!(bytes instanceof Uint8Array) || bytes.length > 1_048_576 || !equal(bytes.slice(0, p.length), p)) fail();
     this.at = p.length; this.bytes = bytes;
   }
-  take(n: number) { if (this.at + n > this.bytes.length) fail(); const b = this.bytes.slice(this.at, this.at + n); this.at += n; return b; }
+  take(n: number) { if (this.at + n > this.bytes.length) fail(); const b = new Uint8Array(this.bytes.subarray(this.at, this.at + n)); this.at += n; return b; }
   n(bytes: number, signed = false) { let n = 0n; for (const x of this.take(bytes)) n = (n << 8n) | BigInt(x); return signed ? BigInt.asIntN(bytes * 8, n) : n; }
   boolean() { const n = this.n(1); if (n > 1n) fail(); return n === 1n; }
   count() { const n = this.n(8); if (n > 4096n) fail(); return Number(n); }
