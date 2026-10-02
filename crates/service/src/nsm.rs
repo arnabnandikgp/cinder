@@ -4,11 +4,26 @@
 use crate::{
     Error,
     attestation::{self, Context, MAX_QUOTE, MAX_SESSION, Policy},
-    transport::Attester,
+    transport::{Attester, Clock},
 };
 use aws_nitro_enclaves_nsm_api::api::{Digest, Request, Response};
-use std::sync::Mutex;
+use std::{
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 use zeroize::Zeroizing;
+
+// Reject late results; an in-progress kernel ioctl is NOT cancellable here.
+// The measured runtime/hardware qualification must also bound driver latency.
+const MAX_NSM_OPERATION: Duration = Duration::from_secs(5);
+
+fn timely(elapsed: Duration) -> Result<(), Error> {
+    if elapsed > MAX_NSM_OPERATION {
+        Err(Error)
+    } else {
+        Ok(())
+    }
+}
 
 struct Device {
     #[cfg(target_os = "linux")]
@@ -122,31 +137,112 @@ fn quote_request(expected: &Policy, context: &Context<'_>) -> Result<Request, Er
     })
 }
 
+fn clock_sample(
+    exchange: &mut impl FnMut(Request) -> Result<Response, Error>,
+    policy: &Policy,
+    verify: impl FnOnce(&[u8], &Policy, &[u8; 32]) -> Result<u64, Error>,
+) -> Result<u64, Error> {
+    let start = Instant::now();
+    let nonce = entropy(exchange)?;
+    let (key, data) = attestation::clock_binding(policy);
+    let Response::Attestation { document } = exchange(Request::Attestation {
+        nonce: Some(nonce.to_vec().into()),
+        public_key: Some(key.to_vec().into()),
+        user_data: Some(data.to_vec().into()),
+    })?
+    else {
+        return Err(Error);
+    };
+    let now = verify(&document, policy, &nonce)?;
+    timely(start.elapsed())?;
+    Ok(now)
+}
+
+#[derive(Default)]
+struct TimeState {
+    last: Option<u64>,
+    failed: bool,
+}
+impl TimeState {
+    fn active(&self) -> Result<(), Error> {
+        if self.failed { Err(Error) } else { Ok(()) }
+    }
+    fn observe(&mut self, result: Result<u64, Error>) -> Result<u64, Error> {
+        let result = self.active().and(result).and_then(|at| {
+            if at == 0 || self.last.is_some_and(|last| at < last) {
+                Err(Error)
+            } else {
+                Ok(at)
+            }
+        });
+        match result {
+            Ok(at) => {
+                self.last = Some(at);
+                Ok(at)
+            }
+            Err(e) => {
+                // No cached clock, parent wall-time or later "healthy" reply can
+                // recover this boot. Restart goes through normal fresh fencing.
+                self.failed = true;
+                Err(e)
+            }
+        }
+    }
+}
+struct State {
+    device: Device,
+    time: TimeState,
+}
+
 /// Actual NSM handle tied to one independently selected release policy.
 /// Missing hardware or a debug/wrong/unlocked PCR bank fails construction.
-/// This adapter is not itself qualified key release, clock or durable storage.
+/// Timestamp replies are nonce-bound, AWS-signed and monotone within this boot.
+/// This is not durable freshness, recipient key release or hardware qualification.
 pub struct Nsm {
-    device: Mutex<Device>,
+    state: Mutex<State>,
     policy: Policy,
 }
 impl Nsm {
-    /// Open `/dev/nsm`, check locked PCR0/1/2 and require NSM entropy before use.
+    /// Open `/dev/nsm`, check locked PCR0/1/2 and verify a fresh NSM clock sample.
     /// NSM major version 1/SHA384 is the closed profile; future majors reject.
     pub fn open(policy: Policy) -> Result<Self, Error> {
         Policy::decode(&policy.encode())?;
         let mut device = Device::open()?;
         check_measurements(&mut |request| device.exchange(request), &policy)?;
-        let _boot_entropy = entropy(&mut |request| device.exchange(request))?;
+        let at = clock_sample(
+            &mut |request| device.exchange(request),
+            &policy,
+            attestation::verify_clock,
+        )?;
+        let mut time = TimeState::default();
+        time.observe(Ok(at))?;
         Ok(Self {
-            device: Mutex::new(device),
+            state: Mutex::new(State { device, time }),
             policy,
         })
     }
     /// Exactly 32 bytes obtained from NSM, zeroized on drop; no host RNG fallback.
     /// TLS/library entropy still requires its own image/runtime qualification.
     pub fn random(&self) -> Result<Zeroizing<[u8; 32]>, Error> {
-        let mut device = self.device.lock().map_err(|_| Error)?;
-        entropy(&mut |request| device.exchange(request))
+        let mut state = self.state.lock().map_err(|_| Error)?;
+        state.time.active()?;
+        let result = entropy(&mut |request| state.device.exchange(request));
+        if result.is_err() {
+            state.time.failed = true;
+        }
+        result
+    }
+}
+impl Clock for Nsm {
+    fn now(&self) -> Result<u64, Error> {
+        let mut state = self.state.lock().map_err(|_| Error)?;
+        state.time.active()?;
+        let result = clock_sample(
+            &mut |request| state.device.exchange(request),
+            &self.policy,
+            attestation::verify_clock,
+        );
+        state.time.observe(result)
     }
 }
 impl Attester for Nsm {
@@ -155,16 +251,25 @@ impl Attester for Nsm {
             return Err(Error);
         }
         let request = quote_request(policy, context)?;
-        let mut device = self.device.lock().map_err(|_| Error)?;
-        let Response::Attestation { document } = device.exchange(request)? else {
-            return Err(Error);
-        };
-        if document.is_empty() || document.len() > MAX_QUOTE {
-            return Err(Error);
-        }
-        // Reuse the production pinned-root verifier, including the exact live
-        // SPKI/challenge/exporter and qualified-clock freshness checks.
-        attestation::verify(&document, policy, context)?;
+        let mut state = self.state.lock().map_err(|_| Error)?;
+        state.time.active()?;
+        let start = Instant::now();
+        let result = (|| {
+            let Response::Attestation { document } = state.device.exchange(request)? else {
+                return Err(Error);
+            };
+            if document.is_empty() || document.len() > MAX_QUOTE {
+                return Err(Error);
+            }
+            // A newly generated quote necessarily follows the initial clock
+            // cut. Verify that signed timestamp locally without relaxing the
+            // public SDK verifier's independently trusted client-clock rules.
+            let at = attestation::verify_local(&document, policy, context)?;
+            timely(start.elapsed())?;
+            Ok((document, at))
+        })();
+        let (document, at) = result.inspect_err(|_| state.time.failed = true)?;
+        state.time.observe(Ok(at))?;
         Ok(document)
     }
 }
@@ -180,6 +285,91 @@ mod tests {
             manifest: [2; 32],
             pcrs: [[3; 48], [4; 48], [5; 48]],
         }
+    }
+    #[test]
+    fn clock_request_uses_fresh_entropy_and_separate_purpose_bindings() {
+        let p = policy();
+        let (key, data) = attestation::clock_binding(&p);
+        let mut calls = 0;
+        assert_eq!(
+            clock_sample(
+                &mut |request| {
+                    calls += 1;
+                    match request {
+                        Request::GetRandom => Ok(Response::GetRandom {
+                            random: vec![6; 32],
+                        }),
+                        Request::Attestation {
+                            nonce,
+                            public_key,
+                            user_data,
+                        } => {
+                            assert_eq!(nonce.unwrap().as_ref(), &[6; 32]);
+                            assert_eq!(public_key.unwrap().as_ref(), &key);
+                            assert_eq!(user_data.unwrap().as_ref(), &data);
+                            Ok(Response::Attestation { document: vec![7] })
+                        }
+                        _ => panic!("unexpected request"),
+                    }
+                },
+                &p,
+                |document, _, nonce| {
+                    assert_eq!(document, [7]);
+                    assert_eq!(nonce, &[6; 32]);
+                    Ok(100)
+                },
+            )
+            .unwrap(),
+            100
+        );
+        assert_eq!(calls, 2);
+        assert!(
+            clock_sample(&mut |_| Err(Error), &p, |_, _, _| panic!(
+                "verification on failed entropy"
+            ))
+            .is_err()
+        );
+        let mut calls = 0;
+        assert!(
+            clock_sample(
+                &mut |_| {
+                    calls += 1;
+                    if calls == 1 {
+                        Ok(Response::GetRandom {
+                            random: vec![6; 32],
+                        })
+                    } else {
+                        Ok(Response::LockPCR)
+                    }
+                },
+                &p,
+                |_, _, _| panic!("verification on wrong response")
+            )
+            .is_err()
+        );
+        assert_eq!(calls, 2); // No retry, cached time or alternate clock.
+    }
+    #[test]
+    fn clock_never_moves_backward_or_recovers_a_failed_boot() {
+        let mut time = TimeState::default();
+        assert_eq!(time.observe(Ok(100)), Ok(100));
+        assert_eq!(time.observe(Ok(100)), Ok(100));
+        assert_eq!(time.observe(Ok(101)), Ok(101));
+        assert!(time.observe(Ok(100)).is_err());
+        assert!(time.active().is_err());
+        assert!(time.observe(Ok(102)).is_err());
+        assert_eq!(time.last, Some(101));
+        for result in [Ok(0), Err(Error)] {
+            let mut time = TimeState::default();
+            assert!(time.observe(result).is_err());
+            assert!(time.observe(Ok(100)).is_err());
+        }
+    }
+    #[test]
+    fn late_nsm_results_reject_at_the_operation_budget() {
+        assert!(timely(Duration::ZERO).is_ok());
+        assert!(timely(MAX_NSM_OPERATION).is_ok());
+        assert!(timely(MAX_NSM_OPERATION + Duration::from_nanos(1)).is_err());
     }
     fn description() -> Response {
         Response::DescribeNSM {

@@ -130,12 +130,24 @@ fn certificate(
 }
 impl Attester for FixtureAttester {
     fn quote(&self, p: &Policy, c: &Context<'_>) -> Result<Vec<u8>, Error> {
+        self.quote_fields(p, c.now, c.spki, &c.nonce, &user_data(p, c))
+    }
+}
+impl FixtureAttester {
+    pub(crate) fn quote_fields(
+        &self,
+        p: &Policy,
+        at: u64,
+        public_key: &[u8],
+        nonce: &[u8],
+        data: &[u8],
+    ) -> Result<Vec<u8>, Error> {
         let mut map = BTreeMap::new();
         let mut put = |k: &str, v: Value| {
             map.insert(Value::Text(k.into()), v);
         };
         put("module_id", Value::Text("LOCAL-FIXTURE-NOT-NITRO".into()));
-        put("timestamp", Value::Integer(c.now as i128));
+        put("timestamp", Value::Integer(at as i128));
         put("digest", Value::Text("SHA384".into()));
         put(
             "pcrs",
@@ -152,9 +164,9 @@ impl Attester for FixtureAttester {
             "cabundle",
             Value::Array(vec![Value::Bytes(self.root.to_der()?)]),
         );
-        put("public_key", Value::Bytes(c.spki.to_vec()));
-        put("nonce", Value::Bytes(c.nonce.to_vec()));
-        put("user_data", Value::Bytes(user_data(p, c).to_vec()));
+        put("public_key", Value::Bytes(public_key.to_vec()));
+        put("nonce", Value::Bytes(nonce.to_vec()));
+        put("user_data", Value::Bytes(data.to_vec()));
         let payload = serde_cbor::to_vec(&Value::Map(map)).map_err(|_| Error)?;
         CoseSign1::new::<Openssl>(&payload, &HeaderMap::new(), &self.key)
             .map_err(|_| Error)?

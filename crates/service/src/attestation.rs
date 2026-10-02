@@ -294,12 +294,19 @@ fn verify_root(bytes: &[u8], p: &Policy, c: &Context<'_>, root: &X509) -> Result
     {
         return Err(Error);
     }
+    verify_signature(bytes, &d, c.now, root)
+}
+
+// Shared strict chain/signature validation. The externally consumed TLS verifier
+// supplies independently trusted client time; ONLY the local NSM clock path may
+// use a nonce-bound signed timestamp as its bootstrapping time source.
+fn verify_signature(bytes: &[u8], d: &Document<'_>, at: u64, root: &X509) -> Result<(), Error> {
     let leaf = X509::from_der(d.certificate)?;
     if leaf.to_der()? != d.certificate {
         return Err(Error);
     }
     let mut stack = Stack::new()?;
-    let now = Asn1Time::from_unix(i64::try_from(c.now / 1000).map_err(|_| Error)?)?;
+    let now = Asn1Time::from_unix(i64::try_from(at / 1000).map_err(|_| Error)?)?;
     // Explicitly check the trust anchor too, not just path-building intermediates.
     for cert in std::iter::once(root.clone())
         .chain(std::iter::once(leaf.clone()))
@@ -327,7 +334,7 @@ fn verify_root(bytes: &[u8], p: &Policy, c: &Context<'_>, root: &X509) -> Result
     let mut store = X509StoreBuilder::new()?;
     store.add_cert(root.clone())?;
     let mut params = X509VerifyParam::new()?;
-    params.set_time(i64::try_from(c.now / 1000).map_err(|_| Error)?);
+    params.set_time(i64::try_from(at / 1000).map_err(|_| Error)?);
     params.set_depth(8);
     // Fixed minimum 128-bit certificate/key strength, not host-library defaults.
     params.set_auth_level(3);
@@ -347,13 +354,76 @@ fn verify_root(bytes: &[u8], p: &Policy, c: &Context<'_>, root: &X509) -> Result
     }
     Ok(())
 }
-/// Production path: only the independently pinned commercial AWS Nitro root.
-pub fn verify(bytes: &[u8], p: &Policy, c: &Context<'_>) -> Result<(), Error> {
+
+fn aws_root() -> Result<X509, Error> {
     let root = X509::from_pem(ROOT)?;
     if sha256(&root.to_der()?) != FINGERPRINT {
         return Err(Error);
     }
-    verify_root(bytes, p, c, &root)
+    Ok(root)
+}
+
+// These are NOT a TLS public key or a user session. Distinct purpose binding
+// prevents a clock sample from being accepted as a private-channel quote.
+pub(crate) fn clock_binding(p: &Policy) -> ([u8; 32], [u8; 48]) {
+    let encoded = p.encode();
+    (
+        sha256(&[b"CINDER-NSM-CLOCK-KEY-1\0".as_slice(), &encoded].concat()),
+        sha384(&[b"CINDER-NSM-CLOCK-DATA-1\0".as_slice(), &encoded].concat()),
+    )
+}
+
+fn verify_clock_root(
+    bytes: &[u8],
+    p: &Policy,
+    nonce: &[u8; 32],
+    root: &X509,
+) -> Result<u64, Error> {
+    Policy::decode(&p.encode())?;
+    let d = profile(bytes)?;
+    let (key, data) = clock_binding(p);
+    if *nonce == [0; 32]
+        || d.timestamp == 0
+        || d.pcrs != p.pcrs
+        || d.spki != key
+        || d.nonce != nonce
+        || d.data != data
+    {
+        return Err(Error);
+    }
+    // The timestamp is not trusted until BOTH the full pinned-root certificate
+    // path and COSE signature have verified. The caller generates the nonce
+    // inside NSM and bounds the complete local ioctl/verification operation.
+    verify_signature(bytes, &d, d.timestamp, root)?;
+    Ok(d.timestamp)
+}
+
+pub(crate) fn verify_clock(bytes: &[u8], p: &Policy, nonce: &[u8; 32]) -> Result<u64, Error> {
+    verify_clock_root(bytes, p, nonce, &aws_root()?)
+}
+
+fn verify_local_root(bytes: &[u8], p: &Policy, c: &Context<'_>, root: &X509) -> Result<u64, Error> {
+    let d = profile(bytes)?;
+    if d.timestamp < c.now || d.timestamp - c.now > MAX_QUOTE_AGE {
+        return Err(Error);
+    }
+    // A real quote is generated AFTER the server's initial clock sample. Do not
+    // incorrectly compare its timestamp with that earlier cut as client "now".
+    let current = Context {
+        now: d.timestamp,
+        ..*c
+    };
+    verify_root(bytes, p, &current, root)?;
+    Ok(d.timestamp)
+}
+
+pub(crate) fn verify_local(bytes: &[u8], p: &Policy, c: &Context<'_>) -> Result<u64, Error> {
+    verify_local_root(bytes, p, c, &aws_root()?)
+}
+
+/// Production path: only the independently pinned commercial AWS Nitro root.
+pub fn verify(bytes: &[u8], p: &Policy, c: &Context<'_>) -> Result<(), Error> {
+    verify_root(bytes, p, c, &aws_root()?)
 }
 /// Explicit fixture-only alternate root. Absent from default production builds.
 #[cfg(feature = "local-fixture")]
@@ -364,6 +434,108 @@ pub fn verify_fixture(bytes: &[u8], p: &Policy, c: &Context<'_>, root: &X509) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "local-fixture")]
+    #[test]
+    fn local_clock_requires_signed_timestamp_fresh_nonce_and_exact_purpose() {
+        use crate::{fixture::*, transport::Clock};
+        let a = FixtureAttester::new().unwrap();
+        let other = FixtureAttester::new().unwrap();
+        let p = policy();
+        let at = FixtureClock.now().unwrap();
+        let nonce = [7; 32];
+        let (key, data) = clock_binding(&p);
+        let quote = a.quote_fields(&p, at, &key, &nonce, &data).unwrap();
+        assert_eq!(verify_clock_root(&quote, &p, &nonce, a.root()), Ok(at));
+        assert!(verify_clock(&quote, &p, &nonce).is_err()); // No fixture root in production.
+        assert!(verify_clock_root(&quote, &p, &nonce, other.root()).is_err());
+        assert!(verify_clock_root(&quote, &p, &[8; 32], a.root()).is_err());
+        assert!(verify_clock_root(&quote, &p, &[0; 32], a.root()).is_err());
+        for changed in [
+            Policy {
+                manifest: [8; 32],
+                ..p.clone()
+            },
+            Policy {
+                domain: [8; 64],
+                ..p.clone()
+            },
+            Policy {
+                pcrs: [[8; 48]; 3],
+                ..p.clone()
+            },
+        ] {
+            assert!(verify_clock_root(&quote, &changed, &nonce, a.root()).is_err());
+        }
+        for (at, key, nonce, data) in [
+            (0, key.to_vec(), nonce.to_vec(), data.to_vec()),
+            (
+                at + 2 * 86_400_000,
+                key.to_vec(),
+                nonce.to_vec(),
+                data.to_vec(),
+            ),
+            (at, vec![9; 32], nonce.to_vec(), data.to_vec()),
+            (at, key.to_vec(), vec![9; 32], data.to_vec()),
+            (at, key.to_vec(), nonce.to_vec(), vec![9; 48]),
+        ] {
+            let q = a.quote_fields(&p, at, &key, &nonce, &data).unwrap();
+            assert!(verify_clock_root(&q, &p, &[7; 32], a.root()).is_err());
+        }
+        // Changing a signed timestamp, even within a valid certificate interval,
+        // is not accepted merely because the CBOR parses and nonce matches.
+        use serde_cbor::Value;
+        let Value::Array(mut fields) = serde_cbor::from_slice::<Value>(&quote[1..]).unwrap() else {
+            panic!()
+        };
+        let Value::Bytes(payload) = &fields[2] else {
+            panic!()
+        };
+        let Value::Map(mut doc) = serde_cbor::from_slice::<Value>(payload).unwrap() else {
+            panic!()
+        };
+        doc.insert(
+            Value::Text("timestamp".into()),
+            Value::Integer((at + 1) as i128),
+        );
+        fields[2] = Value::Bytes(serde_cbor::to_vec(&Value::Map(doc)).unwrap());
+        let changed = serde_cbor::to_vec(&Value::Array(fields)).unwrap();
+        assert!(verify_clock_root(&changed, &p, &nonce, a.root()).is_err());
+    }
+    #[cfg(feature = "local-fixture")]
+    #[test]
+    fn local_quote_can_follow_clock_cut_without_relaxing_client_freshness() {
+        use crate::{
+            fixture::*,
+            transport::{Attester, Clock},
+        };
+        let a = FixtureAttester::new().unwrap();
+        let p = policy();
+        let now = FixtureClock.now().unwrap();
+        let c = Context {
+            nonce: [1; 32],
+            exporter: [2; 32],
+            boot: [3; 32],
+            expires: now + 60_000,
+            now,
+            spki: b"fixture-public-key",
+        };
+        let quote = a.quote(&p, &Context { now: now + 1, ..c }).unwrap();
+        assert_eq!(verify_local_root(&quote, &p, &c, a.root()), Ok(now + 1));
+        assert!(verify_fixture(&quote, &p, &c, a.root()).is_err());
+        verify_fixture(&quote, &p, &Context { now: now + 2, ..c }, a.root()).unwrap();
+        for at in [now - 1, now + MAX_QUOTE_AGE + 1, c.expires] {
+            let quote = a.quote(&p, &Context { now: at, ..c }).unwrap();
+            assert!(verify_local_root(&quote, &p, &c, a.root()).is_err());
+        }
+        let (key, data) = clock_binding(&p);
+        let clock = a.quote_fields(&p, now, &key, &c.nonce, &data).unwrap();
+        assert!(verify_local_root(&clock, &p, &c, a.root()).is_err());
+        let tls = a.quote(&p, &c).unwrap();
+        assert!(verify_clock_root(&tls, &p, &c.nonce, a.root()).is_err());
+        let mut corrupt = quote;
+        *corrupt.last_mut().unwrap() ^= 1;
+        assert!(verify_local_root(&corrupt, &p, &c, a.root()).is_err());
+    }
     #[test]
     fn pinned_aws_root_matches_published_der_fingerprint() {
         assert_eq!(

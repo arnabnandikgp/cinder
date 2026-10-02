@@ -28,7 +28,7 @@
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-01. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-02. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
@@ -40,16 +40,20 @@ Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
 Current branch: `tee/p20-nitro-runtime`, registered above P19 through native
 `gh stack add`, based on `1aeef179b6f963649954f2e1a2da8eab1b6690d6`.
 P20's first local slice adds actual loaded-application policy commitments and the
-fail-closed AWS NSM adapter; see [ADR 0020](../architecture/0020-nitro-runtime.md).
+fail-closed AWS NSM adapter, now including purpose-bound verified timestamps and
+explicit TLS certificate clock selection; see [ADR 0020](../architecture/0020-nitro-runtime.md).
 These are not yet a runnable Nitro financial application or a complete runtime
 manifest. P19's full offline results below remain evidence for its own exact
 head, not this new code. [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44)
 remains open on the TEE trunk; no merge is authorized by starting P20.
 
-AWS: initial disposable test allowance **$5**, profile `cinder-dev`, region
-`us-east-1`, no mainnet/customer funds. Read-only STS reports account root, so
-provisioning waits for a suitable non-root identity. No billable resource has
-been created and test spend is $0. The host has about 2.6 GiB free and no existing
+AWS: initial disposable test allowance **$5**, replacement profile `cinder_new`,
+region `us-east-1`, no mainnet/customer funds. Fresh STS on 2026-10-02 verifies
+the intended IAM user; read-only EC2 inspection confirms the candidate
+`c6g.large` supports Nitro. The root-identity blocker is resolved, not the
+remaining runtime/pricing/permission qualifications. No billable test resource has
+been created and test compute spend is $0. The host had about 4.3 GiB free before
+this continuation and no existing
 Apple container images; do not start a large image pull without a space plan.
 
 P17 #41 and P18 #42 merged atomically through `gh stack merge --yes --merge`
@@ -1024,6 +1028,30 @@ Work: in progress on `tee/p20-nitro-runtime`, above P19 head `1aeef179b6f9636499
 Verification: 2026-10-01 final-source pinned offline runner passes on macOS ARM64: 310 Rust tests plus two compile-fail doctests in each debug/release profile, 26 repository tests, all 17 SDK tests (including the seven real local-process tests), default/all-feature strict Clippy, format, build and TypeScript checks. Four new NSM tests and three loaded-contract tests pass; dependency guard includes the new driver feature/pin/platform refusal test. Linux driver path and actual hardware tests are still pending; local NSM protocol exchanges are synthetic, not hardware evidence. None of the four complete P20 acceptance criteria is marked satisfied. On-chain source is unchanged, so SBF is not rerun.
 Unexpected: current `cinder-dev` STS identity is account root; the same ARN was freshly confirmed after the user's IAM clarification. Provisioning is blocked pending the intended non-root credentials, independently of local implementation. User approves at most $5 for the initial disposable session; no resources or billable spend. Host disk is tight (~2.6 GiB free before the final checks) and Apple containers have no cached images. Container services/images were inspected read-only; no wallet, venue, RPC, AWS write, agent or Linux container was used.
 Next: complete consumed-runtime manifest, qualified clock/entropy, vsock/egress, recipient KMS key release, independent freshness/restore and bounded controller scheduling. Obtain the intended non-root AWS login, then perform explicitly bounded hardware/revocation/restore rehearsals under the approved $5 session with cleanup receipts. Do not promote P19's fake dispatch or fixed fixture holds; unknown attempts cannot auto-retry. Keep P20 in progress, not ready/complete from this first slice. No PR is published yet.
+
+Continuation (2026-10-02): the replacement IAM profile `cinder_new` is verified;
+the prior root blocker above is historical. Added fresh signed NSM clock samples,
+sticky backward-time/error fencing, five-second late-result rejection, distinct
+clock/session purpose binding and explicit clock-driven TLS certificate dates.
+Fixed the real-NSM quote-versus-earlier-clock ordering error without relaxing SDK
+client freshness. Six new regression groups pass within the service suite:
+14 unit tests and six integration tests, offline on macOS ARM64; strict service
+Clippy passes after correcting test comparison/layout issues. The complete pinned
+root runner subsequently passes: 316 Rust tests plus two compile-fail doctests per
+debug/release profile, 26 repository tests and 17 SDK tests, with format, strict
+default/all-feature Clippy, build, dependency guards and TypeScript checks. Linux
+and hardware qualification are still pending for this checkpoint.
+Pinned Node 24.21.0 was restored under a task-specific temporary directory and
+checked against the official archive SHA-256. This local clock checkpoint is
+committed before the next socket/dependency slice; P20 has no PR yet. No cloud
+write, paid resource, live venue or wallet was used. Apple containers were started
+explicitly for the upcoming Linux-specific socket qualification; export only
+tracked source plus intended changes, never ignored research or credentials.
+
+Next: continue the remaining runtime assembly
+and Linux/hardware qualification. Authentication no longer needs user action;
+the remaining consumed manifest, RNG, vsock/egress, KMS, independent witness and
+controller gates above remain open. Keep all complete acceptance boxes unchecked.
 PR: none.
 Merge: none.
 

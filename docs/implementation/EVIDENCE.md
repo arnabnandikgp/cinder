@@ -54,6 +54,14 @@ real enclave attestation or entropy. This is not a complete runtime manifest,
 runnable Nitro financial application, KMS release or fresh-witness qualification.
 No native capability is activated and no experimental authority is promoted.
 
+The 2026-10-02 continuation adds purpose-separated signed NSM clock verification
+and explicit TLS certificate clock selection. Six additional local regression
+groups use fresh synthetic X.509/COSE fixtures or private protocol-test seams;
+production still accepts only the AWS root and actual NSM device. This identifies
+and fixes a real-NSM request-ordering bug without weakening client freshness.
+No real timestamp, driver-latency, RNG or hardware guarantee is inferred. See the
+ADR's time-bootstrap assumptions and remaining image/runtime qualification.
+
 ### P19: attestation-gated runnable service slice
 
 [ADR 0019](../architecture/0019-attested-service.md) promotes W06–W08's exact-key

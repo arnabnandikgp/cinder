@@ -1,6 +1,6 @@
 # ADR 0020: Nitro application assembly and qualification
 
-Date: 2026-10-01. Status: implementation in progress; hardware not qualified.
+Date: 2026-10-02. Status: implementation in progress; hardware not qualified.
 Scope: [P20](../implementation/PLAN.md#p20). [ADR 0019](0019-attested-service.md)
 and [BASELINE](../implementation/BASELINE.md) remain the security/economic contract.
 
@@ -47,7 +47,7 @@ source inspection is not an independent security audit.
 
 ## Remaining assembly and qualification
 
-- Qualified time and TLS/library RNG integration; NSM entropy alone does not
+- TLS/library RNG integration; NSM entropy alone does not
   qualify OpenSSL or journal nonce generation. NSM ioctl timing/deadline behavior
   also needs Linux/hardware observation.
 - Complete consumed-configuration manifest, measured executable, vsock ingress
@@ -67,16 +67,51 @@ approved by these changes. G01–G04 stay open as applicable. This slice cannot 
 the financial application on AWS yet and does not satisfy any complete P20
 hardware acceptance criterion.
 
+## Local NSM time integration (2026-10-02)
+
+Boot and every `Clock::now` require a new NSM-random challenge and a purpose-bound
+attestation. The timestamp is returned only after strict CBOR, exact PCR/policy/
+nonce binding, pinned-root X.509 validation and the COSE signature pass. The local
+clock checks certificate validity at that signed timestamp to bootstrap without
+parent wall time. This path is crate-private and cannot replace the public SDK's
+independently timed freshness verification. Clock quotes and TLS-session quotes
+have separate key/data purpose bindings and cannot be substituted for one another.
+
+The boot's last verified time may remain equal within a millisecond but cannot
+move backward. Failed clock/entropy/quote verification permanently fences that
+NSM handle; no cached-time, parent-time or retry fallback. Operations reject
+results taking more than five seconds **after the ioctl returns**. This is not
+kernel-ioctl cancellation or proof against hypervisor pauses; driver latency and
+real timestamp semantics still require hardware observation. Fresh time is not
+a durable accepted-head witness or a replacement for authoritative financial
+event/finality evidence.
+
+Local verification now handles the actual ordering of NSM requests: a TLS quote
+can be generated after the initial clock sample. The initial implementation would
+incorrectly reject such a quote as future-dated. Its freshly signed timestamp is
+verified locally and checked against the prior cut and monotone clock; the SDK's
+strict client-time rules are unchanged. TLS certificate validity now uses the
+selected clock explicitly instead of OpenSSL's host-wall-clock helper. OpenSSL
+key/boot entropy remains pending measured-image qualification.
+
+Six additional offline regression groups cover request binding, sticky failures,
+operation timing limits, synthetic signed timestamp/chain/nonce/purpose tampering,
+later-quote ordering and certificate clock selection. These are synthetic/local
+tests, not real Nitro evidence. No complete P20 acceptance criterion is closed.
+
 ## Authority and cost boundary
 
 The user approved **at most $5 for the initial disposable AWS test session**,
-`cinder-dev` in `us-east-1`, no mainnet/customer funds. This is not permission to
+the replacement IAM profile `cinder_new` in `us-east-1`, no mainnet/customer funds. This is not permission to
 leave instances running or expand to a larger test budget. Check non-root identity,
 current instance/storage pricing, narrowly scoped permissions and a cleanup plan
 before provisioning; keep an elapsed-time/resource ledger and stop before the
 conservative estimated allowance is exhausted. AWS budget notifications are not
-a hard spending cap. The current profile resolves to account root; no cloud
-resources are created until a suitable non-root identity is configured.
+a hard spending cap. On 2026-10-02 a fresh STS call verified the IAM user
+`cinder_new`, and read-only EC2 inspection confirmed `c6g.large` supports enclaves
+with two vCPUs and 4096 MiB. The prior root-identity blocker is resolved. No
+billable test resources have been created; pricing, remaining narrowly scoped
+permissions, runnable assembly and a bounded cleanup plan still precede launch.
 
 ## Primary sources
 
@@ -84,3 +119,5 @@ Checked 2026-10-01: [pinned AWS NSM API/driver source](https://github.com/aws/aw
 [AWS KMS enclave integration](https://docs.aws.amazon.com/enclaves/latest/user/kms.html),
 [KMS recipient contract](https://docs.aws.amazon.com/kms/latest/APIReference/API_RecipientInfo.html)
 and [supported enclave instance constraints](https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html).
+Timestamp/nonce semantics rechecked 2026-10-02 against
+[AWS's attestation document and validation contract](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html).

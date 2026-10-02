@@ -87,8 +87,15 @@ pub struct Identity {
     boot: [u8; 32],
 }
 impl Identity {
-    /// Uses OpenSSL's entropy provider; P20 must qualify the actual enclave RNG.
-    pub fn generate() -> Result<Self, Error> {
+    /// Certificate times come from the runtime's qualified clock, never the host
+    /// wall clock. OpenSSL entropy still needs measured-image qualification.
+    pub fn generate(clock: &dyn Clock) -> Result<Self, Error> {
+        let now = clock.now()?;
+        if now == 0 {
+            return Err(Error);
+        }
+        let start = i64::try_from(now / 1000).map_err(|_| Error)?;
+        let end = start.checked_add(86_400).ok_or(Error)?;
         let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
         let key = PKey::from_ec_key(EcKey::generate(&group)?)?;
         let mut name = X509NameBuilder::new()?;
@@ -98,13 +105,16 @@ impl Identity {
         cert.set_version(2)?;
         let mut boot = [0; 32];
         rand_bytes(&mut boot)?;
+        if boot == [0; 32] {
+            return Err(Error);
+        }
         let serial = openssl::bn::BigNum::from_slice(&boot[..16])?.to_asn1_integer()?;
         cert.set_serial_number(&serial)?;
         cert.set_subject_name(&name)?;
         cert.set_issuer_name(&name)?;
         cert.set_pubkey(&key)?;
-        cert.set_not_before(Asn1Time::days_from_now(0)?.as_ref())?;
-        cert.set_not_after(Asn1Time::days_from_now(1)?.as_ref())?;
+        cert.set_not_before(Asn1Time::from_unix(start)?.as_ref())?;
+        cert.set_not_after(Asn1Time::from_unix(end)?.as_ref())?;
         cert.sign(&key, MessageDigest::sha256())?;
         let spki = key.public_key_to_der()?;
         Ok(Self {
@@ -135,6 +145,7 @@ impl Identity {
         Ok(b.build())
     }
 }
+
 /// Exact length-prefix framing, rejecting oversize/trailing/empty frames.
 pub fn read_frame(stream: &mut impl Read, maximum: usize) -> Result<Zeroizing<Vec<u8>>, Error> {
     let deadline = Instant::now() + IO_TIMEOUT;
@@ -483,4 +494,30 @@ pub fn stop_on_stdin() -> Arc<AtomicBool> {
         s.store(true, Ordering::SeqCst);
     });
     stop
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    struct Fixed(Result<u64, Error>);
+    impl Clock for Fixed {
+        fn now(&self) -> Result<u64, Error> {
+            self.0
+        }
+    }
+    #[test]
+    fn certificate_uses_only_selected_clock_and_failed_clock_cannot_boot() {
+        let now = 1_600_000_000_123;
+        let identity = Identity::generate(&Fixed(Ok(now))).unwrap();
+        assert!(
+            identity.certificate.not_before() == Asn1Time::from_unix((now / 1000) as i64).unwrap()
+        );
+        assert!(
+            identity.certificate.not_after()
+                == Asn1Time::from_unix((now / 1000) as i64 + 86_400).unwrap()
+        );
+        assert_ne!(identity.boot, [0; 32]);
+        assert!(Identity::generate(&Fixed(Err(Error))).is_err());
+        assert!(Identity::generate(&Fixed(Ok(0))).is_err());
+    }
 }
