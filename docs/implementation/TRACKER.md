@@ -57,11 +57,14 @@ AWS: initial disposable test allowance **$5**, replacement profile `cinder_new`,
 region `us-east-1`, no mainnet/customer funds. Fresh STS on 2026-10-02 verifies
 the intended IAM user; read-only EC2 inspection confirms the candidate
 `c6g.large` supports Nitro. The root-identity blocker is resolved, not the
-remaining hardware/pricing/permission qualifications. No billable test resource has
-been created and test compute spend is $0. Local Apple-container Rust qualification
-now passes with source-only read-only exports and no network. Removed only the
-regenerable Cinder incremental cache and task-created image builder/cache to
-manage disk; do not delete source/research or use broad container pruning.
+remaining qualifications. After the user's explicit Paid-plan upgrade, the actual
+disposable Nitro session now has positive application/KMS/SDK and encrypted
+restore/fault receipts; see [hardware evidence](../operations/nitro-hardware-2026-10-02.md).
+The former Free-plan/no-resource/$0 blocker is historical. Three real AWS format
+compatibility fixes are implemented and verified on macOS and Linux; complete
+P20 hardware acceptance is still open. The evidence page records verified teardown
+and conservative spend below $0.50 (not a finalized bill). No native trading/funding/read capability
+was enabled. Do not delete source/research or use broad container pruning.
 
 P17 #41 and P18 #42 merged atomically through `gh stack merge --yes --merge`
 on 2026-10-01 after explicit user authorization. Both GitHub receipts report the
@@ -85,12 +88,12 @@ compile-fail doctests per debug/release profile, 24 repository tests, strict
 Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
 receipts remain in the owning phases below.
 
-Next: user resumed the bounded hardware session on 2026-10-02, still at **$5**.
-Fresh authentication succeeds, but IAM/KMS/DynamoDB inspection and pricing/SSM/
-quota reads are denied. Verify test and cleanup authority before provisioning;
-current next action is administrator attachment of the local scoped prerequisite
-policies described in the P20 continuation below. No AWS resource or IAM change
-has been made. Keep
+Next: preserve verified cleanup/sanitized receipts and prepare the remaining P20
+security-qualification matrix
+listed in [hardware evidence](../operations/nitro-hardware-2026-10-02.md). The
+scoped prerequisite policies and user-selected Paid upgrade resolved the prior
+IAM/account-plan blockers. Complete criteria remain open; no ready/closed or
+automatic PR/merge claim. Keep
 P19 in progress until actual merge. P21 joins recovery to the journal; P22/P23 reuse
 workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
 separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
@@ -1203,6 +1206,47 @@ provides another explicitly authorized Nitro-capable account. Do not change bill
 plans automatically. Then refresh identity, plan eligibility, budget and resource
 preflight and recreate fresh SSH setup for the same bounded $5 qualification.
 P19 remains open/unmerged; P20 has no PR and no hardware acceptance claim.
+
+### Actual non-debug hardware session (2026-10-02)
+
+Work: after the user's explicit Paid-plan upgrade, ran one tagged c6g.large with
+a default-feature measured application, five recipient-only KMS role keys, two
+private ciphertext buckets and a region-local independent-credential witness.
+Native trading/funding/read gates stayed false. Real NSM/KMS exposed three format
+compatibility failures: the closed indefinite NSM map, AWS leaf's absent AKI,
+and BER rather than canonical DER CMS. Implemented narrow bounded fixes and
+regressions; temporary diagnostic hooks are not in the accepted executable.
+One-hour witness renewal retained original keys/domain/stream/epoch/application
+before first journal initialization; no accepted witness was reset.
+
+Verification: [dated hardware evidence](../operations/nitro-hardware-2026-10-02.md)
+contains exact candidate ELF/EIF/PCRs and tested/remaining distinctions. Actual
+SDK views/grant/revoke, quote/policy negatives and disabled native order pass.
+Crash restore, missing-first replica fallback, both-copy loss, authenticated
+ciphertext corruption, witness-route loss and loaded retained-head epoch fencing
+pass without forgotten history or financial movement. Full macOS workspace release
+tests plus two compile-fail doctests pass; 30+8 service tests and strict Clippy pass
+on Linux; 17 SDK tests/TypeScript and 28 repository tests/guards pass. The prior
+debug runner is historical, not a debug rerun for these new fixes. No SBF change.
+
+Unexpected: real AWS signed-map/certificate/CMS encodings differed from stricter
+synthetic assumptions. Parser bounds, pinned trust, exact original signature and
+recipient/purpose/body checks remain enforced. Initial probe setup also exposed
+tunnel expiry, startup readiness and a zero-position test expectation; these are
+not counted as successful failure tests or a reason to automatically retry money
+movement. No controller/economics/ledger codec or production capability changed.
+
+Cleanup: verified actual EC2 termination and EBS removal; both buckets/objects,
+table, runtime roles and SSH/SG setup absent. Five keys PendingDeletion for the
+seven-day minimum; preexisting managed policies retained. Removed 13 exact local
+throwaway plaintext/credential/key files and the task container/tunnel. Conservative
+spend estimate below $0.50, within $5; final AWS billing is not yet available.
+
+Next: remaining isolated KMS recipient/context/role/replay cases, actual competing
+writer/uncertain append, expiry, stale/orphan replay and upstream-integrity matrix
+in the evidence page. Keep all four complete P20 criteria open. Preserve sanitized
+receipts/ignored work and unrelated untracked files. No P20 push/PR or P19 merge
+has occurred or is authorized by this hardware session.
 
 ## P21 — Recovery integration
 

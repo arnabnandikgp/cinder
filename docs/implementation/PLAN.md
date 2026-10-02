@@ -493,10 +493,12 @@ Final disposable resource identities, EIF/PCRs and KMS/SDK measurement approval
 are hardware-session outputs. The pre-hardware stop was lifted by the user on
 2026-10-02 for the existing $5 disposable session. Scoped managed policies match
 the prepared versions; quota/pricing/AMI checks and launch dry-run pass. Actual
-launch is blocked by Free account-plan eligibility, not IAM. All current eligible
-instance types report Nitro Enclaves unsupported. Temporary SSH setup is cleaned
-up; no instance or application cloud resource was created. A user-selected account
-plan change and refreshed preflight precede another launch; no automatic upgrade.
+launch initially failed Free account-plan eligibility, not IAM. After the user's
+explicit Paid-plan upgrade, one disposable c6g.large ran the actual non-debug
+application. [Hardware receipts](../operations/nitro-hardware-2026-10-02.md) record
+real KMS/NSM/SDK, restore and failure evidence, three compatibility fixes, cleanup
+status and the remaining matrix. This is partial qualification, not a complete
+criterion, approved production topology or native trading workflow.
 
 - [ ] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected.
 - [ ] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled.

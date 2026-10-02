@@ -1,6 +1,7 @@
 # ADR 0020: Nitro application assembly and qualification
 
-Date: 2026-10-02. Status: pre-hardware assembly implemented; qualification pending.
+Date: 2026-10-02. Status: assembled; partial hardware qualification recorded in
+[dated evidence](../operations/nitro-hardware-2026-10-02.md); full matrix pending.
 Scope: [P20](../implementation/PLAN.md#p20). [ADR 0019](0019-attested-service.md)
 and [BASELINE](../implementation/BASELINE.md) remain the security/economic contract.
 

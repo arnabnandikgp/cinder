@@ -1,12 +1,12 @@
 # P20 Nitro qualification runbook
 
-Status: software verified; user resumed hardware testing on 2026-10-02, but the
-actual EC2 launch is blocked by the AWS Free account plan. Scoped IAM policies
-match the prepared versions; quota and launch dry-run pass. RunInstances rejects
-c6g.large as not Free Tier eligible, and all eight currently eligible types report
-Nitro Enclaves unsupported. The temporary SSH key/security group were removed;
-no EC2/EBS/KMS/S3/DynamoDB runtime resource was created. An account administrator
-must explicitly choose whether to upgrade the account plan before resumption.
+Status: assembled and partially hardware-qualified on 2026-10-02. The user
+explicitly upgraded the account to Paid; the earlier Free-plan launch blocker is
+resolved. A non-debug c6g.large enclave ran real five-role KMS release, attested
+private SDK operations, encrypted restart and storage/witness fault checks. See
+[dated hardware evidence](nitro-hardware-2026-10-02.md) for exact release hashes,
+observed compatibility fixes, cleanup status and remaining qualification cases.
+Do not conflate the positive subset with complete P20 or production approval.
 Initial authorized disposable session: maximum **$5**, IAM profile `cinder_new`,
 `us-east-1`, no real wallets, mainnet/customer funds or native trades.
 The [tracker](../implementation/TRACKER.md) owns actual completion/evidence.
@@ -87,8 +87,11 @@ protection from a malicious administrator of every cloud/KMS/witness account.
    key and nonzero Epoch; absent `Sequence`/`Hash` means explicitly provisioned
    empty stream. Never create/reset a missing row during application boot.
 
-Actual KMS CMS/OAEP envelope compatibility remains a hardware test: synthetic CMS
-tests establish fresh-recipient replay rejection, not AWS wire qualification.
+Actual KMS CMS/OAEP compatibility now has positive five-role release evidence
+for the dated candidate. Synthetic CMS tests alone still do not qualify a new
+release or close the remaining negative hardware cases. AWS uses BER CMS, not
+necessarily byte-canonical DER: require a bounded complete ASN.1 envelope before
+OpenSSL parse/decrypt rather than DER round-trip equality.
 The recipient has no reusable export method; its private key is dropped after
 one response. Require exact KMS response KeyId/SYMMETRIC_DEFAULT and no plaintext
 response; validate role/generation/domain/stream prefix and approved body hash.

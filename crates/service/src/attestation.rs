@@ -201,7 +201,13 @@ fn profile(bytes: &[u8]) -> Result<Document<'_>, Error> {
     }
     r.done()?;
     let mut r = Reader::new(payload);
-    if r.header(5)? != 9 {
+    // Real NSM 1.0 uses an indefinite top-level map. Accept only this exact
+    // closed nine-field form (or its definite equivalent), not indefinite
+    // strings, arrays or nested maps. Verify the original signed bytes below.
+    let indefinite = payload.first() == Some(&0xbf);
+    if indefinite {
+        r.take(1)?;
+    } else if r.header(5)? != 9 {
         return Err(Error);
     }
     let mut seen = BTreeSet::new();
@@ -264,6 +270,9 @@ fn profile(bytes: &[u8]) -> Result<Document<'_>, Error> {
             "user_data" => data = Some(r.bytes(512)?),
             _ => return Err(Error),
         }
+    }
+    if indefinite && r.take(1)? != [0xff] {
+        return Err(Error);
     }
     r.done()?;
     Ok(Document {
@@ -331,18 +340,23 @@ fn verify_signature(bytes: &[u8], d: &Document<'_>, at: u64, root: &X509) -> Res
         }
         stack.push(cert)?;
     }
-    let mut store = X509StoreBuilder::new()?;
-    store.add_cert(root.clone())?;
-    let mut params = X509VerifyParam::new()?;
-    params.set_time(i64::try_from(at / 1000).map_err(|_| Error)?);
-    params.set_depth(8);
-    // Fixed minimum 128-bit certificate/key strength, not host-library defaults.
-    params.set_auth_level(3);
-    params.set_flags(X509VerifyFlags::X509_STRICT)?;
-    store.set_param(&params)?;
-    let mut ctx = X509StoreContext::new()?;
-    if !ctx.init(&store.build(), &leaf, &stack, |c| c.verify_cert())? {
-        return Err(Error);
+    let (valid, error, depth) = verify_path(&leaf, root, &stack, at, X509VerifyFlags::X509_STRICT)?;
+    if !valid {
+        // Actual AWS NSM 1.0 leaf certificates omit AKI. This identifier is
+        // path-building metadata, not the signature or issuer authorization.
+        // Accept ONLY this specific leaf error after independently verifying
+        // the strict CA path and the complete standard PKIX leaf path. Never
+        // use an accept-on-error callback or waive another certificate error.
+        if error != 85 || depth != 0 || leaf.version() != 2 || leaf.authority_key_id().is_some() {
+            return Err(Error);
+        }
+        let issuer = X509::from_der(d.chain.last().ok_or(Error)?)?;
+        if issuer.issued(&leaf) != openssl::x509::X509VerifyResult::OK
+            || !verify_path(&issuer, root, &stack, at, X509VerifyFlags::X509_STRICT)?.0
+            || !verify_path(&leaf, root, &stack, at, X509VerifyFlags::empty())?.0
+        {
+            return Err(Error);
+        }
     }
     let key = leaf.public_key()?;
     if key.ec_key()?.group().curve_name() != Some(Nid::SECP384R1) {
@@ -353,6 +367,29 @@ fn verify_signature(bytes: &[u8], d: &Document<'_>, at: u64, root: &X509) -> Res
         return Err(Error);
     }
     Ok(())
+}
+
+fn verify_path(
+    leaf: &X509,
+    root: &X509,
+    chain: &Stack<X509>,
+    at: u64,
+    flags: X509VerifyFlags,
+) -> Result<(bool, i32, u32), Error> {
+    let mut store = X509StoreBuilder::new()?;
+    store.add_cert(root.clone())?;
+    let mut params = X509VerifyParam::new()?;
+    params.set_time(i64::try_from(at / 1000).map_err(|_| Error)?);
+    params.set_depth(8);
+    // Fixed minimum 128-bit certificate/key strength, not host-library defaults.
+    params.set_auth_level(3);
+    params.set_flags(flags)?;
+    store.set_param(&params)?;
+    let mut ctx = X509StoreContext::new()?;
+    Ok(ctx.init(&store.build(), leaf, chain, |c| {
+        let valid = c.verify_cert()?;
+        Ok((valid, c.error().as_raw(), c.error_depth()))
+    })?)
 }
 
 fn aws_root() -> Result<X509, Error> {
@@ -471,6 +508,28 @@ mod tests {
     use super::*;
     #[cfg(feature = "local-fixture")]
     #[test]
+    fn aws_shaped_leaf_without_aki_still_requires_root_signature_and_time() {
+        let a = crate::fixture::FixtureAttester::without_leaf_identifier().unwrap();
+        let other = crate::fixture::FixtureAttester::new().unwrap();
+        let p = crate::fixture::policy();
+        let nonce = [7; 32];
+        let at = 1_700_000_000_000;
+        let (key, data) = clock_binding(&p);
+        let quote = a.quote_fields(&p, at, &key, &nonce, &data).unwrap();
+        assert_eq!(verify_clock_root(&quote, &p, &nonce, a.root()), Ok(at));
+        assert!(verify_clock_root(&quote, &p, &nonce, other.root()).is_err());
+        assert!(verify_clock(&quote, &p, &nonce).is_err());
+        assert!(verify_clock_root(&quote, &p, &[8; 32], a.root()).is_err());
+        let expired = a
+            .quote_fields(&p, u64::MAX / 1000, &key, &nonce, &data)
+            .unwrap();
+        assert!(verify_clock_root(&expired, &p, &nonce, a.root()).is_err());
+        let mut bad_signature = quote;
+        *bad_signature.last_mut().unwrap() ^= 1;
+        assert!(verify_clock_root(&bad_signature, &p, &nonce, a.root()).is_err());
+    }
+    #[cfg(feature = "local-fixture")]
+    #[test]
     fn recipient_quote_is_not_a_clock_or_tls_quote_or_a_replayed_release() {
         let a = crate::fixture::FixtureAttester::new().unwrap();
         let p = crate::fixture::policy();
@@ -513,6 +572,23 @@ mod tests {
         assert!(verify_clock_root(&quote, &p, &nonce, other.root()).is_err());
         assert!(verify_clock_root(&quote, &p, &[8; 32], a.root()).is_err());
         assert!(verify_clock_root(&quote, &p, &[0; 32], a.root()).is_err());
+        // A semantically equivalent CBOR re-encoding is not the signed input.
+        // Parse either bounded form, but never canonicalize before verification.
+        let serde_cbor::Value::Array(mut fields) =
+            serde_cbor::from_slice::<serde_cbor::Value>(&quote[1..]).unwrap()
+        else {
+            panic!()
+        };
+        let serde_cbor::Value::Bytes(payload) = &fields[2] else {
+            panic!()
+        };
+        assert_eq!(payload[0], 0xbf);
+        let mut definite = payload[..payload.len() - 1].to_vec();
+        definite[0] = 0xa9;
+        fields[2] = serde_cbor::Value::Bytes(definite);
+        let reencoded = serde_cbor::to_vec(&serde_cbor::Value::Array(fields)).unwrap();
+        assert!(profile(&reencoded).is_ok());
+        assert!(verify_clock_root(&reencoded, &p, &nonce, a.root()).is_err());
         for changed in [
             Policy {
                 manifest: [8; 32],
@@ -615,6 +691,69 @@ mod tests {
                 .bytes(1024)
                 .is_err()
         );
+    }
+    #[test]
+    fn exact_nine_field_nsm_map_forms_and_break_bounds() {
+        use serde_cbor::Value;
+        let values = [
+            ("module_id", Value::Text("public-parser-test".into())),
+            ("digest", Value::Text("SHA384".into())),
+            ("timestamp", Value::Integer(1)),
+            (
+                "pcrs",
+                Value::Map(
+                    (0..3)
+                        .map(|i| (Value::Integer(i), Value::Bytes(vec![1; 48])))
+                        .collect(),
+                ),
+            ),
+            ("certificate", Value::Bytes(vec![1])),
+            ("cabundle", Value::Array(vec![Value::Bytes(vec![1])])),
+            ("public_key", Value::Bytes(vec![1; 32])),
+            ("user_data", Value::Bytes(vec![1; 48])),
+            ("nonce", Value::Bytes(vec![1; 32])),
+        ];
+        let mut payload = vec![0xa9];
+        for (key, value) in values {
+            payload.extend(serde_cbor::to_vec(&Value::Text(key.into())).unwrap());
+            payload.extend(serde_cbor::to_vec(&value).unwrap());
+        }
+        let wrap = |payload: Vec<u8>| {
+            serde_cbor::to_vec(&Value::Array(vec![
+                Value::Bytes(vec![0xa1, 0x01, 0x38, 0x22]),
+                Value::Map(Default::default()),
+                Value::Bytes(payload),
+                Value::Bytes(vec![0; 96]),
+            ]))
+            .unwrap()
+        };
+        assert!(profile(&wrap(payload.clone())).is_ok()); // Parsing only, not attestation.
+        payload[0] = 0xbf;
+        payload.push(0xff);
+        assert!(profile(&wrap(payload.clone())).is_ok());
+        let mut missing = payload.clone();
+        missing.pop();
+        assert!(profile(&wrap(missing)).is_err());
+        let mut trailing = payload.clone();
+        trailing.push(0xff);
+        assert!(profile(&wrap(trailing)).is_err());
+        let mut early = payload.clone();
+        early[1] = 0xff;
+        assert!(profile(&wrap(early)).is_err());
+        let mut extra = payload.clone();
+        extra.pop();
+        extra.extend([0x61, b'x', 0x01, 0xff]);
+        assert!(profile(&wrap(extra)).is_err());
+        let mut duplicate = vec![0xbf];
+        for _ in 0..9 {
+            duplicate.extend(serde_cbor::to_vec(&Value::Text("module_id".into())).unwrap());
+            duplicate.extend(serde_cbor::to_vec(&Value::Text("duplicate".into())).unwrap());
+        }
+        duplicate.push(0xff);
+        assert!(profile(&wrap(duplicate)).is_err());
+        for n in 0..payload.len() {
+            assert!(profile(&wrap(payload[..n].to_vec())).is_err());
+        }
     }
     #[test]
     fn duplicate_field_and_protected_algorithm_reject_before_cose() {

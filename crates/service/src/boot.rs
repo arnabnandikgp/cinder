@@ -327,10 +327,11 @@ impl Recipient {
         if der.is_empty() || der.len() > 6144 {
             return Err(Error);
         }
+        // KMS returns a CMS BER envelope, not necessarily byte-canonical DER.
+        // Bound the complete single object BEFORE OpenSSL parses it. Never
+        // accept a valid prefix plus trailing bytes or unbounded nesting.
+        cms_frame(&der)?;
         let cms = CmsContentInfo::from_der(&der)?;
-        if cms.to_der()? != der {
-            return Err(Error);
-        }
         // Only a KMS TLS-authenticated response to THIS OAEP-SHA256 request
         // reaches here; this is not a caller-accessible CMS decryption oracle.
         // KMS identifies the ephemeral key, not an X.509 recipient certificate.
@@ -340,6 +341,80 @@ impl Recipient {
         }
         Ok(plain)
     }
+}
+
+fn cms_frame(bytes: &[u8]) -> Result<(), Error> {
+    fn object(
+        bytes: &[u8],
+        at: &mut usize,
+        limit: usize,
+        depth: usize,
+        count: &mut usize,
+    ) -> Result<(), Error> {
+        if depth > 16 || *count >= 256 || *at >= limit {
+            return Err(Error);
+        }
+        *count += 1;
+        let tag = bytes[*at];
+        *at += 1;
+        if tag == 0 || tag & 31 == 31 || *at >= limit {
+            return Err(Error);
+        }
+        let length = bytes[*at];
+        *at += 1;
+        if length == 0x80 {
+            if tag & 0x20 == 0 {
+                return Err(Error);
+            }
+            loop {
+                if *at + 2 > limit {
+                    return Err(Error);
+                }
+                if bytes[*at..*at + 2] == [0, 0] {
+                    *at += 2;
+                    break;
+                }
+                object(bytes, at, limit, depth + 1, count)?;
+            }
+        } else {
+            let mut n = usize::from(length);
+            if length & 0x80 != 0 {
+                let width = usize::from(length & 0x7f);
+                if width == 0 || width > 4 || at.checked_add(width).ok_or(Error)? > limit {
+                    return Err(Error);
+                }
+                n = 0;
+                for _ in 0..width {
+                    n = n
+                        .checked_mul(256)
+                        .and_then(|v| v.checked_add(usize::from(bytes[*at])))
+                        .ok_or(Error)?;
+                    *at += 1;
+                }
+            }
+            let end = at.checked_add(n).ok_or(Error)?;
+            if end > limit {
+                return Err(Error);
+            }
+            if tag & 0x20 != 0 {
+                while *at < end {
+                    object(bytes, at, end, depth + 1, count)?;
+                }
+            } else {
+                *at = end;
+            }
+        }
+        Ok(())
+    }
+    if bytes.first() != Some(&0x30) || bytes.len() > 6144 {
+        return Err(Error);
+    }
+    let mut at = 0;
+    object(bytes, &mut at, bytes.len(), 0, &mut 0)?;
+    if at != bytes.len() {
+        return Err(Error);
+    }
+    Ok(())
 }
 /// Release each role once to its own fresh recipient inside this measured boot.
 /// Any error discards accumulated material; no cached key or plaintext fallback.
@@ -492,6 +567,36 @@ mod tests {
         assert_ne!(public, Recipient::new().unwrap().public().unwrap());
     }
     #[test]
+    fn cms_framing_accepts_bounded_ber_but_not_ambiguous_or_incomplete_objects() {
+        for valid in [
+            vec![0x30, 3, 4, 1, 7],
+            vec![0x30, 0x80, 4, 1, 7, 0, 0],
+            vec![0x30, 0x80, 0x30, 0x80, 4, 1, 7, 0, 0, 0, 0],
+        ] {
+            assert!(cms_frame(&valid).is_ok());
+            for n in 0..valid.len() {
+                assert!(cms_frame(&valid[..n]).is_err());
+            }
+            let mut trailing = valid;
+            trailing.push(0);
+            assert!(cms_frame(&trailing).is_err());
+        }
+        for invalid in [
+            vec![0x30, 0x80, 4, 0x80, 0, 0, 0, 0],
+            vec![0x30, 2, 0, 0],
+            vec![0x30, 0x80, 0x1f, 0, 0, 0],
+            vec![0x30, 0x85, 0, 0, 0, 0, 0],
+            vec![0x30, 0x84, 0xff, 0xff, 0xff, 0xff],
+            vec![0x30, 3, 4, 2, 7],
+        ] {
+            assert!(cms_frame(&invalid).is_err());
+        }
+        let deep = [[0x30, 0x80].repeat(18), [0, 0].repeat(18)].concat();
+        assert!(cms_frame(&deep).is_err());
+        let many = [vec![0x30, 0x80], [4, 0].repeat(256), vec![0, 0]].concat();
+        assert!(cms_frame(&many).is_err());
+    }
+    #[test]
     fn recipient_is_one_shot_and_old_envelopes_do_not_open_with_a_new_key() {
         use openssl::{
             asn1::Asn1Time,
@@ -529,6 +634,28 @@ mod tests {
         .unwrap()
         .to_der()
         .unwrap();
+        // A CMS envelope may use BER's indefinite outer sequence without
+        // changing its cryptographic contents. Canonical re-encoding is not a
+        // valid reason to reject KMS's authenticated recipient response.
+        let width = if der[1] & 0x80 == 0 {
+            0
+        } else {
+            usize::from(der[1] & 0x7f)
+        };
+        let ber = [&[0x30, 0x80][..], &der[2 + width..], &[0, 0][..]].concat();
+        let ber_response = json!({"KeyId":"expected","EncryptionAlgorithm":"SYMMETRIC_DEFAULT","CiphertextForRecipient":STANDARD.encode(ber)});
+        // Test-only clone permits checking two encodings of the same synthetic
+        // envelope; the production recipient remains consumed exactly once.
+        let ber_key = Recipient {
+            key: old.key.clone(),
+        };
+        assert_eq!(
+            ber_key
+                .decrypt(&ber_response, "expected")
+                .unwrap()
+                .as_slice(),
+            b"private role material"
+        );
         let response = json!({"KeyId":"expected","EncryptionAlgorithm":"SYMMETRIC_DEFAULT","CiphertextForRecipient":STANDARD.encode(der)});
         assert!(
             Recipient::new()
