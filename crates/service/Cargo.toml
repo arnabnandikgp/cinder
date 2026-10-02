@@ -20,6 +20,7 @@ aws-nitro-enclaves-cose = "=0.5.2"
 aws-nitro-enclaves-nsm-api = "=0.5.2"
 serde_cbor = "=0.11.2"
 zeroize = "=1.8.2"
+socket2 = { version = "=0.6.5", default-features = false, features = ["all"] }
 
 [[bin]]
 name = "cinder-service-fixture"
@@ -38,6 +39,14 @@ required-features = ["local-fixture"]
 [[bin]]
 name = "cinder-relay"
 path = "src/bin/relay.rs"
+
+[[bin]]
+name = "cinder-nitro-relay"
+path = "src/bin/nitro-relay.rs"
+
+[[bin]]
+name = "cinder-nitro-egress"
+path = "src/bin/nitro-egress.rs"
 
 [lints]
 workspace = true

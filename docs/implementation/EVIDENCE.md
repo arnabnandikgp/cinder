@@ -62,6 +62,16 @@ and fixes a real-NSM request-ordering bug without weakening client freshness.
 No real timestamp, driver-latency, RNG or hardware guarantee is inferred. See the
 ADR's time-bootstrap assumptions and remaining image/runtime qualification.
 
+The socket/HTTPS continuation is tested on macOS and network-disabled Linux
+ARM64 with an exact source export. It uses owned AF_VSOCK APIs, bounded opaque
+parent ingress/egress, and in-enclave hostname/CA/time-verified one-shot HTTPS.
+Wrong-root/hostname/time tests are actual loopback TLS with synthetic certificates;
+Linux owned-stream tests use a Unix pair, not a Nitro device. No live native action,
+AWS resource, production key or customer account is used. The local image/source
+fingerprints, setup deviations, HTTP subset and remaining measured-app/KMS/
+fresh-witness gates are recorded in ADR 0020. This is not hardware evidence or
+a complete release manifest. No P20 acceptance criterion is closed.
+
 ### P19: attestation-gated runnable service slice
 
 [ADR 0019](../architecture/0019-attested-service.md) promotes W06–W08's exact-key

@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "ec0bcc2bdf43de5b4b6db78a2b0a160e67b910a8d54c87a1752fb66a779aaf93",
+  "lockfileSha256": "43d0fc8000bdfd4ccdf892a0d613aeca992cad25a5bd51f06396c795e9ef842e",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
     {
@@ -904,6 +904,12 @@
       "features": []
     },
     {
+      "name": "socket2",
+      "version": "0.6.5",
+      "buildScript": false,
+      "features": ["all"]
+    },
+    {
       "name": "syn",
       "version": "2.0.119",
       "buildScript": false,
@@ -1093,6 +1099,22 @@
       "buildScript": false,
       "features": [
         "std"
+      ]
+    },
+    {
+      "name": "windows-sys",
+      "version": "0.61.2",
+      "buildScript": false,
+      "features": [
+        "Win32",
+        "Win32_Foundation",
+        "Win32_Networking",
+        "Win32_Networking_WinSock",
+        "Win32_System",
+        "Win32_System_IO",
+        "Win32_System_Threading",
+        "Win32_System_WindowsProgramming",
+        "default"
       ]
     },
     {

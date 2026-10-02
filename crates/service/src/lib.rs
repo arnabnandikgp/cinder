@@ -1,12 +1,14 @@
 //! Attestation-gated TLS transport and bounded opaque relay. Real NSM, key
 //! release, trusted time and independent witness ports are qualified by P20.
 pub mod attestation;
+pub mod egress;
 #[cfg(feature = "local-fixture")]
 pub mod fixture;
 pub mod nsm;
 pub mod release;
 pub mod transport;
 pub mod verifier;
+pub mod vsock;
 
 /// Deliberately redacted failures; neither OpenSSL nor application bodies escape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

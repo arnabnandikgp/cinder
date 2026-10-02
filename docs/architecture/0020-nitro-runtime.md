@@ -50,8 +50,9 @@ source inspection is not an independent security audit.
 - TLS/library RNG integration; NSM entropy alone does not
   qualify OpenSSL or journal nonce generation. NSM ioctl timing/deadline behavior
   also needs Linux/hardware observation.
-- Complete consumed-configuration manifest, measured executable, vsock ingress
-  and fixed-destination parent relay; actual enclave-side authenticated egress.
+- Complete consumed-configuration manifest and measured financial executable;
+  qualify the implemented vsock ingress/relays and enclave-side HTTPS on hardware.
+  Native reads, chain, storage/witness and KMS egress remain unwired.
 - Recipient-bound KMS release with wrong/debug/replayed release rejection and
   key-role separation. No plaintext key delivered to the parent.
 - Encrypted external replicas and separately authenticated fresh witness; test
@@ -99,6 +100,99 @@ operation timing limits, synthetic signed timestamp/chain/nonce/purpose tamperin
 later-quote ordering and certificate clock selection. These are synthetic/local
 tests, not real Nitro evidence. No complete P20 acceptance criterion is closed.
 
+## Socket dependency decision (2026-10-02)
+
+Add exact `socket2 =0.6.5` with only its explicit `all` feature to obtain safe
+owned AF_VSOCK sockets, timeout/connect/accept and peer-address APIs. Workspace
+unsafe remains forbidden. The already pinned NSM driver's nix ioctl wrapper is
+unchanged; using nix's raw-fd `accept` would require introducing local unsafe
+ownership conversion, which this dependency avoids. The reviewed socket boundary
+has no alternate provider, environment endpoint override, raw-fd injection or TCP
+fallback. Platform-specific implementation is Linux-only; non-Linux refuses.
+The exact graph and five negative dependency-guard mutations are recorded. It
+adds `windows-sys 0.61.2` on its Windows dependency edge, not another Linux provider.
+The Cargo.lock SHA-256 is
+`43d0fc8000bdfd4ccdf892a0d613aeca992cad25a5bd51f06396c795e9ef842e`.
+
+## Implemented socket and venue HTTPS boundary (2026-10-02)
+
+`Server::run_vsock` uses the existing attestation, TLS 1.3, exporter-bound session
+and private handler contract directly on an owned AF_VSOCK stream. Ingress allows
+one explicitly selected peer CID, with eight workers and the existing handshake/
+session watchdogs. A CID is routing, not authentication. Connections reject
+unconfigured peers before allocating a worker; no raw-fd ownership conversion or
+TCP fallback is exposed. Accepted sockets use explicit five-second I/O limits.
+
+The `cinder-nitro-relay` parent executable accepts loopback TCP only and forwards
+opaque bytes to one exact enclave CID/port. `cinder-nitro-egress` accepts one
+enclave peer and forwards to one selected Pacifica origin on port 443. It resolves
+that origin once at startup and attempts one TCP connection per accepted socket:
+no caller-selected URL, address rotation, TLS termination or retry. Both use
+bounded workers, 16 KiB copy buffers, 4 MiB per direction and the session watchdog.
+These qualification entrypoints require stdin to remain open; stdin closure
+fences/stops them. They are not a completed deployment supervisor/runbook.
+
+`Egress` consumes the non-clone signed `Outbound` only over parent CID 3 vsock.
+HTTPS terminates inside the enclave. It verifies the exact native hostname and
+chain against a bounded canonical DER CA certificate with an independently
+expected digest; this store replaces OpenSSL's system trust, rather than adding
+to it. Certificate time comes from the selected clock, not parent wall time.
+TLS 1.3 is required; hostname verification, SNI and peer verification remain on,
+with no permissive callback, resumption, tickets or early data. Its commitment
+binds the actually consumed native origin, vsock endpoint and CA digest. Clock,
+capability and other port commitments are still needed in the full manifest.
+
+The intentionally narrow HTTP/1.1 profile permits only the existing create,
+scoped-cancel and withdrawal paths and preserves the signed body exactly. Bound
+request/response bodies to the adapter's 16 KiB limit, headers to 8 KiB/64 fields,
+and a one-shot socket to the five-second watchdog; reject results beyond the
+ten-second overall elapsed/clock budget. Require one nonzero Content-Length and
+JSON content type. Redirects, duplicate headers, transfer encoding, compression,
+truncation and malformed framing fail as `Unknown`; there is no automatic retry.
+Numeric Retry-After is bounded to one hour; other forms leave the adapter's
+conservative default in effect. No connection is reused or second response read.
+This is not a general HTTP client: chunked/missing-length or alternative TLS
+venue behavior still requires qualification and an explicit profile change.
+The gateway retains durable exposure/holds on uncertain results; an ACK is not
+a fill. No native capability is activated by constructing this transport.
+
+Offline tests cover fixed routes/ports, bounded opaque copies, exact request
+bytes, response ambiguity/bounds and real loopback TLS handshakes with a synthetic
+CA. Wrong CA, wrong hostname and future/expired certificate time all reject.
+Synthetic certificates never enter a default runtime policy. Linux additionally
+checks safe owned-socket cloning/timeouts/read/write/shutdown using a Unix pair;
+that is not an AF_VSOCK device test. Hardware vsock routing, real NSM/clock/RNG and
+actual venue response compatibility remain unqualified.
+
+## Local Linux qualification (2026-10-02)
+
+Exact exported source tree: `f9221a4df607d362a17f9d3ee37799371d6d4ae0`.
+The complete Rust debug/release suite, format and default/all-feature strict
+Clippy/build passed on Linux ARM64; ordinary Linux refuses `/dev/nsm` construction.
+The macOS pinned full runner passed too, including 27 repository guard tests and
+all 17 SDK tests (seven actual local-process tests). SDK/Node process tests were
+not rerun in Linux; Anchor/SBF source is unchanged.
+
+Apple Containers 1.4.1, recommended Kata 3.32.0 kernel, Rust 1.97.1, Debian
+Bookworm OpenSSL 3.0.22 (`3.0.22-1~deb12u1`) and pkg-config 1.8.1. Check-image index:
+`sha256:c3867809f5ba272041b6c5fed0abed01476cc186e4e8ba2367e64ac1e037f546`;
+ARM64 manifest:
+`sha256:7b3f6c004538ca245185c7e6aa138aeec51b077448e06a53550d3ba40a3a1caf`.
+Tests used four CPUs/4 GiB, networking disabled (only loopback interface),
+read-only exported source/public vendor mounts and container-local outputs.
+Incremental compilation and debug symbols were disabled for disk capacity;
+debug overflow/assertion semantics remain enabled. No `work/`, `.git`, wallets,
+cloud files or the local-only user journey were mounted. The container is removed
+on exit. This ephemeral toolchain image is **not** a production EIF, measured
+release, immutable Debian repository snapshot or attestation qualification.
+
+Setup initially failed on missing kernel, DNS, missing lint components and disk
+space. Installed the recommended kernel, used explicit DNS only during public
+image setup, and removed the task's builder/cache after export. Removed only
+regenerable Cinder Rust incremental cache; source/research are untouched. These
+setup failures are not failed financial tests or excuses to relax qualification.
+No complete P20 acceptance criterion is closed by this offline checkpoint.
+
 ## Authority and cost boundary
 
 The user approved **at most $5 for the initial disposable AWS test session**,
@@ -121,3 +215,8 @@ Checked 2026-10-01: [pinned AWS NSM API/driver source](https://github.com/aws/aw
 and [supported enclave instance constraints](https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html).
 Timestamp/nonce semantics rechecked 2026-10-02 against
 [AWS's attestation document and validation contract](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html).
+Socket semantics checked against the pinned
+[socket2 source](https://github.com/rust-lang/socket2/tree/v0.6.5) and
+[Nitro parent/vsock concepts](https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-concepts.html).
+TLS hostname/time/store behavior checked against the pinned
+[OpenSSL Rust connector source](https://github.com/sfackler/rust-openssl/blob/openssl-v0.10.81/openssl/src/ssl/connector.rs).

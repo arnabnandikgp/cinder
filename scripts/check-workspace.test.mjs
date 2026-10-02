@@ -25,6 +25,7 @@ function fixture() {
     {name: 'cinder-api',kind:null,path:'/repo/crates/api',req:'=0.1.0',target:null},
     {name: 'cinder-pacifica',kind:null,path:'/repo/crates/pacifica',req:'=0.1.0',target:null},
     ...['openssl', 'aws-nitro-enclaves-cose', 'aws-nitro-enclaves-nsm-api', 'serde_cbor', 'zeroize'].map(name => ({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p => p.name === name).version}`,target:null,features:[],uses_default_features:true,optional:false})),
+    {name:'socket2',kind:null,source:dependencyPolicy.registry,req:'=0.6.5',target:null,features:['all'],uses_default_features:false,optional:false},
   ];
   packages[6].features={default:[], 'local-fixture':[]};
   packages[6].targets.push(...['cinder-service-fixture','cinder-verify-fixture'].map(name => ({name,kind:['bin'],'required-features':['local-fixture']})));
@@ -111,5 +112,13 @@ test('NSM driver features, pin and platform cannot silently select another provi
     const metadata = fixture();
     change(metadata.packages[6].dependencies.find(dep => dep.name === 'aws-nitro-enclaves-nsm-api'));
     assert.match(validateWorkspace(metadata).join('\n'), /transport dependency configuration not approved/);
+  }
+});
+
+test('socket ownership wrapper has an exact pin, explicit feature and unconditional edge', () => {
+  for (const change of [dep => { dep.req = '^0.6'; }, dep => { dep.features = []; }, dep => { dep.uses_default_features = true; }, dep => { dep.target = 'cfg(target_os="linux")'; }, dep => { dep.optional = true; }]) {
+    const metadata = fixture();
+    change(metadata.packages[6].dependencies.find(dep => dep.name === 'socket2'));
+    assert.match(validateWorkspace(metadata).join('\n'), /socket dependency configuration not approved/);
   }
 });

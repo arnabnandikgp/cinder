@@ -18,7 +18,7 @@ use openssl::{
 };
 use std::{
     io::{Read, Write},
-    net::{Shutdown, SocketAddr, TcpListener, TcpStream},
+    net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs},
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -39,6 +39,41 @@ pub const MAX_REQUESTS: usize = 128;
 /// Maximum private response; checked before emitting or receiving a frame.
 pub const MAX_RESPONSE: usize = 1_048_576;
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
+
+// Closed implementation seam: only TCP and this crate's AF_VSOCK adapter. The
+// public server never accepts a caller-supplied raw descriptor or fake socket.
+pub(crate) trait Socket: Read + Write + Send + Sized + 'static {
+    fn prepare(&self) -> std::io::Result<()>;
+    fn try_clone(&self) -> std::io::Result<Self>;
+    fn shutdown(&self, how: Shutdown) -> std::io::Result<()>;
+}
+pub(crate) trait Listener {
+    type Stream: Socket;
+    fn nonblocking(&self) -> std::io::Result<()>;
+    fn accept(&self) -> std::io::Result<Self::Stream>;
+}
+impl Socket for TcpStream {
+    fn prepare(&self) -> std::io::Result<()> {
+        self.set_nonblocking(false)?;
+        self.set_read_timeout(Some(IO_TIMEOUT))?;
+        self.set_write_timeout(Some(IO_TIMEOUT))
+    }
+    fn try_clone(&self) -> std::io::Result<Self> {
+        TcpStream::try_clone(self)
+    }
+    fn shutdown(&self, how: Shutdown) -> std::io::Result<()> {
+        TcpStream::shutdown(self, how)
+    }
+}
+impl Listener for TcpListener {
+    type Stream = TcpStream;
+    fn nonblocking(&self) -> std::io::Result<()> {
+        self.set_nonblocking(true)
+    }
+    fn accept(&self) -> std::io::Result<TcpStream> {
+        TcpListener::accept(self).map(|(s, _)| s)
+    }
+}
 
 /// Qualified clock port. P19 uses a clearly identified local fixture clock only.
 pub trait Clock: Send + Sync {
@@ -188,12 +223,12 @@ pub fn write_frame(stream: &mut impl Write, body: &[u8], maximum: usize) -> Resu
     Ok(())
 }
 
-struct Lifetime {
+pub(crate) struct Lifetime {
     state: Arc<(Mutex<(bool, bool)>, Condvar)>,
     worker: Option<thread::JoinHandle<()>>,
 }
 impl Lifetime {
-    fn new(socket: TcpStream) -> Self {
+    pub(crate) fn new(socket: impl Socket) -> Self {
         let state = Arc::new((Mutex::new((false, false)), Condvar::new()));
         let c = state.clone();
         let worker = thread::spawn(move || {
@@ -279,25 +314,40 @@ impl Server {
     /// Serve an already bound listener; shutdown fences new sessions and closes
     /// all accepted sockets. No plaintext HTTP endpoint or fallback is installed.
     pub fn run(self, listener: TcpListener, stop: Arc<AtomicBool>) -> Result<(), Error> {
+        self.run_listener(listener, stop)
+    }
+    /// Identical attestation/TLS/API contract directly over AF_VSOCK. The parent
+    /// relays encrypted bytes; it never terminates this TLS session.
+    pub fn run_vsock(
+        self,
+        listener: crate::vsock::VsockListener,
+        stop: Arc<AtomicBool>,
+    ) -> Result<(), Error> {
+        self.run_listener(listener, stop)
+    }
+    fn run_listener<L: Listener>(self, listener: L, stop: Arc<AtomicBool>) -> Result<(), Error> {
         let acceptor = self.identity.acceptor()?;
         let server = Arc::new(self);
-        listener.set_nonblocking(true)?;
+        listener.nonblocking()?;
         let active = Arc::new(AtomicUsize::new(0));
-        let mut workers = Vec::new();
+        let mut workers: Vec<(L::Stream, thread::JoinHandle<()>)> = Vec::new();
+        let mut failed = false;
         while !stop.load(Ordering::SeqCst) {
-            workers.retain(|(_, h): &(TcpStream, thread::JoinHandle<()>)| !h.is_finished());
+            workers.retain(|(_, h)| !h.is_finished());
             match listener.accept() {
-                Ok((socket, _)) => {
+                Ok(socket) => {
                     if active.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
                         let _ = socket.shutdown(Shutdown::Both);
                         continue;
                     }
                     // Darwin can inherit listener O_NONBLOCK; each worker uses
                     // bounded blocking I/O, never treat a timing race as EOF.
-                    socket.set_nonblocking(false)?;
-                    socket.set_read_timeout(Some(IO_TIMEOUT))?;
-                    socket.set_write_timeout(Some(IO_TIMEOUT))?;
-                    let shutdown = socket.try_clone()?;
+                    if socket.prepare().is_err() {
+                        continue;
+                    }
+                    let Ok(shutdown) = socket.try_clone() else {
+                        continue;
+                    };
                     let a = active.clone();
                     let server = server.clone();
                     let acceptor = acceptor.clone();
@@ -312,6 +362,7 @@ impl Server {
                     thread::sleep(Duration::from_millis(10))
                 }
                 Err(_) => {
+                    failed = true;
                     stop.store(true, Ordering::SeqCst);
                     break;
                 }
@@ -321,9 +372,9 @@ impl Server {
             let _ = socket.shutdown(Shutdown::Both);
             let _ = worker.join();
         }
-        Ok(())
+        if failed { Err(Error) } else { Ok(()) }
     }
-    fn connection(&self, socket: TcpStream, acceptor: &SslAcceptor) -> Result<(), Error> {
+    fn connection(&self, socket: impl Socket, acceptor: &SslAcceptor) -> Result<(), Error> {
         let lifetime = Lifetime::new(socket.try_clone()?);
         let mut tls = acceptor.accept(socket).map_err(|_| Error)?;
         if tls.ssl().version_str() != "TLSv1.3"
@@ -408,32 +459,88 @@ pub fn relay(
     if !target.ip().is_loopback() || !listener.local_addr()?.ip().is_loopback() {
         return Err(Error);
     }
-    listener.set_nonblocking(true)?;
+    relay_socket(
+        listener,
+        || TcpStream::connect_timeout(&target, IO_TIMEOUT).map_err(|_| Error),
+        stop,
+    )
+}
+/// Parent ingress to one fixed enclave CID/port. The TCP listener is loopback
+/// only in this qualification profile; deployment ingress exposure is separate.
+/// Does not parse private frames, terminate TLS, retry connects or change targets.
+pub fn relay_vsock(
+    listener: TcpListener,
+    target: crate::vsock::Target,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    if !target.is_enclave() || !listener.local_addr()?.ip().is_loopback() {
+        return Err(Error);
+    }
+    relay_socket(
+        listener,
+        || crate::vsock::VsockStream::connect(target),
+        stop,
+    )
+}
+/// Parent egress to one native origin's HTTPS port, not a general-purpose proxy.
+/// DNS chooses routing only; the enclave verifies origin/certificates. There is
+/// one TCP attempt per accepted socket, no address rotation or TLS termination.
+pub fn relay_egress(
+    listener: crate::vsock::VsockListener,
+    origin: cinder_pacifica::execution::Origin,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    // Resolve once before serving. Parent DNS availability is not a trust anchor.
+    let address = (crate::egress::host(origin), 443)
+        .to_socket_addrs()?
+        .next()
+        .ok_or(Error)?;
+    relay_socket(
+        listener,
+        || TcpStream::connect_timeout(&address, IO_TIMEOUT).map_err(|_| Error),
+        stop,
+    )
+}
+fn relay_socket<L: Listener, S: Socket>(
+    listener: L,
+    connect: impl Fn() -> Result<S, Error>,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    listener.nonblocking()?;
     let active = Arc::new(AtomicUsize::new(0));
-    let mut workers = Vec::new();
+    let mut workers: Vec<(L::Stream, S, thread::JoinHandle<()>)> = Vec::new();
+    let mut failed = false;
     while !stop.load(Ordering::SeqCst) {
-        workers
-            .retain(|(_, _, h): &(TcpStream, TcpStream, thread::JoinHandle<()>)| !h.is_finished());
+        workers.retain(|(_, _, h)| !h.is_finished());
         match listener.accept() {
-            Ok((client, _)) => {
+            Ok(client) => {
                 if active.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
                     let _ = client.shutdown(Shutdown::Both);
                     continue;
                 }
-                client.set_nonblocking(false)?;
-                let Ok(upstream) = TcpStream::connect_timeout(&target, IO_TIMEOUT) else {
+                if client.prepare().is_err() {
+                    continue;
+                }
+                let Ok(upstream) = connect() else {
                     let _ = client.shutdown(Shutdown::Both);
                     continue;
                 };
-                for s in [&client, &upstream] {
-                    s.set_read_timeout(Some(IO_TIMEOUT))?;
-                    s.set_write_timeout(Some(IO_TIMEOUT))?;
+                if upstream.prepare().is_err() {
+                    let _ = client.shutdown(Shutdown::Both);
+                    let _ = upstream.shutdown(Shutdown::Both);
+                    continue;
                 }
-                let c = client.try_clone()?;
-                let u = upstream.try_clone()?;
-                let deadline_socket = client.try_clone()?;
-                let mut c2 = client.try_clone()?;
-                let mut u2 = upstream.try_clone()?;
+                let (Ok(c), Ok(u), Ok(deadline_socket), Ok(mut c2), Ok(mut u2)) = (
+                    client.try_clone(),
+                    upstream.try_clone(),
+                    client.try_clone(),
+                    client.try_clone(),
+                    upstream.try_clone(),
+                ) else {
+                    let _ = client.shutdown(Shutdown::Both);
+                    let _ = upstream.shutdown(Shutdown::Both);
+                    continue;
+                };
                 let a = active.clone();
                 active.fetch_add(1, Ordering::SeqCst);
                 let h = thread::spawn(move || {
@@ -457,7 +564,10 @@ pub fn relay(
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(10))
             }
-            Err(_) => break,
+            Err(_) => {
+                failed = true;
+                break;
+            }
         }
     }
     for (c, u, h) in workers {
@@ -465,9 +575,9 @@ pub fn relay(
         let _ = u.shutdown(Shutdown::Both);
         let _ = h.join();
     }
-    Ok(())
+    if failed { Err(Error) } else { Ok(()) }
 }
-fn copy_bounded(from: &mut TcpStream, to: &mut TcpStream) -> Result<(), Error> {
+fn copy_bounded(from: &mut impl Read, to: &mut impl Write) -> Result<(), Error> {
     let mut b = [0; 16_384];
     let mut total = 0;
     loop {
@@ -519,5 +629,25 @@ mod identity_tests {
         assert_ne!(identity.boot, [0; 32]);
         assert!(Identity::generate(&Fixed(Err(Error))).is_err());
         assert!(Identity::generate(&Fixed(Ok(0))).is_err());
+    }
+    #[test]
+    fn parent_ingress_rejects_parent_loop_and_bounds_opaque_copy() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        assert!(
+            relay_vsock(
+                listener,
+                crate::vsock::Target::new(3, 5000).unwrap(),
+                Arc::new(AtomicBool::new(false))
+            )
+            .is_err()
+        );
+        let input = vec![7; 4 * MAX_RESPONSE];
+        let mut output = Vec::new();
+        copy_bounded(&mut input.as_slice(), &mut output).unwrap();
+        assert_eq!(output, input);
+        output.clear();
+        let oversized = vec![7; 4 * MAX_RESPONSE + 1];
+        assert!(copy_bounded(&mut oversized.as_slice(), &mut output).is_err());
+        assert_eq!(output.len(), 4 * MAX_RESPONSE);
     }
 }

@@ -41,7 +41,8 @@ Current branch: `tee/p20-nitro-runtime`, registered above P19 through native
 `gh stack add`, based on `1aeef179b6f963649954f2e1a2da8eab1b6690d6`.
 P20's first local slice adds actual loaded-application policy commitments and the
 fail-closed AWS NSM adapter, now including purpose-bound verified timestamps and
-explicit TLS certificate clock selection; see [ADR 0020](../architecture/0020-nitro-runtime.md).
+explicit TLS certificate clock selection, owned vsock ingress/opaque parent
+relays and in-enclave fixed-origin HTTPS; see [ADR 0020](../architecture/0020-nitro-runtime.md).
 These are not yet a runnable Nitro financial application or a complete runtime
 manifest. P19's full offline results below remain evidence for its own exact
 head, not this new code. [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44)
@@ -52,9 +53,10 @@ region `us-east-1`, no mainnet/customer funds. Fresh STS on 2026-10-02 verifies
 the intended IAM user; read-only EC2 inspection confirms the candidate
 `c6g.large` supports Nitro. The root-identity blocker is resolved, not the
 remaining runtime/pricing/permission qualifications. No billable test resource has
-been created and test compute spend is $0. The host had about 4.3 GiB free before
-this continuation and no existing
-Apple container images; do not start a large image pull without a space plan.
+been created and test compute spend is $0. Local Apple-container Rust qualification
+now passes with source-only read-only exports and no network. Removed only the
+regenerable Cinder incremental cache and task-created image builder/cache to
+manage disk; do not delete source/research or use broad container pruning.
 
 P17 #41 and P18 #42 merged atomically through `gh stack merge --yes --merge`
 on 2026-10-01 after explicit user authorization. Both GitHub receipts report the
@@ -1027,7 +1029,7 @@ Merge: none.
 Work: in progress on `tee/p20-nitro-runtime`, above P19 head `1aeef179b6f963649954f2e1a2da8eab1b6690d6`. Application-policy commitment derives from the actual journal/API/execution/funding objects, not a supplied hash; rejects conflicting beneficiaries, mismatched configurations and reused trading/funds key roles. Actual NSM adapter pins AWS's 0.5.2 driver, opens Linux hardware only, checks locked nonzero exact PCR0/1/2 and known SHA384 profile, requires bounded entropy, and verifies fresh connection-bound quotes with the production AWS-root verifier. Dependency/feature/lock guards retain a closed graph. No economics, history codec, Solana source or native capability activation changes. ADR 0020 records the partial implementation and remaining boundaries.
 Verification: 2026-10-01 final-source pinned offline runner passes on macOS ARM64: 310 Rust tests plus two compile-fail doctests in each debug/release profile, 26 repository tests, all 17 SDK tests (including the seven real local-process tests), default/all-feature strict Clippy, format, build and TypeScript checks. Four new NSM tests and three loaded-contract tests pass; dependency guard includes the new driver feature/pin/platform refusal test. Linux driver path and actual hardware tests are still pending; local NSM protocol exchanges are synthetic, not hardware evidence. None of the four complete P20 acceptance criteria is marked satisfied. On-chain source is unchanged, so SBF is not rerun.
 Unexpected: current `cinder-dev` STS identity is account root; the same ARN was freshly confirmed after the user's IAM clarification. Provisioning is blocked pending the intended non-root credentials, independently of local implementation. User approves at most $5 for the initial disposable session; no resources or billable spend. Host disk is tight (~2.6 GiB free before the final checks) and Apple containers have no cached images. Container services/images were inspected read-only; no wallet, venue, RPC, AWS write, agent or Linux container was used.
-Next: complete consumed-runtime manifest, qualified clock/entropy, vsock/egress, recipient KMS key release, independent freshness/restore and bounded controller scheduling. Obtain the intended non-root AWS login, then perform explicitly bounded hardware/revocation/restore rehearsals under the approved $5 session with cleanup receipts. Do not promote P19's fake dispatch or fixed fixture holds; unknown attempts cannot auto-retry. Keep P20 in progress, not ready/complete from this first slice. No PR is published yet.
+Initial next action (2026-10-01; superseded below): finish local runtime ports and obtain non-root authentication before bounded hardware tests. No P19 fixture promotion or automatic unknown retry.
 
 Continuation (2026-10-02): the replacement IAM profile `cinder_new` is verified;
 the prior root blocker above is historical. Added fresh signed NSM clock samples,
@@ -1048,10 +1050,36 @@ write, paid resource, live venue or wallet was used. Apple containers were start
 explicitly for the upcoming Linux-specific socket qualification; export only
 tracked source plus intended changes, never ignored research or credentials.
 
-Next: continue the remaining runtime assembly
-and Linux/hardware qualification. Authentication no longer needs user action;
-the remaining consumed manifest, RNG, vsock/egress, KMS, independent witness and
-controller gates above remain open. Keep all complete acceptance boxes unchecked.
+### Socket/HTTPS continuation (2026-10-02)
+
+Implemented safe owned Linux vsock streams/listeners, exact destination/peer
+checks, shared bounded TLS serving, opaque parent ingress and fixed-origin
+egress executables. Venue HTTPS verifies the actual loaded CA, hostname and
+qualified-clock certificate time inside the confidential runtime; signed requests
+are never parsed by the parent. Add explicit socket2/Windows dependency pins and
+five negative guard mutations. Narrow HTTP framing and all failures stay Unknown,
+without retry or release of an escaped attempt. No native capability is activated.
+
+Verification: the complete pinned macOS offline runner passes (27 repository
+tests, 17 SDK tests, strict default/all-feature Clippy/build, Rust debug/release
+and compile-fail doctests). The entire Rust suite, format/default/all-feature
+strict Clippy and build also pass in network-disabled Linux ARM64 against staged
+source tree `f9221a4df607d362a17f9d3ee37799371d6d4ae0`. Linux-only owned-socket
+operations and NSM driver compilation are now checked; a Unix pair/missing device
+is not Nitro hardware evidence. SDK processes are macOS evidence only. Exact
+image/platform/library details and setup failures are in ADR 0020. Anchor/SBF
+source is unchanged. No agent, venue/RPC/wallet, deployment or AWS resource used;
+AWS test compute spend remains $0. Source/research and local user-journey/stays
+are preserved. The generated incremental cache and task builder are recoverable
+by rebuilding, not source deletion.
+
+Next: complete consumed-runtime manifest and financial executable, actual RNG
+integration, recipient-bound KMS release, authenticated encrypted remote replicas/
+independent witness and bounded controller loops. Then package/qualify real vsock,
+native response compatibility, loaded-key/capability fencing and crash/restore on
+Nitro only within the approved $5 test session, with pricing/permission/cleanup
+checks first. Keep all four P20 criteria open and no PR ready/complete claim. P19
+#44 remains open/unmerged; production authority/topology and G01–G04 remain gates.
 PR: none.
 Merge: none.
 
