@@ -40,8 +40,11 @@ Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
 Current branch: `tee/p20-nitro-runtime`, registered above P19 through native
 `gh stack add`, based on `1aeef179b6f963649954f2e1a2da8eab1b6690d6`.
 Pre-hardware assembly commit: `b67f3947b6eda241bd56912003b22ee90107857f`
-(local, not pushed; no P20 PR yet). Later documentation-only receipts do not
-change the tested executable. Do not mark P20 ready/closed before hardware evidence.
+(local, not pushed; no P20 PR yet). Actual hardware compatibility fixes and dated
+evidence are checkpointed at `37487ca`; these are executable changes, not just
+documentation. Preserve the earlier source's test provenance separately.
+The complete bounded hardware matrix now passes; publish for review, but do not
+mark P20 closed before review/merge.
 P20's pre-hardware assembly includes the consumed public manifest, actual NSM
 clock/recipient, role-separated KMS release, encrypted S3 replicas, strong-read
 DynamoDB witness, default-feature enclave executable and bounded private API/
@@ -88,17 +91,40 @@ compile-fail doctests per debug/release profile, 24 repository tests, strict
 Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
 receipts remain in the owning phases below.
 
-Next: preserve verified cleanup/sanitized receipts and prepare the remaining P20
-security-qualification matrix
-listed in [hardware evidence](../operations/nitro-hardware-2026-10-02.md). The
+Next: publish P20 for review above P19 #44;
+see [follow-up evidence](../operations/nitro-hardware-followup-2026-10-02.md).
+The complete security batch now has an actual independently verified attested
+PASS, including recipient/upstream TLS negatives and journal recovery. A real
+current-snapshot restore bug was reproduced locally and fixed by reusing validated
+immutable objects; failed accepted histories were preserved. Current export
+`5557d3350f371d616965006a90ea03b55420400f` passes macOS workspace, targeted
+macOS/Linux checks and all 17 SDK tests. Wrong-image rejection has same-artifact
+positive brackets with unchanged KMS approval. The real separate-register CAS
+race, final shipping application SDK/restart regression and debug refusal pass.
+Natural 90-second loaded-lease expiry passes with retained head and enabled keys.
+Actual witness STS expiry at 16:56:38 UTC and same-expired-capsule restart refusal
+pass with a 40-minute boot lease, positive SDK bracket, unchanged accepted head,
+five enabled keys and a live parent relay. No policy change or witness renewal
+manufactured the result. The bounded hardware matrix is complete.
+Retain exact-source receipts for the P20 security matrix
+listed in [hardware evidence](../operations/nitro-hardware-2026-10-02.md). New
+tests are compiled only in a separate test image, not the shipping enclave;
+their actual hardware results and limits are recorded separately. The
 scoped prerequisite policies and user-selected Paid upgrade resolved the prior
-IAM/account-plan blockers. Complete criteria remain open; no ready/closed or
-automatic PR/merge claim. Keep
+IAM/account-plan blockers. Technical P20 criteria are satisfied in the bounded
+disabled-native profile; review/merge remains pending. No automatic merge or
+production-key approval. Keep
 P19 in progress until actual merge. P21 joins recovery to the journal; P22/P23 reuse
 workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
 separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
 unrelated `stays/`. Keep P19 in progress until actual merge; local fixtures do not establish
 hardware qualification or authorize live keys, tests or deployment.
+Second-session teardown is verified: termination requested at 17:04:07 UTC,
+test EBS/buckets/table/runtime roles/SSH/security group absent, five fresh KMS
+keys PendingDeletion and existing managed policies preserved. Exactly 45
+generated local secret files were deleted; operator source and public/ciphertext
+evidence remain. Only the task build container was removed. No additional
+hardware tests remain; CI and external review begin after publication.
 
 ### CodeRabbit coverage snapshot (2026-09-30)
 
@@ -1247,6 +1273,84 @@ writer/uncertain append, expiry, stale/orphan replay and upstream-integrity matr
 in the evidence page. Keep all four complete P20 criteria open. Preserve sanitized
 receipts/ignored work and unrelated untracked files. No P20 push/PR or P19 merge
 has occurred or is authorized by this hardware session.
+
+### Hardware-probe preparation (2026-10-02)
+
+Work: added three explicitly ignored, test-only Nitro probes: authenticated
+per-role KMS context/recipient/ciphertext rejection with positive brackets;
+actual independent-client DynamoDB CAS contention on a fresh empty disposable
+register; and fixed-origin Pacifica paper TLS handshakes with CA, hostname and
+encrypted-record negatives. The qualification executable is separate from the
+shipping application, has no fixture feature and needs its own independently
+approved measurement. The witness hashes are synthetic, not journal frames;
+never boot the application against that mutated register. TLS sends no HTTP or
+native action. Neither compilation nor skipping is a live receipt.
+
+Verification: source export tree `4b2bf7279a51a289de7fa67c4fd3e0fad65a7910`
+passed macOS release service checks: 32 unit and 8 integration tests with all
+features, 25 default-feature unit tests, three hardware cases explicitly ignored,
+and strict all-target/all-feature Clippy. Linux ARM64 default-feature release
+unit checks passed 25 tests with three hardware cases ignored; strict
+all-target/all-feature Clippy passed. Both builds used Rust 1.97.1, locked/offline
+dependencies. Linux source and pinned vendor input were read-only with networking
+disabled and no `work/`, wallet or AWS mounts. The public Linux test ELF SHA-256
+is `6ff140088d53ae608199da77d746d45cfcf58b3ee9603c740dc3e7b1275b2949`;
+no EIF/PCR or KMS approval is claimed for it yet. Node 24.21.0 plan validation
+and 12 validator tests passed. Whole-workspace/SDK/SBF/hardware results above
+remain dated evidence, not new reruns at this export.
+
+Unexpected: AWS cloud and Pacifica shared an Internet root, so that root cannot
+serve as the wrong-CA test. The negative now uses the distinct Nitro root and
+retains the real upstream SNI while testing a different verification hostname.
+An attempted operator-tooling update was rejected by the execution safety review
+because it selected a new ledger while leaving old resource/tag names in place.
+That patch was not applied; the existing `hw1` launcher and receipts are unchanged.
+Do not launch it against the cleaned historical ledger or change IAM policy
+automatically. Prepare a consistently isolated second-run scope and resolve its
+narrow permission requirements before any AWS mutation.
+
+Next: finish that safe session setup and expiry/stale-orphan/uncertain-append
+recipes; then run the measured probes under the existing total $5 ceiling and
+retain exact results/cleanup. No new AWS resource or spend was incurred in this
+preparation. All four full P20 hardware criteria remain open; no push, PR-ready
+claim, native capability activation or P19 merge.
+
+### 2026-10-02 second hardware invocation — fixed final scope
+
+Work: fresh generation-two disposable resource ledger/tags; separately measured
+test-only executable and current default-feature shipping ELF. Actual full
+security-batch PASS includes five-role KMS negatives, upstream TLS negatives,
+real encrypted orphan exclusion and accepted lost-ack recovery. Wrong-image
+denial has same-artifact positive brackets with unchanged KMS approval. Real
+separate-register CAS race, final application SDK/restart, debug refusal and
+natural 90-second loaded-lease expiry pass. Actual witness STS expired at
+16:56:38 UTC with a 40-minute boot lease: SDK positive shortly before, then
+API refusal/enclave exit with unchanged accepted head and five enabled KMS keys.
+Restart with the same expired capsule refuses too; fresh parent relay STS does
+not renew the sealed witness. No new test category is queued.
+
+Verification: code export `5557d3350f371d616965006a90ea03b55420400f` passes
+macOS locked/offline release workspace, targeted macOS/Linux journal/service
+release checks and strict Clippy, and 17/17 SDK checks with TypeScript. Linux
+source/vendor inputs are read-only and networking disabled. Public ELF/EIF/PCRs,
+actual verdicts and limits are in the [dated follow-up](../operations/nitro-hardware-followup-2026-10-02.md).
+Latest documentation validator passes 25 phases/34 documents; diff check passes.
+No SBF change/rerun, native capability, real funds or production approval.
+
+Unexpected: immutable S3 restore exposed a real bug; regression was red before
+validated-copy reuse and green afterward, followed by actual hardware PASS.
+Failed accepted histories were not reset. Public test-entrypoint permissions,
+wrong-role AWS error expectations and invalid random agent-key input needed
+operator/test corrections. Failed/transient probes are retained, not hidden or
+counted as passes. Runtime test source is versioned; account-specific operator
+scripts remain ignored local research. Verified exact cloud teardown and
+45-file disposable-secret cleanup preserve operator/public evidence and user
+wallets, AWS profiles, research and unrelated files. The task container is removed.
+
+Next: publish the completed P20
+implementation for review above P19 #44. No further hardware categories without
+discussion. P20 stays `in progress` until review/merge; P19 stays open. No
+automatic merge, native activation or production-key authorization.
 
 ## P21 — Recovery integration
 

@@ -604,6 +604,45 @@ impl Replica for S3Replica {
     }
 }
 
+// Hardware qualification needs to distinguish an authenticated AWS denial
+// from a broken route. No status/body inspection API exists in production.
+#[cfg(test)]
+impl Client {
+    pub(crate) fn qualification_json(
+        &mut self,
+        target: &str,
+        body: Value,
+    ) -> Result<(u16, Value), Error> {
+        let bytes = Zeroizing::new(serde_json::to_vec(&body).map_err(|_| Error)?);
+        let content_type = if self.endpoint.service == "dynamodb" {
+            "application/x-amz-json-1.0"
+        } else {
+            "application/x-amz-json-1.1"
+        };
+        let response = self.call(
+            "POST",
+            "/",
+            vec![("content-type", content_type), ("x-amz-target", target)],
+            &bytes,
+        )?;
+        Ok((
+            response.status,
+            serde_json::from_slice(&response.body).map_err(|_| Error)?,
+        ))
+    }
+}
+
+// Exercise the actual wire builder, not a separately invented CAS query.
+#[cfg(test)]
+pub(crate) fn qualification_cas_request(
+    table: &str,
+    stream: Stream,
+    expected: Anchor,
+    next: Head,
+) -> Result<Value, Error> {
+    cas_request(table, stream, expected, next)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

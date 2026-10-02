@@ -292,7 +292,13 @@ fn run() -> Result<(), Error> {
             trading: false,
             funding: false,
             native_reads: false,
-            maximum_boot_ms: 2400000,
+            maximum_boot_ms: match v.get("maximumBootMs") {
+                None => 2400000,
+                Some(value) => value
+                    .as_u64()
+                    .filter(|ms| *ms > 0 && *ms <= 3_600_000)
+                    .ok_or(Error)?,
+            },
         },
     };
     let prepare = json!({"manifest":manifest,"configuration":configuration,"storage":v["storage"],"trading":v["trading"],"broker":v["broker"],"witness":v["witness"]});

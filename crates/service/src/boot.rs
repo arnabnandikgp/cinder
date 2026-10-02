@@ -718,3 +718,9 @@ mod tests {
         );
     }
 }
+
+// Explicitly ignored hardware tests are a separate measured test executable.
+// They are absent from every default-feature application/library artifact.
+#[cfg(test)]
+#[path = "hardware.rs"]
+mod hardware;

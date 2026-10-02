@@ -497,13 +497,18 @@ launch initially failed Free account-plan eligibility, not IAM. After the user's
 explicit Paid-plan upgrade, one disposable c6g.large ran the actual non-debug
 application. [Hardware receipts](../operations/nitro-hardware-2026-10-02.md) record
 real KMS/NSM/SDK, restore and failure evidence, three compatibility fixes, cleanup
-status and the remaining matrix. This is partial qualification, not a complete
-criterion, approved production topology or native trading workflow.
+status and the historical remaining matrix. The
+[follow-up receipts](../operations/nitro-hardware-followup-2026-10-02.md) complete
+the bounded P20 matrix, including actual recipient/upstream negatives, concurrent
+CAS, orphan/lost-ack recovery, debug refusal, natural loaded-lease and actual
+credential expiry/restart refusal. Native capabilities remain disabled: this is
+runtime qualification, not an approved production topology or P23 trading test.
+P20 remains in progress pending review/merge.
 
-- [ ] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected.
-- [ ] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled.
-- [ ] Accepted encrypted state survives qualified failure/restore; witness loss and split writer fail safely, with costs/limits recorded.
-- [ ] A tagged enclave executable and parent relay run the same SDK operation contract; controller scheduling and persisted unknown attempts cannot bypass qualification or auto-retry after restart. Local fixture acceptance and actual hardware evidence are recorded separately.
+- [x] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected. Actual paper-origin TLS-only negatives pass; native credentials/actions remain gated off until P23.
+- [x] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled. Actual retained-head epoch, natural lease and issued STS expiry/restart checks pass; no native capability was enabled or escaped in this qualification.
+- [x] Accepted encrypted state survives qualified failure/restore; witness loss and split writer fail safely, with costs/limits recorded. Real replicas/CAS participate; lost-ack injection is inside the test enclave, not a physical packet drop.
+- [x] A tagged enclave executable and parent relay run the same SDK operation contract; controller scheduling and persisted unknown attempts cannot bypass qualification or auto-retry after restart. Local fixture acceptance and actual hardware evidence are recorded separately. Exact-source ELF/EIF/PCR releases are identified in both receipts; live native controller workflows remain P22/P23 scope.
 
 <a id="p21"></a>
 ## P21 — Integrated recovery and independent claim delivery

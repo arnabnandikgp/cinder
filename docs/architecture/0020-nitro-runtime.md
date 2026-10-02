@@ -355,6 +355,18 @@ public manifest is still a hardware-session input; this refusal is not a real
 NSM boot or a measured EIF receipt. The task test containers have been removed;
 no source, research, wallet or cloud configuration was deleted.
 
+## Hardware qualification closeout
+
+The historical pre-hardware/account-plan checkpoints below do not describe the
+current status. After the user's Paid-plan upgrade, actual non-debug Nitro
+qualification completed on 2026-10-02. The [first receipt](../operations/nitro-hardware-2026-10-02.md)
+records real AWS compatibility fixes and initial SDK/storage checks; the
+[follow-up](../operations/nitro-hardware-followup-2026-10-02.md) records the
+completed recipient, TLS, journal, CAS, debug and natural lease/credential-expiry
+matrix, exact measured releases, failures and cleanup. Review/merge remains
+pending; G01–G04 production policy/governance and P23 native workflow gates are
+not approved by a disposable test. Native trading/funding/reads stayed disabled.
+
 ## Primary sources
 
 Hardware launch prerequisite observed 2026-10-02: exact scoped managed-policy

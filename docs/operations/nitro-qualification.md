@@ -1,12 +1,15 @@
 # P20 Nitro qualification runbook
 
-Status: assembled and partially hardware-qualified on 2026-10-02. The user
+Status: assembled; the bounded P20 hardware matrix passed on 2026-10-02. PR
+review/merge remains pending. The user
 explicitly upgraded the account to Paid; the earlier Free-plan launch blocker is
 resolved. A non-debug c6g.large enclave ran real five-role KMS release, attested
 private SDK operations, encrypted restart and storage/witness fault checks. See
 [dated hardware evidence](nitro-hardware-2026-10-02.md) for exact release hashes,
-observed compatibility fixes, cleanup status and remaining qualification cases.
-Do not conflate the positive subset with complete P20 or production approval.
+observed compatibility fixes and first-session cleanup. The
+[follow-up](nitro-hardware-followup-2026-10-02.md) records the completed negative
+matrix, expiry/restart fencing and final teardown. Do not conflate hardware test
+acceptance with a merged P20, production governance or a live native workflow.
 Initial authorized disposable session: maximum **$5**, IAM profile `cinder_new`,
 `us-east-1`, no real wallets, mainnet/customer funds or native trades.
 The [tracker](../implementation/TRACKER.md) owns actual completion/evidence.
@@ -168,6 +171,91 @@ has no geographic region; do not switch the test region to match console sign-in
 No customer/mainnet/venue trades are required for these P20 receipts. Later native
 capabilities need G01/G02/G05/P23. An ACK never becomes a fill; possibly exposed
 or unknown attempts remain persisted and are never automatically retried on boot.
+
+### Reproducible recipient negatives
+
+`boot::hardware::hardware_recipient_rejection_matrix` is an explicitly ignored
+unit test, compiled only into a **separate qualification test executable**. It
+is absent from the shipping application and normal CI never invokes it. Its
+live run has an independently verified attested PASS in the
+[follow-up receipts](nitro-hardware-followup-2026-10-02.md). Successful
+compilation/skipping alone is not a KMS receipt.
+
+Build that test executable from the approved source export with:
+
+```sh
+cargo test --locked --offline --release -p cinder-service --no-default-features --lib --no-run
+```
+
+Package the returned Linux ARM64 test executable with only the public manifest
+and the same explicit libraries. Its entrypoint arguments are:
+
+```text
+--exact boot::hardware::hardware_recipient_rejection_matrix --ignored --test-threads=1
+```
+
+Use fresh disposable keys/profile and normal bounded bootstrap/cloud relays,
+without native relays or an owner/financial API. The test exposes only a fixed
+qualification verdict through the actual attested transport. Independently approve this test EIF's
+PCRs in its disposable KMS policies; do not reuse an application's approval,
+enable `local-fixture`, or embed self-referential PCRs inside the measured image.
+No private preparation file enters the rootfs. Record this test measurement
+separately from the default-feature application candidate.
+
+For **each** of the five roles, actual positive release/purpose/body verification
+brackets missing recipient, each wrong context field, absent context and wrong
+role ciphertext. An old real CMS response must refuse an unrelated fresh recipient
+and still decrypt for its original recipient. Denials require an authenticated
+400/403 with the specific expected AWS error and no key/plaintext response;
+timeouts, local errors and 5xx cannot pass. The test performs no journal, venue,
+chain or financial mutation and never prints response bodies or private material.
+Wrong-role ciphertext is specifically AccessDeniedException under these exact
+role/context policies, not an unconditional IncorrectKeyException. Wrong-image
+rejection is bracketed by the same approved positive image: update the SDK's
+verification policy for the negative probe without changing KMS/IAM approval.
+Debug refusal and upstream faults have separate successful receipts. Actual
+credential expiry and same-expired-profile restart refusal also pass in the
+dated follow-up, with unchanged approval, enabled keys and retained history.
+
+The same separate executable now also contains
+`boot::hardware::hardware_upstream_tls_rejection_matrix`. Use that exact filter
+instead, and start the fixed `cinder-nitro-egress 9007 ENCLAVE_CID
+pacifica-testnet` byte relay for this boot. This is **TLS handshakes only**:
+no HTTP request, venue credential, native signature or financial action is sent.
+All manifest financial gates stay false. Each negative is bracketed by a correct
+TLS 1.3 connection to the paper origin using the consumed venue root and actual
+NSM certificate time. The negatives use the distinct Nitro attestation root as
+an HTTPS CA, a mismatched verification hostname while retaining the correct SNI
+and route, and one corrupted encrypted TLS record. AWS and Pacifica can share
+an Internet CA; substituting the AWS cloud CA is not necessarily a negative.
+Timeouts/outages are not successful certificate-rejection observations. The
+test-only record mutation is injected inside the qualification socket; it is
+not a claim that an actual hostile parent or venue trading workflow was tested.
+The TLS matrix passed as part of the attested `hardware_security_batch`; its
+standalone ignored entrypoint is not a separate claimed receipt.
+
+The same test executable also contains the explicitly ignored
+`boot::hardware::hardware_competing_witness_writers` case. Select that exact name
+in a separate measured test image/boot with its **own fresh empty disposable
+stream**. It releases the witness credential inside Nitro, races two independent
+HTTPS clients using the actual production CAS builder, requires one 200 and one
+authenticated `ConditionalCheckFailedException`, then checks the retained winning
+head and another stale-CAS denial. The synthetic register hashes are **not journal
+frames**: discard this test register after qualification and never boot an
+application against it or restore/reset an existing application's head. This
+tests the real witness-port concurrency contract, not a complete competing-API
+workflow or a lost-acknowledgement journal transition. The attested
+`hardware_witness_race_receipt` wrapper passed on the separate disposable
+register; its standalone entrypoint is not a separate claimed receipt.
+
+`hardware_security_batch` also exercises real encrypted orphans and a lost CAS
+acknowledgement fault injected inside the test enclave. Both real replicas and
+the actual independent CAS participate. Reload excludes the orphan, includes
+accepted history once, refuses stale snapshots and restores a matching current
+snapshot without rewriting valid immutable objects. This is not a physical
+network packet-drop test. Reuse valid copies; missing/invalid-copy repair must
+still obey the store's immutable-write policy and fail closed when repair is
+not possible. All qualification handlers are absent from the shipping binary.
 
 ## Fencing, restart and recovery
 
