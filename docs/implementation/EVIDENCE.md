@@ -45,6 +45,9 @@ upload the entire local research tree to make links work.
 
 ### P20: loaded-policy and NSM first slice
 
+Historical checkpoints below are superseded by the pre-hardware assembly receipt
+at the end of this section; none is actual hardware qualification.
+
 [ADR 0020](../architecture/0020-nitro-runtime.md) implements actual loaded-policy
 commitments and AWS's pinned NSM driver boundary. W06–W08's no-host-approval,
 exact-release, role-separation and no-fallback requirements have offline regression
@@ -71,6 +74,28 @@ AWS resource, production key or customer account is used. The local image/source
 fingerprints, setup deviations, HTTP subset and remaining measured-app/KMS/
 fresh-witness gates are recorded in ADR 0020. This is not hardware evidence or
 a complete release manifest. No P20 acceptance criterion is closed.
+
+The completed pre-hardware assembly consumes a full measured public manifest,
+uses fresh purpose-bound NSM recipients for five KMS roles, and constructs the
+actual private API/gateway/funding objects over one encrypted S3/DynamoDB journal.
+Default binaries contain no fixture provider, fake funds or flat admission policy.
+The official pinned SigV4 signer and closed temporary credentials are explicit;
+no default chain/retry/provider appears through a full cloud SDK. Missing witness,
+rollback/epoch/CAS errors and clock expiry fail closed, not by reinitializing files.
+
+Local evidence: manifest/role tampering, synthetic recipient replay separation,
+strict AWS framing, exact signed payloads and strong-read/CAS construction,
+policy-derived customer/native margin, actual configuration construction and
+real trusted-preparation process/file permissions. Full Linux debug/release tests
+and default-feature package/rebuild comparison pass against the exact source
+recorded in TRACKER. Synthetic CMS is not AWS OAEP interoperability; separate
+credential IDs/buckets are not proof of IAM or administrative independence.
+There is no real NSM/vsock/cloud acceptance receipt yet. Native trading, funding
+and reads stay disabled until G01/G02/P23; readiness means private API/storage
+readiness, not live brokerage. Package/runbook and outstanding hardware tests are
+in [ADR 0020](../architecture/0020-nitro-runtime.md) and
+[operations](../operations/nitro-qualification.md). No criterion is closed by an
+ELF digest, local fixture or document update.
 
 ### P19: attestation-gated runnable service slice
 

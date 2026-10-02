@@ -1,6 +1,6 @@
 # ADR 0020: Nitro application assembly and qualification
 
-Date: 2026-10-02. Status: implementation in progress; hardware not qualified.
+Date: 2026-10-02. Status: pre-hardware assembly implemented; qualification pending.
 Scope: [P20](../implementation/PLAN.md#p20). [ADR 0019](0019-attested-service.md)
 and [BASELINE](../implementation/BASELINE.md) remain the security/economic contract.
 
@@ -45,7 +45,11 @@ driver features or new target/provider dependencies still fail the guard. Safe
 workspace code delegates the hardware ioctl to AWS's pinned upstream driver;
 source inspection is not an independent security audit.
 
-## Remaining assembly and qualification
+## Historical first-slice gaps
+
+The entries below describe the first checkpoint, not the current remaining-work
+list. The consumed-manifest, key-release, remote-storage and executable assembly
+are implemented in the continuation below. Hardware evidence remains separate.
 
 - TLS/library RNG integration; NSM entropy alone does not
   qualify OpenSSL or journal nonce generation. NSM ioctl timing/deadline behavior
@@ -63,10 +67,11 @@ source inspection is not an independent security audit.
 - Actual release/fencing rehearsal, secret-safe health/runbook, SDK operation
   through the tagged enclave, and cleanup/cost receipts.
 
-No production topology, witness independence or live financial limits have been
-approved by these changes. G01–G04 stay open as applicable. This slice cannot run
+No production topology, witness independence or live financial limits were
+approved by that checkpoint. G01–G04 stay open as applicable. That slice could not run
 the financial application on AWS yet and does not satisfy any complete P20
-hardware acceptance criterion.
+hardware acceptance criterion. It is superseded by the assembly below, not by a
+hardware qualification claim.
 
 ## Local NSM time integration (2026-10-02)
 
@@ -111,7 +116,7 @@ has no alternate provider, environment endpoint override, raw-fd injection or TC
 fallback. Platform-specific implementation is Linux-only; non-Linux refuses.
 The exact graph and five negative dependency-guard mutations are recorded. It
 adds `windows-sys 0.61.2` on its Windows dependency edge, not another Linux provider.
-The Cargo.lock SHA-256 is
+The socket-checkpoint Cargo.lock SHA-256 was
 `43d0fc8000bdfd4ccdf892a0d613aeca992cad25a5bd51f06396c795e9ef842e`.
 
 ## Implemented socket and venue HTTPS boundary (2026-10-02)
@@ -204,8 +209,147 @@ conservative estimated allowance is exhausted. AWS budget notifications are not
 a hard spending cap. On 2026-10-02 a fresh STS call verified the IAM user
 `cinder_new`, and read-only EC2 inspection confirmed `c6g.large` supports enclaves
 with two vCPUs and 4096 MiB. The prior root-identity blocker is resolved. No
-billable test resources have been created; pricing, remaining narrowly scoped
-permissions, runnable assembly and a bounded cleanup plan still precede launch.
+billable test resources have been created. The user now requests completion of
+all pre-hardware work and a stop **before hardware testing**. Do not provision or
+launch from this branch until that work is resumed. Refresh pricing/permissions
+and record the exact disposable resources before spend; the earlier $5 limit is
+not permission for a larger or unattended deployment.
+
+## Consumed release and enclave executable
+
+`boot::Manifest` is a canonical public policy embedded in the measured rootfs.
+Its digest binds the actual application component, full network/deployment domain,
+storage stream and generation, writer epoch, all ingress/bootstrap/native/cloud
+routes and consumed CA digests, five distinct KMS key roles/body hashes and finite
+boot lifetime. `cinder-prepare-release` derives the application component by
+constructing the actual API/gateway/funding objects from confidential configuration,
+not by echoing an operator-supplied label. Conflicting owners or key roles reject.
+
+PCRs cannot be embedded in their own image. `Nsm::discover` reads the actual locked
+nonzero PCR0/1/2 and then applies the ordinary device/profile/entropy/time checks.
+KMS policy and the independently delivered SDK Policy approve those actual PCRs;
+discovering them inside a changed image does not make its keys or client accepted.
+
+`cinder-enclave` loads only the bounded public manifest from its image, obtains
+the one-shot bootstrap over exact parent-CID vsock and releases each KMS role
+inside the enclave. It constructs the actual API and one encrypted replicated
+journal before opening the attested listener. There is no parent HTTP framework,
+fixture attester, flat fixture holds, seeded customer funds, fake exposure or
+second ledger. Native trading, funding and reads are explicitly disabled and
+the manifest rejects activation in this qualification build. G01/G02/P23 must
+qualify the real observation/chain ports and policy before enabling them; this is
+not a silently incomplete live-trading promise.
+
+The reservation helper derives gross bounded notional with upward rounding,
+selected customer leverage, native initial margin and maximum fees from installed
+policy. It does not replace the journal's joined pending/stress admission. Tests
+cover asymmetric customer/native margin, signed quantities, missing qualification
+and negative fees. The helper is not an excuse to activate native capability.
+
+The one-cut supervisor and every private request re-read authenticated accepted
+state and trusted time. Clock/storage/writer-epoch failure or finite lease expiry
+sets a sticky fence; sessions and scheduling stop and keys drop on process exit.
+Unknown/possibly exposed native actions are never automatically re-signed or
+resent after restore. No queued operation acquires a second financial ledger.
+NSM ioctl cannot be cancelled by this safe wrapper: late results reject after
+return and actual stall/latency remains a hardware observation.
+
+## Recipient-only key release
+
+Roles are private configuration, storage AEAD key, trading seed, broker seed and
+independent witness credentials. Each uses a different exact KMS key ARN, a
+purpose/body commitment and encryption context binding release, role, generation
+and stream. The trusted preparation tool creates a new 0700 local directory with
+0600 files and syncs them; plaintext role files never belong on the parent, image
+or in git. The bounded capsule format is not scalable customer onboarding.
+
+Every Decrypt request creates a new RSA-2048 recipient, fresh NSM challenge and
+purpose-bound quote; it is not a replayable shared recipient. Enclave TLS/SigV4
+authenticates the fixed KMS endpoint and exact request. Require the configured
+KeyId and SYMMETRIC_DEFAULT, request RSAES_OAEP_SHA_256, reject a plaintext response
+and validate the decrypted role/domain/generation/stream and body commitment.
+Recipient private keys cannot be exported and are dropped after one response.
+Safe OpenSSL handles the bounded canonical CMS; no custom RSA/AES primitive or
+workspace unsafe code is introduced. CMS decryption without an X.509 recipient
+certificate is confined to the authenticated KMS response for that fresh public
+key, not exposed as a caller-controlled decryption oracle.
+
+Synthetic CMS tests establish fresh-recipient separation/replay rejection, not
+AWS's OAEP envelope compatibility. Correct/wrong/debug/context KMS denial and
+real CMS interoperability must be observed on hardware. KMS disable only prevents
+future release; loaded-key fencing also requires current witness/epoch, bounded
+leases, enclave termination and future native-agent revocation/reconciliation.
+
+## Closed cloud storage and fresh witness
+
+`cloud::Client` uses exact `aws-sigv4 =1.5.1` and `aws-credential-types =1.3.0`,
+not a handwritten signer or full SDK middleware. Exact serde 1.0.229, serde_json
+1.0.151 and base64 0.23.1 provide bounded explicit protocols. Signer features are
+only `sign-http` and `http1`; default providers, retries, discovery, environment
+credentials and redirects remain absent. The closed dependency policy explicitly
+records the 37 added registry packages and feature changes. The current Cargo.lock
+SHA-256 is `7550e0a91ed766e2c7ed2d40fd2be2d21697f66e7764864ef5a562332ad8eaf5`.
+
+All AWS requests are one-shot TLS 1.3 inside the enclave with exact hostname,
+consumed CA, NSM certificate time and bounded socket/elapsed budgets. Temporary
+STS credentials have explicit finite expiry; no long-lived credential fallback.
+S3 uses its required signed payload-hash header for PUT and empty GET. A narrow
+Content-Length HTTP profile rejects ambiguous headers, redirects, compression,
+chunking and over-size/truncated bodies. Actual AWS response compatibility is
+still a hardware qualification dependency, not assumed from unit fixtures.
+
+Two immutable content-addressed S3 replicas use conditional put and exact existing
+object read-back. The journal verifies hash chains and AEAD. Region-local DynamoDB
+uses strongly consistent reads and exact Epoch/prior Sequence/Hash CAS; writes
+change only Sequence/Hash. The row must be explicitly provisioned. Missing row,
+incomplete head, zero hash, failed CAS or expired credentials fail; no boot resets
+the witness or chooses an old local file. Only an authenticated empty pre-provisioned
+anchor can start a new journal.
+
+The parent knows only KMS-recipient/S3-ciphertext credentials. The distinct witness
+credential is released privately inside KMS. Different credential IDs or bucket
+names alone do not prove IAM separation or failure-domain independence. Hardware
+denial tests, narrow policies and declared administrative trust are required;
+production G03 governance is not approved by this disposable topology.
+
+## Pre-hardware package and handoff
+
+[Packaging](../../tools/nitro-runtime/README.md) builds the default-feature enclave
+and parent/operator tools separately from a source-only public vendor export.
+The enclave rootfs includes only the ELF, five explicit runtime libraries, loader
+and public manifest. No shell, toolchain, fixture root, source/research, AWS CLI,
+wallet, owner directory or plaintext role files enter it. The selected OpenSSL
+provider/kernel RNGs still need measured-kernel observation; NSM GetRandom does
+not alone qualify OpenSSL or journal OsRng. A same-input recompilation comparison
+is a local reproducibility check, not an EIF/PCR or universal reproducible-build
+guarantee.
+
+The [operations runbook](../operations/nitro-qualification.md) defines trusted
+preparation, exact resources/permissions, bounded startup, secret-safe coarse
+health, SDK policy delivery, failure/restart/fencing tests and budget/cleanup.
+Final public resource identities, actual EIF measurements and independently
+approved KMS/SDK PCRs can only be recorded during the resumed hardware session.
+All four complete P20 hardware criteria remain open. P21 recovery, P22 offline
+workflows and P23 live capabilities retain their own scope and gates.
+
+Final offline assembly receipt, 2026-10-02: exported source tree
+`629c4a0fe4a04f0ef027c04481d9eeee1dabcff5`; same ARM64 check image and library
+versions as the earlier Linux checkpoint. Linux and macOS each pass 332 Rust
+tests plus two compile-fail doctests per debug/release profile, strict default/
+all-feature Clippy and build. Pinned macOS runner also passes 28 repository
+tests and all 17 SDK tests. Linux tests do not establish real NSM/vsock/AWS
+behavior. No on-chain source changed, so SBF was not rerun.
+
+Default-feature enclave ELF SHA-256:
+`d0679f2d0fa908369f1816413dd3333b9d2fb86862f54f89dcf3b7a533dc0399`.
+Fresh application recompilation is byte-identical. All seven parent/operator/
+enclave binaries and the exact runtime-library hashes are preserved in the local
+temporary `/private/tmp/cinder-p20-final-06tHDY/bundle/SHA256SUMS`, outside git.
+The minimal checked rootfs loads its explicit libraries in an isolated chroot
+and refuses ordinary non-Nitro boot with only the redacted error. Its finalized
+public manifest is still a hardware-session input; this refusal is not a real
+NSM boot or a measured EIF receipt. The task test containers have been removed;
+no source, research, wallet or cloud configuration was deleted.
 
 ## Primary sources
 
@@ -220,3 +364,13 @@ Socket semantics checked against the pinned
 [Nitro parent/vsock concepts](https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-concepts.html).
 TLS hostname/time/store behavior checked against the pinned
 [OpenSSL Rust connector source](https://github.com/sfackler/rust-openssl/blob/openssl-v0.10.81/openssl/src/ssl/connector.rs).
+Cloud contracts checked 2026-10-02 against
+[KMS Decrypt](https://docs.aws.amazon.com/kms/latest/APIReference/API_Decrypt.html),
+[recipient policy conditions](https://docs.aws.amazon.com/kms/latest/developerguide/conditions-nitro-enclave.html),
+[DynamoDB strong GetItem](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_GetItem.html),
+[conditional UpdateItem](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html),
+[S3 conditional PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
+and the [official pinned SigV4 interface](https://docs.rs/aws-sigv4/1.5.1/aws_sigv4/http_request/index.html).
+AWS SDK C's KMS/attestation implementation was inspected at
+`cd61b6187c8b20867ba4368d1ae62c5790c0269a` as a recipient-envelope reference;
+it is not a dependency or substitute for actual AWS CMS/OAEP qualification.

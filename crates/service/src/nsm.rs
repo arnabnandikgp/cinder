@@ -203,6 +203,66 @@ pub struct Nsm {
     policy: Policy,
 }
 impl Nsm {
+    /// Discover THIS measured image's locked PCR bank. The immutable loaded
+    /// manifest is measured with the image; SDK/KMS independently approve its
+    /// actual measurements. PCRs cannot be embedded in their own measured image.
+    pub fn discover(domain: [u8; 64], manifest: [u8; 32]) -> Result<Self, Error> {
+        let mut device = Device::open()?;
+        let mut pcrs = [[0; 48]; 3];
+        for (i, pcr) in pcrs.iter_mut().enumerate() {
+            let Response::DescribePCR { lock: true, data } =
+                device.exchange(Request::DescribePCR { index: i as u16 })?
+            else {
+                return Err(Error);
+            };
+            *pcr = data.try_into().map_err(|_| Error)?;
+        }
+        drop(device);
+        Self::open(Policy {
+            domain,
+            manifest,
+            pcrs,
+        })
+    }
+    /// Public actual policy, no secrets. Client acceptance is independent.
+    pub fn policy(&self) -> Policy {
+        self.policy.clone()
+    }
+    pub(crate) fn recipient(&self, spki: &[u8], data: [u8; 48]) -> Result<Vec<u8>, Error> {
+        if spki.is_empty() || spki.len() > 1024 {
+            return Err(Error);
+        }
+        let mut state = self.state.lock().map_err(|_| Error)?;
+        state.time.active()?;
+        let start = Instant::now();
+        let result = (|| {
+            let nonce = entropy(&mut |r| state.device.exchange(r))?;
+            let now = state.time.last.ok_or(Error)?;
+            let Response::Attestation { document } =
+                state.device.exchange(Request::Attestation {
+                    nonce: Some(nonce.to_vec().into()),
+                    public_key: Some(spki.to_vec().into()),
+                    user_data: Some(data.to_vec().into()),
+                })?
+            else {
+                return Err(Error);
+            };
+            let at =
+                attestation::verify_recipient(&document, &self.policy, &nonce, spki, &data, now)?;
+            timely(start.elapsed())?;
+            Ok((at, document))
+        })();
+        match result {
+            Ok((at, document)) => {
+                state.time.observe(Ok(at))?;
+                Ok(document)
+            }
+            Err(e) => {
+                state.time.observe(Err(e))?;
+                Err(e)
+            }
+        }
+    }
     /// Open `/dev/nsm`, check locked PCR0/1/2 and verify a fresh NSM clock sample.
     /// NSM major version 1/SHA384 is the closed profile; future majors reject.
     pub fn open(policy: Policy) -> Result<Self, Error> {

@@ -53,7 +53,7 @@ impl Trust {
             digest: expected,
         })
     }
-    fn connector(&self) -> Result<SslConnector, Error> {
+    pub(crate) fn connector(&self) -> Result<SslConnector, Error> {
         let mut store = X509StoreBuilder::new()?;
         store.add_cert(self.root.clone())?;
         let mut builder = SslConnector::builder(SslMethod::tls_client())?;

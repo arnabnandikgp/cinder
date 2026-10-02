@@ -226,6 +226,36 @@ fn accept(i: orders::Intent) -> Control {
 }
 
 #[test]
+fn runtime_holds_follow_exact_bounds_selected_leverage_and_native_margin_not_flat_fixtures() {
+    let t = Temp::new();
+    let mut s = setup(&t, 10000, 10000, 10000, 0, 0);
+    let mut i = intent(50, 3);
+    i.maximum = p(101);
+    i.maximum_fee_per_lot = cash(2);
+    let holds = s.state().unwrap().order_reservations(&i).unwrap();
+    assert_eq!(holds[0].amount, cash(37));
+    assert_eq!(holds[1].amount, cash(37));
+    let choice = selection(&s, 51, 30000);
+    assert_eq!(commit(&mut s, vec![], vec![choice]).receipt.controls, None);
+    let holds = s.state().unwrap().order_reservations(&i).unwrap();
+    assert_eq!(holds[0].amount, cash(107));
+    assert_eq!(holds[1].amount, cash(37));
+    i.quantity = q(-3);
+    assert_eq!(s.state().unwrap().order_reservations(&i).unwrap(), holds);
+    i.maximum_fee_per_lot = cash(-1);
+    assert!(s.state().unwrap().order_reservations(&i).is_err());
+    let t2 = Temp::new();
+    let unqualified = t2.create();
+    assert!(
+        unqualified
+            .state()
+            .unwrap()
+            .order_reservations(&intent(52, 1))
+            .is_err()
+    );
+}
+
+#[test]
 fn opposing_pending_order_is_classified_before_its_reservation_is_checked() {
     let t = Temp::new();
     let mut s = setup(&t, 100, 100, 100, 0, 0);

@@ -19,7 +19,7 @@ const allowed = new Map([
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
   ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'ed25519-dalek:normal', 'bs58:normal', 'zeroize:normal']],
   ['cinder-api', ['cinder-kernel:normal', 'cinder-journal:normal', 'sha2:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
-  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal']],
+  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal', 'serde:normal', 'serde_json:normal', 'base64:normal', 'aws-sigv4:normal', 'aws-credential-types:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
@@ -54,6 +54,12 @@ export function validateWorkspace(metadata) {
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
+      if (pkg.name === 'cinder-service' && ['serde','serde_json','base64','aws-sigv4','aws-credential-types'].includes(dep.name)) {
+        const features = dep.name === 'serde' ? ['derive'] : dep.name === 'base64' ? ['alloc'] : dep.name === 'aws-sigv4' ? ['sign-http','http1'] : [];
+        const expected=dependencyPolicy.packages.find(p=>p.name===dep.name && dep.req===`=${p.version}`);
+        if (!expected || dep.source!==dependencyPolicy.registry || dep.path || dep.target!=null || dep.optional || dep.uses_default_features!==!['base64','aws-sigv4'].includes(dep.name) || JSON.stringify(dep.features)!==JSON.stringify(features)) errors.push('cinder-service: cloud dependency configuration not approved');
+        continue;
+      }
       if (pkg.name === 'cinder-service' && dep.name === 'socket2') {
         if (dep.req !== '=0.6.5' || dep.source !== dependencyPolicy.registry || dep.path || dep.target != null || dep.optional || dep.uses_default_features || JSON.stringify(dep.features) !== JSON.stringify(['all'])) errors.push('cinder-service: socket dependency configuration not approved');
         continue;

@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "43d0fc8000bdfd4ccdf892a0d613aeca992cad25a5bd51f06396c795e9ef842e",
+  "lockfileSha256": "7550e0a91ed766e2c7ed2d40fd2be2d21697f66e7764864ef5a562332ad8eaf5",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
     {
@@ -25,6 +25,12 @@
       "features": []
     },
     {
+      "name": "aws-credential-types",
+      "version": "1.3.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "aws-nitro-enclaves-cose",
       "version": "0.5.2",
       "buildScript": false,
@@ -44,11 +50,69 @@
       ]
     },
     {
+      "name": "aws-sigv4",
+      "version": "1.5.1",
+      "buildScript": false,
+      "features": [
+        "http1",
+        "sign-http"
+      ]
+    },
+    {
+      "name": "aws-smithy-async",
+      "version": "1.3.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-smithy-http",
+      "version": "0.64.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-smithy-runtime-api",
+      "version": "1.19.0",
+      "buildScript": false,
+      "features": [
+        "client",
+        "default",
+        "http-1x",
+        "http-auth"
+      ]
+    },
+    {
+      "name": "aws-smithy-runtime-api-macros",
+      "version": "1.1.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-smithy-types",
+      "version": "1.8.1",
+      "buildScript": false,
+      "features": [
+        "byte-stream-poll-next",
+        "http-body-1-x"
+      ]
+    },
+    {
       "name": "base64",
       "version": "0.23.1",
       "buildScript": false,
       "features": [
         "alloc"
+      ]
+    },
+    {
+      "name": "base64-simd",
+      "version": "0.8.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "detect",
+        "std"
       ]
     },
     {
@@ -80,6 +144,12 @@
       "features": []
     },
     {
+      "name": "block-buffer",
+      "version": "0.12.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "bs58",
       "version": "0.5.1",
       "buildScript": false,
@@ -95,6 +165,24 @@
       "buildScript": false,
       "features": [
         "default"
+      ]
+    },
+    {
+      "name": "bytes",
+      "version": "1.12.1",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "bytes-utils",
+      "version": "0.1.4",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
       ]
     },
     {
@@ -158,8 +246,20 @@
       ]
     },
     {
+      "name": "cmov",
+      "version": "0.5.4",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "const-oid",
       "version": "0.9.6",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "const-oid",
+      "version": "0.10.2",
       "buildScript": false,
       "features": []
     },
@@ -179,6 +279,12 @@
       "features": []
     },
     {
+      "name": "cpufeatures",
+      "version": "0.3.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
       "name": "crypto-common",
       "version": "0.1.7",
       "buildScript": false,
@@ -187,6 +293,18 @@
         "rand_core",
         "std"
       ]
+    },
+    {
+      "name": "crypto-common",
+      "version": "0.2.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "ctutils",
+      "version": "0.4.2",
+      "buildScript": false,
+      "features": []
     },
     {
       "name": "curve25519-dalek",
@@ -282,6 +400,18 @@
       ]
     },
     {
+      "name": "digest",
+      "version": "0.11.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "block-api",
+        "default",
+        "mac",
+        "oid"
+      ]
+    },
+    {
       "name": "dyn-clone",
       "version": "1.0.20",
       "buildScript": false,
@@ -306,6 +436,12 @@
         "std",
         "zeroize"
       ]
+    },
+    {
+      "name": "either",
+      "version": "1.18.0",
+      "buildScript": false,
+      "features": []
     },
     {
       "name": "equivalent",
@@ -341,6 +477,15 @@
       "features": []
     },
     {
+      "name": "fnv",
+      "version": "1.0.7",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
       "name": "foreign-types",
       "version": "0.3.2",
       "buildScript": false,
@@ -353,11 +498,22 @@
       "features": []
     },
     {
+      "name": "form_urlencoded",
+      "version": "1.2.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
       "name": "futures-core",
       "version": "0.3.34",
       "buildScript": false,
       "features": [
         "alloc",
+        "default",
         "std"
       ]
     },
@@ -421,8 +577,51 @@
       "version": "0.4.3",
       "buildScript": false,
       "features": [
-        "alloc"
+        "alloc",
+        "default",
+        "std"
       ]
+    },
+    {
+      "name": "hmac",
+      "version": "0.13.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "http",
+      "version": "0.2.12",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "http",
+      "version": "1.5.0",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "http-body",
+      "version": "1.1.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "http-body-util",
+      "version": "0.1.5",
+      "buildScript": false,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "hybrid-array",
+      "version": "0.4.15",
+      "buildScript": false,
+      "features": []
     },
     {
       "name": "iana-time-zone",
@@ -587,16 +786,33 @@
       "features": []
     },
     {
+      "name": "num-integer",
+      "version": "0.1.47",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
       "name": "num-traits",
       "version": "0.2.19",
       "buildScript": true,
-      "features": []
+      "features": [
+        "i128",
+        "std"
+      ]
     },
     {
       "name": "once_cell",
       "version": "1.21.4",
       "buildScript": false,
-      "features": []
+      "features": [
+        "alloc",
+        "default",
+        "race",
+        "std"
+      ]
     },
     {
       "name": "opaque-debug",
@@ -625,8 +841,30 @@
       "features": []
     },
     {
+      "name": "outref",
+      "version": "0.5.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "percent-encoding",
+      "version": "2.3.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
       "name": "pin-project-lite",
       "version": "0.2.17",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "pin-utils",
+      "version": "0.1.1",
       "buildScript": false,
       "features": []
     },
@@ -732,6 +970,12 @@
       "name": "rustversion",
       "version": "1.0.23",
       "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "ryu",
+      "version": "1.0.23",
+      "buildScript": false,
       "features": []
     },
     {
@@ -851,6 +1095,16 @@
       ]
     },
     {
+      "name": "sha2",
+      "version": "0.11.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "oid"
+      ]
+    },
+    {
       "name": "shlex",
       "version": "2.0.1",
       "buildScript": false,
@@ -883,6 +1137,14 @@
       "features": []
     },
     {
+      "name": "socket2",
+      "version": "0.6.5",
+      "buildScript": false,
+      "features": [
+        "all"
+      ]
+    },
+    {
       "name": "spki",
       "version": "0.7.3",
       "buildScript": false,
@@ -904,12 +1166,6 @@
       "features": []
     },
     {
-      "name": "socket2",
-      "version": "0.6.5",
-      "buildScript": false,
-      "features": ["all"]
-    },
-    {
       "name": "syn",
       "version": "2.0.119",
       "buildScript": false,
@@ -921,7 +1177,8 @@
         "full",
         "parsing",
         "printing",
-        "proc-macro"
+        "proc-macro",
+        "visit-mut"
       ]
     },
     {
@@ -962,6 +1219,7 @@
       "buildScript": false,
       "features": [
         "alloc",
+        "default",
         "formatting",
         "parsing",
         "serde",
@@ -996,10 +1254,47 @@
       ]
     },
     {
+      "name": "tokio",
+      "version": "1.53.1",
+      "buildScript": false,
+      "features": [
+        "default",
+        "sync"
+      ]
+    },
+    {
+      "name": "tracing",
+      "version": "0.1.44",
+      "buildScript": false,
+      "features": [
+        "attributes",
+        "default",
+        "std",
+        "tracing-attributes"
+      ]
+    },
+    {
+      "name": "tracing-attributes",
+      "version": "0.1.31",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "tracing-core",
+      "version": "0.1.36",
+      "buildScript": false,
+      "features": [
+        "once_cell",
+        "std"
+      ]
+    },
+    {
       "name": "typenum",
       "version": "1.20.1",
       "buildScript": false,
-      "features": []
+      "features": [
+        "const-generics"
+      ]
     },
     {
       "name": "unicode-ident",
@@ -1024,6 +1319,16 @@
       "version": "0.9.5",
       "buildScript": false,
       "features": []
+    },
+    {
+      "name": "vsimd",
+      "version": "0.8.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "detect",
+        "std"
+      ]
     },
     {
       "name": "wasi",

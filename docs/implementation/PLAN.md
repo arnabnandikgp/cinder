@@ -480,6 +480,19 @@ Do not close hardware qualification with a mocked attestation document. A workin
 Nitro service is not already a live venue workflow; that remains P23.
 Evidence: W06, W08; real attested runtime evidence and failure/revocation rehearsal.
 
+Pre-hardware software handoff is separate from the four hardware criteria below:
+consumed manifest and actual loaded-policy comparison; default-feature executable
+over the real private API/journal/controllers; recipient-only separated KMS roles;
+closed TLS/SigV4 cloud replicas and independent witness interface; bounded lease/
+supervisor/fencing; reproducible local package plus preparation/operations runbook.
+Use [ADR 0020](../architecture/0020-nitro-runtime.md) and the
+[qualification runbook](../operations/nitro-qualification.md). Current qualification
+build rejects native trading/funding/read activation, rather than fabricating
+unqualified observations or chain authority. P22/P23 own those joined workflows.
+Final disposable resource identities, EIF/PCRs and KMS/SDK measurement approval
+are hardware-session outputs. Current instruction: finish software and **stop
+before hardware testing**; no provisioning or spend from the handoff alone.
+
 - [ ] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected.
 - [ ] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled.
 - [ ] Accepted encrypted state survives qualified failure/restore; witness loss and split writer fail safely, with costs/limits recorded.

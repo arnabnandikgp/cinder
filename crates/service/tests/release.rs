@@ -139,6 +139,200 @@ fn loaded(
     )
 }
 
+fn runtime_configuration() -> cinder_service::runtime::Configuration {
+    let p = profile(&config());
+    let c = contract();
+    cinder_service::runtime::Configuration {
+        ledger: cinder_journal::wire::encode_config(&config()).unwrap(),
+        owners: c
+            .owners
+            .into_iter()
+            .map(|o| cinder_service::runtime::Owner {
+                account: o.account.bytes(),
+                wallet: o.wallet,
+                tokens: o.tokens,
+            })
+            .collect(),
+        auth_ms: c.maximum_auth_lifetime,
+        grant_ms: c.maximum_grant_lifetime,
+        source: 0,
+        account: p.account,
+        environment: p.environment,
+        revision: p.revision,
+        evidence: p.evidence,
+        precision: p.precision,
+        fills: p.fills,
+        markets: p.markets,
+        quote_places: p.quote_places,
+        perp_tag: p.perp_tag,
+        execution: policy(),
+        route: route(),
+        trading_epoch: 1,
+    }
+}
+fn runtime_keys() -> std::collections::BTreeMap<cinder_service::boot::Role, Zeroizing<Vec<u8>>> {
+    use cinder_service::{boot::Role, cloud::Credential};
+    std::collections::BTreeMap::from([
+        (Role::Storage, Zeroizing::new(vec![55; 32])),
+        (Role::Trading, Zeroizing::new(vec![7; 32])),
+        (Role::Broker, Zeroizing::new(vec![9; 32])),
+        (
+            Role::Witness,
+            Zeroizing::new(
+                serde_cbor::to_vec(&Credential {
+                    access: "AKIDEXAMPLE123456".into(),
+                    secret: "fixture witness credential only not AWS".into(),
+                    token: "disposable-session-token".into(),
+                    expires: 1_700_000_060_000,
+                })
+                .unwrap(),
+            ),
+        ),
+    ])
+}
+#[test]
+fn confidential_configuration_constructs_the_same_actual_controller_contract() {
+    let expected = loaded(&config(), contract(), policy(), route(), 7, 1)
+        .unwrap()
+        .digest();
+    assert_eq!(
+        runtime_configuration()
+            .construct(runtime_keys())
+            .unwrap()
+            .commitment(),
+        expected
+    );
+    let mut c = runtime_configuration();
+    c.route.beneficiaries[0].wallet = [1; 32];
+    assert!(c.construct(runtime_keys()).is_err());
+    let mut keys = runtime_keys();
+    keys.remove(&cinder_service::boot::Role::Storage);
+    assert!(runtime_configuration().construct(keys).is_err());
+}
+
+#[cfg(feature = "local-fixture")]
+#[test]
+fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipts() {
+    use cinder_service::{
+        boot::{Gates, Manifest, Role, Slot},
+        cloud::Endpoint,
+    };
+    use std::io::Write;
+    let root = cinder_service::fixture::FixtureAttester::new()
+        .unwrap()
+        .root()
+        .to_der()
+        .unwrap();
+    let hash = openssl::sha::sha256(&root);
+    let endpoint = |s: &str, r: String, port| Endpoint {
+        service: s.into(),
+        region: "us-east-1".into(),
+        resource: r,
+        port,
+        root: root.clone(),
+        root_hash: hash,
+    };
+    let manifest = Manifest {
+        version: 1,
+        domain: [[1; 32], [2; 32]].concat(),
+        application: [1; 32],
+        stream: [42; 32],
+        generation: 1,
+        epoch: 1,
+        ingress: 9000,
+        bootstrap: 9001,
+        venue_port: 9002,
+        venue_root: root.clone(),
+        venue_root_hash: hash,
+        first: endpoint("s3", "cinder-first-test".into(), 9003),
+        second: endpoint("s3", "cinder-second-test".into(), 9004),
+        witness: endpoint("dynamodb", "cinder-witness-test".into(), 9005),
+        slots: [
+            Role::Configuration,
+            Role::Storage,
+            Role::Trading,
+            Role::Broker,
+            Role::Witness,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(i, role)| Slot {
+            role,
+            endpoint: endpoint(
+                "kms",
+                format!(
+                    "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-00000000000{}",
+                    i + 1
+                ),
+                9006,
+            ),
+            plaintext_hash: [1; 32],
+        })
+        .collect(),
+        gates: Gates {
+            trading: false,
+            funding: false,
+            native_reads: false,
+            maximum_boot_ms: 60000,
+        },
+    };
+    let keys = runtime_keys();
+    let witness: serde_cbor::Value =
+        serde_cbor::from_slice(keys[&Role::Witness].as_slice()).unwrap();
+    let input=serde_cbor::to_vec(&serde_json::json!({"manifest":manifest,"configuration":runtime_configuration(),"storage":vec![55;32],"trading":vec![7;32],"broker":vec![9;32],"witness":witness})).unwrap();
+    let t = support::Temp::new();
+    let out = t.root.join("prepared");
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_cinder-prepare-release"))
+        .arg(&out)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(&input).unwrap();
+    let receipt = child.wait_with_output().unwrap();
+    assert!(receipt.status.success(), "preparation refused");
+    assert!(receipt.stderr.is_empty());
+    assert!(receipt.stdout.len() < 128);
+    let m: Manifest =
+        serde_cbor::from_slice(&std::fs::read(out.join("manifest.cbor")).unwrap()).unwrap();
+    assert_eq!(
+        m.application,
+        loaded(&config(), contract(), policy(), route(), 7, 1)
+            .unwrap()
+            .digest()
+    );
+    m.validate().unwrap();
+    for role in [
+        Role::Configuration,
+        Role::Storage,
+        Role::Trading,
+        Role::Broker,
+        Role::Witness,
+    ] {
+        let path = out.join(format!("{}.plain", role.name()));
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(bytes.starts_with(b"CKR1"));
+        assert!(bytes.len() <= 4096);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&out).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+}
+
 #[test]
 fn actual_loaded_components_change_the_commitment_not_an_echoed_label() {
     let c = config();

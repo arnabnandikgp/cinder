@@ -402,6 +402,41 @@ pub(crate) fn verify_clock(bytes: &[u8], p: &Policy, nonce: &[u8; 32]) -> Result
     verify_clock_root(bytes, p, nonce, &aws_root()?)
 }
 
+pub(crate) fn verify_recipient(
+    bytes: &[u8],
+    p: &Policy,
+    nonce: &[u8; 32],
+    spki: &[u8],
+    data: &[u8; 48],
+    now: u64,
+) -> Result<u64, Error> {
+    verify_recipient_root(bytes, p, nonce, spki, data, now, &aws_root()?)
+}
+fn verify_recipient_root(
+    bytes: &[u8],
+    p: &Policy,
+    nonce: &[u8; 32],
+    spki: &[u8],
+    data: &[u8; 48],
+    now: u64,
+    root: &X509,
+) -> Result<u64, Error> {
+    Policy::decode(&p.encode())?;
+    let d = profile(bytes)?;
+    if *nonce == [0; 32]
+        || d.pcrs != p.pcrs
+        || d.nonce != nonce
+        || d.spki != spki
+        || d.data != data
+        || d.timestamp < now
+        || d.timestamp - now > MAX_QUOTE_AGE
+    {
+        return Err(Error);
+    }
+    verify_signature(bytes, &d, d.timestamp, root)?;
+    Ok(d.timestamp)
+}
+
 fn verify_local_root(bytes: &[u8], p: &Policy, c: &Context<'_>, root: &X509) -> Result<u64, Error> {
     let d = profile(bytes)?;
     if d.timestamp < c.now || d.timestamp - c.now > MAX_QUOTE_AGE {
@@ -434,6 +469,34 @@ pub fn verify_fixture(bytes: &[u8], p: &Policy, c: &Context<'_>, root: &X509) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "local-fixture")]
+    #[test]
+    fn recipient_quote_is_not_a_clock_or_tls_quote_or_a_replayed_release() {
+        let a = crate::fixture::FixtureAttester::new().unwrap();
+        let p = crate::fixture::policy();
+        let nonce = [7; 32];
+        let data = [8; 48];
+        let rsa =
+            openssl::pkey::PKey::from_rsa(openssl::rsa::Rsa::generate(2048).unwrap()).unwrap();
+        let key = rsa.public_key_to_der().unwrap();
+        let at = 1_700_000_000_000;
+        let q = a.quote_fields(&p, at, &key, &nonce, &data).unwrap();
+        assert_eq!(
+            verify_recipient_root(&q, &p, &nonce, &key, &data, at, a.root()),
+            Ok(at)
+        );
+        assert!(verify_recipient(&q, &p, &nonce, &key, &data, at).is_err());
+        assert!(verify_recipient_root(&q, &p, &[9; 32], &key, &data, at, a.root()).is_err());
+        assert!(verify_recipient_root(&q, &p, &nonce, &key, &[9; 48], at, a.root()).is_err());
+        assert!(
+            verify_recipient_root(&q, &p, &nonce, b"wrong recipient", &data, at, a.root()).is_err()
+        );
+        assert!(verify_recipient_root(&q, &p, &nonce, &key, &data, at + 1, a.root()).is_err());
+        let mut debug = p.clone();
+        debug.pcrs[0] = [0; 48];
+        assert!(verify_recipient_root(&q, &debug, &nonce, &key, &data, at, a.root()).is_err());
+        assert!(verify_clock_root(&q, &p, &nonce, a.root()).is_err());
+    }
     #[cfg(feature = "local-fixture")]
     #[test]
     fn local_clock_requires_signed_timestamp_fresh_nonce_and_exact_purpose() {

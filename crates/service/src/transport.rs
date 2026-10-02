@@ -501,6 +501,22 @@ pub fn relay_egress(
         stop,
     )
 }
+/// Measured cloud endpoint only. TLS/SigV4 terminate in the enclave, never here.
+pub fn relay_cloud(
+    listener: crate::vsock::VsockListener,
+    endpoint: &crate::cloud::Endpoint,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    let address = (endpoint.host()?.as_str(), 443)
+        .to_socket_addrs()?
+        .next()
+        .ok_or(Error)?;
+    relay_socket(
+        listener,
+        || TcpStream::connect_timeout(&address, IO_TIMEOUT).map_err(|_| Error),
+        stop,
+    )
+}
 fn relay_socket<L: Listener, S: Socket>(
     listener: L,
     connect: impl Fn() -> Result<S, Error>,
