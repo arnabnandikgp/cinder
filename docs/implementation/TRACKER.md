@@ -39,6 +39,9 @@ Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
 `1f750b059f39e9f409ae10fe2f4e070c2e0aa428`.
 Current branch: `tee/p20-nitro-runtime`, registered above P19 through native
 `gh stack add`, based on `1aeef179b6f963649954f2e1a2da8eab1b6690d6`.
+Pre-hardware assembly commit: `b67f3947b6eda241bd56912003b22ee90107857f`
+(local, not pushed; no P20 PR yet). Later documentation-only receipts do not
+change the tested executable. Do not mark P20 ready/closed before hardware evidence.
 P20's pre-hardware assembly includes the consumed public manifest, actual NSM
 clock/recipient, role-separated KMS release, encrypted S3 replicas, strong-read
 DynamoDB witness, default-feature enclave executable and bounded private API/
@@ -1131,6 +1134,11 @@ split-writer and loaded-key/SDK fencing still need their bounded hardware receip
 EIF/PCRs and finalized disposable resource identities are session outputs, not
 invented software receipts. No complete P20 hardware criterion is closed; no
 billable resources or test compute charge incurred. P19 remains open/unmerged.
+Commit: `b67f3947b6eda241bd56912003b22ee90107857f`; preserved locally before
+hardware work. Final documentation handoff export
+`695f7110a6f13c1bc5e679de5b9fb19fc257ceef` passes link/progress checks without
+ignored work, local-only user journey or unrelated stays. Runtime/build sources
+match the Linux tested tree; final receipt edits are documentation-only.
 
 ## P21 — Recovery integration
 
