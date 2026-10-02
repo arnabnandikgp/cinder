@@ -1172,6 +1172,38 @@ permissions, current prices and quotas before launch. No AdministratorAccess or
 root CLI is requested. No AWS writes/resources/test compute spend; four hardware
 criteria remain open. Current application/executable sources are unchanged.
 
+### Hardware launch / account-plan prerequisite (2026-10-02)
+
+Work: verified the actual v1 CinderP20Operator and CinderP20RuntimeBoundary
+documents against the prepared local JSON. STS still identifies cinder_new;
+EC2 quota is eight standard on-demand vCPUs. Current regional c6g.large Linux
+on-demand price is $0.068/hour. Selected Amazon-owned ARM64 AL2023 kernel-6.1
+AMI `ami-0ae8605ed708e3c3e`, public default subnet and restricted operator-/32 SSH.
+Prepared a local resource ledger and two-hour shutdown/termination configuration;
+no IAM instance profile or native/customer authority is loaded.
+
+Verification: EC2 RunInstances dry-run reports DryRunOperation, but actual launch
+returns InvalidParameterCombination: the selected instance is not eligible for
+Free Tier. Current describe-instance-types returns eight Free Tier eligible types,
+all with NitroEnclavesSupport=unsupported. No instance was launched; no volume,
+application KMS key, bucket, witness table or runtime role was created. Deleted
+the exact temporary SSH key and security group; follow-up EC2 metadata confirms
+no session instance, volume, group or key pair. Disposable local SSH files are
+removed. Actual hardware criteria remain open; test compute spend is $0.
+
+Unexpected: account-plan restrictions are checked by the actual launch, not the
+successful EC2 permission dry-run. This is distinct from the resolved IAM blocker.
+No plan upgrade, wider IAM grant, unsupported instance substitution or synthetic
+hardware receipt was attempted. The local session script remains ignored research
+tooling; it is not a production/provisioning interface or reviewed release artifact.
+
+Next: user chooses a direct Free-to-Paid account-plan upgrade in AWS Console
+(remaining eligible credits continue applying under AWS's documented terms), or
+provides another explicitly authorized Nitro-capable account. Do not change billing
+plans automatically. Then refresh identity, plan eligibility, budget and resource
+preflight and recreate fresh SSH setup for the same bounded $5 qualification.
+P19 remains open/unmerged; P20 has no PR and no hardware acceptance claim.
+
 ## P21 — Recovery integration
 
 Work: not started.

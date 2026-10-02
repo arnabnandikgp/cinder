@@ -356,6 +356,18 @@ no source, research, wallet or cloud configuration was deleted.
 
 ## Primary sources
 
+Hardware launch prerequisite observed 2026-10-02: exact scoped managed-policy
+documents, quota, price/AMI metadata and EC2 permission dry-run pass. Actual
+c6g.large launch is refused by the AWS Free account plan. All eight currently
+Free Tier eligible types report Nitro Enclaves unsupported; no accepted hardware
+substitute exists in that list. Temporary SSH setup was deleted and verified
+absent; no instance/application cloud resource or compute charge resulted.
+Hardware qualification remains pending a user-selected account-plan change.
+AWS's [account-plan guidance](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html)
+and [Free Tier FAQ](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-FAQ.html)
+describe direct upgrade and retained credits; these are not permission to change
+the user's billing plan. Successful dry-run alone is not launch eligibility.
+
 Checked 2026-10-01: [pinned AWS NSM API/driver source](https://github.com/aws/aws-nitro-enclaves-nsm-api/tree/v0.5.2),
 [AWS KMS enclave integration](https://docs.aws.amazon.com/enclaves/latest/user/kms.html),
 [KMS recipient contract](https://docs.aws.amazon.com/kms/latest/APIReference/API_RecipientInfo.html)

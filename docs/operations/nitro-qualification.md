@@ -1,9 +1,14 @@
 # P20 Nitro qualification runbook
 
-Status: pre-hardware implementation/verification. **Do not provision or launch
-from this document until the user resumes hardware testing.** Initial authorized
-disposable session: maximum **$5**, IAM profile `cinder_new`, `us-east-1`, no real
-wallets, mainnet/customer funds or native trades. No billable resources yet.
+Status: software verified; user resumed hardware testing on 2026-10-02, but the
+actual EC2 launch is blocked by the AWS Free account plan. Scoped IAM policies
+match the prepared versions; quota and launch dry-run pass. RunInstances rejects
+c6g.large as not Free Tier eligible, and all eight currently eligible types report
+Nitro Enclaves unsupported. The temporary SSH key/security group were removed;
+no EC2/EBS/KMS/S3/DynamoDB runtime resource was created. An account administrator
+must explicitly choose whether to upgrade the account plan before resumption.
+Initial authorized disposable session: maximum **$5**, IAM profile `cinder_new`,
+`us-east-1`, no real wallets, mainnet/customer funds or native trades.
 The [tracker](../implementation/TRACKER.md) owns actual completion/evidence.
 
 ## Release and trust boundary
@@ -190,7 +195,9 @@ expiry, file restore or this runbook opens the Solana recovery payout path.
 ## Budget and cleanup stop
 
 Before spend, refresh non-root STS identity, exact region prices, permissions,
-AMI/tooling and quotas. Keep estimates for EC2, EBS, KMS lifetime/requests, S3,
+AMI/tooling, quotas and account-plan eligibility. A successful EC2 dry-run does
+not establish Free plan eligibility; this was observed in the first launch.
+Do not upgrade billing/account plans automatically. Keep estimates for EC2, EBS, KMS lifetime/requests, S3,
 DynamoDB and transfer; avoid NAT gateways, load balancers, elastic IPs and other
 unneeded fixed charges. Plan a short timed session, not days of compute. Reserve
 cleanup time inside $5 and stop early when the remaining conservative allowance

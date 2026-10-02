@@ -491,8 +491,12 @@ build rejects native trading/funding/read activation, rather than fabricating
 unqualified observations or chain authority. P22/P23 own those joined workflows.
 Final disposable resource identities, EIF/PCRs and KMS/SDK measurement approval
 are hardware-session outputs. The pre-hardware stop was lifted by the user on
-2026-10-02 for the existing $5 disposable session. Authentication is verified;
-test/cleanup permissions, prices and quotas still precede any provisioning.
+2026-10-02 for the existing $5 disposable session. Scoped managed policies match
+the prepared versions; quota/pricing/AMI checks and launch dry-run pass. Actual
+launch is blocked by Free account-plan eligibility, not IAM. All current eligible
+instance types report Nitro Enclaves unsupported. Temporary SSH setup is cleaned
+up; no instance or application cloud resource was created. A user-selected account
+plan change and refreshed preflight precede another launch; no automatic upgrade.
 
 - [ ] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected.
 - [ ] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled.
