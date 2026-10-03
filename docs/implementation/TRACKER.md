@@ -23,7 +23,7 @@
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
 | [P20 — Nitro application qualification](PLAN.md#p20) | closed | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), merged `76f3295` |
-| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | `tee/p21a-web-api-contract`, contract/transport review |
+| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | [#47](https://github.com/arnabnandikgp/cinder/pull/47), first contract/core-qualification slice |
 | [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
@@ -54,6 +54,11 @@ future frontend and programmatic trading clients. Typical frontend use is HTTP
 commands plus WebSocket private updates; WebSocket commands are optional, not a
 requirement to place an order. Public venue market-data feeds remain separate.
 The user subsequently explicitly approved bounded local Noise NK qualification.
+First bounded slice is [#47](https://github.com/arnabnandikgp/cinder/pull/47), ready
+for review on `product/tee-v1` (base `76f32956e3ee5d31707ec1bf7fa81f8711666c97`).
+Tested source checkpoint: `e4a4ec34ea3fd5fe6a0fe0bace67f10d26aa4f8a`; the following
+publication receipt changes documentation only. Hosted checks/review for the new
+tip remain pending; no earlier P20 or source-head result is reused as tip evidence.
 [ADR 0021](../architecture/0021-confidential-web-api.md) is tracked and the separate
 `tools/web-channel/` Rust/WASM core uses pinned Snow 0.10.0 without altering the
 shipping graph or P19 Node TLS. No HTTP trading handler or stream is implemented.
@@ -62,8 +67,8 @@ Native tests and actual Node/browser round trips pass with explicit synthetic
 responder-key trust. Independent browser Nitro verification is NOT implemented;
 the opaque library's key-erasure limitation is recorded before shipping. The full
 repository runner also passes (debug/release workspace, 29 repository tests and
-17 SDK/process tests). Next: publish the bounded first-slice native stacked PR
-with its new Linux/browser CI, then qualify hardened dependencies, browser verifier and exact attested binding
+17 SDK/process tests). Next: review #47 and its new Linux/browser CI, then qualify
+hardened dependencies, browser verifier and exact attested binding
 before HTTP/WS integration. Continue API → Mintlify → recovery. Preserve ignored
 work and unrelated `docs/user-journey.md`/`stays/`; no AWS, live venue, wallet,
 container or subagent was used for this merge/qualification.
@@ -1521,8 +1526,8 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 Work: API → public docs → recovery ordering and full API_SCOPE approved 2026-10-03; P21 is not an API prerequisite. Started tee/p21a-web-api-contract on P20 merge 76f32956e3ee5d31707ec1bf7fa81f8711666c97. After the frontend/bot explanation, the user explicitly approved bounded Noise NK qualification. ADR 0021 carries the contract, permission/provenance matrix, bounds and split. Isolated tools/web-channel supplies one Rust core, thin WASM binding, synthetic native responder, published known answer, adversarial tests and disposable browser harness; no shipping dependency or existing Node TLS change.
 Verification: primary browser/Noise/Snow/RFC/AWS sources checked. Native debug/release tests: 10 pass each. Node 24.21.0 and actual Chrome 154.0.8037.93: seven groups each pass, including standard vector, encrypted native round trip, early/replay/tamper/reflection/size refusal and RNG failure. Carrier marker absent in both directions. Complete isolated runner passes: four dependency-guard tests, native/WASM strict Clippy and formatting. Full pinned repository runner also passes default/all-feature Clippy, workspace build/debug/release tests, 29 repository tests and all 17 SDK/process tests. Foundation: 27 phases/36 documents; focused 13 plan-validator tests and diff check pass. On-chain source unchanged, so no local SBF rerun. Hosted CI/review receipt to follow; no HTTP/WS financial workflow or fresh browser Nitro attestation claimed. All four PLAN P21A acceptance criteria remain open.
 Unexpected: Snow lacks qualified zeroizing Drop for opaque key/chaining state and has no formal audit; this candidate cannot silently become production crypto. Removed unused Snow std feature (otherwise enables ring/Blake2), pinning only selected suite/entropy and 43 registry packages. Existing risk_report uses journal cut time and needs qualified read-time validation. READ remains own-account scoped. Tool setup used task-local downloads, not global replacement; no AWS, live venue, wallet, container or agent.
-Next: publish the bounded contract/core qualification PR using native gh stack; then qualify hardened implementation, independent browser AWS verifier and exact attested context/binding. Implement HTTP/shared SDK next, followed by read projections/WS and joined adversarial acceptance. No parent-readable fallback, fake recovery, triggers/modify/batching, public feed, onboarding or terminal expansion.
-PR: none.
+Next: #47 is published ready using native gh stack against product/tee-v1 at 76f32956e3ee5d31707ec1bf7fa81f8711666c97; source/test checkpoint e4a4ec34ea3fd5fe6a0fe0bace67f10d26aa4f8a, publication receipt is docs-only. Check the current tip's CI/review; do not reuse earlier green results or merge automatically. Then qualify hardened implementation, independent browser AWS verifier and exact attested context/binding. HTTP/shared SDK follows, then read projections/WS and joined acceptance. No parent-readable fallback or execution/onboarding scope expansion.
+PR: https://github.com/arnabnandikgp/cinder/pull/47.
 Merge: none.
 
 ## P21B — Public documentation
