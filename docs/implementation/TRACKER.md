@@ -23,7 +23,7 @@
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
 | [P20 — Nitro application qualification](PLAN.md#p20) | closed | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), merged `76f3295` |
-| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | [#47](https://github.com/arnabnandikgp/cinder/pull/47), first contract/core-qualification slice |
+| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | [#47](https://github.com/arnabnandikgp/cinder/pull/47), contract/core; [#48](https://github.com/arnabnandikgp/cinder/pull/48), browser verifier/binding |
 | [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
@@ -42,9 +42,9 @@ P21A.1 #47 at `9aefdd9d3478870ccf58b3cc1cf1ade449f13cd3`; trunk remains
 `product/tee-v1` at `76f32956e3ee5d31707ec1bf7fa81f8711666c97`.
 The #47 cleanup fix is green on all four hosted jobs at 3c1b593. CodeRabbit's
 sole minor ADR status-clarity finding is fixed on its owning base PR at 9aefdd9
-and its thread is resolved; that docs-only head has separate pending checks.
+and its thread is resolved; all four hosted jobs also pass at that docs-only head.
 No merge is authorized here. The candidate source checkpoint is
-`f73b879` after native-stack rebase; all tool/workflow bytes are identical to
+`f73b879c9d051a52b1b7726d353ef83f89f4d36c` after native-stack rebase; all tool/workflow bytes are identical to
 locally tested `48ca7c1`, with only documentation/base alignment changed.
 
 The new candidate supplies independent browser AWS-root/X.509/COSE validation,
@@ -59,12 +59,15 @@ rejects synthetic roots. The shipping Cargo graph and P19 Node TLS are unchanged
 
 Native debug/release tests: twelve each; dependency/process regressions: nine;
 native/WASM strict Clippy, formatting and bundle pass. The root workspace guard
-and 29 repository tests pass. The current candidate's hosted CI/review is pending
-publication; do not reuse base-head green checks. No shipping HTTP/WS handler,
+and 29 repository tests pass. Ready PR #48 is published above #47 through native
+stack #49. All four hosted jobs pass at first publication head
+`cff23613fdb26c780e7487edc320328876fc6a9b`; a successful CodeRabbit status alone is
+not a completed review disposition. Any later docs-only receipt head needs its
+own checks; do not reuse base-head green checks. No shipping HTTP/WS handler,
 fresh browser hardware attestation, zeroization proof or full phase closure.
 
-Next: submit this verifier/context slice through the native stack, then check
-its exact-head CI/review. Separately qualify reviewed secret-lifetime hardening,
+Next: review the published verifier/context slice and its exact-head evidence.
+Separately qualify reviewed secret-lifetime hardening,
 server NSM web quotes/entropy and SDK lifetime/fencing before HTTP integration.
 No Snow fork or production crypto choice has been made; its open erasure gap
 must not be hidden by dropping a wrapper or browser worker. All P21A acceptance
@@ -1573,8 +1576,8 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 Work: API → public docs → recovery ordering and full API_SCOPE approved 2026-10-03; P21 is not an API prerequisite. Started tee/p21a-web-api-contract on P20 merge 76f32956e3ee5d31707ec1bf7fa81f8711666c97. After the frontend/bot explanation, the user explicitly approved bounded Noise NK qualification. ADR 0021 carries the contract, permission/provenance matrix, bounds and split. Isolated tools/web-channel supplies one Rust core, thin WASM binding, synthetic native responder, published known answer, adversarial tests and disposable browser harness; no shipping dependency or existing Node TLS change.
 Verification: primary browser/Noise/Snow/RFC/AWS sources checked. Native debug/release tests: 10 pass each. Node 24.21.0 and actual Chrome 154.0.8037.93: seven groups each pass, including standard vector, encrypted native round trip, early/replay/tamper/reflection/size refusal and RNG failure. Carrier marker absent in both directions. Complete isolated runner passes: four dependency-guard tests, native/WASM strict Clippy and formatting. Two new teardown regressions pass, including a SIGTERM-resistant descendant writer after its leader exits; the complete isolated runner passes again after this fix. At docs-only a96b5cc hosted plan/Rust/Anchor jobs passed and Linux Chrome 154.0.8037.57/Node passed all channel groups before the cleanup race failed the job. New-fix hosted CI is pending (first evidence-based CI fix); no container run needed. Earlier full pinned repository runner passed default/all-feature Clippy, workspace build/debug/release tests, 29 repository tests and all 17 SDK/process tests; that is not a fresh full-repository run for this harness-only fix. Foundation: 27 phases/36 documents; focused 13 plan-validator tests and diff check pass. On-chain source unchanged, so no local SBF rerun. No HTTP/WS financial workflow or fresh browser Nitro attestation claimed. All four PLAN P21A acceptance criteria remain open.
 Unexpected: Snow lacks qualified zeroizing Drop for opaque key/chaining state and has no formal audit; this candidate cannot silently become production crypto. Removed unused Snow std feature (otherwise enables ring/Blake2), pinning only selected suite/entropy and 43 registry packages. Existing risk_report uses journal cut time and needs qualified read-time validation. READ remains own-account scoped. Tool setup used task-local downloads, not global replacement; no AWS, live venue, wallet, container or agent.
-Review continuation: all four hosted jobs passed at cleanup-fix 3c1b593ae3731bea5c5fa619023ef20a546006a7. The single completed CodeRabbit finding is a valid minor status-clarity issue; fixed in ADR 0021 and locally validated with the foundation checker, 13 focused tests and diff check. The current review-fix tip is documentation-only and awaits its own hosted results. No production/API gate closes.
-Next: #47 remains ready against product/tee-v1 at 76f32956e3ee5d31707ec1bf7fa81f8711666c97. Push the documentation-only finding fix and rebase the unpublished tee/p21a-browser-attestation layer onto it through native gh stack; then publish that bounded verifier/context qualification. Keep source-head and docs-head CI evidence distinct; do not merge automatically. Dependency secret-lifetime hardening remains separate before HTTP/shared SDK, reads/WS and joined acceptance. No parent-readable fallback or execution/onboarding expansion.
+Review continuation: all four hosted jobs passed at cleanup-fix 3c1b593ae3731bea5c5fa619023ef20a546006a7. The single completed CodeRabbit finding is a valid minor status-clarity issue; fixed in ADR 0021 and locally validated with the foundation checker, 13 focused tests and diff check. All four hosted jobs also pass at documentation-only review-fix 9aefdd9d3478870ccf58b3cc1cf1ade449f13cd3, and the finding's thread is resolved. No production/API gate closes.
+Next: #47 remains ready against product/tee-v1 at 76f32956e3ee5d31707ec1bf7fa81f8711666c97. The browser verifier/context layer is published above it as #48 through native stack #49. Keep source-head and docs-head CI evidence distinct; do not merge automatically. Dependency secret-lifetime hardening remains separate before HTTP/shared SDK, reads/WS and joined acceptance. No parent-readable fallback or execution/onboarding expansion.
 PR: https://github.com/arnabnandikgp/cinder/pull/47.
 Merge: none.
 
@@ -1597,7 +1600,9 @@ synthetic key -> native Noise -> both confirmations -> matching binding/private
 echo passes. Historical AWS path validates at capture time only and expires later.
 Root workspace guard and all 29 repository tests pass; no shipping Rust/Anchor
 source changed and no fresh full workspace/SBF run is claimed for this layer.
-Hosted CI/review for this new layer remains pending. No fresh NSM web quote or
+All four hosted jobs pass at first publication head cff23613fdb26c780e7487edc320328876fc6a9b;
+review disposition remains separate, and later receipt heads need their own checks.
+No fresh NSM web quote or
 production API/crypto approval; all four parent-phase criteria stay open.
 
 Unexpected: PKI.js needs explicit path-length checks, and actual AWS CA paths
@@ -1609,10 +1614,10 @@ shapes fail closed. Native trust/revocation policy is unchanged. NPM lifecycle
 scripts are disabled, exact manifest/lock/integrities guarded, build-only esbuild
 separate. Snow erasure remains open and no vendor fork has been selected.
 
-Next: publish the bounded layer above the clarified #47 base (9aefdd9), check its exact-head
-CI/review, then P21A.2b dependency/secret-lifetime and remaining transport gates
+Next: review the bounded layer above the clarified #47 base (9aefdd9), then
+P21A.2b dependency/secret-lifetime and remaining transport gates
 before HTTP/SDK integration. Do not close the parent phase or merge automatically.
-PR: pending publication.
+PR: https://github.com/arnabnandikgp/cinder/pull/48 (ready; native stack #49 above #47).
 Merge: none.
 
 ## P21B — Public documentation
