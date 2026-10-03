@@ -93,6 +93,12 @@ Rust/crypto/financial source and dependency graph are unchanged, so no redundant
 full Rust/SBF/hardware rerun is claimed. Review-fix CI requires its own head;
 the docstring-coverage warning is not a reason for blanket comment changes.
 
+Published review-fix source: `4cf0462c91f1ac424e9ecf9ebee29845500e6b58`, above
+unchanged #50/base `4841c7044dc7d1080c5ad8f45ddc14277bae4bca`. The actionable
+thread has a fix/evidence reply and is resolved. New-source CI is running; this
+publication receipt is documentation-only and also needs its own head checks.
+Neither the old green jobs nor the resolved thread closes P21A or authorizes merge.
+
 Next: review #51 and its current-head checks, then bottom-up merge when authorized.
 P21A/milestones stay in
 progress until relevant reviews are addressed and all layers merge. P21B Mintlify
@@ -1878,8 +1884,10 @@ timeouts/pages fail. Four deterministic regressions are included in the normal
 SDK runner. Strict typechecking/all 24 SDK/assertion/TLS tests and Node/Chrome's
 24 joined groups each pass. Prior closure evidence is superseded by this rerun;
 all four hosted jobs passed at `9fa8748`, not automatically at the review-fix head.
-No production source, policy, native action or dependency changed. Next: publish
-the narrow fix, record thread disposition and check its own CI; no automatic merge.
+No production source, policy, native action or dependency changed. Published fix:
+`4cf0462c91f1ac424e9ecf9ebee29845500e6b58`; its review thread is replied/resolved.
+Next: inspect the new-head CI/review, then await authorized bottom-up stack merge.
+No automatic merge; subsequent docs-only receipt checks are not inherited.
 
 ## P21B — Public documentation
 
