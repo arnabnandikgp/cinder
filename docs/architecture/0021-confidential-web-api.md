@@ -1,7 +1,7 @@
 # P21A: confidential web API contract and transport proposal
 
 Date: 2026-10-03. Product scope and bounded Noise NK qualification approved.
-Status: implementation contract; new browser channel not yet implemented or qualified.
+Status: implementation contract; isolated native/browser core locally qualified; shipping channel and fresh browser Nitro attestation remain unqualified.
 This is the implementation contract, not a published or implemented HTTP API.
 Progress belongs in the tracked implementation tracker. No deployment is enabled.
 

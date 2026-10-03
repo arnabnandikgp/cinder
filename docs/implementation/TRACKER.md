@@ -61,11 +61,13 @@ publication receipt `a96b5cc5d1c696ff9089d6dfe9d85a3c6b8a7b03` was docs-only.
 At a96b5cc the plan, Rust and Anchor jobs passed; the browser job passed all
 native/Node/Chrome channel checks but failed in temporary-profile teardown
 (`ENOTEMPTY`). An owned Chrome helper was still writing after its leader exited.
-The current fix stops the freshly spawned process group, clears bounded wait
-timers and retries profile deletion finitely. Two local process regressions and
-the complete isolated runner pass; this fix's hosted checks remain pending.
-No earlier result is reused as evidence for the new head. No inline review or
-submitted review was present at the check; CodeRabbit's status alone is not a review.
+Fix `3c1b593ae3731bea5c5fa619023ef20a546006a7` stops the freshly spawned process
+group, clears bounded wait timers and retries profile deletion finitely. Two local
+process regressions and the complete isolated runner pass; all four hosted jobs
+also passed at that exact head. CodeRabbit's completed review has one minor ADR
+status-clarity finding, now corrected to distinguish qualified isolated core from
+unqualified shipping channel/fresh browser hardware. This review fix is docs-only;
+its new-head hosted checks remain pending, not inherited from 3c1b593.
 [ADR 0021](../architecture/0021-confidential-web-api.md) is tracked and the separate
 `tools/web-channel/` Rust/WASM core uses pinned Snow 0.10.0 without altering the
 shipping graph or P19 Node TLS. No HTTP trading handler or stream is implemented.
@@ -1533,7 +1535,8 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 Work: API → public docs → recovery ordering and full API_SCOPE approved 2026-10-03; P21 is not an API prerequisite. Started tee/p21a-web-api-contract on P20 merge 76f32956e3ee5d31707ec1bf7fa81f8711666c97. After the frontend/bot explanation, the user explicitly approved bounded Noise NK qualification. ADR 0021 carries the contract, permission/provenance matrix, bounds and split. Isolated tools/web-channel supplies one Rust core, thin WASM binding, synthetic native responder, published known answer, adversarial tests and disposable browser harness; no shipping dependency or existing Node TLS change.
 Verification: primary browser/Noise/Snow/RFC/AWS sources checked. Native debug/release tests: 10 pass each. Node 24.21.0 and actual Chrome 154.0.8037.93: seven groups each pass, including standard vector, encrypted native round trip, early/replay/tamper/reflection/size refusal and RNG failure. Carrier marker absent in both directions. Complete isolated runner passes: four dependency-guard tests, native/WASM strict Clippy and formatting. Two new teardown regressions pass, including a SIGTERM-resistant descendant writer after its leader exits; the complete isolated runner passes again after this fix. At docs-only a96b5cc hosted plan/Rust/Anchor jobs passed and Linux Chrome 154.0.8037.57/Node passed all channel groups before the cleanup race failed the job. New-fix hosted CI is pending (first evidence-based CI fix); no container run needed. Earlier full pinned repository runner passed default/all-feature Clippy, workspace build/debug/release tests, 29 repository tests and all 17 SDK/process tests; that is not a fresh full-repository run for this harness-only fix. Foundation: 27 phases/36 documents; focused 13 plan-validator tests and diff check pass. On-chain source unchanged, so no local SBF rerun. No HTTP/WS financial workflow or fresh browser Nitro attestation claimed. All four PLAN P21A acceptance criteria remain open.
 Unexpected: Snow lacks qualified zeroizing Drop for opaque key/chaining state and has no formal audit; this candidate cannot silently become production crypto. Removed unused Snow std feature (otherwise enables ring/Blake2), pinning only selected suite/entropy and 43 registry packages. Existing risk_report uses journal cut time and needs qualified read-time validation. READ remains own-account scoped. Tool setup used task-local downloads, not global replacement; no AWS, live venue, wallet, container or agent.
-Next: #47 is published ready using native gh stack against product/tee-v1 at 76f32956e3ee5d31707ec1bf7fa81f8711666c97; source/test checkpoint e4a4ec34ea3fd5fe6a0fe0bace67f10d26aa4f8a, publication receipt is docs-only. Check the current tip's CI/review; do not reuse earlier green results or merge automatically. Then qualify hardened implementation, independent browser AWS verifier and exact attested context/binding. HTTP/shared SDK follows, then read projections/WS and joined acceptance. No parent-readable fallback or execution/onboarding scope expansion.
+Review continuation: all four hosted jobs passed at cleanup-fix 3c1b593ae3731bea5c5fa619023ef20a546006a7. The single completed CodeRabbit finding is a valid minor status-clarity issue; fixed in ADR 0021 and locally validated with the foundation checker, 13 focused tests and diff check. The current review-fix tip is documentation-only and awaits its own hosted results. No production/API gate closes.
+Next: #47 remains ready against product/tee-v1 at 76f32956e3ee5d31707ec1bf7fa81f8711666c97. Push the documentation-only finding fix and rebase the unpublished tee/p21a-browser-attestation layer onto it through native gh stack; then publish that bounded verifier/context qualification. Keep source-head and docs-head CI evidence distinct; do not merge automatically. Dependency secret-lifetime hardening remains separate before HTTP/shared SDK, reads/WS and joined acceptance. No parent-readable fallback or execution/onboarding expansion.
 PR: https://github.com/arnabnandikgp/cinder/pull/47.
 Merge: none.
 
