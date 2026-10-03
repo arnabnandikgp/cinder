@@ -72,6 +72,8 @@ no HTTP framework or concrete deployment is selected by this plan update.
 | Unit and component integration | P02–P18 and every later change | Existing financial/journal/API/adapter tests and actual local SBF instructions; not a complete deployed workflow |
 | Local executable service slice | P19 | SDK → real relay/service processes → signed request → protected journal → private response, with explicit attestation/infrastructure fixtures; not Nitro evidence |
 | Actual confidential runtime | P20 | Same service packaged into an enclave, authenticated egress, key release and fresh encrypted restore; actual AWS use requires G03/G05 |
+| Customer HTTP/WebSocket surface | P21A | Reviewed confidential browser/Node transport over the same authorization/journal, with bounded private streams; no native compatibility or production claim |
+| Implemented public reference | P21B | Mintlify guides/method pages and checked examples match actual handlers and environment availability; publishing is not customer-funds release |
 | Independent recovery workflow | P21 | Fence/reconcile/return/finalize/activate/claim delivery; fake hardware allowed, actual claim instruction evidence remains distinct |
 | Joined offline workflows | P22 | Production SDK/service/controllers/adapters with deterministic external ports, recorded failure seeds and per-boundary accounting assertions; no live venue/RPC in routine CI |
 | Actual end-to-end qualification | P23 | Tagged implementation on approved Nitro + Solana devnet + venue test environment, current capability evidence, receipts and cleanup; no mainnet inference |
@@ -83,9 +85,11 @@ A failed or unsupported capability stays named and disabled. P24 reviews the
 evidence and remaining release gates; it is not a substitute for runnable services.
 
 Use the thin SDK/CLI and explicitly preconfigured disposable accounts for initial
-application tests. Scope addition approved 2026-10-03: after P21 recovery, implement
+application tests. Scope and subsequent sequencing approved 2026-10-03: implement
 browser-compatible confidential HTTP/WebSocket operations in P21A, then author
-the public Mintlify reference against that implementation in P21B. Do not publish
+the public Mintlify reference against that implementation in P21B, then complete
+P21 recovery integration. P21 is not a prerequisite for ordinary API transport.
+Do not publish
 planned endpoints as working ones. P22 must exercise the implemented transports
 and P23 must qualify the changed application, not inherit P20's old measured image.
 These suffixes preserve existing phase IDs; they are explicit new scope, not a
@@ -517,30 +521,10 @@ P20 remains in progress pending review/merge.
 - [x] Accepted encrypted state survives qualified failure/restore; witness loss and split writer fail safely, with costs/limits recorded. Real replicas/CAS participate; lost-ack injection is inside the test enclave, not a physical packet drop.
 - [x] A tagged enclave executable and parent relay run the same SDK operation contract; controller scheduling and persisted unknown attempts cannot bypass qualification or auto-retry after restart. Local fixture acceptance and actual hardware evidence are recorded separately. Exact-source ELF/EIF/PCR releases are identified in both receipts; live native controller workflows remain P22/P23 scope.
 
-<a id="p21"></a>
-## P21 — Integrated recovery and independent claim delivery
-
-Depends on: P10, P12, P16, P17, P19.
-
-Deliver: controlled cutover/reconciliation, venue unwind/returns, final root/backing
-verification, operator activation, encrypted proof-package publication and standalone
-claimant. Pending claims/fees/late actions all use the same financial journal.
-Evidence: W04–W08; live-like offline outage rehearsal. Use explicit fake hardware/
-witness ports here; actual P20 runtime and live qualification join in P23. Do not
-block offline recovery engineering on AWS access or label it hardware-qualified.
-Exercise the runnable service/SDK's accepted tail and existing payout history, not
-an independently seeded recovery ledger. Claim delivery/submission must still work
-with the ordinary service unavailable; representative final payouts use the actual
-local compiled custody/recovery program or an explicitly separately checked SBF path.
-
-- [ ] No ordinary writer/payout/escaped capability can race an activated root; unresolved native outcomes prevent unsafe activation.
-- [ ] Claimants obtain and verify kits without the ordinary API; package loss, stale package and privacy are tested.
-- [ ] Final funded claims match remaining entitlements; unavailable venue assets do not become payout cash or disappear as liabilities.
-
 <a id="p21a"></a>
 ## P21A — Confidential HTTP and WebSocket API
 
-Depends on: P18, P19, P20, P21.
+Depends on: P18, P19, P20.
 
 Deliver: a versioned customer HTTP/WebSocket contract and browser/Node SDK transport
 over the existing eight P18 commands, with correlated command responses and private
@@ -557,7 +541,13 @@ First scope is existing commands plus private updates; no batch/modify/trigger,
 public market-data feeds, self-service onboarding, new payout recipient or automatic
 uncertain-order retry. Stop for review if the proposed cryptographic/authority
 profile changes an approved security guarantee. No live customer release is implied.
-Evidence: W06, ADR 0018/0019/0020, P21 accepted history and tracked Rust/TypeScript
+The [API comparison and scope proposal](API_SCOPE.md) distinguishes current commands,
+recommended bounded account/history reads and separate execution enhancements.
+Finalize that surface before coding; richer reads are proposed, not automatically
+approved by the sequencing change. Define journal freeze/writer-epoch and API
+availability behavior now so P21 can later integrate without a second authority
+store. Do not implement fake claim/recovery endpoints to satisfy a transport test.
+Evidence: W06, ADR 0018/0019/0020, P18/P19 accepted history and tracked Rust/TypeScript
 protocol vectors; runnable offline browser/Node transport and adversarial process tests.
 
 - [ ] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
@@ -587,6 +577,28 @@ tracked implementation and sanitized qualification receipts; docs build/link che
 - [ ] Guides accurately state pooled execution, customer ownership, fees/protection limits, private versus public data and operator-assisted recovery; unsupported features and environments are clearly distinguished.
 - [ ] Every advertised method/stream maps to implemented handlers and checked examples, including authorization, exact units, uncertain outcomes, disconnect and reconciliation; spec/example drift fails CI.
 - [ ] Mintlify preview/build/navigation and safe publication checks pass without secrets or ignored work; hosted publication has its own recorded receipt if performed, not a claim based on a local build.
+
+<a id="p21"></a>
+## P21 — Integrated recovery and independent claim delivery
+
+Depends on: P10, P12, P16, P17, P19, P21A.
+
+Deliver: controlled cutover/reconciliation, venue unwind/returns, final root/backing
+verification, operator activation, encrypted proof-package publication and standalone
+claimant. Pending claims/fees/late actions all use the same financial journal.
+Evidence: W04–W08; live-like offline outage rehearsal. Use explicit fake hardware/
+witness ports here; actual P20 runtime and live qualification join in P23. Do not
+block offline recovery engineering on AWS access or label it hardware-qualified.
+Exercise the implemented HTTP/WebSocket service/SDK's accepted tail and existing
+payout history, not an independently seeded recovery ledger. Claim delivery and
+submission must still work with the ordinary service unavailable; representative
+final payouts use the actual local compiled custody/recovery program or an
+explicitly separately checked SBF path. Scheduled after P21B public docs; update
+those docs when integration passes, rather than claiming recovery is already live.
+
+- [ ] No ordinary writer/payout/escaped capability can race an activated root; unresolved native outcomes prevent unsafe activation.
+- [ ] Claimants obtain and verify kits without the ordinary API; package loss, stale package and privacy are tested.
+- [ ] Final funded claims match remaining entitlements; unavailable venue assets do not become payout cash or disappear as liabilities.
 
 <a id="p22"></a>
 ## P22 — Joined offline adversarial acceptance suite

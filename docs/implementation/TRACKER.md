@@ -23,9 +23,9 @@
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
 | [P20 — Nitro application qualification](PLAN.md#p20) | in progress | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), open on `product/tee-v1` |
-| [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P21A — HTTP and WebSocket API](PLAN.md#p21a) | open | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | — |
 | [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
+| [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
@@ -54,6 +54,10 @@ has the plan job passing and Rust/SBF plus CodeRabbit still running at the
 2026-10-03 check. All four original threads have fix replies and are resolved;
 the naming nit also has a summary reply. This documentation-only follow-up does
 not inherit those hosted results; check the latest tip before merge.
+Subsequent read-only check at `b2c2e8b6a0fa724d497b1ca323a05d930f8558d1`:
+all three hosted jobs pass; CodeRabbit is still pending. The API-first planning
+changes below alter documentation only, not the tested runtime; their later
+publication still needs its own hosted status.
 Hardware results remain tied to their actual source. Pre-hardware assembly is
 `b67f3947b6eda241bd56912003b22ee90107857f`; real AWS compatibility fixes are
 `37487ca`; the qualified export is `5557d3350f371d616965006a90ea03b55420400f`.
@@ -109,8 +113,9 @@ receipts remain in the owning phases below.
 
 Next: inspect latest-head CI/review for P20 #45's locally verified fixes and
 approved roadmap, and verify the relevant thread replies/resolutions. No automatic
-merge. After P20's reviewed merge, proceed with P21 recovery, P21A HTTP/WebSocket
-implementation, P21B public docs, then P22/P23 joined offline/live acceptance.
+merge. Sequencing subsequently approved 2026-10-03: after P20's reviewed merge,
+proceed with P21A HTTP/WebSocket implementation, P21B public docs, then P21 recovery
+and P22/P23 joined offline/live acceptance.
 Public docs follow implemented APIs, not speculative endpoint promises. Browser
 transport needs its reviewed ADR before implementation; onboarding/terminal and
 public market-data feeds remain separate scope.
@@ -1433,28 +1438,27 @@ review/CI pass or merge is presumed. Final prose-only plan validation and all
 13 validator tests also pass with available Node 26.8.2 after the temporary pinned
 Node binary was removed; the earlier full run used pinned Node 24.21.0.
 
+Sequencing follow-up: the user subsequently approved HTTP/WebSocket → Mintlify
+docs → P21 recovery. PLAN/TRACKER are reordered without renumbering completed
+phases or deleting any recovery criterion. API_SCOPE.md records the current
+eight-command surface, HyperLink method comparison and explicitly proposed
+read/history extensions. Local plan validation passes 27 phases/35 documents,
+all 13 validator tests and diff checks on available Node 26.8.2. No runtime
+change or additional Rust/SBF/hardware test is implied by this planning update.
+
 Next: inspect new-head CI/review and the four addressed thread replies/resolutions,
-and obtain merge authorization before closing P20. Then start
-P21 recovery integration; implement P21A before publishing P21B. Native trading,
+and obtain merge authorization before closing P20. Then finalize P21A's scope
+and transport ADR, implement P21A, publish P21B, and complete P21 recovery. Native trading,
 funding/reads and production policy remain separate G01–G04/P23 gates.
 PR: https://github.com/arnabnandikgp/cinder/pull/45.
 Merge: none.
 
-## P21 — Recovery integration
-
-Work: not started.
-Verification: not run; acceptance in PLAN P21.
-Unexpected: none yet.
-Next: recover the runnable service's accepted journal, fence/reconcile/unwind/return funds, finalize backed claims and independently deliver/submit kits with the ordinary API unavailable. Keep explicit hardware/witness doubles and actual local SBF evidence distinct.
-PR: none.
-Merge: none.
-
 ## P21A — HTTP and WebSocket API
 
-Work: scope approved 2026-10-03; implementation not started. Added a bounded browser/Node API milestone after recovery, preserving the P18 commands and one journal. Protocol/attestation choices remain an explicit reviewed ADR prerequisite, not an inferred approval of custom cryptography.
-Verification: not run; acceptance in PLAN P21A. This tracker entry is a planning change, not a working HTTP/WebSocket endpoint.
+Work: transport milestone approved 2026-10-03; implementation not started. The user subsequently approved API → public docs → recovery ordering, replacing the earlier recovery-first schedule. P21 is removed as an API dependency. Compared HyperLink's current documented methods with actual Rust/TypeScript commands in API_SCOPE.md; bounded read/history extensions remain proposals for scope review. Protocol/attestation choices remain an explicit reviewed ADR prerequisite, not an inferred approval of custom cryptography.
+Verification: public HyperLink documentation and actual Rust/TypeScript commands compared on 2026-10-03; plan/link validation and all 13 validator tests pass. HTTP/WebSocket implementation tests not run; acceptance in PLAN P21A. This is a planning change, not a working endpoint.
 Unexpected: the initial P19/P20 automation channel is not browser HTTP/WebSocket; a reviewed confidential browser transport is required, not a parent-side plaintext facade.
-Next: after P21, finalize the enclave-attested browser/Node contract and implement commands plus bounded private streams; keep public market data, onboarding and terminal UI outside this milestone.
+Next: finalize API_SCOPE.md's method/permission/read matrix and transport ADR after P20; implement the shared browser/Node commands and bounded private streams. Define freeze/epoch behavior for later recovery; keep triggers/modify/batching and public market data/onboarding/terminal outside this phase unless separately approved.
 PR: none.
 Merge: none.
 
@@ -1464,6 +1468,15 @@ Work: scope approved 2026-10-03; implementation not started. Public docs follow 
 Verification: not run; acceptance in PLAN P21B. No Mintlify project, hosted site or deployment is claimed.
 Unexpected: local implementation and actual deployment availability are distinct; public examples must identify the supported environment and qualified release.
 Next: after P21A, build the separate docs-site/ tree from checked handlers/schemas/examples and product/security/recovery decisions, then record actual publication if authorized/performed.
+PR: none.
+Merge: none.
+
+## P21 — Recovery integration
+
+Work: not started; scheduled after HTTP/WebSocket implementation and public docs by the user's 2026-10-03 decision. No recovery criterion is removed.
+Verification: not run; acceptance in PLAN P21.
+Unexpected: none yet.
+Next: recover the implemented service's accepted journal, fence/reconcile/unwind/return funds, finalize backed claims and independently deliver/submit kits with the ordinary API unavailable. Keep explicit hardware/witness doubles and actual local SBF evidence distinct. Update public recovery docs only when this integrated path is tested.
 PR: none.
 Merge: none.
 
