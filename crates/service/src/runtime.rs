@@ -279,11 +279,7 @@ impl Loaded {
             return Err(Error);
         }
         self.api.initialize(&mut store, now).map_err(|_| Error)?;
-        if fresh {
-            self.funding
-                .bind(&mut store, commit_id()?, clock.now()?)
-                .map_err(|_| Error)?;
-        }
+        initialize_funding(&self.funding, &mut store, clock.as_ref())?;
         let egress = Egress::new(
             self.origin,
             Target::new(3, manifest.venue_port)?,
@@ -307,11 +303,24 @@ impl Loaded {
         })
     }
 }
+fn initialize_funding<B: Backend, P: Protection>(
+    funding: &Controller,
+    store: &mut Journal<B, P>,
+    clock: &dyn Clock,
+) -> Result<(), Error> {
+    if !funding.bound(store, clock.now()?).map_err(|_| Error)? {
+        funding
+            .bind(store, commit_id()?, clock.now()?)
+            .map_err(|_| Error)?;
+    }
+    Ok(())
+}
 fn commit_id() -> Result<CommitId, Error> {
     let mut id = [0; 32];
     openssl::rand::rand_bytes(&mut id)?;
     CommitId::new(id).map_err(|_| Error)
 }
+
 impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
     fn active_time(&self) -> Result<u64, Error> {
         if self.stop.load(Ordering::SeqCst) {
@@ -423,5 +432,121 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
         // Contention is not a permanent key revocation. Journal/clock failures
         // are caught by tick and private API already refuses stale state.
         result
+    }
+}
+
+#[cfg(test)]
+#[path = "../../journal/tests/support/mod.rs"]
+mod initialization_support;
+
+#[cfg(test)]
+mod initialization_tests {
+    use super::*;
+    use cinder_journal::sqlite::{Migration, SqliteBackend};
+    use cinder_kernel::ledger::{Location, Source};
+    use cinder_pacifica::{execution::Origin, funding::Beneficiary, profile::Grid};
+    use initialization_support::{FixtureProtection, Temp};
+    struct Fixed(Result<u64, Error>);
+    impl Clock for Fixed {
+        fn now(&self) -> Result<u64, Error> {
+            self.0
+        }
+    }
+    #[test]
+    fn restart_repairs_binding_after_committed_genesis_without_rebinding() {
+        let mut config = initialization_support::config();
+        for (tag, location) in [(8, Location::Vault), (9, Location::Broker)] {
+            config.sources.push(Source {
+                scope: EventScope {
+                    namespace: NamespaceId::new([tag; 32]).unwrap(),
+                    ..config.sources[0].scope
+                },
+                location,
+            });
+        }
+        let broker =
+            openssl::pkey::PKey::private_key_from_raw_bytes(&[9; 32], openssl::pkey::Id::ED25519)
+                .unwrap()
+                .raw_public_key()
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let profile = Profile {
+            config: config.clone(),
+            source: config.sources[0].scope,
+            account: "J2xccRtuG43drESLYznHhLhQkLTdfepcKYbiQ9BsJVaf".into(),
+            environment: Origin::Testnet.url().into(),
+            revision: 1,
+            evidence: "offline interrupted-boot fixture; not AWS evidence".into(),
+            precision: Level::Qualified,
+            fills: Level::Qualified,
+            quote_places: 0,
+            perp_tag: 0,
+            markets: vec![Mapping {
+                symbol: "BTC".into(),
+                market: 0,
+                size: Grid { places: 0, step: 1 },
+                price: Grid { places: 0, step: 1 },
+            }],
+        };
+        let route = Route {
+            domain: config.domain.deployment.bytes(),
+            pool: [18; 32],
+            funds: [19; 32],
+            beneficiaries: (1..=2)
+                .map(|n| Beneficiary {
+                    account: [n; 32],
+                    wallet: [n + 10; 32],
+                    tokens: [n + 33; 32],
+                })
+                .collect(),
+            program: [20; 32],
+            config: [21; 32],
+            vault: [22; 32],
+            mint: [23; 32],
+            broker,
+            broker_tokens: [24; 32],
+            venue_program: [25; 32],
+            venue_vault: [26; 32],
+            epoch: 1,
+            decimals: 0,
+            withdrawal: Level::Qualified,
+            chain: Level::Qualified,
+            settings: Level::Qualified,
+            withdrawal_cost: 10,
+            maximum_movement: 1000,
+            maximum_fee: 5,
+            setup_max_age: 10_000,
+        };
+        let funding = Controller::new(profile, route, Zeroizing::new([9; 32])).unwrap();
+        let temp = Temp::new();
+        let journal = Journal::create(
+            SqliteBackend::create(&temp.db).unwrap(),
+            FixtureProtection,
+            config.clone(),
+        )
+        .unwrap();
+        // Genesis is durable, but the process stopped before the route was bound.
+        drop(journal);
+        let mut journal = Journal::open(
+            SqliteBackend::open(&temp.db, Migration::None).unwrap(),
+            FixtureProtection,
+            config,
+        )
+        .unwrap();
+        let head = journal.head();
+        assert!(!funding.bound(&mut journal, 100).unwrap());
+        assert_eq!(journal.head(), head);
+        assert!(funding.funding_need(&mut journal, 100, 1).is_err());
+        assert!(initialize_funding(&funding, &mut journal, &Fixed(Err(Error))).is_err());
+        assert_eq!(journal.head(), head);
+        initialize_funding(&funding, &mut journal, &Fixed(Ok(100))).unwrap();
+        assert!(funding.bound(&mut journal, 100).unwrap());
+        assert!(funding.funding_need(&mut journal, 100, 1).is_ok());
+        assert!(!journal.state().unwrap().native_funding_ready());
+        let head = journal.head();
+        initialize_funding(&funding, &mut journal, &Fixed(Ok(100))).unwrap();
+        assert!(funding.bound(&mut journal, 99).is_err());
+        assert_eq!(journal.head(), head);
     }
 }

@@ -484,22 +484,16 @@ pub fn relay_vsock(
 }
 /// Parent egress to one native origin's HTTPS port, not a general-purpose proxy.
 /// DNS chooses routing only; the enclave verifies origin/certificates. There is
-/// one TCP attempt per accepted socket, no address rotation or TLS termination.
+/// one TCP attempt per accepted socket, no address fallback or TLS termination.
 pub fn relay_egress(
     listener: crate::vsock::VsockListener,
     origin: cinder_pacifica::execution::Origin,
     stop: Arc<AtomicBool>,
 ) -> Result<(), Error> {
-    // Resolve once before serving. Parent DNS availability is not a trust anchor.
-    let address = (crate::egress::host(origin), 443)
-        .to_socket_addrs()?
-        .next()
-        .ok_or(Error)?;
-    relay_socket(
-        listener,
-        || TcpStream::connect_timeout(&address, IO_TIMEOUT).map_err(|_| Error),
-        stop,
-    )
+    let host = crate::egress::host(origin);
+    // Fail fast at startup, but do not retain an address beyond that check.
+    first_ipv4((host, 443).to_socket_addrs()?)?;
+    relay_socket(listener, || connect_https(host), stop)
 }
 /// Measured cloud endpoint only. TLS/SigV4 terminate in the enclave, never here.
 pub fn relay_cloud(
@@ -507,15 +501,24 @@ pub fn relay_cloud(
     endpoint: &crate::cloud::Endpoint,
     stop: Arc<AtomicBool>,
 ) -> Result<(), Error> {
-    let address = (endpoint.host()?.as_str(), 443)
-        .to_socket_addrs()?
-        .next()
-        .ok_or(Error)?;
-    relay_socket(
-        listener,
-        || TcpStream::connect_timeout(&address, IO_TIMEOUT).map_err(|_| Error),
-        stop,
+    let host = endpoint.host()?;
+    first_ipv4((host.as_str(), 443).to_socket_addrs()?)?;
+    relay_socket(listener, || connect_https(&host), stop)
+}
+fn first_ipv4(mut addresses: impl Iterator<Item = SocketAddr>) -> Result<SocketAddr, Error> {
+    addresses.find(SocketAddr::is_ipv4).ok_or(Error)
+}
+fn connect_https(host: &str) -> Result<TcpStream, Error> {
+    connect_https_with(
+        || (host, 443).to_socket_addrs().map_err(|_| Error),
+        |address| TcpStream::connect_timeout(&address, IO_TIMEOUT).map_err(|_| Error),
     )
+}
+fn connect_https_with<I: Iterator<Item = SocketAddr>, S>(
+    resolve: impl FnOnce() -> Result<I, Error>,
+    connect: impl FnOnce(SocketAddr) -> Result<S, Error>,
+) -> Result<S, Error> {
+    connect(first_ipv4(resolve()?)?)
 }
 fn relay_socket<L: Listener, S: Socket>(
     listener: L,
@@ -625,6 +628,64 @@ pub fn stop_on_stdin() -> Arc<AtomicBool> {
 #[cfg(test)]
 mod identity_tests {
     use super::*;
+    #[test]
+    fn https_connections_resolve_fresh_ipv4_once_without_address_retry() {
+        let ipv6: SocketAddr = "[::1]:443".parse().unwrap();
+        let first: SocketAddr = "127.0.0.1:443".parse().unwrap();
+        let second: SocketAddr = "127.0.0.2:443".parse().unwrap();
+        let resolutions = std::cell::Cell::new(0);
+        let attempts = std::cell::Cell::new(0);
+        let dial = || {
+            connect_https_with(
+                || {
+                    let n = resolutions.get();
+                    resolutions.set(n + 1);
+                    Ok([ipv6, if n == 0 { first } else { second }].into_iter())
+                },
+                |address| {
+                    attempts.set(attempts.get() + 1);
+                    Ok(address)
+                },
+            )
+        };
+        assert_eq!(dial().unwrap(), first);
+        assert_eq!(dial().unwrap(), second);
+        assert_eq!((resolutions.get(), attempts.get()), (2, 2));
+        let calls = std::cell::Cell::new(0);
+        assert!(
+            connect_https_with(
+                || Ok([first, second].into_iter()),
+                |_| {
+                    calls.set(calls.get() + 1);
+                    Err::<(), _>(Error)
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(calls.get(), 1);
+        assert!(first_ipv4([ipv6].into_iter()).is_err());
+        assert!(
+            connect_https_with(
+                || Ok([ipv6].into_iter()),
+                |_| {
+                    calls.set(calls.get() + 1);
+                    Ok(())
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            connect_https_with(
+                || Err::<std::vec::IntoIter<SocketAddr>, _>(Error),
+                |_| {
+                    calls.set(calls.get() + 1);
+                    Ok(())
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(calls.get(), 1);
+    }
     struct Fixed(Result<u64, Error>);
     impl Clock for Fixed {
         fn now(&self) -> Result<u64, Error> {

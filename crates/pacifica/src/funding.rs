@@ -670,6 +670,14 @@ impl Controller {
                         == Ok(0)
             })
     }
+    /// Read whether this exact route is installed in verified journal history.
+    pub fn bound<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        at: u64,
+    ) -> Result<bool, Error> {
+        Ok(self.history(j, at)?.bound)
+    }
     /// Trusted route install. It fences native risk until source-qualified setup;
     /// contract changes cannot reinterpret a prior operation or reset its identity.
     pub fn bind<B: Backend, P: Protection>(

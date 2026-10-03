@@ -22,6 +22,9 @@ pub const MAX_QUOTE_AGE: u64 = 30_000;
 /// Short maximum connection life; reconnect requires a new quote and signature.
 pub const MAX_SESSION: u64 = 120_000;
 const ROOT: &[u8] = include_bytes!("aws-root.pem");
+// OpenSSL's x509_vfy.h identifier. The safe pinned Rust wrapper does not expose
+// this constant; the AWS-shaped leaf regression pins the actual strict-path code.
+const X509_V_ERR_MISSING_AUTHORITY_KEY_IDENTIFIER: i32 = 85;
 const FINGERPRINT: [u8; 32] = [
     0x64, 0x1a, 0x03, 0x21, 0xa3, 0xe2, 0x44, 0xef, 0xe4, 0x56, 0x46, 0x31, 0x95, 0xd6, 0x06, 0x31,
     0x7e, 0xd7, 0xcd, 0xcc, 0x3c, 0x17, 0x56, 0xe0, 0x98, 0x93, 0xf3, 0xc6, 0x8f, 0x79, 0xbb, 0x5b,
@@ -347,7 +350,11 @@ fn verify_signature(bytes: &[u8], d: &Document<'_>, at: u64, root: &X509) -> Res
         // Accept ONLY this specific leaf error after independently verifying
         // the strict CA path and the complete standard PKIX leaf path. Never
         // use an accept-on-error callback or waive another certificate error.
-        if error != 85 || depth != 0 || leaf.version() != 2 || leaf.authority_key_id().is_some() {
+        if error != X509_V_ERR_MISSING_AUTHORITY_KEY_IDENTIFIER
+            || depth != 0
+            || leaf.version() != 2
+            || leaf.authority_key_id().is_some()
+        {
             return Err(Error);
         }
         let issuer = X509::from_der(d.chain.last().ok_or(Error)?)?;
@@ -516,6 +523,19 @@ mod tests {
         let at = 1_700_000_000_000;
         let (key, data) = clock_binding(&p);
         let quote = a.quote_fields(&p, at, &key, &nonce, &data).unwrap();
+        let document = profile(&quote).unwrap();
+        let leaf = X509::from_der(document.certificate).unwrap();
+        assert_eq!(
+            verify_path(
+                &leaf,
+                a.root(),
+                &Stack::new().unwrap(),
+                at,
+                X509VerifyFlags::X509_STRICT
+            )
+            .unwrap(),
+            (false, X509_V_ERR_MISSING_AUTHORITY_KEY_IDENTIFIER, 0)
+        );
         assert_eq!(verify_clock_root(&quote, &p, &nonce, a.root()), Ok(at));
         assert!(verify_clock_root(&quote, &p, &nonce, other.root()).is_err());
         assert!(verify_clock(&quote, &p, &nonce).is_err());

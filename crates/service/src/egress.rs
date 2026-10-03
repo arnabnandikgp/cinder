@@ -234,6 +234,7 @@ fn response(reader: &mut impl Read, start: Instant) -> Result<Response, Error> {
         return Err(Error);
     }
     let mut names = BTreeSet::new();
+    let mut field_count = 0;
     let mut length = None;
     let mut retry_after_ms = None;
     let mut json = false;
@@ -248,7 +249,16 @@ fn response(reader: &mut impl Read, start: Instant) -> Result<Response, Error> {
             return Err(Error);
         }
         let name = name.to_ascii_lowercase();
-        if !names.insert(name.clone()) || names.len() > MAX_FIELDS {
+        field_count += 1;
+        let consumed = matches!(
+            name.as_str(),
+            "content-length"
+                | "transfer-encoding"
+                | "content-type"
+                | "content-encoding"
+                | "retry-after"
+        );
+        if field_count > MAX_FIELDS || (consumed && !names.insert(name.clone())) {
             return Err(Error);
         }
         let value = value.trim_matches([' ', '\t']);
@@ -309,6 +319,41 @@ mod tests {
     use super::*;
     fn parse(mut wire: &[u8]) -> Result<Response, Error> {
         response(&mut wire, Instant::now())
+    }
+    #[test]
+    fn repeated_ignored_fields_are_valid_but_still_count_toward_the_limit() {
+        let prefix = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: application/json\r\n";
+        let fields = "Set-Cookie: a=1\r\nset-cookie: b=2\r\nVary: Accept\r\nvary: Origin\r\n";
+        let reply = parse(format!("{prefix}{fields}\r\n{{}}").as_bytes()).unwrap();
+        assert_eq!(reply.body.as_bytes(), b"{}");
+        assert!(
+            parse(
+                format!(
+                    "{prefix}{}\r\n{{}}",
+                    "Set-Cookie: a=1\r\n".repeat(MAX_FIELDS - 2)
+                )
+                .as_bytes()
+            )
+            .is_ok()
+        );
+        assert!(
+            parse(
+                format!(
+                    "{prefix}{}\r\n{{}}",
+                    "Set-Cookie: a=1\r\n".repeat(MAX_FIELDS - 1)
+                )
+                .as_bytes()
+            )
+            .is_err()
+        );
+        for field in [
+            "Content-Length: 2",
+            "content-type: application/json",
+            "Retry-After: 1\r\nretry-after: 2",
+            "Content-Encoding: identity\r\ncontent-encoding: identity",
+        ] {
+            assert!(parse(format!("{prefix}{field}\r\n\r\n{{}}").as_bytes()).is_err());
+        }
     }
     #[test]
     fn http_framing_is_bounded_unambiguous_and_redirects_never_retry() {
