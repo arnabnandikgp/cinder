@@ -38,11 +38,14 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Current work: `tee/p21a-browser-attestation` in `cinder-tee`, stacked above
-P21A.1 #47 at `3c1b593ae3731bea5c5fa619023ef20a546006a7`; trunk remains
+P21A.1 #47 at `9aefdd9d3478870ccf58b3cc1cf1ade449f13cd3`; trunk remains
 `product/tee-v1` at `76f32956e3ee5d31707ec1bf7fa81f8711666c97`.
 The #47 cleanup fix is green on all four hosted jobs at 3c1b593. CodeRabbit's
-completed review has one minor ADR status-clarity finding; address it on the
-owning base PR before submitting the next layer. No merge is authorized here.
+sole minor ADR status-clarity finding is fixed on its owning base PR at 9aefdd9
+and its thread is resolved; that docs-only head has separate pending checks.
+No merge is authorized here. The candidate source checkpoint is
+`f73b879` after native-stack rebase; all tool/workflow bytes are identical to
+locally tested `48ca7c1`, with only documentation/base alignment changed.
 
 The new candidate supplies independent browser AWS-root/X.509/COSE validation,
 a deliberately narrower strict certificate profile, exact web-purpose context
@@ -60,8 +63,8 @@ and 29 repository tests pass. The current candidate's hosted CI/review is pendin
 publication; do not reuse base-head green checks. No shipping HTTP/WS handler,
 fresh browser hardware attestation, zeroization proof or full phase closure.
 
-Next: submit this verifier/context slice through the native stack after the
-base's narrow status fix. Separately qualify reviewed secret-lifetime hardening,
+Next: submit this verifier/context slice through the native stack, then check
+its exact-head CI/review. Separately qualify reviewed secret-lifetime hardening,
 server NSM web quotes/entropy and SDK lifetime/fencing before HTTP integration.
 No Snow fork or production crypto choice has been made; its open erasure gap
 must not be hidden by dropping a wrapper or browser worker. All P21A acceptance
@@ -1606,7 +1609,7 @@ shapes fail closed. Native trust/revocation policy is unchanged. NPM lifecycle
 scripts are disabled, exact manifest/lock/integrities guarded, build-only esbuild
 separate. Snow erasure remains open and no vendor fork has been selected.
 
-Next: publish the bounded layer above the clarified #47 base, check its exact-head
+Next: publish the bounded layer above the clarified #47 base (9aefdd9), check its exact-head
 CI/review, then P21A.2b dependency/secret-lifetime and remaining transport gates
 before HTTP/SDK integration. Do not close the parent phase or merge automatically.
 PR: pending publication.
