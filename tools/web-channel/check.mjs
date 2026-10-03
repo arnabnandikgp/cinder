@@ -19,5 +19,6 @@ command('cargo', ['build', '--lib', '--release', '--target', 'wasm32-unknown-unk
 command(bindgen, ['target/wasm32-unknown-unknown/release/cinder_web_channel_qualification.wasm', '--target', 'web', '--out-dir', 'pkg', '--out-name', 'channel']);
 execFileSync('cargo', ['build', '-p', 'cinder-service', '--features', 'local-fixture', '--bin', 'cinder-verify-fixture', '--locked', '--offline'],
   { cwd: fileURLToPath(new URL('../..', import.meta.url)), stdio:'inherit' });
+command(process.execPath, ['--test', 'attestation/serial.test.mjs']);
 command(process.execPath, ['attestation/build.mjs']);
 command(process.execPath, ['check-browser.mjs']);

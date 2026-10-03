@@ -66,6 +66,17 @@ not a completed review disposition. Any later docs-only receipt head needs its
 own checks; do not reuse base-head green checks. No shipping HTTP/WS handler,
 fresh browser hardware attestation, zeroization proof or full phase closure.
 
+At subsequent docs-only head `43516d7f130b46be92eee51bb050adf2ae1fd5f5`, plan,
+Rust and Anchor jobs pass but the browser job rejects a nominally valid synthetic
+CRL-metadata certificate path. Local forcing of the generator's redundant-zero
+serial reproduces native rejection: masking the random sign bit could leave an
+unnecessary leading zero in an ASN.1 INTEGER. Fixture-only canonical positive
+serial encoding fixes that defect without changing either verifier. Deterministic
+leading-zero/sign-padding regressions and the full pinned runner pass (12 native
+tests each profile, 9 original guard/process tests, 2 new serial tests, and 14
+groups each in Node/actual Chrome). The first source fix awaits its own hosted
+results after push; the earlier green receipts are not its checks.
+
 Next: review the published verifier/context slice and its exact-head evidence.
 Separately qualify reviewed secret-lifetime hardening,
 server NSM web quotes/entropy and SDK lifetime/fencing before HTTP integration.
@@ -74,6 +85,15 @@ must not be hidden by dropping a wrapper or browser worker. All P21A acceptance
 criteria remain open. API → Mintlify → recovery ordering is unchanged. Preserve
 unrelated `docs/user-journey.md`/`stays/` and ignored work. No AWS, live venue,
 wallet, container or subagent was used.
+
+Remaining PR target: two, not a PR per submilestone: transport hardening +
+HTTP/shared SDK, then reads/WebSocket + joined offline acceptance. A material
+dependency decision remains before that implementation: qualify a narrowly
+scoped pinned local/upstream secret-lifetime patch (recommended candidate), or
+replace the provider and repeat interoperability/browser qualification. No patch
+is approved/adopted here. Continuing Node TLS alone would leave browser scope
+unmet. Stop for the user's decision; do not silently maintain a crypto fork.
+Changed-image Nitro/actual venue qualification remains P23.
 
 ### Historical P21A.1 publication handoff (superseded)
 
@@ -1564,14 +1584,14 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 
 ## P21A — HTTP and WebSocket API
 
-| PR-sized slice (ADR 0021) | Progress | Completion boundary |
-| --- | --- | --- |
-| 1 — Contract and isolated core qualification | in progress | Reviewed contract plus offline native/browser vector and hostile-wire evidence, then merge; not attestation or a shipping API. |
-| 2a — Browser verifier and binding qualification | in progress | Independent AWS/COSE/X.509 validation in a tested strict subset, exact attested channel vectors and native differential fixtures; then reviewed merge, not a shipping/hardware claim. |
-| 2b — Secret lifetime and transport hardening | open | Reviewed dependency secret erasure, qualified entropy, server quote generation and SDK lifetime/fencing/assembly; no opaque-key wipe or worker-teardown shortcut. |
-| 3 — HTTP and shared SDK/service | open | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation. |
-| 4 — Authorized reads and WebSocket | open | Own-account projections/paging and bounded revocable committed streams; no native pooled-query/global-sequence leakage. |
-| 5 — Joined adversarial acceptance | open | Both transports satisfy all four parent-phase criteria; then P21A can close after merge. |
+| Milestone (ADR 0021) | Progress | Completion boundary | PR grouping |
+| --- | --- | --- | --- |
+| 1 — Contract and isolated core qualification | in progress | Reviewed contract plus offline native/browser vector and hostile-wire evidence, then merge; not attestation or a shipping API. | #47 |
+| 2a — Browser verifier and binding qualification | in progress | Independent AWS/COSE/X.509 validation in a tested strict subset, exact attested channel vectors and native differential fixtures; then reviewed merge, not a shipping/hardware claim. | #48 |
+| 2b — Secret lifetime and transport hardening | open | Reviewed dependency secret erasure, qualified entropy, server quote generation and SDK lifetime/fencing/assembly; no opaque-key wipe or worker-teardown shortcut. | Next PR, with 3 |
+| 3 — HTTP and shared SDK/service | open | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation. | Next PR, with 2b |
+| 4 — Authorized reads and WebSocket | open | Own-account projections/paging and bounded revocable committed streams; no native pooled-query/global-sequence leakage. | Following PR, with 5 |
+| 5 — Joined adversarial acceptance | open | Both transports satisfy all four parent-phase criteria; then P21A can close after merge. | Following PR, with 4 |
 
 Work: API → public docs → recovery ordering and full API_SCOPE approved 2026-10-03; P21 is not an API prerequisite. Started tee/p21a-web-api-contract on P20 merge 76f32956e3ee5d31707ec1bf7fa81f8711666c97. After the frontend/bot explanation, the user explicitly approved bounded Noise NK qualification. ADR 0021 carries the contract, permission/provenance matrix, bounds and split. Isolated tools/web-channel supplies one Rust core, thin WASM binding, synthetic native responder, published known answer, adversarial tests and disposable browser harness; no shipping dependency or existing Node TLS change.
 Verification: primary browser/Noise/Snow/RFC/AWS sources checked. Native debug/release tests: 10 pass each. Node 24.21.0 and actual Chrome 154.0.8037.93: seven groups each pass, including standard vector, encrypted native round trip, early/replay/tamper/reflection/size refusal and RNG failure. Carrier marker absent in both directions. Complete isolated runner passes: four dependency-guard tests, native/WASM strict Clippy and formatting. Two new teardown regressions pass, including a SIGTERM-resistant descendant writer after its leader exits; the complete isolated runner passes again after this fix. At docs-only a96b5cc hosted plan/Rust/Anchor jobs passed and Linux Chrome 154.0.8037.57/Node passed all channel groups before the cleanup race failed the job. New-fix hosted CI is pending (first evidence-based CI fix); no container run needed. Earlier full pinned repository runner passed default/all-feature Clippy, workspace build/debug/release tests, 29 repository tests and all 17 SDK/process tests; that is not a fresh full-repository run for this harness-only fix. Foundation: 27 phases/36 documents; focused 13 plan-validator tests and diff check pass. On-chain source unchanged, so no local SBF rerun. No HTTP/WS financial workflow or fresh browser Nitro attestation claimed. All four PLAN P21A acceptance criteria remain open.
@@ -1613,6 +1633,16 @@ than general OpenSSL PKIX (e.g. ES384 certificate signatures only); unsupported
 shapes fail closed. Native trust/revocation policy is unchanged. NPM lifecycle
 scripts are disabled, exact manifest/lock/integrities guarded, build-only esbuild
 separate. Snow erasure remains open and no vendor fork has been selected.
+
+CI continuation: docs-only 43516d7 passed plan/Rust/Anchor but failed while
+building the signed corpus, before Node/Chrome groups. The native oracle rejected
+a nominally valid CRL-metadata path. The synthetic serial generator could produce
+a nonminimal INTEGER; deterministic forced leading-zero entropy reproduces a
+positive-case rejection locally. Fixed only fixture serial encoding, with positive,
+minimal, nonmutating boundary tests and real certificate/native/browser-verifier
+regressions. The complete isolated runner passes again, including actual Chrome;
+no verification constraint is relaxed. First source-fix hosted checks remain
+pending. No container or new live/hardware run is needed/claimed for this defect.
 
 Next: review the bounded layer above the clarified #47 base (9aefdd9), then
 P21A.2b dependency/secret-lifetime and remaining transport gates

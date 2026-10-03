@@ -560,6 +560,19 @@ own the hardened dependency/verifier and exact binding profile, HTTP integration
 read projections/WebSocket and joined acceptance. Keep P21A in progress throughout;
 the four phase criteria below remain open after the first slice.
 
+PR grouping clarification, 2026-10-03: milestone boundaries are not mandatory PR
+boundaries. After #47 (contract/core) and #48 (browser verifier/binding), target
+**two further stacked PRs**: (A) dependency/transport hardening, server quotes,
+SDK session safeguards and HTTP integration; (B) owner-scoped reads, WebSocket
+commands/updates and joined offline acceptance. Keep the submilestones/evidence
+visible in TRACKER, but include their tests and documentation in the owning PR
+rather than creating separate bookkeeping or test-only PRs. Split further only
+for a material security choice or a genuinely unreviewable implementation, and
+explain the reason. This grouping does not waive any criterion. Stop for review
+before selecting a dependency fork or linking unqualified crypto into the service.
+P21A completion is offline implementation/acceptance; fresh changed-image Nitro
+and actual venue/chain workflow qualification remain P23, not a new P21A PR.
+
 - [ ] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
 - [ ] Both transports reach the same command authorization, durable IDs, reservations and journal; exact retries reconcile, conflicting IDs reject, and agents cannot obtain payout or administrative authority.
 - [ ] Private updates follow committed owner-attributed state; bounded queues, missed-message snapshots, reconnect, revocation and cross-account isolation are exercised with no global-sequence leakage.

@@ -185,6 +185,12 @@ caps must be tested before implementation acceptance, not inferred from a librar
 ## PR-sized implementation steps and acceptance
 
 P21A remains in progress through all these steps; a contract-only PR cannot close it.
+These are implementation/test milestones, not a requirement for five separate
+PRs. Following #47/#48, the 2026-10-03 grouping target is two more: transport
+hardening plus HTTP/shared SDK, then authorized reads/WebSocket plus joined
+offline acceptance. Keep tests/evidence/docs with their implementation. Preserve
+the dependency/security review stop before promotion; changed-image hardware
+qualification belongs to P23.
 
 1. Contract + isolated core qualification. Record approved methods/permissions,
    retained signing semantics, candidate transport, dependency policy and local

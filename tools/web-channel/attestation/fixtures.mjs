@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { cbor, concat, uint64 } from './encoding.mjs';
 import { digest, userData, prologue } from './profile.mjs';
 import capture from './aws-certificate-capture.json' with { type: 'json' };
+import { serialFromEntropy } from './serial.mjs';
 
 const cryptoEngine = new pki.CryptoEngine({ name: 'synthetic-fixture', crypto: globalThis.crypto, subtle: crypto.subtle });
 const text = b => new TextEncoder().encode(b);
@@ -26,7 +27,7 @@ async function certificate(name, parent, { ca = false, pathLen = ca ? 2 : undefi
   const keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: curve }, false, ['sign', 'verify']);
   const cert = new pki.Certificate();
   cert.version = 2;
-  const serial = crypto.getRandomValues(new Uint8Array(16)); serial[0] &= 127; serial[15] |= 1;
+  const serial = serialFromEntropy(crypto.getRandomValues(new Uint8Array(16)));
   cert.serialNumber = new asn1js.Integer({ valueHex: serial.buffer });
   cert.subject = new pki.RelativeDistinguishedNames({ typesAndValues: [
     new pki.AttributeTypeAndValue({ type: '2.5.4.3', value: new asn1js.Utf8String({ value: name }) }),
