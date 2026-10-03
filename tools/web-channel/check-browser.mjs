@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { run } from './web/suite.mjs';
+import { stopChild } from './stop-child.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const native = join(root, 'target/debug/qualification-responder');
@@ -106,20 +107,19 @@ const server = createServer(async (request, response) => {
 });
 server.headersTimeout = 5000;
 server.requestTimeout = 5000;
-let timeout;
+let timeout, browser;
 try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const core = await import('./pkg/channel.js');
   await core.default({ module_or_path: await readFile(join(root, 'pkg/channel_bg.wasm')) });
   const nodeChecks = await run(core, base);
-  const browser = spawn(chrome, [
+  browser = spawn(chrome, [
     '--headless', '--no-first-run', '--disable-background-networking', '--disable-component-update',
     '--disable-sync', '--disable-default-apps', '--no-proxy-server', `--user-data-dir=${profile}`, base,
-  ], { stdio: 'ignore' });
-  children.add(browser);
+  ], { stdio: 'ignore', detached: true });
   browser.on('error', () => resultResolve({ ok: false, error: 'Chrome launch failure' }));
-  browser.on('exit', () => { children.delete(browser); resultResolve({ ok: false, error: 'Chrome exited before result' }); });
+  browser.on('exit', () => resultResolve({ ok: false, error: 'Chrome exited before result' }));
   const result = await Promise.race([browserResult, new Promise((_, reject) => {
     timeout = setTimeout(() => reject(Error('Browser qualification timeout')), 30000);
   })]);
@@ -129,12 +129,12 @@ try {
   console.log('Carrier observation: no fixture private marker; synthetic trust, NOT Nitro attestation.');
 } finally {
   clearTimeout(timeout);
-  await Promise.all([...children].map(child => new Promise(resolve => {
-    child.once('exit', resolve); child.kill();
-    setTimeout(() => { child.kill('SIGKILL'); resolve(); }, 2000).unref();
-  })));
+  await Promise.all([
+    stopChild(browser, { group: true }),
+    ...[...children].map(child => stopChild(child)),
+  ]);
   server.closeAllConnections();
   await new Promise(resolve => server.close(resolve));
   // Exact task-created Chrome profile only, never an existing user's profile.
-  await rm(profile, { recursive: true, force: true });
+  await rm(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 100 });
 }
