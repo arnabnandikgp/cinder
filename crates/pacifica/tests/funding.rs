@@ -11,9 +11,484 @@ use cinder_kernel::{
 use cinder_pacifica::{
     Error as AdapterError,
     execution::{Dispatch, Gateway, Origin, Outbound, Policy, Reply, Transport},
+    funding::recovery::{BindingError, CustodyState, CustomerState},
     funding::*,
     profile::*,
 };
+
+fn recovery_cut(j: &mut Store) -> (Head, EventKey) {
+    let freeze = tx(
+        j,
+        210,
+        vec![],
+        vec![Control::Funds(lifecycle::Action::Freeze)],
+    );
+    assert_eq!(j.commit(freeze).unwrap().receipt.controls, None);
+    let l = j.state().unwrap().ledger();
+    let check = NativeCheck {
+        expected_version: l.version(),
+        cash: Some(l.venue().cash()),
+        funding: Some(l.venue().funding()),
+        positions: Some(l.venue().positions().to_vec()),
+        complete: true,
+        resolves: vec![],
+    };
+    let check = tx(
+        j,
+        211,
+        vec![(Location::Venue, Change::Reconcile(check))],
+        vec![],
+    );
+    assert_eq!(
+        j.commit(check).unwrap().receipt.inputs,
+        [InputResult::Normalized(Disposition::Applied)]
+    );
+    (j.head(), key(211, Location::Venue))
+}
+fn begin_recovery(j: &mut Store) {
+    let control = Control::Recovery(cinder_journal::recovery::Action::Begin {
+        expected_version: j.state().unwrap().ledger().version(),
+        authority_epoch: 7,
+        valid_until: 20_000,
+        fence: [99; 32], // Explicit synthetic qualified cutover port, not native proof.
+    });
+    let t = tx(j, 208, vec![], vec![control]);
+    assert_eq!(j.commit(t).unwrap().receipt.controls, None);
+}
+fn recovery_intent(n: u8, source: Location, destination: Destination) -> lifecycle::Intent {
+    lifecycle::Intent {
+        request: a(n).request,
+        source,
+        destination,
+        net: atoms(20),
+        maximum_fee: atoms(0),
+        fee_payer: Owner::House,
+        allow_partial: false,
+        policy: config().policy,
+        authority_epoch: 7,
+        expires_at: 10_000,
+    }
+}
+fn recovery_accept(i: lifecycle::Intent) -> Control {
+    let approval = orders::Approval {
+        account: user(1),
+        intent_hash: i.digest().unwrap(),
+        authority_epoch: 7,
+    };
+    Control::Funds(lifecycle::Action::RecoveryAccept {
+        intent: Box::new(i),
+        approval,
+    })
+}
+#[test]
+fn frozen_recovery_return_uses_the_incremented_epoch_and_never_reopens_normal_paths() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    prepare(&mut j, 10, Rail::Release, 20, 0);
+    let plan = expose(&mut j, &c, 10, Rail::Release, 60);
+    c.observe_chain(&mut j, id(60), 100, chain(&plan, 60))
+        .unwrap();
+    begin_recovery(&mut j);
+    let i = recovery_intent(11, Location::Broker, Destination::Location(Location::Vault));
+    let approval = orders::Approval {
+        account: user(1),
+        intent_hash: i.digest().unwrap(),
+        authority_epoch: 7,
+    };
+    let ordinary = tx(
+        &j,
+        9,
+        vec![],
+        vec![Control::Funds(lifecycle::Action::Accept {
+            intent: Box::new(i.clone()),
+            approval,
+        })],
+    );
+    assert!(j.commit(ordinary).unwrap().receipt.controls.is_some());
+    let prepare = tx(
+        &j,
+        11,
+        vec![],
+        vec![
+            recovery_accept(i),
+            Control::Funds(lifecycle::Action::Prepare {
+                attempt: a(11),
+                net: atoms(20),
+            }),
+        ],
+    );
+    assert_eq!(j.commit(prepare).unwrap().receipt.controls, None);
+    let plan = expose(&mut j, &c, 11, Rail::Return, 61);
+    assert_eq!(plan.epoch(), 2);
+    let seal = tx(
+        &j,
+        12,
+        vec![],
+        vec![Control::Recovery(cinder_journal::recovery::Action::Seal {
+            expected_version: j.state().unwrap().ledger().version(),
+        })],
+    );
+    assert!(j.commit(seal).unwrap().receipt.controls.is_some()); // Unknown return cannot seal.
+    c.observe_chain(&mut j, id(61), 100, chain(&plan, 61))
+        .unwrap();
+    let (head, check) = recovery_cut(&mut j);
+    assert_eq!(
+        c.recovery_backing(&mut j, head, check.clone(), &custody(0, 0, 1, 120))
+            .unwrap()
+            .total(),
+        20
+    );
+    let seal = tx(
+        &j,
+        13,
+        vec![],
+        vec![Control::Recovery(cinder_journal::recovery::Action::Seal {
+            expected_version: j.state().unwrap().ledger().version(),
+        })],
+    );
+    assert_eq!(j.commit(seal).unwrap().receipt.controls, None);
+    assert!(j.state().unwrap().frozen());
+    assert!(j.state().unwrap().recovery_sealed());
+    let sealed = j.head();
+    assert!(
+        c.recovery_backing(&mut j, head, check.clone(), &custody(0, 0, 1, 120))
+            .is_err()
+    );
+    assert_eq!(
+        c.recovery_backing(&mut j, sealed, check, &custody(0, 0, 1, 120))
+            .unwrap()
+            .total(),
+        20
+    );
+    let expected = j.state().unwrap().clone();
+    drop(j);
+    assert_eq!(open(&t).state().unwrap(), &expected);
+}
+#[test]
+fn recovery_permissions_cannot_authorize_release_payout_or_an_old_prepared_return() {
+    let t = Temp::new();
+    let (mut j, _, _) = setup(&t, true);
+    begin_recovery(&mut j);
+    for (n, source, destination) in [
+        (10, Location::Vault, Destination::Recipient([11; 32])),
+        (11, Location::Vault, Destination::Location(Location::Broker)),
+        (12, Location::Broker, Destination::Location(Location::Venue)),
+    ] {
+        let t = tx(
+            &j,
+            n,
+            vec![],
+            vec![recovery_accept(recovery_intent(n, source, destination))],
+        );
+        assert!(j.commit(t).unwrap().receipt.controls.is_some());
+    }
+    assert!(j.state().unwrap().funds().is_empty());
+    let t = Temp::new();
+    let (mut j, _, _) = setup(&t, true);
+    prepare(&mut j, 10, Rail::Withdraw, 20, 0);
+    begin_recovery(&mut j);
+    let t = tx(&j, 11, vec![], vec![Control::Expose(a(10))]);
+    assert!(j.commit(t).unwrap().receipt.controls.is_some());
+    assert!(!j.state().unwrap().attempts()[0].possibly_exposed);
+}
+#[test]
+fn recovery_permission_is_one_way_and_expiry_cannot_authorize_a_return() {
+    let t = Temp::new();
+    let (mut j, _, _) = setup(&t, true);
+    begin_recovery(&mut j);
+    let begin = Control::Recovery(cinder_journal::recovery::Action::Begin {
+        expected_version: j.state().unwrap().ledger().version(),
+        authority_epoch: 8,
+        valid_until: 30_000,
+        fence: [98; 32],
+    });
+    let t = tx(&j, 10, vec![], vec![begin]);
+    assert!(j.commit(t).unwrap().receipt.controls.is_some());
+    let mut t = tx(
+        &j,
+        11,
+        vec![],
+        vec![recovery_accept(recovery_intent(
+            11,
+            Location::Venue,
+            Destination::Location(Location::Broker),
+        ))],
+    );
+    t.at = 20_000;
+    assert!(j.commit(t).unwrap().receipt.controls.is_some());
+    assert_eq!(j.state().unwrap().recovery_epoch(), None);
+    assert!(j.state().unwrap().frozen());
+}
+fn custody(paid: u64, sequence: u64, funding_sequence: u64, vault_amount: u64) -> CustodyState {
+    let r = route();
+    CustodyState {
+        network: config().domain.network.bytes(),
+        program: r.program,
+        config: r.config,
+        vault: r.vault,
+        mint: r.mint,
+        domain: r.domain,
+        pool: r.pool,
+        broker: r.broker,
+        broker_tokens: r.broker_tokens,
+        decimals: r.decimals,
+        epoch: r.epoch + 1,
+        mode: 1,
+        normal_paid: paid,
+        funding_sequence,
+        vault_amount,
+        finalized_slot: 200,
+        customers: vec![
+            CustomerState {
+                wallet: r.beneficiaries[0].wallet,
+                tokens: r.beneficiaries[0].tokens,
+                paid,
+                payout_sequence: sequence,
+            },
+            CustomerState {
+                wallet: r.beneficiaries[1].wallet,
+                tokens: r.beneficiaries[1].tokens,
+                paid: 0,
+                payout_sequence: 0,
+            },
+        ],
+    }
+}
+
+#[test]
+fn recovery_backing_binds_real_p16_payout_history_without_a_second_deduction() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    prepare(&mut j, 10, Rail::Payout, 5, 0);
+    let plan = expose(&mut j, &c, 10, Rail::Payout, 60);
+    c.observe_chain(&mut j, id(60), 100, chain(&plan, 60))
+        .unwrap();
+    // A repeated authenticated receipt is evidence, not a second paid event.
+    c.observe_chain(&mut j, id(61), 100, chain(&plan, 60))
+        .unwrap();
+    let (head, check) = recovery_cut(&mut j);
+    let observation = custody(5, 1, 0, 115);
+    let matched = c
+        .recovery_backing(&mut j, head, check.clone(), &observation)
+        .unwrap();
+    assert_eq!(matched.total(), 15);
+    assert_eq!(matched.normal_paid(), 5);
+    assert_eq!(matched.epoch(), 2);
+    assert_eq!(matched.funding_sequence(), 0);
+    assert_eq!(matched.finalized_slot(), 200);
+    assert_eq!(matched.cut().accounts().len(), 2);
+    assert_eq!(matched.claims().len(), 1);
+    let claim = &matched.claims()[0];
+    assert_eq!(claim.account(), user(1));
+    assert_eq!(claim.wallet(), [11; 32]);
+    assert_eq!(claim.tokens(), [34; 32]);
+    assert_eq!(claim.amount(), 15);
+    assert_eq!(claim.paid_base(), 5);
+    assert_eq!(claim.payout_sequence_base(), 1);
+    assert_eq!(format!("{matched:?}"), "RecoveryBacking([PRIVATE])");
+    assert_eq!(format!("{claim:?}"), "ClaimBasis([PRIVATE])");
+    assert_eq!(format!("{observation:?}"), "CustodyState([PRIVATE])");
+    drop(j);
+    let mut reopened = open(&t);
+    assert_eq!(
+        c.recovery_backing(&mut reopened, head, check, &observation)
+            .unwrap(),
+        matched
+    );
+}
+
+#[test]
+fn recovery_custody_context_inventory_counters_and_coherent_slot_are_exact() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    let (head, check) = recovery_cut(&mut j);
+    let original = custody(0, 0, 0, 120);
+    assert!(
+        c.recovery_backing(&mut j, head, check.clone(), &original)
+            .is_ok()
+    );
+    for variant in 0..22 {
+        let mut changed = original.clone();
+        match variant {
+            0 => changed.network = [99; 32],
+            1 => changed.program = [99; 32],
+            2 => changed.config = [99; 32],
+            3 => changed.vault = [99; 32],
+            4 => changed.mint = [99; 32],
+            5 => changed.domain = [99; 32],
+            6 => changed.pool = [99; 32],
+            7 => changed.broker = [99; 32],
+            8 => changed.broker_tokens = [99; 32],
+            9 => changed.decimals = 6,
+            10 => changed.epoch = 1,
+            11 => changed.mode = 0,
+            12 => changed.mode = 3,
+            13 => changed.normal_paid = 1,
+            14 => changed.funding_sequence = 1,
+            15 => changed.vault_amount = 119,
+            16 => changed.vault_amount = 121,
+            17 => changed.finalized_slot = 99,
+            18 => {
+                changed.customers.pop();
+            }
+            19 => changed.customers[1] = changed.customers[0].clone(),
+            20 => changed.customers[0].tokens = [99; 32],
+            _ => changed.customers[0].payout_sequence = 1,
+        }
+        assert_eq!(
+            c.recovery_backing(&mut j, head, check.clone(), &changed),
+            Err(BindingError::Mismatch),
+            "variant {variant}"
+        );
+    }
+    let mut reordered = original;
+    reordered.customers.reverse();
+    assert!(
+        c.recovery_backing(&mut j, head, check.clone(), &reordered)
+            .is_ok()
+    );
+    let extra = tx(&j, 212, vec![], vec![]);
+    j.commit(extra).unwrap();
+    assert_eq!(
+        c.recovery_backing(&mut j, head, check, &reordered),
+        Err(BindingError::Cut(cinder_journal::recovery::CutError::Stale))
+    );
+}
+
+#[test]
+fn returned_working_capital_keeps_its_funding_sequence_in_recovery() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    prepare(&mut j, 10, Rail::Release, 20, 0);
+    let plan = expose(&mut j, &c, 10, Rail::Release, 60);
+    c.observe_chain(&mut j, id(60), 100, chain(&plan, 60))
+        .unwrap();
+    prepare(&mut j, 11, Rail::Return, 20, 0);
+    let plan = expose(&mut j, &c, 11, Rail::Return, 61);
+    c.observe_chain(&mut j, id(61), 100, chain(&plan, 61))
+        .unwrap();
+    let (head, check) = recovery_cut(&mut j);
+    let state = custody(0, 0, 1, 120);
+    assert_eq!(
+        c.recovery_backing(&mut j, head, check.clone(), &state)
+            .unwrap()
+            .funding_sequence(),
+        1
+    );
+    let mut changed = state.clone();
+    changed.funding_sequence = 0;
+    assert_eq!(
+        c.recovery_backing(&mut j, head, check.clone(), &changed),
+        Err(BindingError::Mismatch)
+    );
+    changed = state;
+    changed.finalized_slot = 199;
+    assert_eq!(
+        c.recovery_backing(&mut j, head, check, &changed),
+        Err(BindingError::Mismatch)
+    );
+}
+
+#[test]
+fn recovery_rejects_a_program_counter_jump_not_explained_by_accepted_history() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    prepare(&mut j, 10, Rail::Payout, 5, 0);
+    let action = c
+        .expose_chain(
+            &mut j,
+            Dispatch {
+                attempt: a(10),
+                commit: id(40),
+                at: 100,
+            },
+            Rail::Payout,
+            counters(Rail::Payout, 0, 5),
+        )
+        .unwrap();
+    let plan = signed_fixture(&c, &mut j, action, 60);
+    c.observe_chain(&mut j, id(60), 100, chain(&plan, 60))
+        .unwrap();
+    let (head, check) = recovery_cut(&mut j);
+    assert_eq!(
+        c.recovery_backing(&mut j, head, check, &custody(5, 6, 0, 115)),
+        Err(BindingError::Mismatch)
+    );
+}
+
+#[test]
+fn recovery_cannot_truncate_a_journal_amount_to_program_mint_atoms() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    let extra = tx(
+        &j,
+        209,
+        vec![(
+            Location::Vault,
+            Change::Receipt {
+                owner: Owner::House,
+                location: Location::Vault,
+                amount: atoms(i128::from(u64::MAX)),
+            },
+        )],
+        vec![],
+    );
+    assert_eq!(
+        j.commit(extra).unwrap().receipt.inputs,
+        [InputResult::Normalized(Disposition::Applied)]
+    );
+    let (head, check) = recovery_cut(&mut j);
+    assert_eq!(
+        c.recovery_backing(&mut j, head, check, &custody(0, 0, 0, u64::MAX)),
+        Err(BindingError::Precision)
+    );
+}
+
+#[test]
+fn recovery_uses_the_qualified_raw_resolution_cut_not_an_absent_original_cut() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    let mut unknown = tx(&j, 207, vec![], vec![]);
+    unknown.inputs.push(Input {
+        source: source(Location::Vault),
+        source_cut: None,
+        authority_epoch: 1,
+        observed_at: 100,
+        raw: raw(b"synthetic initially unknown chain input"),
+        event: None,
+    });
+    assert_eq!(
+        j.commit(unknown).unwrap().receipt.inputs,
+        [InputResult::Unnormalized]
+    );
+    let entry = &j.state().unwrap().raw_inputs()[0];
+    let proof = raw(b"synthetic authenticated no-effect chain history through slot 250");
+    let resolution = cinder_journal::raw::Resolution {
+        key: entry.key,
+        fingerprint: entry.fingerprint,
+        source: entry.source,
+        authority_epoch: 1,
+        through: 250,
+        observed_at: 100,
+        evidence: Sha256::digest(proof.as_bytes()).into(),
+        no_effect: true,
+        effects: vec![],
+    };
+    let mut resolved = tx(&j, 208, vec![], vec![Control::ResolveRaw(resolution)]);
+    resolved.evidence.push(proof);
+    assert_eq!(j.commit(resolved).unwrap().receipt.controls, None);
+    let (head, check) = recovery_cut(&mut j);
+    let mut observation = custody(0, 0, 0, 120);
+    assert_eq!(
+        c.recovery_backing(&mut j, head, check.clone(), &observation),
+        Err(BindingError::Mismatch)
+    );
+    observation.finalized_slot = 250;
+    assert!(
+        c.recovery_backing(&mut j, head, check, &observation)
+            .is_ok()
+    );
+}
 use ed25519_dalek::{Signature, SigningKey, VerifyingKey};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -672,7 +1147,7 @@ fn prepare(j: &mut Store, n: u8, rail: Rail, net: i128, fee: i128) {
         Rail::Deposit => (Location::Broker, Destination::Location(Location::Venue)),
         Rail::Withdraw => (Location::Venue, Destination::Location(Location::Broker)),
         Rail::Return => (Location::Broker, Destination::Location(Location::Vault)),
-        Rail::Payout => (Location::Vault, Destination::Recipient([11; 32])),
+        Rail::Payout => (Location::Vault, Destination::Recipient([34; 32])),
     };
     let i = lifecycle::Intent {
         request: a(n).request,

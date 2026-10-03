@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { cp,mkdtemp,mkdir,readFile,rm,writeFile } from 'node:fs/promises';
+import { createHash,createPrivateKey,generateKeyPairSync,randomBytes,sign } from 'node:crypto';
+import { spawn,type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { once } from 'node:events';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AnchorProvider, BN, type Idl, type Wallet } from '@anchor-lang/core';
 import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SystemProgram, Transaction, type TransactionInstruction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createMint, createAccount, mintTo, getAccount,
@@ -10,6 +15,13 @@ import { customerAddress, depositReceiptAddress, identity, movement, receiptAddr
 import { fundingInstruction, verifyFundingWire } from '../src/funding.ts';
 import { buildRecoveryTree, recoveryAddress, recoveryReceiptAddress, recoveryClaimWire, recoveryStatementWire,
   recoveryContextHash, recoveryLeaf, type RecoveryClaim, type RecoveryStatement } from '../src/recovery.ts';
+import { custodySnapshot,custodyWire,decryptKit,independentClaim,recoveryKeyAuthorization,retrieveKit,verifyManifest,type ExpectedCustody,type Snapshot } from '../src/claims.ts';
+import { PrivateClient,type MessageSigner } from '../../private/src/index.ts';
+import { WebChannel,type WebCore } from '../../private/src/web-channel-core.ts';
+// Deliberately fixture-rooted verifier; never accepted by the production client.
+import { verifyWithRoot } from '../../../tools/web-channel/attestation/verifier.mjs';
+// @ts-expect-error parent-only JavaScript framing layer has no custody API
+import { createWebRelay } from '../../../services/web-relay/server.mjs';
 
 // In-memory disposable identities only; no wallet file, network URL or deployed key is inherited.
 const RPC_URL = 'http://127.0.0.1:18899';
@@ -112,6 +124,182 @@ async function fixture() {
     customer, auth, receipt, depositReceipt, initialize, deposit, release, payout, returned, freeze, state };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+const signerKey=(k:Keypair)=>createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.from(k.secretKey.subarray(0,32))]),format:'der',type:'pkcs8'});
+const toBytes=(p:PublicKey|Uint8Array)=>Array.from(p instanceof PublicKey?p.toBytes():p);
+async function childLines(child:ChildProcessWithoutNullStreams) {
+  let pending:((v:string)=>void)|undefined,failed:((e:Error)=>void)|undefined,buff='';const lines:string[]=[];
+  child.stdout.on('data',b=>{buff+=b;while(buff.includes('\n')){const at=buff.indexOf('\n'),line=buff.slice(0,at);buff=buff.slice(at+1);
+    if(pending){const p=pending;pending=undefined;failed=undefined;p(line);}else lines.push(line);}});
+  let error='';child.stderr.on('data',b=>{error+=b;});child.on('exit',()=>failed?.(new Error(`Joined fixture exited: ${error}`)));
+  return async()=>{if(lines.length)return lines.shift()!;if(child.exitCode!==null||child.signalCode!==null)throw Error(`Joined fixture exited: ${error}`);
+    return new Promise<string>((resolve,reject)=>{const t=setTimeout(()=>reject(Error('Joined fixture deadline')),10_000);pending=v=>{clearTimeout(t);resolve(v);};failed=e=>{clearTimeout(t);reject(e);};});};
+}
+async function stopFixture(child:ChildProcessWithoutNullStreams){
+  if(child.exitCode!==null||child.signalCode!==null)return;
+  const ended=once(child,'exit');child.kill('SIGKILL');await ended;
+}
+async function chainSnapshot(e:ExpectedCustody):Promise<Snapshot>{
+  const {config,vault}=vaultAddresses(e.program,e.domain,e.pool,e.mint),pd=PublicKey.findProgramAddressSync([e.program.toBuffer()],loader)[0];
+  const addresses=[e.program,pd,config,vault,e.mint,e.brokerTokens,recoveryAddress(e.program,config),
+    ...e.customers.flatMap(o=>[o.tokens,customerAddress(e.program,config,o.wallet),recoveryReceiptAddress(e.program,config,o.wallet)])];
+  const result=await connection.getMultipleAccountsInfoAndContext(addresses,{commitment:'finalized'});
+  const accounts=new Map<string,NonNullable<typeof result.value[0]>>();result.value.forEach((v,i)=>{if(v)accounts.set(addresses[i]!.toBase58(),v);});
+  return {network:e.network,slot:BigInt(result.context.slot),accounts};
+}
+for(const carrier of ['http','websocket'] as const)test(`P21 ${carrier} accepted tail → outage → recipient package → actual independent SBF claim`,{timeout:90_000},async()=>{
+  const f=await fixture(); // Original fixture mint has 6 decimals; joined profile uses exact 0-place atoms.
+  // Separate zero-place classic mint/config, no reinterpretation of the existing fixture's units.
+  const mint=await createMint(connection,governance,governance.publicKey,null,0);
+  const source=await createAccount(connection,governance,mint,f.owner.publicKey);
+  const brokerTokens=await createAccount(connection,governance,mint,f.broker.publicKey);
+  const venueTokens=await createAccount(connection,governance,mint,f.outsider.publicKey);
+  const domain=Buffer.alloc(32,2),pool=id(`joined-${carrier}-${number}`),{config,vault}=vaultAddresses(programId,domain,pool,mint);
+  const customer=customerAddress(programId,config,f.owner.publicKey);
+  await send(await program.methods.initialize(identity(domain),identity(pool),u64(10_000n),u64(10_000n)).accountsStrict({
+    governance:governance.publicKey,funds:f.funds.publicKey,recovery:f.recovery.publicKey,program:programId,programData,mint,brokerTokens,
+    config,vault,tokenProgram:TOKEN_PROGRAM_ID,systemProgram:SystemProgram.programId}).instruction(),[governance,f.funds,f.recovery]);
+  await send(await program.methods.registerCustomer(identity(domain)).accountsStrict({config,owner:f.owner.publicKey,customer,systemProgram:SystemProgram.programId}).instruction(),[f.owner]);
+  await mintTo(connection,governance,mint,source,governance,1000n);
+  const deposit=movement(domain,1n,id(`joined-deposit-${carrier}`),(1n<<64n)-1n);
+  await send(await program.methods.deposit(deposit,u64(1000n)).accountsStrict({config,vault,mint,customer,owner:f.owner.publicKey,source,
+    receipt:depositReceiptAddress(programId,config,f.owner.publicKey,Uint8Array.from(deposit.operation)),tokenProgram:TOKEN_PROGRAM_ID,systemProgram:SystemProgram.programId}).instruction(),[f.owner]);
+  // HOUSE collateral starts at the explicit synthetic native venue, not in the
+  // Solana vault. A later fake native withdrawal + actual SBF return must settle it.
+  await mintTo(connection,governance,mint,venueTokens,governance,1000n);
+  const enc=generateKeyPairSync('rsa',{modulusLength:3072}),spki=enc.publicKey.export({format:'der',type:'spki'});
+  const ownerKey=signerKey(f.owner),binding={account:f.broker.publicKey.toBase58(),broker_seed:toBytes(f.broker.secretKey.subarray(0,32)),
+    keys:[{owner:toBytes(f.owner.publicKey),spki:toBytes(spki),signature:Array.from(sign(null,recoveryKeyAuthorization(domain,pool,spki),ownerKey))}],
+    route:{domain:toBytes(domain),pool:toBytes(pool),funds:toBytes(f.funds.publicKey),beneficiaries:[{account:Array(32).fill(1),wallet:toBytes(f.owner.publicKey),tokens:toBytes(source)}],
+      program:toBytes(programId),config:toBytes(config),vault:toBytes(vault),mint:toBytes(mint),broker:toBytes(f.broker.publicKey),broker_tokens:toBytes(brokerTokens),
+      venue_program:toBytes(f.outsider.publicKey),venue_vault:toBytes(venueTokens),epoch:1,decimals:0,withdrawal:'Qualified',chain:'Qualified',settings:'Qualified',
+      withdrawal_cost:10,maximum_movement:10_000,maximum_fee:0,setup_max_age:86_400_000}};
+  const directory=await mkdtemp(join(tmpdir(),'cinder-p21-outage-')),store=join(directory,'store');await mkdir(store,{mode:0o700});
+  const storageKey=randomBytes(32),configBytes=Buffer.from(JSON.stringify(binding)),prefix=Buffer.alloc(4);prefix.writeUInt32BE(configBytes.length);
+  const binary=new URL('../../../target/debug/cinder-service-fixture',import.meta.url).pathname;
+  let service:ChildProcessWithoutNullStreams|undefined,worker:ChildProcessWithoutNullStreams|undefined;
+  let relay:ReturnType<typeof createWebRelay>|undefined,channel:WebChannel|undefined;
+  try {
+    const refuseRestart=async(path:string,bytes:Buffer)=>{
+      const length=Buffer.alloc(4);length.writeUInt32BE(bytes.length);
+      service=spawn(binary,['127.0.0.1:0',path,f.owner.publicKey.toBuffer().toString('hex'),'--recovery-web']);
+      const exited=once(service,'exit');let output='';service.stdout.on('data',b=>{output+=b;});
+      service.stdin.on('error',()=>{});service.stdin.end(Buffer.concat([storageKey,length,bytes]));
+      assert.notEqual((await exited)[0],0);assert.equal(output,'');service=undefined;
+    };
+    service=spawn(binary,['127.0.0.1:0',store,f.owner.publicKey.toBuffer().toString('hex'),'--recovery-web']);
+    const line=await childLines(service);service.stdin.write(Buffer.concat([storageKey,prefix,configBytes]));
+    const [address,ca]=(await line()).split(' ');
+    relay=createWebRelay({target:{host:'127.0.0.1',port:Number(address!.split(':')[1])}});relay.server.listen(0,'127.0.0.1');await once(relay.server,'listening');
+    const coreModule=await import(new URL('../../../tools/web-channel/pkg/channel.js',import.meta.url).href);
+    await coreModule.default({module_or_path:await readFile(new URL('../../../tools/web-channel/pkg/channel_bg.wasm',import.meta.url))});
+    const core=coreModule as WebCore;
+    const policy={network:Buffer.alloc(32,1),deployment:domain,manifest:Buffer.alloc(32,21),pcrs:[Buffer.alloc(48,22),Buffer.alloc(48,23),Buffer.alloc(48,24)] as const};
+    channel=await WebChannel.connect({baseUrl:`http://127.0.0.1:${relay.server.address().port}`,policy,core,transport:carrier},(q,p,c)=>verifyWithRoot(q,p,c,Buffer.from(ca!,'hex')));
+    const signer:MessageSigner={publicKey:f.owner.publicKey.toBytes(),signMessage:async b=>sign(null,b,ownerKey)};
+    const api=new PrivateClient(channel,signer,{domain:policy,account:Buffer.alloc(32,1),policy:1});
+    const req=(n:number,command:Parameters<PrivateClient['request']>[0]['command'])=>({id:Buffer.alloc(32,n),epoch:1n,expiresAt:BigInt(Date.now()+60_000),command});
+    const order=await api.request(req(40,{kind:'order',market:Buffer.alloc(32,7),lots:2n,minimum:90n,maximum:110n,fee:1n,tif:'GTC',reduceOnly:false,goodUntil:BigInt(Date.now()+60_000)}));
+    assert(order.kind==='receipt'&&order.outcome==='dispatched'&&order.possiblyExposed);
+    const payout=await api.request(req(41,{kind:'payout',net:20n,maximumFee:0n,allowPartial:false,goodUntil:BigInt(Date.now()+60_000)}));
+    assert(payout.kind==='receipt'&&payout.outcome==='accepted');
+    const accepted=await readFile(join(store,'accepted'));assert.equal(accepted.length,40);
+    channel.close();await relay.close();relay=undefined;await stopFixture(service);service=undefined;
+    // A valid epoch-1 restart must succeed with the exact registered keys and
+    // recover pending operations without a second registration or journal write.
+    service=spawn(binary,['127.0.0.1:0',store,f.owner.publicKey.toBuffer().toString('hex'),'--recovery-web']);
+    const resumedLine=await childLines(service);service.stdin.write(Buffer.concat([storageKey,prefix,configBytes]));
+    const [resumedAddress,resumedCa]=(await resumedLine()).split(' ');
+    relay=createWebRelay({target:{host:'127.0.0.1',port:Number(resumedAddress!.split(':')[1])}});
+    relay.server.listen(0,'127.0.0.1');await once(relay.server,'listening');
+    channel=await WebChannel.connect({baseUrl:`http://127.0.0.1:${relay.server.address().port}`,policy,core,transport:carrier},(q,p,c)=>verifyWithRoot(q,p,c,Buffer.from(resumedCa!,'hex')));
+    const resumedApi=new PrivateClient(channel,signer,{domain:policy,account:Buffer.alloc(32,1),policy:1});
+    assert.deepEqual(await resumedApi.request(req(42,{kind:'operation',target:Buffer.alloc(32,40)})),order);
+    assert.deepEqual(await resumedApi.request(req(43,{kind:'operation',target:Buffer.alloc(32,41)})),payout);
+    assert.deepEqual(await readFile(join(store,'accepted')),accepted);
+    channel.close();await relay.close();relay=undefined;await stopFixture(service);service=undefined;
+    await refuseRestart(store,Buffer.from(JSON.stringify({...binding,keys:[]})));
+    const wrong=generateKeyPairSync('rsa',{modulusLength:3072}),changedSpki=wrong.publicKey.export({format:'der',type:'spki'});
+    await refuseRestart(store,Buffer.from(JSON.stringify({...binding,keys:[{owner:binding.keys[0]!.owner,spki:toBytes(changedSpki),
+      signature:Array.from(sign(null,recoveryKeyAuthorization(domain,pool,changedSpki),ownerKey))}]})));
+    assert.deepEqual(await readFile(join(store,'accepted')),accepted);
+    // Isolate the epoch gate: identical valid journal, route and registered keys;
+    // ONLY the witness epoch changes in this disposable copy. Never roll back
+    // the actual recovery store's fence to make a negative startup test pass.
+    const probe=join(directory,'epoch-probe');await cp(store,probe,{recursive:true});
+    const epochOnly=Buffer.concat([Buffer.alloc(8),accepted]);epochOnly.writeBigUInt64BE(2n);
+    await writeFile(join(probe,'accepted'),epochOnly);
+    await refuseRestart(probe,configBytes);assert.deepEqual(await readFile(join(probe,'accepted')),epochOnly);
+    // Restore the SAME accepted encrypted journal, not another seeded ledger.
+    worker=spawn(binary,[store,'--recovery-worker']);const response=await childLines(worker);worker.stdin.write(Buffer.concat([storageKey,prefix,configBytes]));
+    const ask=async(v:unknown)=>{worker!.stdin.write(JSON.stringify(v)+'\n');return JSON.parse(await response());};
+    const plan=await ask({op:'payout'}),contract=Buffer.from(plan.contract);
+    const built=await fundingInstruction(program,contract),block=await connection.getLatestBlockhash();
+    const tx=new Transaction({feePayer:f.funds.publicKey,...block}).add(built.instruction);tx.sign(f.funds);
+    const signed=await verifyFundingWire(program,contract,tx.serialize()),signature=await connection.sendRawTransaction(signed.wire,{skipPreflight:true});
+    assert.equal((await connection.confirmTransaction({signature,...block},'finalized')).value.err,null);
+    const auth=JSON.parse(contract.toString()),receipt=await program.account.movementReceipt.fetch(receiptAddress(programId,config,Uint8Array.from(auth.operation)));
+    assert.equal(receipt.amount.toString(),'20');assert.equal(receipt.owner.toBase58(),f.owner.publicKey.toBase58());
+    const paid=(await program.account.customerCounter.fetch(customer)).paid.toString();
+    await ask({op:'settle',wire:Array.from(signed.wire),signature:Array.from(tx.signature!),slot:await connection.getSlot('finalized'),paid:Number(paid),sequence:Number(receipt.sequence.toString())});
+    await send(await program.methods.freeze(identity(domain),u64(1n)).accountsStrict({config,recovery:f.recovery.publicKey}).instruction(),[f.recovery]);
+    const returned=await ask({op:'return'}),returnContract=Buffer.from(returned.contract);
+    // Synthetic native owner-directed payout. This is NOT a venue integration
+    // qualification; all subsequent vault return effects execute actual SBF.
+    await transfer(connection,governance,venueTokens,brokerTokens,f.outsider,1000n);
+    const returning=await fundingInstruction(program,returnContract),returnBlock=await connection.getLatestBlockhash();
+    const returnTx=new Transaction({feePayer:f.broker.publicKey,...returnBlock}).add(returning.instruction);returnTx.sign(f.broker);
+    const returnWire=await verifyFundingWire(program,returnContract,returnTx.serialize());
+    const returnSignature=await connection.sendRawTransaction(returnWire.wire,{skipPreflight:true});
+    assert.equal((await connection.confirmTransaction({signature:returnSignature,...returnBlock},'finalized')).value.err,null);
+    await ask({op:'settle',wire:Array.from(returnWire.wire),signature:Array.from(returnTx.signature!),slot:await connection.getSlot('finalized'),paid:20,sequence:1});
+    const expected:ExpectedCustody={program:programId,domain,pool,mint,decimals:0,governance:governance.publicKey,funds:f.funds.publicKey,recovery:f.recovery.publicKey,
+      broker:f.broker.publicKey,brokerTokens,network:Buffer.alloc(32,1),customers:[{wallet:f.owner.publicKey,tokens:source}]};
+    const snapshot=await chainSnapshot(expected),observed=custodySnapshot(program,snapshot,expected);
+    assert.equal(observed.vault_amount,1980n);assert.equal(observed.normal_paid,20n);
+    // Same-bank parser rejects owner/schema/token/finality/domain substitution.
+    for(const [address,offset,value] of [[config,8,2],[vault,108,2],[vault,72,1],[source,129,1]] as const){
+      const accounts=new Map(snapshot.accounts),old=accounts.get(address.toBase58())!,data=Buffer.from(old.data);data[offset]=value;
+      accounts.set(address.toBase58(),{...old,data});assert.throws(()=>custodySnapshot(program,{...snapshot,accounts},expected));}
+    assert.throws(()=>custodySnapshot(program,{...snapshot,network:Buffer.alloc(32,55)},expected));
+    assert.throws(()=>custodySnapshot(program,{...snapshot,slot:0n},expected));
+    const cmd=`{"op":"finish","custody":${custodyWire(observed).toString()},"owner":${JSON.stringify(toBytes(f.owner.publicKey))},"spki":${JSON.stringify(toBytes(spki))},"signature":${JSON.stringify(binding.keys[0]!.signature)}}\n`;
+    worker.stdin.write(cmd);const publication=JSON.parse(await response()),wire=Buffer.from(publication.manifest),locator=Buffer.from(publication.locator);
+    const manifest=verifyManifest(wire,sign(null,wire,signerKey(governance)),governance.publicKey);
+    assert.equal(manifest.statement.total,980n);assert.equal(manifest.statement.normalPaid,20n);
+    assert.throws(()=>verifyManifest(wire,sign(null,wire,ownerKey),governance.publicKey));
+    await stopFixture(worker);worker=undefined;
+    // Neither the trading process nor recovery worker is needed to fetch/decrypt.
+    const first=join(store,'claims-first',locator.toString('hex')),second=join(store,'claims-second',locator.toString('hex'));
+    const saved=await readFile(first);await rm(first);
+    const kitWire=await retrieveKit(locator,manifest,[async()=>readFile(first),async()=>readFile(second)]);
+    assert.deepEqual(Buffer.from(kitWire),saved);
+    const kit=decryptKit(kitWire,locator,enc.privateKey,manifest);assert.equal(kit.claim.amount,980n);assert.equal(kit.claim.paidBase,20n);
+    assert.equal(kit.claim.destination.toBase58(),source.toBase58());
+    const altered=Buffer.from(kitWire);altered[altered.length-2]^=1;assert.throws(()=>decryptKit(altered,locator,enc.privateKey,manifest));
+    assert.throws(()=>decryptKit(kitWire,locator,wrong.privateKey,manifest));
+    const publicBytes=Buffer.concat([wire,saved]);for(const marker of ['"owner":','"destination":','"paid_base":','"salt":','"proof":'])assert.equal(publicBytes.includes(Buffer.from(marker)),false);
+    await rm(second);await assert.rejects(retrieveKit(locator,manifest,[async()=>readFile(first),async()=>readFile(second)]));
+    // Saved ciphertext remains independently verifiable even with both stores lost.
+    assert.equal(decryptKit(saved,locator,enc.privateKey,manifest).claim.amount,980n);
+    const root=recoveryAddress(programId,config);
+    await send(await program.methods.stageRecovery(recoveryStatementWire(kit.statement)).accountsStrict({config,governance:governance.publicKey,recoveryEpoch:root,systemProgram:SystemProgram.programId}).instruction(),[governance]);
+    await assert.rejects(independentClaim(program,await chainSnapshot(expected),expected,kit)); // STAGED is not ACTIVE.
+    await send(await program.methods.activateRecovery(identity(domain),u64(2n),identity(kit.statement.root)).accountsStrict({config,recovery:f.recovery.publicKey,recoveryEpoch:root,vault,tokenProgram:TOKEN_PROGRAM_ID}).instruction(),[f.recovery]);
+    const active=await chainSnapshot(expected);
+    await assert.rejects(independentClaim(program,active,expected,{...kit,statement:{...kit.statement,epoch:1n}}));
+    await send(await independentClaim(program,active,expected,kit),[f.owner]);
+    assert.equal((await getAccount(connection,source)).amount,1000n); // 20 normal + 980 recovery, not 960.
+    assert.equal((await getAccount(connection,vault)).amount,1000n); // House capital stays distinct.
+    assert.equal((await program.account.recoveryEpoch.fetch(root)).remaining.toString(),'0');
+    await assert.rejects(independentClaim(program,await chainSnapshot(expected),expected,kit));
+    const fenced=await readFile(join(store,'accepted'));
+    assert.equal(fenced.length,48);assert.equal(fenced.readBigUInt64BE(),2n);
+    await refuseRestart(store,configBytes); // Same keys that reopened epoch 1 cannot reopen a fenced epoch 2.
+    assert.deepEqual(await readFile(join(store,'accepted')),fenced);
+  } finally {channel?.close();await relay?.close();if(service)await stopFixture(service);if(worker)await stopFixture(worker);
+    storageKey.fill(0);binding.broker_seed.fill(0);configBytes.fill(0);await rm(directory,{recursive:true,force:true});}
+});
 test('funding codec executes the selected release, return and payout rails in SBF', async () => {
   const f=await fixture(); await send(await f.deposit(),[f.owner]);
   for (const rail of ['Release','Return','Payout']) {

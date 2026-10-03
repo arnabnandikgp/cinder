@@ -30,13 +30,15 @@ P15/P16 add the Anchor 1.2 custody vault and a durable vault/broker/venue fundin
 coordinator with original-attempt reconciliation and offline signed SBF tests.
 P17 extends the same vault with immutable final recovery statements, separate
 operator activation, owner-signed claims and shared lifetime payout counters.
-Its joined finalization/private delivery workflow remains P21; passing membership
-checks is not evidence of complete liabilities or full solvency.
+P21 joins the sealed accepted journal, returned backing, recipient-encrypted kits
+and independent claims, tested through HTTP/WebSocket outages and compiled local SBF.
+Native/witness ports are explicit offline fixtures; passing membership checks is
+not evidence of complete liabilities, full solvency or deployed recovery availability.
 P18 adds protected-journal wallet/agent authorization, account-private operation
 views and an exact-integer client SDK. P19 adds a runnable TLS 1.3 relay/service
 slice and attestation-gated Node channel, tested with explicit local fixtures.
 P20's bounded hardware qualification is merged; it does not establish live native
-trading or qualify a later changed image. The open P21A stack adds shared browser/
+trading or qualify a later changed image. The merged P21A stack adds shared browser/
 Node confidential HTTP/WebSocket, signed bounded reads and private subscriptions,
 tested offline. No public endpoint, plaintext fallback or live trading readiness
 is implied; changed-image/native qualification remains P23.
@@ -72,6 +74,8 @@ is implied; changed-image/native qualification remains P23.
 27. [Exact private reads, paging and WebSocket delivery](docs/architecture/private-read-contract.md)
 
 Resume implementation from the current handoff in the tracker.
+Public documentation is maintained separately in the user's Mintlify repository.
+Local `docs-content/` is ignored and is not required for checkout or CI.
 Ignored `work/` contains the original local research; it is not a CI dependency.
 Later phases must promote their needed sanitized specifications and fixtures before
 relying on them. No wallets, credentials, signed live requests or private customer

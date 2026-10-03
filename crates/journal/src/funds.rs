@@ -96,6 +96,14 @@ impl std::fmt::Debug for Observation {
 /// Funds controls, committed atomically with holds and postings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
+    /// Authenticated recovery operator's return of existing, gross-settled assets.
+    /// Only Venue -> Broker or Broker -> Vault; never deposits or beneficiary payouts.
+    RecoveryAccept {
+        /// Same immutable economic intent; fees must remain house-owned.
+        intent: Box<Intent>,
+        /// Trusted recovery-operator digest, not a fabricated customer signature.
+        approval: Approval,
+    },
     /// Persist the requested economics and its customer/fee commitments.
     Accept {
         /// Exact immutable instruction.
@@ -125,6 +133,8 @@ pub enum Action {
 /// Queue/lifecycle metadata, not another asset or claim ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Operation {
+    /// Recovery-only return; cannot revive an ordinary prepared capability.
+    pub recovery: bool,
     /// Requested economics; vector insertion order is durable queue order.
     pub intent: Intent,
     /// At most one dispatch attempt in this phase.
@@ -147,7 +157,21 @@ impl State {
         self.frozen
     }
 
-    fn funds_ready(&self) -> Result<(), ControlError> {
+    fn funds_ready(&self, recovery: bool) -> Result<(), ControlError> {
+        if recovery {
+            if self.recovery_epoch().is_none()
+                || !self.recovery_flat_returns()
+                || self.raw_unresolved != 0
+                || self.funds.iter().any(|o| o.faulted)
+                || self.orders.iter().any(|o| !o.complete())
+                || self.ledger.unresolved_attribution() != 0
+                || self.ledger.unresolved_funds() != 0
+                || self.ledger.issues().iter().any(|i| i.open)
+            {
+                return Err(ControlError::Unqualified);
+            }
+            return self.recovery_return_capacity();
+        }
         self.protection_ready()?;
         if self.frozen
             || self.raw_unresolved != 0
@@ -193,8 +217,24 @@ impl State {
             Action::Accept {
                 intent: i,
                 approval,
+            }
+            | Action::RecoveryAccept {
+                intent: i,
+                approval,
             } => {
-                self.funds_ready()?;
+                let recovery = matches!(action, Action::RecoveryAccept { .. });
+                self.funds_ready(recovery)?;
+                if recovery
+                    && (self.recovery_epoch() != Some(i.authority_epoch)
+                        || i.fee_payer != Owner::House
+                        || !matches!(
+                            (i.source, i.destination),
+                            (Location::Venue, Destination::Location(Location::Broker))
+                                | (Location::Broker, Destination::Location(Location::Vault))
+                        ))
+                {
+                    return Err(ControlError::Unqualified);
+                }
                 self.request(i.request)?;
                 if self.funds.len() >= MAX_ITEMS
                     || self.funds.iter().any(|o| o.intent.request == i.request)
@@ -209,7 +249,7 @@ impl State {
                     || matches!(i.fee_payer,Owner::Customer(id) if id!=i.request.account)
                     || matches!(i.destination, Destination::Location(_))
                         && i.fee_payer != Owner::House
-                    || self.authority(i.request.account) != Some(i.authority_epoch)
+                    || !recovery && self.authority(i.request.account) != Some(i.authority_epoch)
                     || approval.account != i.request.account
                     || approval.authority_epoch != i.authority_epoch
                     || approval.intent_hash != i.digest().map_err(|_| ControlError::Invalid)?
@@ -250,6 +290,7 @@ impl State {
                     reservations,
                 })?;
                 self.funds.push(Operation {
+                    recovery,
                     intent: (**i).clone(),
                     attempt: None,
                     proof: None,
@@ -258,12 +299,13 @@ impl State {
                 });
             }
             Action::Prepare { attempt, net } => {
-                self.funds_ready()?;
                 let index = self
                     .funds
                     .iter()
                     .position(|o| o.intent.request == attempt.request)
                     .ok_or(ControlError::Invalid)?;
+                let recovery = self.funds[index].recovery;
+                self.funds_ready(recovery)?;
                 self.funds_turn(index)?;
                 let o = &self.funds[index];
                 let i = o.intent.clone();
@@ -273,7 +315,11 @@ impl State {
                     || net.atoms() <= 0
                     || net.atoms() > i.net.atoms()
                     || !i.allow_partial && *net != i.net
-                    || self.authority(i.request.account) != Some(i.authority_epoch)
+                    || (if recovery {
+                        self.recovery_epoch()
+                    } else {
+                        self.authority(i.request.account)
+                    }) != Some(i.authority_epoch)
                 {
                     return Err(ControlError::Invalid);
                 }
@@ -386,16 +432,21 @@ impl State {
         if a.kind != AttemptKind::Funds {
             return Ok(());
         }
-        self.funds_ready()?;
         let index = self
             .funds
             .iter()
             .position(|o| o.attempt == Some(a.key))
             .ok_or(ControlError::Invalid)?;
+        let recovery = self.funds[index].recovery;
+        self.funds_ready(recovery)?;
         self.funds_turn(index)?;
         if self.funds[index].terminal
             || self.funds[index].proof.is_some()
-            || self.authority(a.key.request.account) != Some(a.authority_epoch)
+            || (if recovery {
+                self.recovery_epoch()
+            } else {
+                self.authority(a.key.request.account)
+            }) != Some(a.authority_epoch)
         {
             return Err(ControlError::Invalid);
         }
@@ -652,8 +703,12 @@ pub(crate) fn decode_terminal(r: &mut Reader<'_>) -> Result<Terminal, Error> {
 }
 pub(crate) fn encode_action(w: &mut Writer, a: &Action) {
     match a {
-        Action::Accept { intent, approval } => {
-            w.byte(0);
+        Action::Accept { intent, approval } | Action::RecoveryAccept { intent, approval } => {
+            w.byte(if matches!(a, Action::RecoveryAccept { .. }) {
+                6
+            } else {
+                0
+            });
             encode_intent(w, intent);
             w.raw(&approval.account.bytes());
             w.raw(&approval.intent_hash);
@@ -697,6 +752,14 @@ pub(crate) fn decode_action(r: &mut Reader<'_>) -> Result<Action, Error> {
         3 => Ok(Action::Finalize(r.item()?)),
         4 => Ok(Action::Freeze),
         5 => Ok(Action::NativeCreditReady(r.bool()?)),
+        6 => Ok(Action::RecoveryAccept {
+            intent: Box::new(decode_intent(r)?),
+            approval: Approval {
+                account: AccountId::new(r.array()?).map_err(|_| Error::Codec)?,
+                intent_hash: r.array()?,
+                authority_epoch: r.u64()?,
+            },
+        }),
         _ => Err(Error::Codec),
     }
 }

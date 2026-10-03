@@ -586,35 +586,48 @@ The final grouped slice adds signed owner-scoped reads, immutable replay-derived
 book history, the same commands over WebSocket and bounded replacement-page
 subscriptions. The [versioned read/delivery contract](../architecture/private-read-contract.md)
 defines exact schemas/provenance/bounds and Node/actual-browser acceptance.
-Implemented/tested criteria remain open for review and bottom-up stack merge.
+All four slices were reviewed and merged through native stack #49 on 2026-10-03
+at `05303740dd00129eeb038c9963f44301405725d7`. The criteria below close for the
+bounded offline implementation; changed-image/native qualification remains P23.
 
-- [ ] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
-- [ ] Both transports reach the same command authorization, durable IDs, reservations and journal; exact retries reconcile, conflicting IDs reject, and agents cannot obtain payout or administrative authority.
-- [ ] Private updates follow committed owner-attributed state; bounded queues, missed-message snapshots, reconnect, revocation and cross-account isolation are exercised with no global-sequence leakage.
-- [ ] Actual browser and Node clients run order/query/cancel and owner-payout fixtures; relay plaintext/log checks and mid-operation disconnect/restart regressions pass offline. No synthetic fill or unavailable native rail is advertised as live.
+- [x] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
+- [x] Both transports reach the same command authorization, durable IDs, reservations and journal; exact retries reconcile, conflicting IDs reject, and agents cannot obtain payout or administrative authority.
+- [x] Private updates follow committed owner-attributed state; bounded queues, missed-message snapshots, reconnect, revocation and cross-account isolation are exercised with no global-sequence leakage.
+- [x] Actual browser and Node clients run order/query/cancel and owner-payout fixtures; relay plaintext/log checks and mid-operation disconnect/restart regressions pass offline. No synthetic fill or unavailable native rail is advertised as live.
 
 <a id="p21b"></a>
 ## P21B — Public documentation from the implemented API
 
 Depends on: P21A.
 
-Deliver: a separate docs-site/ Mintlify source tree with product/funds/trading,
+Deliver: copy-ready MDX content in docs-content/ for the user's existing separate
+Mintlify repository, with product/funds/trading,
 security/risk/recovery guides, SDK quickstart and one page for each implemented
 customer method plus WebSocket commands/subscriptions. Document the actual P21A
 version, units, permissions, lifecycle, errors, limits and reconnect handling.
-Generate/check examples against the real contract and offline tests; no invented
+Check examples against the real contract and offline tests; no invented
 HTTP route, fake deployment URL or unimplemented interactive playground. Public
 publication follows implementation, with explicit environment/qualification status.
 Local/tested implementation is not production availability; update live evidence
 after P23. Publishing credentials, ignored research or unverified mainnet/privacy/
 solvency/unconditional-exit claims is prohibited. Hosting/account setup is a distinct
 external step; lack of hosting must not masquerade as a published docs deployment.
+User clarification: do not build another site, add package/configuration/dev-server
+tooling or new CI for this phase. Keep MDX and native Mintlify field/example
+components. Endpoint references show SDK pre-encryption fields and decoded replies,
+not a fictitious JSON exchange; disable the incompatible interactive playground.
+The user subsequently supplied their own local `docs.json` and requested that
+all `docs-content/` stay ignored, for copying into the separate Mintlify repo.
+No documentation-source PR is required. Record delivery/checks here; tracked
+bookkeeping can merge with P21. Relative carrier routes are ordinary reference
+text, not `api:` frontmatter requiring a nonexistent public server URL.
 Evidence: P21A schemas/examples, BASELINE B01–B08/F01–F14/S01–S05/R01–R05,
-tracked implementation and sanitized qualification receipts; docs build/link checks.
+tracked implementation and sanitized qualification receipts; MDX compilation,
+content links and SDK example checks, using temporary validation tools only.
 
-- [ ] Guides accurately state pooled execution, customer ownership, fees/protection limits, private versus public data and operator-assisted recovery; unsupported features and environments are clearly distinguished.
-- [ ] Every advertised method/stream maps to implemented handlers and checked examples, including authorization, exact units, uncertain outcomes, disconnect and reconciliation; spec/example drift fails CI.
-- [ ] Mintlify preview/build/navigation and safe publication checks pass without secrets or ignored work; hosted publication has its own recorded receipt if performed, not a claim based on a local build.
+- [x] Guides accurately state pooled execution, customer ownership, fees/protection limits, private versus public data and operator-assisted recovery; unsupported features and environments are clearly distinguished.
+- [x] Every advertised method/stream maps to implemented handlers and checked examples, including authorization, exact units, uncertain outcomes, disconnect and reconciliation; example checks and their source checkpoint are recorded without adding new recurring CI.
+- [x] Copy-ready MDX syntax, page links, navigation and safe-publication checks pass without secrets or ignored work; rendering/publication in the user's existing Mintlify repository has its own receipt if performed, not a claim based on local content validation.
 
 <a id="p21"></a>
 ## P21 — Integrated recovery and independent claim delivery
@@ -634,9 +647,42 @@ final payouts use the actual local compiled custody/recovery program or an
 explicitly separately checked SBF path. Scheduled after P21B public docs; update
 those docs when integration passes, rather than claiming recovery is already live.
 
-- [ ] No ordinary writer/payout/escaped capability can race an activated root; unresolved native outcomes prevent unsafe activation.
-- [ ] Claimants obtain and verify kits without the ordinary API; package loss, stale package and privacy are tested.
-- [ ] Final funded claims match remaining entitlements; unavailable venue assets do not become payout cash or disappear as liabilities.
+Implementation order within this bounded phase:
+
+1. Derive a read-only settled financial cut from the existing journal, including
+   every configured customer and ordinary payment history. Do not promote the cut
+   to a sealing/fencing certificate or create another entitlement ledger.
+2. Join controlled cutover, qualified native terminal outcomes and returned assets,
+   then bind the exact final cut to independently checked chain counters/backing.
+   Ordinary admission/exposure freeze must not disable necessary recovery-only
+   reconciliation/unwind/return work or silently re-enable the ordinary writer.
+3. Prepare and independently deliver recipient-encrypted packages, verify their
+   exact active context and submit owner claims without the normal API. Reuse P17
+   tree/wire rules; do not invent a new user encryption-key scheme without checking
+   the approved private-runtime/recovery contracts and recording its disposition.
+4. Rehearse the actual HTTP/WebSocket SDK/service accepted tail, late/unknown effects
+   and prior payouts through local compiled recovery claims, including outages and
+   races. Library fixtures alone do not close any of the phase criteria below.
+
+- [x] No ordinary writer/payout/escaped capability can race an activated root; unresolved native outcomes prevent unsafe activation.
+- [x] Claimants obtain and verify kits without the ordinary API; package loss, stale package and privacy are tested.
+- [x] Final funded claims match remaining entitlements; unavailable venue assets do not become payout cash or disappear as liabilities.
+
+Offline acceptance disposition: journal revision 21 implements explicit trusted
+cutover and irreversible dispatch sealing; scoped recovery IOC closes and flat
+returns never reopen ordinary spending. Installed P16 counters/backing and the
+complete immutable owner-authorized encryption-key inventory bind preparation.
+RSA-OAEP-SHA256/AES-256-GCM packages require both immutable-store readbacks;
+the separate governed publisher signs the public ciphertext manifest. The Node
+claimant needs no ordinary API and builds an unsigned claim only after checking
+live ACTIVE context/counters/backing. Keys and private locators must be retained;
+no automatic key rotation/lost-key reissue or public onboarding endpoint is added.
+Both actual HTTP/WebSocket accepted-tail outage rehearsals execute normal payout,
+return and final claims in compiled local SBF. Native completion/fencing, source
+authentication and store independence are explicit qualified **fake ports** here,
+not claims about live capability closure. P23/G01/G03 qualify those ports, entropy
+and the changed measured image before deployment. Tests do not prove complete
+liabilities or unconditional solvency/exit. P21 stays in progress until review/merge.
 
 <a id="p22"></a>
 ## P22 — Joined offline adversarial acceptance suite

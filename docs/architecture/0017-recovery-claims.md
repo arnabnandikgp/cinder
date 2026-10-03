@@ -161,6 +161,166 @@ contained and require a separately reviewed remediation, not a root-reset escape
 
 ## Evidence and implementation boundaries
 
+### P21 financial-cut projection
+
+`crates/journal/src/recovery.rs` now derives a private read-only cut from the
+existing journal. It revalidates the backend's current head/authority before
+reading; plain SQLite still supplies no independent rollback witness. The caller
+must name the exact reviewed head and an applied, source-covered complete native
+check following every financial observation. Controls alone may follow that check.
+
+The cut requires a durable ordinary-path freeze, closed order/funds lifecycles,
+no active holds or unqualified generic attempts, no unresolved inputs/attribution/
+reconciliation/protection and no open **gross** user/house/suspense/native positions.
+Every funding boundary must be settled even when net accrual is zero. Venue,
+broker and transit balances must be returned; only recorded vault cash backs the
+positive claims. The full configured inventory includes zero/negative accounts;
+customer debt is retained but never offsets someone else's positive entitlement.
+Confirmed beneficiary payments remain a separate counter basis, not a second
+deduction from already-net cash. Reserve designation creates no new assets.
+
+The cut remains a financial projection, **not** root-publication permission or
+escaped-capability revocation. P21 now joins it to explicit cutover, durable sealing,
+installed-custody matching and independently retrievable encrypted packages. These
+are separate checks; a valid cut alone still authorizes no claim. The joined changes
+advance journal `ENGINE_REVISION` to **21**; revision 20 histories reject rather than
+silently replaying under new permission semantics. Migration is not implemented.
+
+Sixteen synthetic journal tests cover settled/replayed cuts, payout/fee accounting,
+stale heads and late deposits, missing causal coverage, gross positions, unsettled
+zero-net funding, external/transit assets, queued/unfinalized movements, generic
+attempts, evidence gaps, remediation underbacking, negative debt, zero accounts,
+unattributed deposits and freshness failure. They are not a new hardware/live/SBF
+qualification receipt.
+
+### P21 installed-custody matching
+
+`crates/pacifica/src/funding/recovery.rs` joins the cut to P16's already-installed
+route, precision and beneficiary mappings. It does not select recipients or
+recalculate entitlements. Matching requires the exact frozen P15 domain/pool/mint/
+program/config/vault/broker/epoch, a complete unique counter inventory and an exact
+returned vault amount. All chain observations must cover the latest applied chain
+receipt and accepted raw-resolution slots; venue causal cuts and milliseconds are
+not compared with Solana slots. Unknown or extra tokens require reconciliation,
+not automatic house credit. Program mint atoms must fit u64 without truncation.
+
+Successful original P16 plans/receipts reconstruct lifetime paid and payout/release
+sequences from the fresh P15 zero-counter origin. Duplicate receipts do not consume
+them twice; unsupported historical counter baselines or unexplained jumps refuse
+matching and require explicit migration. Returns never reset the funding sequence.
+The positive claim basis contains the fixed wallet/token recipient, already-net
+amount and checked prior-counter bases; zero/negative users remain in the cut.
+
+The chain input is an explicitly trusted **decoded observation port**, not a host
+assertion promoted to proof. Its cluster/finality/schema/PDA/SPL authority checks
+remain mandatory for the actual chain integration. The result's private Debug is
+redacted and it authorizes neither staging nor activation. Six added P16 tests cover
+duplicate receipt/replay, 22 context/inventory/counter mutations, return/release
+sequence preservation, unexplained counter jumps, u64 precision and qualified
+resolution of previously unknown chain inputs. `clients/vault/src/claims.ts` now
+checks coherent raw classic-SPL/program/config/counter accounts, canonical PDAs,
+schemas, role separation and exact integer fields before producing the trusted P16
+observation. Its caller must authenticate genesis, finality and the complete request
+set: a parent-supplied `finalized` flag or network label is not validator proof.
+Hardware/live source qualification remains P23/G01 evidence.
+
+### P21 controlled cutover and sealing
+
+The trusted recovery port first authenticates independent writer takeover, custody
+freeze and native capability closure. It retains the evidence referenced by `fence`
+and commits `Recovery::Begin` with the exact financial version, operator epoch and
+deadline. A nonzero fence digest is a binding, **not** a proof of those external
+facts. Begin permanently freezes ordinary admission/payout and cannot be repeated
+to replace the recovery session. An expired permission stops new dispatch; it never
+settles an unknown action.
+
+Existing order observations, original receipts and reconciliation continue to post
+to the same journal. Recovery closes use existing bounded IOC sizing, deterministic
+allocation, house stress support and ordinary unknown-outcome retention. The
+adapter's separate testnet `dispatch_recovery` path cannot be borrowed by ordinary
+dispatch; native `reduce_only` stays false because a private close can increase pool
+net exposure. Cleanup credit eligibility is independent of create/cancel routing.
+Live recovery execution remains a G01/P23 qualification, not an implicit mainnet
+switch.
+
+Gross-flat recovery returns allow only Venue → Broker → Vault, with house-owned
+fees, shared source reservations and existing P16 original-attempt/receipt rules.
+They cannot authorize releases, deposits, customer payouts or a previously prepared
+ordinary capability. Returning existing settled assets need not satisfy new-risk
+capital targets, but customer debt and unsettled transit are never available cash.
+The ordinary payout route binds the authorized **token account**, not its wallet;
+both remain independently checked by the custody boundary.
+
+`Recovery::Seal` irreversibly stops further signing/exposure after all orders,
+movements, reservations and evidence are resolved and gross positions and external/
+broker/transit balances are zero. Facts still arrive and change the authoritative
+head; a late fact invalidates an already prepared publication. Publication rechecks
+the sealed accepted head and custody observation. Separate governed staging and
+recovery activation are still required by the program.
+
+### P21 recipient encryption and independent claimant
+
+Each registered owner authorizes a **dedicated RSA-3072/e=65537 SPKI** with an
+Ed25519 signature over SHA256(`CINDER_RECOVERY_KEY_V1` || domain || pool ||
+SHA256(SPKI)). The complete immutable key inventory is recorded inside the existing
+encrypted journal before cutover. Preparation rejects missing, substituted,
+duplicated or unregistered keys. This is an attested private configuration port,
+not a newly advertised public onboarding endpoint. There is no wallet-secret KDF,
+operator decryptor, key rotation or lost-key reissue. Owners must retain the key;
+G03 must approve production provisioning/backup and any future replacement policy.
+
+Private preparation derives every positive claim from the matched sealed journal;
+zero/negative accounts remain in the inventory. A cached ordered tree bounds proof
+construction to O(n log n), 65,536 leaves and 16 siblings. Cryptographic entropy
+supplies independent salts, claim IDs, opaque locators, AES keys and GCM nonces.
+Each package is AES-256-GCM encrypted with root/context/locator-bound AAD; its key
+is wrapped using RSA-OAEP with SHA-256 and MGF1-SHA-256. Packages are bounded at
+32,768 bytes, stored immutably in two approved failure domains and read back exactly
+from **both** before availability is reported. Distinct labels alone do not prove
+independent failure domains. A failed readback leaves only orphan ciphertext, not
+publication authority.
+
+The preparation evidence precommits the two store identities and opaque locator
+layout **before** constructing the root. Ciphertext digests cannot be included in
+their own plaintext/root commitment without circularity. Instead a public compact
+manifest binds the final statement, stores and exact ciphertext digests, and the
+separate governed publisher signs its exact bytes after readback/revalidation.
+Public entries contain no wallet, destination, amount, salt, leaf index or path.
+Opaque locators must be delivered privately and retained locally; there is no
+public wallet-to-locator directory.
+
+The independent Node client verifies that governed signature, GET-only replica
+failover, ciphertext digest, OAEP/GCM authentication, canonical bounded JSON,
+context/root and exact P17 inclusion proof. It decrypts locally using the dedicated
+key, never through Cinder. `independentClaim` then checks authenticated live custody,
+ACTIVE mode, immutable statement/PDA, fixed owner/recipient, paid bases, unconsumed
+receipt and aggregate remaining backing before constructing an unsigned instruction.
+The owner's wallet signs; the program repeats the checks atomically. Browser key
+storage, hosted package endpoints, rotation/reissue and deployment are not supplied
+by this offline SDK slice. OpenSSL owns OAEP randomness/opaque crypto buffers;
+native entropy/erasure and the changed measured image still require G03/P23 review.
+
+### Joined offline acceptance
+
+Both HTTP and WebSocket tests initiate a real signed SDK order and payout through
+the Noise/WASM client, parent relay and private service. They kill those processes,
+restore the same encrypted accepted tail, execute the original normal payout in
+compiled SBF, freeze custody, reject the old writer, resolve the unknown order only
+with an explicitly **synthetic** native completion certificate, and return synthetic
+native house collateral through the existing controller plus an actual SBF return.
+The final seal/counter/backing match produces recipient-only packages. With service
+and worker stopped, one replica is removed, the independent client retrieves from
+the other, rejects corruption/wrong keys/stale context, and submits the real owner
+claim to SBF. Loss of both stores fails retrieval; a retained local ciphertext copy
+still verifies. Normal 20 + recovery 980 pays the original 1,000 once, while the
+separate 1,000 house contribution remains in custody. Replay and old-writer restart
+fail. Fake native/witness ports are feature-gated and are **not** live evidence.
+
+P22 expands this representative acceptance into the complete adversarial lifecycle.
+P23 qualifies actual native capability fencing, receipts/RPC finality, independent
+stores, attested entropy and the changed image. A successful local claim neither
+proves all liabilities on-chain nor guarantees exit when a venue remains inaccessible.
+
 `clients/vault/tests/vault.test.ts` executes compiled Anchor 1.2 SBF through the
 check-owned offline Surfpool with disposable in-memory keys. It covers V08, strict
 owner/domain/epoch/root/asset/recipient checks, unknown reservations/source state,

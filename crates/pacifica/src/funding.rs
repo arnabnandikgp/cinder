@@ -19,6 +19,7 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 const MAGIC: &[u8] = b"CINDER-PACIFICA-FUNDING-1\0";
+pub mod recovery;
 /// Governed binding between an opaque private account and its public payout owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Beneficiary {
@@ -771,7 +772,7 @@ impl Controller {
             Rail::Deposit => (Location::Broker, Destination::Location(Location::Venue)),
             Rail::Withdraw => (Location::Venue, Destination::Location(Location::Broker)),
             Rail::Return => (Location::Broker, Destination::Location(Location::Vault)),
-            Rail::Payout => (Location::Vault, Destination::Recipient(beneficiary.wallet)),
+            Rail::Payout => (Location::Vault, Destination::Recipient(beneficiary.tokens)),
         };
         let net = u64::try_from(m.net.atoms()).map_err(|_| Error::Limit)?;
         let fee = u64::try_from(m.maximum_fee.atoms()).map_err(|_| Error::Limit)?;
@@ -819,7 +820,18 @@ impl Controller {
             net,
             gross,
             operation,
-            epoch: self.route.epoch,
+            // Ordinary route stays immutable. Only a recovery-tagged return uses
+            // the one frozen custody epoch; no release/payout can borrow it.
+            epoch: if state
+                .funds()
+                .iter()
+                .any(|o| o.recovery && o.attempt == Some(a.key))
+                && rail == Rail::Return
+            {
+                self.route.epoch.checked_add(1).ok_or(Error::Limit)?
+            } else {
+                self.route.epoch
+            },
             customer: beneficiary.wallet,
             counters,
             at: dispatch.at,
@@ -1149,7 +1161,7 @@ impl Controller {
             ),
             Rail::Payout => (
                 Location::Vault,
-                Destination::Recipient(plan.customer),
+                Destination::Recipient(plan.counters.recipient_tokens),
                 self.route.program,
                 self.route.vault,
                 plan.counters.recipient_tokens,

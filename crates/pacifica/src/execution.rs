@@ -581,7 +581,12 @@ impl Gateway {
         journal.commit(tx)?;
         Ok(())
     }
-    fn plan(&self, state: &State, dispatch: Dispatch) -> Result<(Plan, u32, bool), Error> {
+    fn plan(
+        &self,
+        state: &State,
+        dispatch: Dispatch,
+        recovery: bool,
+    ) -> Result<(Plan, u32, bool), Error> {
         let a = state
             .attempts()
             .iter()
@@ -602,8 +607,9 @@ impl Gateway {
             .iter()
             .find(|m| self.profile.config.markets[m.market].unit() == order.intent.quantity.unit())
             .ok_or(Error::Qualification)?;
-        let cleanup = a.kind == AttemptKind::Cancel;
-        let (path, kind, data, cost) = if cleanup {
+        let cancel = a.kind == AttemptKind::Cancel;
+        let cleanup = cancel || recovery;
+        let (path, kind, data, cost) = if cancel {
             (
                 "/api/v1/orders/cancel",
                 "cancel_order",
@@ -611,9 +617,22 @@ impl Gateway {
                 5,
             )
         } else {
-            // Emergency and restoration native qualification stays disabled: P13
-            // does not yet provide their required native source-time/cut evidence.
-            if a.kind != AttemptKind::Order || original != a.key {
+            // Ordinary emergency/restoration qualification stays disabled. Only
+            // the explicit testnet recovery port enables bounded recovery closes;
+            // live source-time/terminal evidence remains a G01/P23 gate.
+            let recovery_close = recovery
+                && self.policy.origin == Origin::Testnet
+                && a.kind == AttemptKind::Emergency
+                && state.recovery_epoch() == Some(a.authority_epoch)
+                && state.closes().iter().any(|c| {
+                    c.request == a.key.request
+                        && matches!(
+                            c.kind,
+                            cinder_journal::liquidation::Kind::RecoveryClose
+                                | cinder_journal::liquidation::Kind::HouseUnwind
+                        )
+                });
+            if !(a.kind == AttemptKind::Order && !recovery || recovery_close) || original != a.key {
                 return Err(Error::Qualification);
             }
             let i = &order.intent;
@@ -669,11 +688,33 @@ impl Gateway {
         dispatch: Dispatch,
         transport: &mut T,
     ) -> Result<Outcome, Error> {
+        self.dispatch_scoped(journal, dispatch, transport, false)
+    }
+    /// Explicit recovery-port dispatch for bounded IOC closes on the qualified
+    /// testnet profile only. G01 must qualify native terminal/source-cut evidence;
+    /// offline fixtures exercise this port, not mainnet/customer-fund authority.
+    /// Ordinary dispatch cannot use this scope. No restoration or healthy-user
+    /// liquidation outside operator-assisted recovery is enabled.
+    pub fn dispatch_recovery<B: Backend, P: Protection, T: Transport>(
+        &self,
+        journal: &mut Journal<B, P>,
+        dispatch: Dispatch,
+        transport: &mut T,
+    ) -> Result<Outcome, Error> {
+        self.dispatch_scoped(journal, dispatch, transport, true)
+    }
+    fn dispatch_scoped<B: Backend, P: Protection, T: Transport>(
+        &self,
+        journal: &mut Journal<B, P>,
+        dispatch: Dispatch,
+        transport: &mut T,
+        recovery: bool,
+    ) -> Result<Outcome, Error> {
         if journal.transaction(dispatch.commit).is_some() {
             return Err(Error::Qualification);
         }
         let history = self.history(journal, dispatch.at)?;
-        let (plan, cost, cleanup) = self.plan(journal.state()?, dispatch)?;
+        let (plan, cost, cleanup) = self.plan(journal.state()?, dispatch, recovery)?;
         if !cleanup && !observation::replay(journal, &self.profile)?.gaps.is_empty() {
             return Err(Error::Qualification);
         }
@@ -721,10 +762,12 @@ impl Gateway {
         body.insert("expiry_window".into(), signed["expiry_window"].clone());
         let request = Outbound {
             origin: plan.origin,
-            path: if cleanup {
-                "/api/v1/orders/cancel"
-            } else {
-                "/api/v1/orders/create"
+            // Cleanup credit eligibility is NOT an endpoint selector: a recovery
+            // IOC close spends cleanup credits but remains a signed create order.
+            path: match plan.path.as_str() {
+                "/api/v1/orders/cancel" => "/api/v1/orders/cancel",
+                "/api/v1/orders/create" => "/api/v1/orders/create",
+                _ => return Err(Error::Qualification),
             },
             body: PrivateBytes::new(serde_json::to_vec(&body).map_err(|_| Error::Codec)?)?,
         };

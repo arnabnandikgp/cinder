@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const focused=process.argv.slice(2);
+assert(focused.length===0||(focused.length===1&&focused[0]==='--recovery-only'),'Only the explicit local recovery focus is supported');
 const programs = resolve(root, 'programs');
 const client = resolve(root, 'clients/vault');
 const anchor = process.env.CINDER_ANCHOR_TOOL || 'anchor';
@@ -27,6 +29,7 @@ function run(command, args, cwd = programs) {
 }
 assert.equal(run(anchor, ['--version']).trim(), 'anchor-cli 1.2.0');
 assert.equal(run('surfpool', ['--version']).trim(), 'surfpool 1.5.0');
+run(process.execPath,['scripts/prepare-recovery-test.mjs'],root);
 assert.match(run('cargo-build-sbf', ['--version']), /solana-cargo-build-sbf 3\.1\.10\b/);
 const policy = JSON.parse(readFileSync(resolve(root, 'scripts/vault-dependencies.json'), 'utf8'));
 for (const [path, hash] of Object.entries(policy.lockfiles)) {
@@ -94,7 +97,7 @@ try {
   }
   assert(ready, `Surfpool startup timeout: ${serverLog}`);
   // Asynchronous child keeps the parent available to supervise/clean up the sandbox.
-  const tests = spawn(process.execPath, ['--test', '--test-concurrency=1', 'tests/funding.test.ts', 'tests/recovery.test.ts', 'tests/vault.test.ts'], { cwd: client, env, stdio: 'inherit' });
+  const tests = spawn(process.execPath, ['--test', '--test-concurrency=1',...(focused.length?['--test-name-pattern=^P21 ']:[]), 'tests/funding.test.ts', 'tests/recovery.test.ts', 'tests/vault.test.ts'], { cwd: client, env, stdio: 'inherit' });
   await new Promise((accept, reject) => {
     tests.on('error', reject); tests.on('exit', (code, signal) => code === 0 ? accept() : reject(new Error(`Vault tests failed: ${code ?? signal}`)));
   });
@@ -104,4 +107,4 @@ try {
   if (surfpool.exitCode === null && surfpool.signalCode === null) surfpool.kill('SIGKILL');
   rmSync(sandbox, { recursive: true, force: true });
 }
-process.stdout.write('Vault: locked SBF/IDL, strict Rust/TypeScript checks and offline signed transaction tests passed.\n');
+process.stdout.write(focused.length?'Focused recovery: strict checks and HTTP/WebSocket outage-to-SBF-claim tests passed.\n':'Vault: locked SBF/IDL, strict Rust/TypeScript checks and offline signed transaction tests passed.\n');

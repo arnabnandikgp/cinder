@@ -9,6 +9,7 @@ pub mod orders;
 pub mod projection;
 pub mod protection;
 pub mod raw;
+pub mod recovery;
 pub mod replicated;
 pub mod restoration;
 pub mod risk;
@@ -20,7 +21,7 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 // Order classification/authority/lifecycle changes replay semantics.
-const ENGINE_REVISION: u16 = 20;
+const ENGINE_REVISION: u16 = 21;
 
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

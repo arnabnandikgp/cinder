@@ -22,6 +22,16 @@ It is not an entitlement calculator, full-solvency verifier or automatic activat
 service. Authenticate the actual active statement/configuration and paid-counter
 basis before using inclusion results. Use the generated `stageRecovery`,
 `activateRecovery` and `claimRecovery` methods with explicit strict accounts;
-normal and recovery payments share lifetime counters. Claim delivery/encryption
-and the standalone recovery workflow are P21, not ambient SDK behavior.
+normal and recovery payments share lifetime counters.
+
+`src/claims.ts` adds independent P21 verification: owner-authorized dedicated
+encryption keys, governed manifest signatures, GET-only ciphertext failover,
+recipient-local OAEP/GCM decryption and strict live custody/counter/root checks.
+Use `verifyManifest` → `retrieveKit` → `decryptKit` → `independentClaim`; supply
+authenticated chain observations and independently governed readers explicitly.
+`independentClaim` only builds an unsigned instruction; the owner wallet signs it.
+No Cinder API, native venue credential or ambient RPC/wallet is selected. Back up
+the dedicated decryption key and private opaque locator before depending on recovery;
+this slice implements neither key rotation nor lost-key reissue. Package hosts and
+live source qualification remain release gates, not defaults hidden in the SDK.
 See [recovery contract](../../docs/architecture/0017-recovery-claims.md).

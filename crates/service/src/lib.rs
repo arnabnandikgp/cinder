@@ -7,6 +7,8 @@ pub mod egress;
 #[cfg(feature = "local-fixture")]
 pub mod fixture;
 pub mod nsm;
+/// Sealed-journal recovery preparation and recipient-encrypted independent delivery.
+pub mod recovery;
 pub mod release;
 pub mod runtime;
 pub mod transport;

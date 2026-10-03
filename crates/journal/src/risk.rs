@@ -1117,36 +1117,42 @@ impl State {
         if self.risk.is_none() {
             return Ok(());
         }
-        let admission =
-            controls.iter().any(|c| match c {
-                Control::Collateral(_)
-                | Control::Risk(Action::Install { .. })
-                | Control::Release(_) => false,
-                Control::Protection(crate::protection::Action::Apply { decision, .. }) => {
-                    matches!(
-                        decision.change,
-                        cinder_kernel::ledger::protection::ProtectionChange::Designate { delta }
-                            if delta.atoms() < 0
-                    )
-                }
-                Control::Protection(_) => false,
-                Control::Liquidation(_) => false,
-                Control::Restoration(a) => matches!(a, crate::restoration::Action::Prepare { .. }),
-                Control::Order(orders) => !matches!(
-                    orders,
-                    crate::orders::Action::AdvanceAuthority { .. }
-                        | crate::orders::Action::PrepareCancel { .. }
-                        | crate::orders::Action::Release { .. }
-                ),
-                Control::Funds(f) => matches!(
-                    f,
-                    crate::funds::Action::Accept { .. } | crate::funds::Action::Prepare { .. }
-                ),
-                Control::Expose(k) => self.attempts.iter().find(|a| a.key == *k).is_none_or(|a| {
-                    !matches!(a.kind, AttemptKind::Cancel | AttemptKind::Emergency)
-                }),
-                _ => true,
-            });
+        let admission = controls.iter().any(|c| match c {
+            Control::Recovery(_)
+            | Control::ResolveRaw(_)
+            | Control::Collateral(_)
+            | Control::Risk(Action::Install { .. })
+            | Control::Release(_) => false,
+            Control::Protection(crate::protection::Action::Apply { decision, .. }) => {
+                matches!(
+                    decision.change,
+                    cinder_kernel::ledger::protection::ProtectionChange::Designate { delta }
+                        if delta.atoms() < 0
+                )
+            }
+            Control::Protection(_) => false,
+            Control::Liquidation(_) => false,
+            Control::Restoration(a) => matches!(a, crate::restoration::Action::Prepare { .. }),
+            Control::Order(orders) => !matches!(
+                orders,
+                crate::orders::Action::AdvanceAuthority { .. }
+                    | crate::orders::Action::PrepareCancel { .. }
+                    | crate::orders::Action::Release { .. }
+            ),
+            Control::Funds(f) => match f {
+                crate::funds::Action::Accept { .. } => true,
+                crate::funds::Action::Prepare { attempt, .. } => !self
+                    .funds
+                    .iter()
+                    .any(|o| o.recovery && o.intent.request == attempt.request),
+                _ => false,
+            },
+            Control::Expose(k) => self.attempts.iter().find(|a| a.key == *k).is_none_or(|a| {
+                !matches!(a.kind, AttemptKind::Cancel | AttemptKind::Emergency)
+                    && !self.recovery_exposure(a)
+            }),
+            _ => true,
+        });
         if admission {
             self.risk_gate()?;
         }
