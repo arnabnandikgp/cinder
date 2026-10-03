@@ -355,14 +355,23 @@ fn parse(reader: &mut impl Read) -> Result<Http, Error> {
         return Err(Error);
     }
     let mut fields = BTreeMap::new();
+    let mut field_count = 0;
     for line in lines {
+        field_count += 1;
         let (k, v) = line.split_once(':').ok_or(Error)?;
-        if fields.len() >= 64
+        if field_count > 64
             || k.is_empty()
             || k.bytes().any(|b| !b.is_ascii_alphanumeric() && b != b'-')
             || !v.is_ascii()
             || v.bytes().any(|b| b < 32 || b == 127)
-            || fields.insert(k.to_ascii_lowercase(), v.trim()).is_some()
+        {
+            return Err(Error);
+        }
+        let name = k.to_ascii_lowercase();
+        if matches!(
+            name.as_str(),
+            "content-length" | "transfer-encoding" | "content-encoding" | "location"
+        ) && fields.insert(name, v.trim()).is_some()
         {
             return Err(Error);
         }
@@ -646,6 +655,23 @@ pub(crate) fn qualification_cas_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn repeated_unconsumed_cloud_headers_are_bounded() {
+        let response = b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\nSet-Cookie: a=1\r\nset-cookie: b=2\r\nVary: Origin\r\nvary: Accept-Encoding\r\n\r\nx";
+        assert_eq!(parse(&mut &response[..]).unwrap().body.as_slice(), b"x");
+        assert!(
+            parse(&mut &b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\ncontent-length: 0\r\n\r\n"[..])
+                .is_err()
+        );
+        for count in [63, 64] {
+            let mut response = String::from("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n");
+            for _ in 0..count {
+                response.push_str("Vary: Origin\r\n");
+            }
+            response.push_str("\r\n");
+            assert_eq!(parse(&mut response.as_bytes()).is_ok(), count == 63);
+        }
+    }
     #[test]
     fn strict_cloud_framing() {
         assert_eq!(
