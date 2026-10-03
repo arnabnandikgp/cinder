@@ -274,6 +274,26 @@ impl Gateway {
     pub fn agent(&self) -> String {
         bs58::encode(self.key.verifying_key().to_bytes()).into_string()
     }
+    /// Public signer identity for enforcing separation of loaded key roles.
+    pub fn agent_key(&self) -> [u8; 32] {
+        self.key.verifying_key().to_bytes()
+    }
+    /// Release component from the actual loaded profile/policy, signer and epoch.
+    /// Refuse a gateway belonging to a different authoritative journal.
+    pub fn release_commitment(
+        &self,
+        config: &cinder_kernel::ledger::Config,
+    ) -> Result<[u8; 32], Error> {
+        if &self.profile.config != config {
+            return Err(Error::Qualification);
+        }
+        let mut hash = Sha256::new();
+        hash.update(b"CINDER-PACIFICA-LOADED-EXECUTION-1\0");
+        hash.update(self.contract);
+        hash.update(self.epoch.to_be_bytes());
+        hash.update(self.key.verifying_key().to_bytes());
+        Ok(hash.finalize().into())
+    }
     fn evidence(&self, record: Record) -> Result<PrivateBytes, Error> {
         let mut bytes = MAGIC.to_vec();
         bytes.extend(

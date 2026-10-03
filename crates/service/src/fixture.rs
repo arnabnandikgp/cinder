@@ -65,11 +65,24 @@ pub struct FixtureAttester {
 impl FixtureAttester {
     /// Fresh disposable CA, not a static secret/root accepted by production.
     pub fn new() -> Result<Self, Error> {
+        Self::build(true)
+    }
+    #[cfg(test)]
+    pub(crate) fn without_leaf_identifier() -> Result<Self, Error> {
+        Self::build(false)
+    }
+    fn build(leaf_identifier: bool) -> Result<Self, Error> {
         let group = EcGroup::from_curve_name(Nid::SECP384R1)?;
         let root_key = PKey::from_ec_key(EcKey::generate(&group)?)?;
-        let root = certificate(&root_key, "fixture-root", None, true)?;
+        let root = certificate(&root_key, "fixture-root", None, true, true)?;
         let key = PKey::from_ec_key(EcKey::generate(&group)?)?;
-        let leaf = certificate(&key, "fixture-leaf", Some((&root, &root_key)), false)?;
+        let leaf = certificate(
+            &key,
+            "fixture-leaf",
+            Some((&root, &root_key)),
+            false,
+            leaf_identifier,
+        )?;
         Ok(Self { key, leaf, root })
     }
     /// Public root for the EXPLICIT fixture verifier only.
@@ -82,6 +95,7 @@ fn certificate(
     name: &str,
     issuer: Option<(&X509, &PKey<Private>)>,
     ca: bool,
+    identifier: bool,
 ) -> Result<X509, Error> {
     let mut n = X509NameBuilder::new()?;
     n.append_entry_by_text("CN", name)?;
@@ -118,10 +132,12 @@ fn certificate(
     let ski = SubjectKeyIdentifier::new()
         .build(&b.x509v3_context(issuer.map(|(c, _)| c.as_ref()), None))?;
     b.append_extension(ski)?;
-    let aki = AuthorityKeyIdentifier::new()
-        .keyid(true)
-        .build(&b.x509v3_context(issuer.map(|(c, _)| c.as_ref()), None))?;
-    b.append_extension(aki)?;
+    if identifier {
+        let aki = AuthorityKeyIdentifier::new()
+            .keyid(true)
+            .build(&b.x509v3_context(issuer.map(|(c, _)| c.as_ref()), None))?;
+        b.append_extension(aki)?;
+    }
     b.sign(
         issuer.map(|(_, k)| k).unwrap_or(key),
         MessageDigest::sha384(),
@@ -130,12 +146,24 @@ fn certificate(
 }
 impl Attester for FixtureAttester {
     fn quote(&self, p: &Policy, c: &Context<'_>) -> Result<Vec<u8>, Error> {
+        self.quote_fields(p, c.now, c.spki, &c.nonce, &user_data(p, c))
+    }
+}
+impl FixtureAttester {
+    pub(crate) fn quote_fields(
+        &self,
+        p: &Policy,
+        at: u64,
+        public_key: &[u8],
+        nonce: &[u8],
+        data: &[u8],
+    ) -> Result<Vec<u8>, Error> {
         let mut map = BTreeMap::new();
         let mut put = |k: &str, v: Value| {
             map.insert(Value::Text(k.into()), v);
         };
         put("module_id", Value::Text("LOCAL-FIXTURE-NOT-NITRO".into()));
-        put("timestamp", Value::Integer(c.now as i128));
+        put("timestamp", Value::Integer(at as i128));
         put("digest", Value::Text("SHA384".into()));
         put(
             "pcrs",
@@ -152,10 +180,17 @@ impl Attester for FixtureAttester {
             "cabundle",
             Value::Array(vec![Value::Bytes(self.root.to_der()?)]),
         );
-        put("public_key", Value::Bytes(c.spki.to_vec()));
-        put("nonce", Value::Bytes(c.nonce.to_vec()));
-        put("user_data", Value::Bytes(user_data(p, c).to_vec()));
-        let payload = serde_cbor::to_vec(&Value::Map(map)).map_err(|_| Error)?;
+        put("public_key", Value::Bytes(public_key.to_vec()));
+        put("nonce", Value::Bytes(nonce.to_vec()));
+        put("user_data", Value::Bytes(data.to_vec()));
+        let mut payload = serde_cbor::to_vec(&Value::Map(map)).map_err(|_| Error)?;
+        // Match the top-level map framing observed on actual NSM 1.0 hardware.
+        // This remains a synthetic, separately rooted signed test document.
+        if payload.first() != Some(&0xa9) {
+            return Err(Error);
+        }
+        payload[0] = 0xbf;
+        payload.push(0xff);
         CoseSign1::new::<Openssl>(&payload, &HeaderMap::new(), &self.key)
             .map_err(|_| Error)?
             .as_bytes(true)

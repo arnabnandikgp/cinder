@@ -1,6 +1,6 @@
 # Implementation plan
 
-Updated 2026-10-01. Canonical scope and acceptance criteria; actual progress lives in
+Updated 2026-10-03. Canonical scope and acceptance criteria; actual progress lives in
 [TRACKER](TRACKER.md). Read [BASELINE](BASELINE.md) for approved policy and
 [EVIDENCE](EVIDENCE.md) for research/prototype provenance and regression obligations.
 P00 establishes this foundation; it does not implement or deploy the broker.
@@ -72,6 +72,8 @@ no HTTP framework or concrete deployment is selected by this plan update.
 | Unit and component integration | P02–P18 and every later change | Existing financial/journal/API/adapter tests and actual local SBF instructions; not a complete deployed workflow |
 | Local executable service slice | P19 | SDK → real relay/service processes → signed request → protected journal → private response, with explicit attestation/infrastructure fixtures; not Nitro evidence |
 | Actual confidential runtime | P20 | Same service packaged into an enclave, authenticated egress, key release and fresh encrypted restore; actual AWS use requires G03/G05 |
+| Customer HTTP/WebSocket surface | P21A | Reviewed confidential browser/Node transport over the same authorization/journal, with bounded private streams; no native compatibility or production claim |
+| Implemented public reference | P21B | Mintlify guides/method pages and checked examples match actual handlers and environment availability; publishing is not customer-funds release |
 | Independent recovery workflow | P21 | Fence/reconcile/return/finalize/activate/claim delivery; fake hardware allowed, actual claim instruction evidence remains distinct |
 | Joined offline workflows | P22 | Production SDK/service/controllers/adapters with deterministic external ports, recorded failure seeds and per-boundary accounting assertions; no live venue/RPC in routine CI |
 | Actual end-to-end qualification | P23 | Tagged implementation on approved Nitro + Solana devnet + venue test environment, current capability evidence, receipts and cleanup; no mainnet inference |
@@ -83,12 +85,21 @@ A failed or unsupported capability stays named and disabled. P24 reviews the
 evidence and remaining release gates; it is not a substitute for runnable services.
 
 Use the thin SDK/CLI and explicitly preconfigured disposable accounts for initial
-application tests. Self-service private-account onboarding, browser-agent key UX,
-public market-data UI and a trading terminal are **separate product-integration
-follow-ups** requiring their own scope/acceptance before public user access. They
-are not implicitly delivered by P19–P24 or an imported Phoenix website. Do not
-block backend testing on a frontend or claim configured fixture accounts prove
-runtime account creation.
+application tests. Scope and subsequent sequencing approved 2026-10-03: implement
+browser-compatible confidential HTTP/WebSocket operations in P21A, then author
+the public Mintlify reference against that implementation in P21B, then complete
+P21 recovery integration. P21 is not a prerequisite for ordinary API transport.
+Do not publish
+planned endpoints as working ones. P22 must exercise the implemented transports
+and P23 must qualify the changed application, not inherit P20's old measured image.
+These suffixes preserve existing phase IDs; they are explicit new scope, not a
+claim that P19/P20 already shipped HTTP or streaming. Browser attestation/session
+security needs its own reviewed ADR before coding the transport.
+Self-service private-account onboarding, full browser-agent management UX, public
+market-data UI and a trading terminal remain separate product-integration follow-ups.
+P21A's preconfigured browser/SDK test client is not a completed terminal or account
+creation flow. Do not import the Phoenix website or block backend/recovery tests
+on a frontend. HTTP/WebSocket and the Node profile share one financial journal.
 
 ## PR and stack workflow
 
@@ -480,15 +491,97 @@ Do not close hardware qualification with a mocked attestation document. A workin
 Nitro service is not already a live venue workflow; that remains P23.
 Evidence: W06, W08; real attested runtime evidence and failure/revocation rehearsal.
 
-- [ ] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected.
-- [ ] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled.
-- [ ] Accepted encrypted state survives qualified failure/restore; witness loss and split writer fail safely, with costs/limits recorded.
-- [ ] A tagged enclave executable and parent relay run the same SDK operation contract; controller scheduling and persisted unknown attempts cannot bypass qualification or auto-retry after restart. Local fixture acceptance and actual hardware evidence are recorded separately.
+Pre-hardware software handoff is separate from the four hardware criteria below:
+consumed manifest and actual loaded-policy comparison; default-feature executable
+over the real private API/journal/controllers; recipient-only separated KMS roles;
+closed TLS/SigV4 cloud replicas and independent witness interface; bounded lease/
+supervisor/fencing; reproducible local package plus preparation/operations runbook.
+Use [ADR 0020](../architecture/0020-nitro-runtime.md) and the
+[qualification runbook](../operations/nitro-qualification.md). Current qualification
+build rejects native trading/funding/read activation, rather than fabricating
+unqualified observations or chain authority. P22/P23 own those joined workflows.
+Final disposable resource identities, EIF/PCRs and KMS/SDK measurement approval
+are hardware-session outputs. The pre-hardware stop was lifted by the user on
+2026-10-02 for the existing $5 disposable session. Scoped managed policies match
+the prepared versions; quota/pricing/AMI checks and launch dry-run pass. Actual
+launch initially failed Free account-plan eligibility, not IAM. After the user's
+explicit Paid-plan upgrade, one disposable c6g.large ran the actual non-debug
+application. [Hardware receipts](../operations/nitro-hardware-2026-10-02.md) record
+real KMS/NSM/SDK, restore and failure evidence, three compatibility fixes, cleanup
+status and the historical remaining matrix. The
+[follow-up receipts](../operations/nitro-hardware-followup-2026-10-02.md) complete
+the bounded P20 matrix, including actual recipient/upstream negatives, concurrent
+CAS, orphan/lost-ack recovery, debug refusal, natural loaded-lease and actual
+credential expiry/restart refusal. Native capabilities remain disabled: this is
+runtime qualification, not an approved production topology or P23 trading test.
+P20 remains in progress pending review/merge.
+
+- [x] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected. Actual paper-origin TLS-only negatives pass; native credentials/actions remain gated off until P23.
+- [x] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled. Actual retained-head epoch, natural lease and issued STS expiry/restart checks pass; no native capability was enabled or escaped in this qualification.
+- [x] Accepted encrypted state survives qualified failure/restore; witness loss and split writer fail safely, with costs/limits recorded. Real replicas/CAS participate; lost-ack injection is inside the test enclave, not a physical packet drop.
+- [x] A tagged enclave executable and parent relay run the same SDK operation contract; controller scheduling and persisted unknown attempts cannot bypass qualification or auto-retry after restart. Local fixture acceptance and actual hardware evidence are recorded separately. Exact-source ELF/EIF/PCR releases are identified in both receipts; live native controller workflows remain P22/P23 scope.
+
+<a id="p21a"></a>
+## P21A — Confidential HTTP and WebSocket API
+
+Depends on: P18, P19, P20.
+
+Deliver: a versioned customer HTTP/WebSocket contract and browser/Node SDK transport
+over the existing eight P18 commands, with correlated command responses and private
+operation/account subscriptions derived from committed journal state. Finalize a
+reviewed ADR for browser-verifiable enclave attestation, confidential session/key
+binding, signature encoding, replay/expiry and ingress topology before implementation.
+Never terminate readable private requests at the parent or replace attestation with
+ordinary web-PKI or an operator approval flag. Preserve financial IDs, permissions,
+fee/price bounds and payout-recipient restrictions; no second authority/replay store.
+Define finite message/queue/session limits, revocation checks, account-local stream
+ordering and snapshot/gap recovery without exposing global journal sequence. HTTP
+and WebSocket are alternate ingress paths, not independent financial engines.
+First scope is existing commands plus private updates; no batch/modify/trigger,
+public market-data feeds, self-service onboarding, new payout recipient or automatic
+uncertain-order retry. Stop for review if the proposed cryptographic/authority
+profile changes an approved security guarantee. No live customer release is implied.
+The [API comparison and scope proposal](API_SCOPE.md) distinguishes current commands,
+recommended bounded account/history reads and separate execution enhancements.
+Finalize that surface before coding; richer reads are proposed, not automatically
+approved by the sequencing change. Define journal freeze/writer-epoch and API
+availability behavior now so P21 can later integrate without a second authority
+store. Do not implement fake claim/recovery endpoints to satisfy a transport test.
+Evidence: W06, ADR 0018/0019/0020, P18/P19 accepted history and tracked Rust/TypeScript
+protocol vectors; runnable offline browser/Node transport and adversarial process tests.
+
+- [ ] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
+- [ ] Both transports reach the same command authorization, durable IDs, reservations and journal; exact retries reconcile, conflicting IDs reject, and agents cannot obtain payout or administrative authority.
+- [ ] Private updates follow committed owner-attributed state; bounded queues, missed-message snapshots, reconnect, revocation and cross-account isolation are exercised with no global-sequence leakage.
+- [ ] Actual browser and Node clients run order/query/cancel and owner-payout fixtures; relay plaintext/log checks and mid-operation disconnect/restart regressions pass offline. No synthetic fill or unavailable native rail is advertised as live.
+
+<a id="p21b"></a>
+## P21B — Public documentation from the implemented API
+
+Depends on: P21A.
+
+Deliver: a separate docs-site/ Mintlify source tree with product/funds/trading,
+security/risk/recovery guides, SDK quickstart and one page for each implemented
+customer method plus WebSocket commands/subscriptions. Document the actual P21A
+version, units, permissions, lifecycle, errors, limits and reconnect handling.
+Generate/check examples against the real contract and offline tests; no invented
+HTTP route, fake deployment URL or unimplemented interactive playground. Public
+publication follows implementation, with explicit environment/qualification status.
+Local/tested implementation is not production availability; update live evidence
+after P23. Publishing credentials, ignored research or unverified mainnet/privacy/
+solvency/unconditional-exit claims is prohibited. Hosting/account setup is a distinct
+external step; lack of hosting must not masquerade as a published docs deployment.
+Evidence: P21A schemas/examples, BASELINE B01–B08/F01–F14/S01–S05/R01–R05,
+tracked implementation and sanitized qualification receipts; docs build/link checks.
+
+- [ ] Guides accurately state pooled execution, customer ownership, fees/protection limits, private versus public data and operator-assisted recovery; unsupported features and environments are clearly distinguished.
+- [ ] Every advertised method/stream maps to implemented handlers and checked examples, including authorization, exact units, uncertain outcomes, disconnect and reconciliation; spec/example drift fails CI.
+- [ ] Mintlify preview/build/navigation and safe publication checks pass without secrets or ignored work; hosted publication has its own recorded receipt if performed, not a claim based on a local build.
 
 <a id="p21"></a>
 ## P21 — Integrated recovery and independent claim delivery
 
-Depends on: P10, P12, P16, P17, P19.
+Depends on: P10, P12, P16, P17, P19, P21A.
 
 Deliver: controlled cutover/reconciliation, venue unwind/returns, final root/backing
 verification, operator activation, encrypted proof-package publication and standalone
@@ -496,10 +589,12 @@ claimant. Pending claims/fees/late actions all use the same financial journal.
 Evidence: W04–W08; live-like offline outage rehearsal. Use explicit fake hardware/
 witness ports here; actual P20 runtime and live qualification join in P23. Do not
 block offline recovery engineering on AWS access or label it hardware-qualified.
-Exercise the runnable service/SDK's accepted tail and existing payout history, not
-an independently seeded recovery ledger. Claim delivery/submission must still work
-with the ordinary service unavailable; representative final payouts use the actual
-local compiled custody/recovery program or an explicitly separately checked SBF path.
+Exercise the implemented HTTP/WebSocket service/SDK's accepted tail and existing
+payout history, not an independently seeded recovery ledger. Claim delivery and
+submission must still work with the ordinary service unavailable; representative
+final payouts use the actual local compiled custody/recovery program or an
+explicitly separately checked SBF path. Scheduled after P21B public docs; update
+those docs when integration passes, rather than claiming recovery is already live.
 
 - [ ] No ordinary writer/payout/escaped capability can race an activated root; unresolved native outcomes prevent unsafe activation.
 - [ ] Claimants obtain and verify kits without the ordinary API; package loss, stale package and privacy are tested.
@@ -508,10 +603,10 @@ local compiled custody/recovery program or an explicitly separately checked SBF 
 <a id="p22"></a>
 ## P22 — Joined offline adversarial acceptance suite
 
-Depends on: P09, P12, P16, P17, P18, P19, P21.
+Depends on: P09, P12, P16, P17, P18, P19, P21, P21A.
 
 Deliver: deterministic end-to-end fake venue/chain/time harness driving the actual
-SDK, runnable relay/private service, protected journal and production controllers/
+HTTP/WebSocket SDKs, runnable relay/private service, protected journal and production controllers/
 adapters. Cover deposit → credit → native funding → order → partial fills/cancel →
 funding/fees → close → return → beneficiary payout, plus outage/recovery/claim.
 Specify per-step customer/house claims, external exposure, physical locations,
@@ -525,7 +620,7 @@ Evidence: all W IDs and V01–V10; fresh-checkout repeatable seed manifest.
 - [ ] Opposing winners/defaults, ADL gaps, funding boundaries, house exhaustion, inaccessible cash and payout races preserve attribution/claims.
 - [ ] Duplicate/conflicting/late events, restart, rollback and malicious ordering cannot double-spend or silently omit loss.
 - [ ] Test bounds, counterexamples and unresolved proofs are explicit; measurements meet declared load/resource budgets without weakening economics.
-- [ ] Normal, partial/cancel and recovery workflows start through the SDK/service boundary, not only direct Rust method calls. Fresh-checkout offline CI reruns the recorded manifest with no live API/RPC/AWS dependency.
+- [ ] Normal, partial/cancel and recovery workflows start through actual HTTP/WebSocket SDK/service paths, not only direct Rust method calls; private streams recover after gaps/reconnect without duplicate financial actions. Fresh-checkout offline CI reruns the recorded manifest with no live API/RPC/AWS dependency.
 
 <a id="p23"></a>
 ## P23 — Bounded devnet/testnet integration qualification
@@ -536,6 +631,9 @@ Deliver: current G05-approved account/funding/environment/cleanup manifest, tagg
 release tests using the actual program, adapter, enclave and recovery path. Reuse
 M1/M2 scenarios but obtain new implementation evidence. No mainnet inference.
 Carry P22's SDK/service workflow assertions onto actual approved infrastructure;
+qualify the P21A transport and changed measured application on hardware, rather
+than treating P20's exact-source receipts as evidence for a later image. Refresh
+P21B public environment/availability documentation from actual current receipts;
 verify implementation receipts and current native authority/precision/completeness,
 not a replay labeled as live integration. Use bounded scenarios and preconfigured
 test accounts; an unavailable capability is a named blocker, not a simulated pass.

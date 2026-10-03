@@ -23,7 +23,10 @@ function fixture() {
   packages[6].dependencies = [
     ...packages[5].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal'].includes(dep.name)),
     {name: 'cinder-api',kind:null,path:'/repo/crates/api',req:'=0.1.0',target:null},
-    ...['openssl', 'aws-nitro-enclaves-cose', 'serde_cbor', 'zeroize'].map(name => ({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p => p.name === name).version}`,target:null,features:[],uses_default_features:true,optional:false})),
+    {name: 'cinder-pacifica',kind:null,path:'/repo/crates/pacifica',req:'=0.1.0',target:null},
+    ...['openssl', 'aws-nitro-enclaves-cose', 'aws-nitro-enclaves-nsm-api', 'serde_cbor', 'zeroize'].map(name => ({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p => p.name === name).version}`,target:null,features:[],uses_default_features:true,optional:false})),
+    {name:'socket2',kind:null,source:dependencyPolicy.registry,req:'=0.6.5',target:null,features:['all'],uses_default_features:false,optional:false},
+    ...['serde','serde_json','base64','aws-sigv4','aws-credential-types'].map(name=>({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p=>p.name===name).version}`,target:null,features:name==='serde'?['derive']:name==='base64'?['alloc']:name==='aws-sigv4'?['sign-http','http1']:[],uses_default_features:!['base64','aws-sigv4'].includes(name),optional:false})),
   ];
   packages[6].features={default:[], 'local-fixture':[]};
   packages[6].targets.push(...['cinder-service-fixture','cinder-verify-fixture'].map(name => ({name,kind:['bin'],'required-features':['local-fixture']})));
@@ -103,4 +106,29 @@ test('fixture trust roots and key providers cannot silently become default entry
   assert.match(validateWorkspace(metadata).join('\n'),/fixture feature/);
   metadata.packages[6].features.default=[];delete metadata.packages[6].targets[1]['required-features'];
   assert.match(validateWorkspace(metadata).join('\n'),/fixture binary/);
+});
+
+test('NSM driver features, pin and platform cannot silently select another provider', () => {
+  for (const change of [dep => { dep.req = '^0.5'; }, dep => { dep.features = ['test-hooks']; }, dep => { dep.uses_default_features = false; }, dep => { dep.target = 'cfg(unix)'; }]) {
+    const metadata = fixture();
+    change(metadata.packages[6].dependencies.find(dep => dep.name === 'aws-nitro-enclaves-nsm-api'));
+    assert.match(validateWorkspace(metadata).join('\n'), /transport dependency configuration not approved/);
+  }
+});
+
+test('socket ownership wrapper has an exact pin, explicit feature and unconditional edge', () => {
+  for (const change of [dep => { dep.req = '^0.6'; }, dep => { dep.features = []; }, dep => { dep.uses_default_features = true; }, dep => { dep.target = 'cfg(target_os="linux")'; }, dep => { dep.optional = true; }]) {
+    const metadata = fixture();
+    change(metadata.packages[6].dependencies.find(dep => dep.name === 'socket2'));
+    assert.match(validateWorkspace(metadata).join('\n'), /socket dependency configuration not approved/);
+  }
+});
+
+test('cloud signing cannot acquire default providers, SigV4a or optional platform gates',()=>{
+  for (const name of ['aws-sigv4','aws-credential-types','base64','serde']) {
+    for (const change of [d=>{d.req='*';},d=>{d.features.push('unapproved');},d=>{d.optional=true;},d=>{d.target='cfg(unix)';}]) {
+      const m=fixture();change(m.packages[6].dependencies.find(d=>d.name===name));
+      assert.match(validateWorkspace(m).join('\n'),/cloud dependency configuration not approved/);
+    }
+  }
 });

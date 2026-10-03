@@ -25,6 +25,16 @@ test('open foundation validates', () => {
   const { plan, tracker } = fixture();
   assert.deepEqual(validatePlan(plan, tracker), []);
 });
+test('inserted letter-suffixed phases retain dependency and handoff validation', () => {
+  const { plan, tracker } = fixture();
+  const insertedPlan = plan.replaceAll('P01', 'P21A').replaceAll('p01', 'p21a');
+  const insertedTracker = tracker.replaceAll('P01', 'P21A').replaceAll('p01', 'p21a');
+  assert.deepEqual(validatePlan(insertedPlan, insertedTracker), []);
+  assert.match(validatePlan(insertedPlan.replace('Depends on: none.', 'Depends on: P21A.'), insertedTracker).join('\n'), /cycle/);
+  assert.match(validatePlan(insertedPlan.replace('Depends on: P00.', 'Depends on: P21B.'), insertedTracker).join('\n'), /unknown dependency/);
+  assert.match(validatePlan(insertedPlan, insertedTracker.replace('## P21A', '## P21B')).join('\n'), /phase set differs/);
+  assert.match(validatePlan(insertedPlan, insertedTracker.replace('#p21a', '#p21b')).join('\n'), /wrong plan anchor/);
+});
 test('complete closed foundation validates structurally', () => {
   const { plan, tracker } = fixture(true);
   assert.deepEqual(validatePlan(plan, tracker), []);

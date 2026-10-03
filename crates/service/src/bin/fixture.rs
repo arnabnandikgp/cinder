@@ -22,7 +22,7 @@ fn run() -> Result<(), cinder_service::Error> {
     let attester = FixtureAttester::new()?;
     let root = attester.root().to_der()?;
     let server = Server::new(
-        Identity::generate()?,
+        Identity::generate(&FixtureClock)?,
         policy(),
         Arc::new(attester),
         Arc::new(FixtureClock),

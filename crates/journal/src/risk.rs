@@ -830,6 +830,93 @@ impl State {
     pub fn has_joined_risk(&self) -> bool {
         self.risk.is_some()
     }
+    /// Conservative shared holds from the installed risk/collateral policy and
+    /// exact bounded order. This is not admission by itself: the atomic proposed
+    /// state still passes the full pending-outcome/stress gate. No fixed holds,
+    /// future rebates, favorable fills or offsetting users finance this order.
+    pub fn order_reservations(&self, intent: &crate::orders::Intent) -> Result<Vec<Reservation>> {
+        self.risk_gate()?;
+        let policy = self.risk.as_ref().ok_or(ControlError::Unqualified)?;
+        let c = self.collateral.as_ref().ok_or(ControlError::Unqualified)?;
+        let unit = intent.quantity.unit();
+        let market = self
+            .config
+            .markets
+            .iter()
+            .find(|m| m.unit() == unit)
+            .ok_or(ControlError::Invalid)?;
+        let rule = policy
+            .markets
+            .iter()
+            .find(|r| r.market == unit)
+            .ok_or(ControlError::Unqualified)?;
+        let native = c
+            .policy
+            .markets
+            .iter()
+            .find(|r| r.market == unit)
+            .ok_or(ControlError::Unqualified)?;
+        let lots = intent
+            .quantity
+            .lots()
+            .checked_abs()
+            .ok_or(ControlError::Invalid)?;
+        if lots == 0
+            || intent.maximum.unit() != unit
+            || intent.minimum.unit() != unit
+            || intent.minimum.ticks() > intent.maximum.ticks()
+            || intent.maximum_fee_per_lot.unit() != self.config.quote
+            || intent.maximum_fee_per_lot.atoms() < 0
+            || intent.policy != self.config.policy
+        {
+            return Err(ControlError::Invalid);
+        }
+        // Round up BEFORE margin conversion. Market::notional uses settlement
+        // rounding, which must not under-reserve admission's fractional notional.
+        let (n, d) = market.conversion();
+        let numerator = i128::from(lots)
+            .checked_mul(i128::from(intent.maximum.ticks()))
+            .ok_or(ControlError::Capacity)?;
+        let notional =
+            mul_div(numerator, n, d, Rounding::Ceil).map_err(|_| ControlError::Capacity)?;
+        let fees = intent
+            .maximum_fee_per_lot
+            .atoms()
+            .checked_mul(i128::from(lots))
+            .ok_or(ControlError::Capacity)?;
+        let private = mul_div(
+            notional,
+            SCALE,
+            self.leverage(intent.request.account, rule),
+            Rounding::Ceil,
+        )
+        .map_err(|_| ControlError::Capacity)?;
+        let venue = mul_div(
+            notional,
+            u64::from(native.native_bps),
+            10_000,
+            Rounding::Ceil,
+        )
+        .map_err(|_| ControlError::Capacity)?;
+        [
+            (Resource::Customer(intent.request.account), private),
+            (Resource::Location(Location::Venue), venue),
+        ]
+        .into_iter()
+        .map(|(resource, amount)| {
+            Ok(Reservation {
+                resource,
+                amount: QuoteAtoms::new(
+                    self.config.quote,
+                    amount
+                        .checked_add(fees)
+                        .ok_or(ControlError::Capacity)?
+                        .max(1),
+                ),
+            })
+        })
+        .collect()
+    }
     /// Recompute current/pending margin and every configured stress prefix under
     /// this exact journal state. Errors mean unqualified, never an empty safe report.
     pub fn risk_report(&self) -> Result<Report> {

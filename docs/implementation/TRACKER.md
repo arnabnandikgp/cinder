@@ -21,14 +21,16 @@
 | [P16 — Funding coordinator](PLAN.md#p16) | closed | Collateral completes the supported vault/venue round trip without duplicate funding, withdrawal or customer credit. | [#40](https://github.com/arnabnandikgp/cinder/pull/40), merged `95fe3b7` |
 | [P17 — Recovery program](PLAN.md#p17) | closed | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), merged `1f750b0` |
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
-| [P19 — Attested transport and runnable service](PLAN.md#p19) | in progress | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), open |
-| [P20 — Nitro application qualification](PLAN.md#p20) | open | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | — |
+| [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
+| [P20 — Nitro application qualification](PLAN.md#p20) | in progress | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), open on `product/tee-v1` |
+| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | open | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | — |
+| [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-01. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-03. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
@@ -36,18 +38,59 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
-`1f750b059f39e9f409ae10fe2f4e070c2e0aa428`.
-Current branch: `tee/p19-attested-service`. P19 implements the TLS 1.3 service/relay
-slice, strict pinned-root quote verifier and Node automation channel. The fixture
-processes use the real P18 API and P06 encrypted replicated journal. Full offline
-verification passed in a staged-source export without research/local-only files.
-Ready-for-review [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44) is open
-on the TEE trunk through native `gh stack`. Hosted CI/review is pending; nothing
-has been deployed or merged in this phase.
+`dc5f01ddadb6730886f939693b2b6c0c7d642caf`.
+Current branch: `tee/p20-nitro-runtime`. Native stack #46 originally placed
+[P20 #45](https://github.com/arnabnandikgp/cinder/pull/45) above
+[P19 #44](https://github.com/arnabnandikgp/cinder/pull/44); P19 is now merged and
+P20 is rebased directly on the updated TEE trunk. Historical code/evidence
+checkpoint `b6e0f4c` became `adf42ea`; that rebase changed documentation only.
+The runtime review fixes in `82073c221895f505e4d029f2b4e99c2a6e13031e` and
+`c94adc94c3fa72b545c0aa5ce1448668309e239c` change source and are offline-tested,
+not newly Nitro-qualified. All three hosted jobs passed at preceding published
+head `479ef98155a3da2ccdbcb03973f96a5462f23656`. Four original CodeRabbit threads
+are resolved; the completed review at `b2c2e8b` also identified one valid
+outside-diff cloud-header finding, now fixed in `c94adc9`. Its regression failed
+before the fix and passes afterward; complete Rust workspace debug/release tests,
+strict all-feature Clippy and format pass. Plan validation and all 13 validator
+tests pass using available Node 26.8.2. The final publication needs its own hosted
+CI check before merge. The user authorized P20's merge and approved the complete
+API_SCOPE.md recommendations, including bounded richer reads and scoped agents,
+on 2026-10-03. Browser transport security selection still requires ADR review.
+Hardware results remain tied to their actual source. Pre-hardware assembly is
+`b67f3947b6eda241bd56912003b22ee90107857f`; real AWS compatibility fixes are
+`37487ca`; the qualified export is `5557d3350f371d616965006a90ea03b55420400f`.
+The bounded hardware matrix completed on 2026-10-02. Do not mark P20 closed
+before review/merge or relabel the later review changes hardware-tested.
+P20's pre-hardware assembly includes the consumed public manifest, actual NSM
+clock/recipient, role-separated KMS release, encrypted S3 replicas, strong-read
+DynamoDB witness, default-feature enclave executable and bounded private API/
+supervisor; see [ADR 0020](../architecture/0020-nitro-runtime.md) and the
+[hardware runbook](../operations/nitro-qualification.md). No seeded balance,
+fixture dispatch or alternate ledger is promoted. Native trading, funding and
+reads are deliberately disabled until qualified G01/G02/P23 ports and policy.
+Local assembly is not a completed hardware criterion. Dated results below apply
+to their exact source, not a later change. P19's authorized merge, exact checked
+head and review disposition are recorded in its owning phase below. P20 remains
+open pending final-fix CI and the authorized merge; no production activation is
+authorized.
+
+AWS: initial disposable test allowance **$5**, replacement profile `cinder_new`,
+region `us-east-1`, no mainnet/customer funds. Fresh STS on 2026-10-02 verifies
+the intended IAM user; read-only EC2 inspection confirms the candidate
+`c6g.large` supports Nitro. The root-identity and Free-plan launch blockers are
+historical. After the user's explicit Paid-plan upgrade, the actual
+disposable Nitro session now has positive application/KMS/SDK and encrypted
+restore/fault receipts; see [hardware evidence](../operations/nitro-hardware-2026-10-02.md).
+The former Free-plan/no-resource/$0 blocker is historical. Three real AWS format
+compatibility fixes are implemented and verified on macOS and Linux; that first
+session's partial matrix is completed by the follow-up below. Review/merge remains
+open. The evidence page records verified teardown
+and conservative spend below $0.50 (not a finalized bill). No native trading/funding/read capability
+was enabled. Do not delete source/research or use broad container pruning.
 
 P17 #41 and P18 #42 merged atomically through `gh stack merge --yes --merge`
 on 2026-10-01 after explicit user authorization. Both GitHub receipts report the
-trunk commit above. Checked source heads were P17
+historical merge `1f750b059f39e9f409ae10fe2f4e070c2e0aa428`. Checked source heads were P17
 `8868749f8805a49945bcaa2dcfe4e30044f4d6b2` and P18
 `70641e322f8555eb3bfe671ca2fed5e460b762fb`. Plan/handoff, offline Rust and
 Anchor/SBF/Surfpool jobs were successful at both exact heads; CodeRabbit statuses
@@ -67,19 +110,50 @@ compile-fail doctests per debug/release profile, 24 repository tests, strict
 Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
 receipts remain in the owning phases below.
 
-P19's source verification is 303 Rust tests plus two compile-fail doctests per
-debug/release profile, 25 repository tests and 17 SDK tests, with strict
-Clippy/format/build and TypeScript checks. Hosted Rust, Anchor/SBF/Surfpool and
-plan jobs passed at `1aeef17`. CodeRabbit's one valid minor finding was the
-unlabeled P18 baseline above; this documentation-only fix preserves historical
-evidence without attributing it to P19. No runtime or test source changes.
+Next: inspect latest-head CI/review for P20 #45's locally verified fixes and
+approved roadmap, and verify the relevant thread replies/resolutions. No automatic
+merge. Sequencing subsequently approved 2026-10-03: after P20's reviewed merge,
+proceed with P21A HTTP/WebSocket implementation, P21B public docs, then P21 recovery
+and P22/P23 joined offline/live acceptance.
+Public docs follow implemented APIs, not speculative endpoint promises. Browser
+transport needs its reviewed ADR before implementation; onboarding/terminal and
+public market-data feeds remain separate scope.
 
-Next: review P19 #44 and its hosted checks; keep it in progress until actual merge.
-P20 assembles/qualifies Nitro; P21 joins recovery to the journal; P22/P23 reuse
-workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
+Historical exact-source hardware closeout, 2026-10-02:
+see [follow-up evidence](../operations/nitro-hardware-followup-2026-10-02.md).
+The complete security batch now has an actual independently verified attested
+PASS, including recipient/upstream TLS negatives and journal recovery. A real
+current-snapshot restore bug was reproduced locally and fixed by reusing validated
+immutable objects; failed accepted histories were preserved. Current export
+`5557d3350f371d616965006a90ea03b55420400f` passes macOS workspace, targeted
+macOS/Linux checks and all 17 SDK tests. Wrong-image rejection has same-artifact
+positive brackets with unchanged KMS approval. The real separate-register CAS
+race, final shipping application SDK/restart regression and debug refusal pass.
+Natural 90-second loaded-lease expiry passes with retained head and enabled keys.
+Actual witness STS expiry at 16:56:38 UTC and same-expired-capsule restart refusal
+pass with a 40-minute boot lease, positive SDK bracket, unchanged accepted head,
+five enabled keys and a live parent relay. No policy change or witness renewal
+manufactured the result. The bounded hardware matrix is complete.
+Retain exact-source receipts for the P20 security matrix
+listed in [hardware evidence](../operations/nitro-hardware-2026-10-02.md). New
+tests are compiled only in a separate test image, not the shipping enclave;
+their actual hardware results and limits are recorded separately. The
+scoped prerequisite policies and user-selected Paid upgrade resolved the prior
+IAM/account-plan blockers. Technical P20 criteria are satisfied in the bounded
+disabled-native profile; review/merge remains pending. No automatic merge or
+production-key approval. P19 is closed after verified merge. P21 joins recovery
+to the journal; P21A adds customer HTTP/WebSocket ingress; P21B documents it;
+P22/P23 reuse workflow assertions offline/live. Onboarding/terminal remain
 separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
-unrelated `stays/`. Keep P19 in progress until actual merge; local fixtures do not establish
+unrelated `stays/`. Local fixtures alone do not establish
 hardware qualification or authorize live keys, tests or deployment.
+Second-session teardown is verified: termination requested at 17:04:07 UTC,
+test EBS/buckets/table/runtime roles/SSH/security group absent, five fresh KMS
+keys PendingDeletion and existing managed policies preserved. Exactly 45
+generated local secret files were deleted; operator source and public/ciphertext
+evidence remain. Only the task build container was removed. No additional
+hardware categories remain from that approved batch. Later runtime changes have
+their own source/test evidence; P23 qualifies the updated joined application.
 
 ### CodeRabbit coverage snapshot (2026-09-30)
 
@@ -1006,25 +1080,414 @@ Next: P19 attested transport and runnable service; implementation is not started
 Work: ADR 0019 selects enclave-terminated TLS 1.3, bounded synchronous listeners and the independently distributed public-data quote verifier. New service/relay/fixture entrypoints wire P18 to the real P06 cipher/replica journal. Node SDK gates private requests on the exact socket SPKI/exporter, fresh challenge, expected release/domain and short expiry. Default builds exclude fixture attester/key providers; production verifier never accepts fixture roots. Exact dependency/feature/build-script policy is updated; no financial policy, native signing or Solana program change.
 Verification: 2026-10-01 pinned full offline checks passed on macOS ARM64, including a staged-source export excluding work/, user-journey.md and stays/. Each debug/release profile passed 303 Rust tests plus two compile-fail doctests; 25 repository tests and 17 SDK tests passed (seven use actual local service/relay/verifier processes). Default/all-feature Clippy, format, build, exact dependency policy and strict TypeScript checks passed. Relay ciphertext corruption cannot forge a request; a corrupted committed reply reconciles after process death without another attempt. No AWS, RPC, wallet, funding, container or agent used; SBF not rerun because on-chain source is unchanged. Local CA/clock/witness/venue evidence is synthetic, not NSM or independent storage qualification.
 Unexpected: real transport exposed Darwin inherited nonblocking sockets and Node Buffer.slice aliasing in the P18 SDK. Explicit worker socket mode and copy-safe IDs/reply decoding fix both; tracked regression tests retain them. A client TLS protocol accessor reports configured legacy version even on rejected handshakes, so the downgrade test checks secureConnect was never reached rather than that accessor.
-Next: P19 #44 is ready for review through native gh stack on product/tee-v1; hosted CI/CodeRabbit are pending. Review/merge only with authorization. P20 supplies measured application entrypoint, actual vsock/NSM, secure entropy/time, actual-config manifest binding, key release, qualified storage witness and enclave-side egress. No production or hardware claim from this slice; remain in progress until reviewed/merged, do not begin live qualification without G03/G05 authorization.
+Review evidence: P19's source verification is 303 Rust tests plus two compile-fail
+doctests per debug/release profile, 25 repository tests and 17 SDK tests, with
+strict Clippy/format/build and TypeScript checks. Hosted Rust, Anchor/SBF/Surfpool
+and plan jobs passed at `1aeef17`. CodeRabbit's one valid minor finding was the
+unlabeled P18 baseline in the current handoff; the documentation-only correction
+preserves historical evidence without attributing it to P19. No runtime or test
+source changes. These P19 details belong in their owning phase rather than being
+presented as verification of P20's later source.
+Historical next action (superseded by the merge below): P19 #44 was ready for review through native gh stack on product/tee-v1; P20 supplies actual Nitro qualification, separately from P19's local service evidence.
 PR: https://github.com/arnabnandikgp/cinder/pull/44.
-Merge: none.
+Merge: dc5f01ddadb6730886f939693b2b6c0c7d642caf.
+
+Merge follow-up — 2026-10-02: one valid minor CodeRabbit finding was fixed in
+`486de5319cd4538b82012dfe65beb03e972b2491`, with a public fix reply and resolved
+thread. Planning validation, its 12 tests and diff checks pass locally. All
+three hosted jobs (Rust, Anchor/SBF/Surfpool and plan consistency) pass at that
+exact head. CodeRabbit's original completed review remains the source review;
+the latest status is rate-limited, not a fresh completed review of the doc fix.
+After explicit user authorization, `gh stack merge 44 --yes --merge` merged only
+P19 at 17:26:30 UTC, leaving P20 open. Local trunk fast-forwarded to the receipt
+above. P19 is now `closed`; legacy main, wallets and cloud resources are untouched.
+Next: review P20 #45 on the updated TEE trunk; no automatic upper-layer merge.
 
 ## P20 — Nitro application qualification
 
-Work: not started.
-Verification: not run; acceptance in PLAN P20.
-Unexpected: none yet.
-Next: compose existing controllers/adapters into the confidential application and parent relay, wire gated production ports/scheduling, build deterministic packaging locally, then obtain G03/G05 authority for actual Nitro/key-release/egress/freshness qualification. Disabled native capabilities stay disabled; no automatic retries after restart.
+Initial work (historical): `tee/p20-nitro-runtime` above P19 head `1aeef179b6f963649954f2e1a2da8eab1b6690d6`; the current branch is now rebased on the merged trunk. Application-policy commitment derives from the actual journal/API/execution/funding objects, not a supplied hash; rejects conflicting beneficiaries, mismatched configurations and reused trading/funds key roles. Actual NSM adapter pins AWS's 0.5.2 driver, opens Linux hardware only, checks locked nonzero exact PCR0/1/2 and known SHA384 profile, requires bounded entropy, and verifies fresh connection-bound quotes with the production AWS-root verifier. Dependency/feature/lock guards retain a closed graph. No economics, history codec, Solana source or native capability activation changes. ADR 0020 records the partial implementation and remaining boundaries.
+Verification: 2026-10-01 final-source pinned offline runner passes on macOS ARM64: 310 Rust tests plus two compile-fail doctests in each debug/release profile, 26 repository tests, all 17 SDK tests (including the seven real local-process tests), default/all-feature strict Clippy, format, build and TypeScript checks. Four new NSM tests and three loaded-contract tests pass; dependency guard includes the new driver feature/pin/platform refusal test. Linux driver path and actual hardware tests are still pending; local NSM protocol exchanges are synthetic, not hardware evidence. None of the four complete P20 acceptance criteria is marked satisfied. On-chain source is unchanged, so SBF is not rerun.
+Unexpected: current `cinder-dev` STS identity is account root; the same ARN was freshly confirmed after the user's IAM clarification. Provisioning is blocked pending the intended non-root credentials, independently of local implementation. User approves at most $5 for the initial disposable session; no resources or billable spend. Host disk is tight (~2.6 GiB free before the final checks) and Apple containers have no cached images. Container services/images were inspected read-only; no wallet, venue, RPC, AWS write, agent or Linux container was used.
+Initial next action (2026-10-01; superseded below): finish local runtime ports and obtain non-root authentication before bounded hardware tests. No P19 fixture promotion or automatic unknown retry.
+
+Continuation (2026-10-02): the replacement IAM profile `cinder_new` is verified;
+the prior root blocker above is historical. Added fresh signed NSM clock samples,
+sticky backward-time/error fencing, five-second late-result rejection, distinct
+clock/session purpose binding and explicit clock-driven TLS certificate dates.
+Fixed the real-NSM quote-versus-earlier-clock ordering error without relaxing SDK
+client freshness. Six new regression groups pass within the service suite:
+14 unit tests and six integration tests, offline on macOS ARM64; strict service
+Clippy passes after correcting test comparison/layout issues. The complete pinned
+root runner subsequently passes: 316 Rust tests plus two compile-fail doctests per
+debug/release profile, 26 repository tests and 17 SDK tests, with format, strict
+default/all-feature Clippy, build, dependency guards and TypeScript checks. Linux
+and hardware qualification are still pending for this checkpoint.
+Pinned Node 24.21.0 was restored under a task-specific temporary directory and
+checked against the official archive SHA-256. This local clock checkpoint is
+committed before the next socket/dependency slice; P20 has no PR yet. No cloud
+write, paid resource, live venue or wallet was used. Apple containers were started
+explicitly for the upcoming Linux-specific socket qualification; export only
+tracked source plus intended changes, never ignored research or credentials.
+
+### Socket/HTTPS continuation (2026-10-02)
+
+Implemented safe owned Linux vsock streams/listeners, exact destination/peer
+checks, shared bounded TLS serving, opaque parent ingress and fixed-origin
+egress executables. Venue HTTPS verifies the actual loaded CA, hostname and
+qualified-clock certificate time inside the confidential runtime; signed requests
+are never parsed by the parent. Add explicit socket2/Windows dependency pins and
+five negative guard mutations. Narrow HTTP framing and all failures stay Unknown,
+without retry or release of an escaped attempt. No native capability is activated.
+
+Verification: the complete pinned macOS offline runner passes (27 repository
+tests, 17 SDK tests, strict default/all-feature Clippy/build, Rust debug/release
+and compile-fail doctests). The entire Rust suite, format/default/all-feature
+strict Clippy and build also pass in network-disabled Linux ARM64 against staged
+source tree `f9221a4df607d362a17f9d3ee37799371d6d4ae0`. Linux-only owned-socket
+operations and NSM driver compilation are now checked; a Unix pair/missing device
+is not Nitro hardware evidence. SDK processes are macOS evidence only. Exact
+image/platform/library details and setup failures are in ADR 0020. Anchor/SBF
+source is unchanged. No agent, venue/RPC/wallet, deployment or AWS resource used;
+AWS test compute spend remains $0. Source/research and local user-journey/stays
+are preserved. The generated incremental cache and task builder are recoverable
+by rebuilding, not source deletion.
+
+Historical next action (superseded by the assembly below): complete consumed-runtime manifest and financial executable, actual RNG
+integration, recipient-bound KMS release, authenticated encrypted remote replicas/
+independent witness and bounded controller loops. Then package/qualify real vsock,
+native response compatibility, loaded-key/capability fencing and crash/restore on
+Nitro only within the approved $5 test session, with pricing/permission/cleanup
+checks first. Keep all four P20 criteria open and no PR ready/complete claim. P19
+#44 remains open/unmerged; production authority/topology and G01–G04 remain gates.
+PR: none.
+Merge: none.
+
+### Complete pre-hardware assembly (2026-10-02)
+
+Work: actual measured manifest binds all consumed application/storage/witness/KMS/
+clock/egress/gate fields. Add one-shot purpose-bound RSA KMS recipients and five
+separated confidential roles, the official closed SigV4 signer, encrypted immutable
+S3 replicas and strongly consistent conditional DynamoDB witness. Missing witness
+never initializes history and the enclave writer cannot reset Epoch. The actual
+API, gateway and funding controller share one restored journal; sticky time/epoch/
+storage fencing and finite supervisor prevent stale work or restart resend.
+Add policy-derived gross customer/native margin holds without fixture constants.
+The default-feature enclave and parent/operator tools, trusted local preparation,
+minimal rootfs recipe and detailed permissions/startup/fencing/budget/cleanup
+runbook are implemented. No native read/chain authority is pretended: qualification
+manifest refuses trading/funding/native-read activation; P22/P23 own those workflows.
+
+Verification: final pinned macOS full offline runner passes 332 Rust tests plus
+two compile-fail doctests per profile, 28 repository tests and all 17 private SDK
+tests. Complete Linux ARM64 format, strict default/
+all-feature Clippy/build and debug/release suites pass on exact staged source
+`629c4a0fe4a04f0ef027c04481d9eeee1dabcff5`: 332 Rust tests plus two compile-fail
+doctests per profile. Default-feature package compiles all seven enclave/parent/
+operator tools; recompiling the enclave application yields byte-identical ELF.
+Ordinary-host boot and the minimal-rootfs chroot both fail redacted, not as a
+successful hardware test. Enclave ELF SHA-256 is
+`d0679f2d0fa908369f1816413dd3333b9d2fb86862f54f89dcf3b7a533dc0399`;
+local bundle/hash receipt path is in ADR 0020. Exact local
+image/library pins and previous receipts remain in ADR 0020. No NSM device, AWS
+resource, wallet or live venue was present in the Linux check. Anchor/SBF unchanged.
+
+Unexpected: the official generic signer needs S3's explicit payload-hash header;
+corrected before Linux checking and covered for PUT/empty GET. DynamoDB uses JSON
+1.0, not KMS's JSON 1.1. The signer requires its explicit http1 feature; the closed
+dependency guard now records the reviewed graph. Test setup's reused journal
+directory was corrected, not a changed financial rule. Apple Containers cannot
+copy artifacts from a stopped container; briefly resume it for artifact extraction,
+then remove only that task container. Removed only regenerable target/debug for
+disk capacity; local research/user-journey/stays are preserved.
+
+Next: stop before the AWS hardware session. Actual NSM/kernel/OpenSSL/OsRng,
+AF_VSOCK routing, KMS OAEP/CMS/denials, real AWS HTTP compatibility, remote restore/
+split-writer and loaded-key/SDK fencing still need their bounded hardware receipts.
+EIF/PCRs and finalized disposable resource identities are session outputs, not
+invented software receipts. No complete P20 hardware criterion is closed; no
+billable resources or test compute charge incurred. P19 remains open/unmerged.
+Commit: `b67f3947b6eda241bd56912003b22ee90107857f`; preserved locally before
+hardware work. Final documentation handoff export
+`695f7110a6f13c1bc5e679de5b9fb19fc257ceef` passes link/progress checks without
+ignored work, local-only user journey or unrelated stays. Runtime/build sources
+match the Linux tested tree; final receipt edits are documentation-only.
+
+### Hardware resumption / IAM prerequisite (2026-10-02)
+
+Work: user authorizes resuming the existing $5 disposable session. Fresh STS
+confirms `arn:aws:iam::588966314654:user/cinder_new`, region us-east-1. Verified
+preserved Linux artifacts and c6g.large's two ARM64 CPUs/4096 MiB/enclave support.
+EC2 describes the default VPC and latest Amazon-owned ARM64 AL2023 image; S3
+metadata read works. No root profile or customer wallet used.
+
+Verification: KMS ListKeys, DynamoDB ListTables, IAM own-policy inspection,
+Pricing GetProducts, SSM public parameter and EC2 quota lookup return AccessDenied.
+These are read denials, not proof every Create action is denied. No blind creation
+probe or partial paid deployment was attempted without known cleanup authority.
+The IAM prerequisite is separate from an attestation or application-code failure.
+
+Unexpected: authenticated IAM identity has insufficient permission visibility for
+the previously planned KMS/witness topology. Prepared account/session-scoped
+operator and fixed runtime-boundary policies in ignored local
+`work/experiments/p20-hardware/permissions/`, with administrator setup instructions.
+They grant no IAM user management, policy versioning or boundary removal; new
+roles require the fixed administrator-created ceiling. No arbitrary existing KMS
+tagging is granted. Syntax/managed-policy size are checked, not effective AWS
+authorization; the added policy does not subtract existing attached rights.
+
+Next: user applies the two managed policies using an administrator console,
+attaches only CinderP20Operator to cinder_new, then we verify effective test/cleanup
+permissions, current prices and quotas before launch. No AdministratorAccess or
+root CLI is requested. No AWS writes/resources/test compute spend; four hardware
+criteria remain open. Current application/executable sources are unchanged.
+
+### Hardware launch / account-plan prerequisite (2026-10-02)
+
+Work: verified the actual v1 CinderP20Operator and CinderP20RuntimeBoundary
+documents against the prepared local JSON. STS still identifies cinder_new;
+EC2 quota is eight standard on-demand vCPUs. Current regional c6g.large Linux
+on-demand price is $0.068/hour. Selected Amazon-owned ARM64 AL2023 kernel-6.1
+AMI `ami-0ae8605ed708e3c3e`, public default subnet and restricted operator-/32 SSH.
+Prepared a local resource ledger and two-hour shutdown/termination configuration;
+no IAM instance profile or native/customer authority is loaded.
+
+Verification: EC2 RunInstances dry-run reports DryRunOperation, but actual launch
+returns InvalidParameterCombination: the selected instance is not eligible for
+Free Tier. Current describe-instance-types returns eight Free Tier eligible types,
+all with NitroEnclavesSupport=unsupported. No instance was launched; no volume,
+application KMS key, bucket, witness table or runtime role was created. Deleted
+the exact temporary SSH key and security group; follow-up EC2 metadata confirms
+no session instance, volume, group or key pair. Disposable local SSH files are
+removed. Actual hardware criteria remain open; test compute spend is $0.
+
+Unexpected: account-plan restrictions are checked by the actual launch, not the
+successful EC2 permission dry-run. This is distinct from the resolved IAM blocker.
+No plan upgrade, wider IAM grant, unsupported instance substitution or synthetic
+hardware receipt was attempted. The local session script remains ignored research
+tooling; it is not a production/provisioning interface or reviewed release artifact.
+
+Next: user chooses a direct Free-to-Paid account-plan upgrade in AWS Console
+(remaining eligible credits continue applying under AWS's documented terms), or
+provides another explicitly authorized Nitro-capable account. Do not change billing
+plans automatically. Then refresh identity, plan eligibility, budget and resource
+preflight and recreate fresh SSH setup for the same bounded $5 qualification.
+P19 remains open/unmerged; P20 has no PR and no hardware acceptance claim.
+
+### Actual non-debug hardware session (2026-10-02)
+
+Work: after the user's explicit Paid-plan upgrade, ran one tagged c6g.large with
+a default-feature measured application, five recipient-only KMS role keys, two
+private ciphertext buckets and a region-local independent-credential witness.
+Native trading/funding/read gates stayed false. Real NSM/KMS exposed three format
+compatibility failures: the closed indefinite NSM map, AWS leaf's absent AKI,
+and BER rather than canonical DER CMS. Implemented narrow bounded fixes and
+regressions; temporary diagnostic hooks are not in the accepted executable.
+One-hour witness renewal retained original keys/domain/stream/epoch/application
+before first journal initialization; no accepted witness was reset.
+
+Verification: [dated hardware evidence](../operations/nitro-hardware-2026-10-02.md)
+contains exact candidate ELF/EIF/PCRs and tested/remaining distinctions. Actual
+SDK views/grant/revoke, quote/policy negatives and disabled native order pass.
+Crash restore, missing-first replica fallback, both-copy loss, authenticated
+ciphertext corruption, witness-route loss and loaded retained-head epoch fencing
+pass without forgotten history or financial movement. Full macOS workspace release
+tests plus two compile-fail doctests pass; 30+8 service tests and strict Clippy pass
+on Linux; 17 SDK tests/TypeScript and 28 repository tests/guards pass. The prior
+debug runner is historical, not a debug rerun for these new fixes. No SBF change.
+
+Unexpected: real AWS signed-map/certificate/CMS encodings differed from stricter
+synthetic assumptions. Parser bounds, pinned trust, exact original signature and
+recipient/purpose/body checks remain enforced. Initial probe setup also exposed
+tunnel expiry, startup readiness and a zero-position test expectation; these are
+not counted as successful failure tests or a reason to automatically retry money
+movement. No controller/economics/ledger codec or production capability changed.
+
+Cleanup: verified actual EC2 termination and EBS removal; both buckets/objects,
+table, runtime roles and SSH/SG setup absent. Five keys PendingDeletion for the
+seven-day minimum; preexisting managed policies retained. Removed 13 exact local
+throwaway plaintext/credential/key files and the task container/tunnel. Conservative
+spend estimate below $0.50, within $5; final AWS billing is not yet available.
+
+Next: remaining isolated KMS recipient/context/role/replay cases, actual competing
+writer/uncertain append, expiry, stale/orphan replay and upstream-integrity matrix
+in the evidence page. Keep all four complete P20 criteria open. Preserve sanitized
+receipts/ignored work and unrelated untracked files. No P20 push/PR or P19 merge
+has occurred or is authorized by this hardware session.
+
+### Hardware-probe preparation (2026-10-02)
+
+Work: added three explicitly ignored, test-only Nitro probes: authenticated
+per-role KMS context/recipient/ciphertext rejection with positive brackets;
+actual independent-client DynamoDB CAS contention on a fresh empty disposable
+register; and fixed-origin Pacifica paper TLS handshakes with CA, hostname and
+encrypted-record negatives. The qualification executable is separate from the
+shipping application, has no fixture feature and needs its own independently
+approved measurement. The witness hashes are synthetic, not journal frames;
+never boot the application against that mutated register. TLS sends no HTTP or
+native action. Neither compilation nor skipping is a live receipt.
+
+Verification: source export tree `4b2bf7279a51a289de7fa67c4fd3e0fad65a7910`
+passed macOS release service checks: 32 unit and 8 integration tests with all
+features, 25 default-feature unit tests, three hardware cases explicitly ignored,
+and strict all-target/all-feature Clippy. Linux ARM64 default-feature release
+unit checks passed 25 tests with three hardware cases ignored; strict
+all-target/all-feature Clippy passed. Both builds used Rust 1.97.1, locked/offline
+dependencies. Linux source and pinned vendor input were read-only with networking
+disabled and no `work/`, wallet or AWS mounts. The public Linux test ELF SHA-256
+is `6ff140088d53ae608199da77d746d45cfcf58b3ee9603c740dc3e7b1275b2949`;
+no EIF/PCR or KMS approval is claimed for it yet. Node 24.21.0 plan validation
+and 12 validator tests passed. Whole-workspace/SDK/SBF/hardware results above
+remain dated evidence, not new reruns at this export.
+
+Unexpected: AWS cloud and Pacifica shared an Internet root, so that root cannot
+serve as the wrong-CA test. The negative now uses the distinct Nitro root and
+retains the real upstream SNI while testing a different verification hostname.
+An attempted operator-tooling update was rejected by the execution safety review
+because it selected a new ledger while leaving old resource/tag names in place.
+That patch was not applied; the existing `hw1` launcher and receipts are unchanged.
+Do not launch it against the cleaned historical ledger or change IAM policy
+automatically. Prepare a consistently isolated second-run scope and resolve its
+narrow permission requirements before any AWS mutation.
+
+Next: finish that safe session setup and expiry/stale-orphan/uncertain-append
+recipes; then run the measured probes under the existing total $5 ceiling and
+retain exact results/cleanup. No new AWS resource or spend was incurred in this
+preparation. All four full P20 hardware criteria remain open; no push, PR-ready
+claim, native capability activation or P19 merge.
+
+### 2026-10-02 second hardware invocation — fixed final scope
+
+Work: fresh generation-two disposable resource ledger/tags; separately measured
+test-only executable and current default-feature shipping ELF. Actual full
+security-batch PASS includes five-role KMS negatives, upstream TLS negatives,
+real encrypted orphan exclusion and accepted lost-ack recovery. Wrong-image
+denial has same-artifact positive brackets with unchanged KMS approval. Real
+separate-register CAS race, final application SDK/restart, debug refusal and
+natural 90-second loaded-lease expiry pass. Actual witness STS expired at
+16:56:38 UTC with a 40-minute boot lease: SDK positive shortly before, then
+API refusal/enclave exit with unchanged accepted head and five enabled KMS keys.
+Restart with the same expired capsule refuses too; fresh parent relay STS does
+not renew the sealed witness. No new test category is queued.
+
+Verification: code export `5557d3350f371d616965006a90ea03b55420400f` passes
+macOS locked/offline release workspace, targeted macOS/Linux journal/service
+release checks and strict Clippy, and 17/17 SDK checks with TypeScript. Linux
+source/vendor inputs are read-only and networking disabled. Public ELF/EIF/PCRs,
+actual verdicts and limits are in the [dated follow-up](../operations/nitro-hardware-followup-2026-10-02.md).
+Latest documentation validator passes 25 phases/34 documents; diff check passes.
+No SBF change/rerun, native capability, real funds or production approval.
+
+Unexpected: immutable S3 restore exposed a real bug; regression was red before
+validated-copy reuse and green afterward, followed by actual hardware PASS.
+Failed accepted histories were not reset. Public test-entrypoint permissions,
+wrong-role AWS error expectations and invalid random agent-key input needed
+operator/test corrections. Failed/transient probes are retained, not hidden or
+counted as passes. Runtime test source is versioned; account-specific operator
+scripts remain ignored local research. Verified exact cloud teardown and
+45-file disposable-secret cleanup preserve operator/public evidence and user
+wallets, AWS profiles, research and unrelated files. The task container is removed.
+
+Next: P19 #44 is merged; P20 #45 is rebased on `dc5f01d` and remains open.
+Implementation/evidence commit `b6e0f4c` is now `adf42ea`; code-export inputs are
+unchanged and only tracker/publication text differs from the original P20 tip.
+The rebase conflicts were documentation-only: preserve the P18 baseline label
+and keep P19-specific verification in its owning phase. Current plan validation,
+its 12 tests and diff checks pass; hosted CI/review must be checked at the new
+published tip. No further hardware categories without discussion. P20 stays
+`in progress` until review/merge; no native activation or production approval.
+PR: https://github.com/arnabnandikgp/cinder/pull/45.
+Merge: none.
+
+### Review follow-up — 2026-10-03
+
+Work: CodeRabbit #4168125099/#4168125110/#4168125139 are valid. Runtime fix
+`82073c221895f505e4d029f2b4e99c2a6e13031e` permits repeated unconsumed HTTP fields
+while counting every field and rejecting duplicate consumed metadata; repairs a
+missing funding-route bind from verified history after interrupted genesis; and
+resolves fresh IPv4 routing per connection with one TCP attempt and no address
+fallback. The AKI nit uses a documented named constant: the pinned safe OpenSSL
+wrapper omits that constant and `from_raw` requires forbidden unsafe code. No new
+dependency or certificate waiver is introduced. #4168125151 updates the ADR and
+current handoff so historical pending launch/qualification checkpoints are not
+presented as current. PLAN/TRACKER now include approved P21A/P21B insertion after
+recovery, with dependencies, PR-sized criteria and implementation-before-docs.
+
+Verification: header and interrupted-boot regressions were red before fixes.
+Full pinned macOS `node scripts/check.mjs` passes format, strict default/all-feature
+Clippy, all-target build, debug/release workspace tests, TypeScript and 17/17 SDK
+tests. The new DNS test checks fresh IPv4 selection, resolver failures and no
+retry; the AKI fixture pins the actual strict-path error/depth. Plan validation
+passes 27 phases/34 documents and all 29 repository tests, including the new
+letter-suffixed phase dependency/handoff regression. One local Clippy run found
+test-module placement; moving it to the end fixed it without suppressing lint.
+Pre-fix hosted plan/Rust/SBF jobs passed at `d07038df`; latest publication needs
+its own CI/review. No local SBF rerun: program/client sources are unchanged.
+
+Unexpected: no new economic or custody decision. Review additions are offline
+tested; October 2 hardware receipts remain exact-source evidence, not qualification
+of the new runtime source/PCR. No AWS, live venue, wallet, container or agent was
+used. The focused local review artifact stays ignored under `work/reviews/`.
+
+Publication: runtime fix `82073c2` and roadmap/evidence update `083a641` are pushed
+to #45. All four actionable threads have author fix/test replies and are resolved;
+the safe named-constant alternative is explained in a summary comment. At the
+post-push check, `083a6413107763daf29a4605e1a3587e492c45a8` has successful hosted
+plan validation; Rust and SBF jobs are in progress, CodeRabbit is pending. No new
+review/CI pass or merge is presumed. Final prose-only plan validation and all
+13 validator tests also pass with available Node 26.8.2 after the temporary pinned
+Node binary was removed; the earlier full run used pinned Node 24.21.0.
+
+Sequencing follow-up: the user subsequently approved HTTP/WebSocket → Mintlify
+docs → P21 recovery. PLAN/TRACKER are reordered without renumbering completed
+phases or deleting any recovery criterion. API_SCOPE.md records the current
+eight-command surface, HyperLink method comparison and explicitly proposed
+read/history extensions. Local plan validation passes 27 phases/35 documents,
+all 13 validator tests and diff checks on available Node 26.8.2. No runtime
+change or additional Rust/SBF/hardware test is implied by this planning update.
+
+Final outside-diff review follow-up: review #5398556153 correctly identified
+that `cloud.rs` still rejected harmless repeated fields. Runtime commit
+`c94adc94c3fa72b545c0aa5ce1448668309e239c` validates/counts every field line,
+retains only consumed metadata and rejects its case-insensitive duplicates.
+Regression covers repeated Set-Cookie/Vary, duplicate Content-Length and exactly
+64 versus 65 field lines; it failed before the fix. Cloud tests (4/4), full
+offline Rust debug/release workspace suites, strict all-feature Clippy, format,
+plan validation (27 phases/35 documents), all 13 validator tests and diff checks
+pass. No SDK/program source change, AWS session, live venue call or container.
+Existing hardware receipts are unchanged; the new parser is not hardware-tested.
+Merge is now explicitly authorized, subject to final published-head checks.
+
+Next: push the final fix/receipt, reply to the outside-diff finding, verify
+new-head CI/review and merge #45 onto product/tee-v1. Then start P21A's approved
+scope and transport ADR, implement P21A, publish P21B, and complete P21 recovery. Native trading,
+funding/reads and production policy remain separate G01–G04/P23 gates.
+PR: https://github.com/arnabnandikgp/cinder/pull/45.
+Merge: none.
+
+## P21A — HTTP and WebSocket API
+
+Work: transport milestone approved 2026-10-03; implementation not started. The user subsequently approved API → public docs → recovery ordering, replacing the earlier recovery-first schedule. P21 is removed as an API dependency. Compared HyperLink's current documented methods with actual Rust/TypeScript commands in API_SCOPE.md; bounded read/history extensions remain proposals for scope review. Protocol/attestation choices remain an explicit reviewed ADR prerequisite, not an inferred approval of custom cryptography.
+Verification: public HyperLink documentation and actual Rust/TypeScript commands compared on 2026-10-03; plan/link validation and all 13 validator tests pass. HTTP/WebSocket implementation tests not run; acceptance in PLAN P21A. This is a planning change, not a working endpoint.
+Unexpected: the initial P19/P20 automation channel is not browser HTTP/WebSocket; a reviewed confidential browser transport is required, not a parent-side plaintext facade.
+Next: finalize API_SCOPE.md's method/permission/read matrix and transport ADR after P20; implement the shared browser/Node commands and bounded private streams. Define freeze/epoch behavior for later recovery; keep triggers/modify/batching and public market data/onboarding/terminal outside this phase unless separately approved.
+PR: none.
+Merge: none.
+
+## P21B — Public documentation
+
+Work: scope approved 2026-10-03; implementation not started. Public docs follow the implemented HTTP/WebSocket layer; planned endpoints will not be published as available integrations.
+Verification: not run; acceptance in PLAN P21B. No Mintlify project, hosted site or deployment is claimed.
+Unexpected: local implementation and actual deployment availability are distinct; public examples must identify the supported environment and qualified release.
+Next: after P21A, build the separate docs-site/ tree from checked handlers/schemas/examples and product/security/recovery decisions, then record actual publication if authorized/performed.
 PR: none.
 Merge: none.
 
 ## P21 — Recovery integration
 
-Work: not started.
+Work: not started; scheduled after HTTP/WebSocket implementation and public docs by the user's 2026-10-03 decision. No recovery criterion is removed.
 Verification: not run; acceptance in PLAN P21.
 Unexpected: none yet.
-Next: recover the runnable service's accepted journal, fence/reconcile/unwind/return funds, finalize backed claims and independently deliver/submit kits with the ordinary API unavailable. Keep explicit hardware/witness doubles and actual local SBF evidence distinct.
+Next: recover the implemented service's accepted journal, fence/reconcile/unwind/return funds, finalize backed claims and independently deliver/submit kits with the ordinary API unavailable. Keep explicit hardware/witness doubles and actual local SBF evidence distinct. Update public recovery docs only when this integrated path is tested.
 PR: none.
 Merge: none.
 
@@ -1033,7 +1496,7 @@ Merge: none.
 Work: not started.
 Verification: not run; acceptance in PLAN P22.
 Unexpected: none yet.
-Next: drive complete deposit/trade/partial-cancel/funding/close/return/payout and recovery paths through the actual SDK/service/controllers with offline external fixtures. Assert claims, exposure, locations, reservations and payment at each boundary; kill/restart service processes and preserve reproducible seeds/counterexamples. No live endpoints in ordinary CI.
+Next: after P21/P21A, drive complete deposit/trade/partial-cancel/funding/close/return/payout and recovery paths through actual HTTP/WebSocket SDK/service/controllers with offline external fixtures. Assert claims, exposure, locations, reservations and payment at each boundary; kill/restart service processes and test private-stream gap recovery with reproducible seeds/counterexamples. No live endpoints in ordinary CI.
 PR: none.
 Merge: none.
 

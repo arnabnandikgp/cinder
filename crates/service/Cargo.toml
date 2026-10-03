@@ -14,10 +14,18 @@ local-fixture = []
 cinder-kernel.workspace = true
 cinder-journal = { path = "../journal", version = "=0.1.0" }
 cinder-api = { path = "../api", version = "=0.1.0" }
+cinder-pacifica = { path = "../pacifica", version = "=0.1.0" }
 openssl = "=0.10.81"
 aws-nitro-enclaves-cose = "=0.5.2"
+aws-nitro-enclaves-nsm-api = "=0.5.2"
 serde_cbor = "=0.11.2"
 zeroize = "=1.8.2"
+socket2 = { version = "=0.6.5", default-features = false, features = ["all"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+base64 = { version = "=0.23.1", default-features = false, features = ["alloc"] }
+aws-sigv4 = { version = "=1.5.1", default-features = false, features = ["sign-http", "http1"] }
+aws-credential-types = "=1.3.0"
 
 [[bin]]
 name = "cinder-service-fixture"
@@ -36,6 +44,30 @@ required-features = ["local-fixture"]
 [[bin]]
 name = "cinder-relay"
 path = "src/bin/relay.rs"
+
+[[bin]]
+name = "cinder-nitro-relay"
+path = "src/bin/nitro-relay.rs"
+
+[[bin]]
+name = "cinder-nitro-egress"
+path = "src/bin/nitro-egress.rs"
+
+[[bin]]
+name = "cinder-enclave"
+path = "src/bin/enclave.rs"
+
+[[bin]]
+name = "cinder-cloud-relay"
+path = "src/bin/cloud-relay.rs"
+
+[[bin]]
+name = "cinder-bootstrap"
+path = "src/bin/bootstrap.rs"
+
+[[bin]]
+name = "cinder-prepare-release"
+path = "src/bin/prepare.rs"
 
 [lints]
 workspace = true

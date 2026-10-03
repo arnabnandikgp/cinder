@@ -1,0 +1,24 @@
+# Explicit immutable locally-qualified toolchain; no source or secrets in final
+# image except the selected default executable, runtime libraries and public policy.
+ARG TOOLCHAIN=cinder-p20-linux:20261002@sha256:7b3f6c004538ca245185c7e6aa138aeec51b077448e06a53550d3ba40a3a1caf
+FROM ${TOOLCHAIN} AS build
+WORKDIR /source
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+COPY vendor /vendor
+COPY cargo-config.toml /root/.cargo/config.toml
+ENV CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true CARGO_BUILD_JOBS=2
+ENV RUSTFLAGS="--remap-path-prefix=/source=/cinder --remap-path-prefix=/vendor=/vendor -C debuginfo=0"
+RUN cargo build --locked --offline --release -p cinder-service --bin cinder-enclave \
+ && mkdir /runtime \
+ && cp /lib/aarch64-linux-gnu/libssl.so.3 /lib/aarch64-linux-gnu/libcrypto.so.3 \
+       /lib/aarch64-linux-gnu/libc.so.6 /lib/aarch64-linux-gnu/libm.so.6 \
+       /lib/aarch64-linux-gnu/libgcc_s.so.1 /runtime/
+
+FROM scratch
+COPY --from=build /runtime/ /lib/aarch64-linux-gnu/
+COPY --from=build /lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
+COPY --from=build /source/target/release/cinder-enclave /usr/bin/cinder-enclave
+# Public release manifest only. NEVER COPY a prepare-release output directory.
+COPY manifest.cbor /etc/cinder/manifest.cbor
+ENTRYPOINT ["/usr/bin/cinder-enclave"]

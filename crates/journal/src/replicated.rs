@@ -191,7 +191,10 @@ impl<A: Replica, B: Replica, W: Witness> Replicated<A, B, W> {
             return Err(Error::Stale);
         }
         for frame in &frames {
-            self.copy_both(frame)?;
+            // Immutable stores need not accept another put of an existing
+            // object. Validate both copies and write/read back only missing or
+            // invalid ones, exactly as before new acceptance. Never reset CAS.
+            self.ensure_both(frame)?;
         }
         if self.anchor()? != anchor {
             return Err(Error::Stale);

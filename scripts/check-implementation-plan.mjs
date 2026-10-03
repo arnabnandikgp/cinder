@@ -5,7 +5,7 @@ import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 function sections(markdown) {
-  const headings = [...markdown.matchAll(/^## (P\d{2,}) — .+$/gm)];
+  const headings = [...markdown.matchAll(/^## (P\d{2,}[A-Z]?) — .+$/gm)];
   return headings.map((heading, i) => ({
     id: heading[1],
     body: markdown.slice(heading.index, headings[i + 1]?.index ?? markdown.length),
@@ -16,7 +16,7 @@ export function validatePlan(plan, tracker) {
   const errors = [];
   const phases = sections(plan);
   const logs = sections(tracker);
-  const rows = [...tracker.matchAll(/^\| \[(P\d{2,})[^\n]*?\]\(PLAN\.md#(p\d{2,})\) \| ([^|]+) \| ([^|]*) \|[^|\n]*\|$/gm)];
+  const rows = [...tracker.matchAll(/^\| \[(P\d{2,}[A-Z]?)[^\n]*?\]\(PLAN\.md#(p\d{2,}[a-z]?)\) \| ([^|]+) \| ([^|]*) \|[^|\n]*\|$/gm)];
   if (!tracker.includes('| Phase | Progress | Invariant / deliverable | PR / merge |')) errors.push('tracker: missing invariant/deliverable column');
   const unique = (ids, name) => {
     if (!ids.length) errors.push(`${name}: no phases found`);
@@ -38,7 +38,7 @@ export function validatePlan(plan, tracker) {
   for (const phase of phases) {
     const field = phase.body.match(/^Depends on: (.+)\.$/m)?.[1];
     const deps = field === 'none' ? [] : (field ?? '').split(', ');
-    if (!field || (field !== 'none' && !/^P\d{2,}(, P\d{2,})*$/.test(field))) errors.push(`${phase.id}: malformed dependencies`);
+    if (!field || (field !== 'none' && !/^P\d{2,}[A-Z]?(, P\d{2,}[A-Z]?)*$/.test(field))) errors.push(`${phase.id}: malformed dependencies`);
     if (new Set(deps).size !== deps.length) errors.push(`${phase.id}: duplicate dependency`);
     dependencies.set(phase.id, deps);
     for (const dep of deps) if (!ids.has(dep)) errors.push(`${phase.id}: unknown dependency ${dep}`);

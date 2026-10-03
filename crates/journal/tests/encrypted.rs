@@ -414,6 +414,48 @@ fn ciphertext_snapshot_rehydrates_but_never_supersedes_witness() {
 }
 
 #[test]
+fn current_snapshot_restore_reuses_valid_create_only_objects() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    #[derive(Clone)]
+    struct CreateOnly(MemoryReplica, Arc<AtomicUsize>);
+    impl Replica for CreateOnly {
+        fn identity(&self) -> [u8; 32] {
+            self.0.identity()
+        }
+        fn get(&mut self, hash: [u8; 32]) -> Result<Frame, Error> {
+            self.0.get(hash)
+        }
+        fn put(&mut self, frame: &Frame) -> Result<(), Error> {
+            if self.0.0.lock().unwrap().0.contains_key(&frame.head.hash) {
+                self.1.fetch_add(1, Ordering::SeqCst);
+                return Err(Error::Storage);
+            }
+            self.0.put(frame)
+        }
+    }
+    let a = CreateOnly(MemoryReplica::default(), Arc::new(AtomicUsize::new(0)));
+    let b = CreateOnly(MemoryReplica::default(), Arc::new(AtomicUsize::new(0)));
+    let w = TestWitness::default();
+    let make = || Replicated::new(stream(), 1, a.clone(), b.clone(), w.clone()).unwrap();
+    let mut journal = Journal::create(make(), cipher(), config()).unwrap();
+    let stale = make().snapshot().unwrap();
+    journal.commit(credit(journal.head(), 1)).unwrap();
+    let current = make().snapshot().unwrap();
+    let accepted = w.0.lock().unwrap().0;
+    assert_eq!(make().restore_snapshot(&stale), Err(Error::Stale));
+    make().restore_snapshot(&current).unwrap();
+    // Restore one missing replica without rewriting the other valid copy.
+    a.0.0.lock().unwrap().0.clear();
+    make().restore_snapshot(&current).unwrap();
+    assert_eq!(a.1.load(Ordering::SeqCst), 0);
+    assert_eq!(b.1.load(Ordering::SeqCst), 0);
+    assert_eq!(w.0.lock().unwrap().0, accepted);
+    let restored = Journal::open(make(), cipher(), config()).unwrap();
+    assert_eq!(restored.state().unwrap(), journal.state().unwrap());
+    assert_eq!(restored.head(), journal.head());
+}
+
+#[test]
 fn actual_host_files_have_ciphertext_only_and_wrong_key_stops_replay() {
     let temp = Temp::new();
     let a = temp.root.join("a");

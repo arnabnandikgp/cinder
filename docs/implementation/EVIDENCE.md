@@ -43,6 +43,105 @@ upload the entire local research tree to make links work.
 
 ## Verified evidence versus new work
 
+### P20: loaded-policy and NSM first slice
+
+Historical checkpoints below are superseded by the pre-hardware assembly and
+dated hardware receipts at the end of this section. The earlier offline results
+must not be read as claims about actual hardware or later source revisions.
+
+[ADR 0020](../architecture/0020-nitro-runtime.md) implements actual loaded-policy
+commitments and AWS's pinned NSM driver boundary. W06–W08's no-host-approval,
+exact-release, role-separation and no-fallback requirements have offline regression
+tests. The default build cannot construct an injected fixture NSM device. Tests
+cover synthetic NSM protocol replies and the ordinary-host refusal path, not
+real enclave attestation or entropy. This is not a complete runtime manifest,
+runnable Nitro financial application, KMS release or fresh-witness qualification.
+No native capability is activated and no experimental authority is promoted.
+
+The 2026-10-02 continuation adds purpose-separated signed NSM clock verification
+and explicit TLS certificate clock selection. Six additional local regression
+groups use fresh synthetic X.509/COSE fixtures or private protocol-test seams;
+production still accepts only the AWS root and actual NSM device. This identifies
+and fixes a real-NSM request-ordering bug without weakening client freshness.
+No real timestamp, driver-latency, RNG or hardware guarantee is inferred. See the
+ADR's time-bootstrap assumptions and remaining image/runtime qualification.
+
+The socket/HTTPS continuation is tested on macOS and network-disabled Linux
+ARM64 with an exact source export. It uses owned AF_VSOCK APIs, bounded opaque
+parent ingress/egress, and in-enclave hostname/CA/time-verified one-shot HTTPS.
+Wrong-root/hostname/time tests are actual loopback TLS with synthetic certificates;
+Linux owned-stream tests use a Unix pair, not a Nitro device. No live native action,
+AWS resource, production key or customer account is used. The local image/source
+fingerprints, setup deviations, HTTP subset and remaining measured-app/KMS/
+fresh-witness gates are recorded in ADR 0020. This is not hardware evidence or
+a complete release manifest. No P20 acceptance criterion is closed.
+
+The completed pre-hardware assembly consumes a full measured public manifest,
+uses fresh purpose-bound NSM recipients for five KMS roles, and constructs the
+actual private API/gateway/funding objects over one encrypted S3/DynamoDB journal.
+Default binaries contain no fixture provider, fake funds or flat admission policy.
+The official pinned SigV4 signer and closed temporary credentials are explicit;
+no default chain/retry/provider appears through a full cloud SDK. Missing witness,
+rollback/epoch/CAS errors and clock expiry fail closed, not by reinitializing files.
+
+Local evidence: manifest/role tampering, synthetic recipient replay separation,
+strict AWS framing, exact signed payloads and strong-read/CAS construction,
+policy-derived customer/native margin, actual configuration construction and
+real trusted-preparation process/file permissions. Full Linux debug/release tests
+and default-feature package/rebuild comparison pass against the exact source
+recorded in TRACKER. Synthetic CMS is not AWS OAEP interoperability; separate
+credential IDs/buckets are not proof of IAM or administrative independence.
+At that pre-hardware checkpoint there was no real NSM/vsock/cloud acceptance
+receipt. Native trading, funding
+and reads stay disabled until G01/G02/P23; readiness means private API/storage
+readiness, not live brokerage. Package/runbook and outstanding hardware tests are
+in [ADR 0020](../architecture/0020-nitro-runtime.md) and
+[operations](../operations/nitro-qualification.md). No criterion is closed by an
+ELF digest, local fixture or document update.
+
+Actual disposable hardware continuation, 2026-10-02: the non-debug application
+ran on Nitro with actual five-role recipient KMS release, the production-root SDK
+verifier, owner views/grants/revocation and the encrypted journal. Restart,
+one-replica recovery, missing/corrupt accepted state refusal, witness-route loss
+and retained-head writer-epoch fencing were observed. Three real AWS encoding/
+certificate compatibility fixes are checkpointed at `37487ca`; current changed
+source passed macOS release/workspace/SDK tests and Linux service tests/Clippy.
+Exact ELF/EIF/PCRs, failed probes, evidence limits, verified cleanup and conservative
+spend are in [the dated receipt](../operations/nitro-hardware-2026-10-02.md).
+This is partial P20 evidence, not a production topology, native workflow,
+independent audit or completion of the remaining negative matrix.
+
+Second hardware session: [follow-up receipts](../operations/nitro-hardware-followup-2026-10-02.md)
+preserve the failed journal restores and the subsequent actual independently
+verified `security-batch/PASS`. Restore now reuses validated immutable replicas;
+a create-only regression reproduced the original failure before the fix.
+Current code export `5557d3350f371d616965006a90ea03b55420400f` passes macOS
+release workspace, targeted macOS/Linux journal/service checks and all 17 SDK
+tests. Wrong-measurement release rejection passes for all five roles with the
+same KMS approval and capsules, bracketed by verified positive recipient runs.
+The separate-register writer race, final shipping application SDK/restart
+regression, debug refusal and natural 90-second loaded-lease fence also pass.
+Actual 900-second witness STS expiry and same-expired-capsule restart refusal
+also pass, with a longer boot lease, unchanged accepted head, enabled KMS keys
+and a live parent relay. The bounded P20 hardware matrix is complete; PR
+review/merge and production/native gates remain separate. Teardown is recorded
+in the follow-up; no native workflow or production governance is inferred.
+
+Review fixes, 2026-10-03: runtime commit
+`82073c221895f505e4d029f2b4e99c2a6e13031e` adds offline regressions for repeated
+ignored response headers, interrupted-genesis funding binding, per-connection
+IPv4 resolution without retries and the named strict-path AKI error. Full pinned
+macOS debug/release/workspace and 17 SDK checks pass. This changes source; the
+earlier measured export and actual Nitro receipts are not relabeled as hardware
+qualification for it. The updated joined release is qualified separately in P23.
+
+Final outside-diff review fix: `c94adc94c3fa72b545c0aa5ce1448668309e239c`
+applies the same bounded duplicate-field policy to cloud responses. Its new
+regression fails before the fix and passes afterward, including 64/65 total
+field-line boundaries. Full offline Rust debug/release workspace tests, strict
+all-feature Clippy and format pass. This is new offline evidence, not a new AWS
+hardware receipt; no native capability is enabled.
+
 ### P19: attestation-gated runnable service slice
 
 [ADR 0019](../architecture/0019-attested-service.md) promotes W06–W08's exact-key
