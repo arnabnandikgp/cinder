@@ -3,6 +3,7 @@
 import type { ChannelContext, ConfidentialChannel } from './index.ts';
 import type { ReleasePolicy } from './node-channel.ts';
 import type { QuoteContext, VerifiedQuote } from '../../../tools/web-channel/attestation/verifier.mjs';
+import { privateIterable } from './private-iteration.ts';
 
 export interface WebEndpoint {
   start(): Uint8Array; advance(bytes: Uint8Array): Uint8Array;
@@ -124,15 +125,15 @@ export class WebChannel implements ConfidentialChannel {
       this.#watch={sequence,ordinal:0n,queue:[],bytes:0};this.#socket.send(Uint8Array.from(wire).buffer);
       this.#subscriptionDeadline=setTimeout(()=>this.close(),DEADLINE);
     }catch{this.close();throw failed();}finally{clear.fill(0);}
-    const self=this;let consumed=false;
-    return {async *[Symbol.asyncIterator](){
-      try{if(consumed)throw failed();consumed=true;for(;;){
+    const self=this;
+    return privateIterable(async function*(){
+      try{for(;;){
         const watch=self.#watch;if(self.#closed||!watch)throw failed();
         if(!watch.queue.length){await new Promise<void>(resolve=>{watch.wait=resolve;});continue;}
         const bytes=watch.queue.shift()!;watch.bytes-=bytes.length;
         yield bytes;
       }}finally{self.close();}
-    }};
+    },()=>self.close());
   }
   async #openSocket(){
     const url=new URL('/v1/ws',this.#base);url.protocol=url.protocol==='https:'?'wss:':'ws:';

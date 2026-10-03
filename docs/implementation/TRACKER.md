@@ -23,7 +23,7 @@
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
 | [P20 — Nitro application qualification](PLAN.md#p20) | closed | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), merged `76f3295` |
-| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | [#47](https://github.com/arnabnandikgp/cinder/pull/47), contract/core; [#48](https://github.com/arnabnandikgp/cinder/pull/48), browser verifier/binding; [#50](https://github.com/arnabnandikgp/cinder/pull/50), HTTP/shared SDK |
+| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | [#47](https://github.com/arnabnandikgp/cinder/pull/47), contract/core; [#48](https://github.com/arnabnandikgp/cinder/pull/48), browser verifier/binding; [#50](https://github.com/arnabnandikgp/cinder/pull/50), HTTP/shared SDK; [#51](https://github.com/arnabnandikgp/cinder/pull/51), reads/WebSocket/acceptance |
 | [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
@@ -37,9 +37,12 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Current work: `tee/p21a-reads-websocket` in `cinder-tee`, final grouped P21A.4/5
-slice above ready/open #50 at `4841c7044dc7d1080c5ad8f45ddc14277bae4bca` through
-native stack #49. #47/#48/#50 stay unmerged while the user reviews them.
+Current work: published [#51](https://github.com/arnabnandikgp/cinder/pull/51),
+`tee/p21a-reads-websocket` in `cinder-tee`, final grouped P21A.4/5 slice above
+ready/open #50 at `4841c7044dc7d1080c5ad8f45ddc14277bae4bca` through native stack #49.
+First published source: `a0442d5cb3af7f3706be1b31e05b301adeacee35`; the scoped
+subscription-iterator cleanup and this publication receipt follow that checkpoint.
+#47/#48/#50 stay unmerged while the user reviews them.
 Trunk remains `product/tee-v1` at `76f32956e3ee5d31707ec1bf7fa81f8711666c97`.
 
 Implemented: signed read version/paging, own account/risk/position/operation/order/
@@ -63,8 +66,19 @@ now assembles TCP frames before dropping; packet boundaries are not frame bounda
 Parent traffic/logs/disk private-marker checks pass. No actual venue fill/payment,
 hardware qualification, live endpoint or key-erasure guarantee is claimed.
 
-Next: publish one ready stacked PR
-above #50, then review/bottom-up merge when authorized. P21A/milestones stay in
+Final cleanup: returning an unused subscription iterator now closes its underlying
+channel even before the generator starts. Strict SDK typechecking and all 20
+SDK/Node-TLS tests pass; the public SDK bundle builds and Node/actual Chrome each
+repeat all 24 joined groups with the new regression. Its fixture waits for public
+delivery before abandonment, avoiding artificial read-lock contention without
+relaxing the service's fail-closed busy response. Rust/crypto/financial source is
+unchanged by this narrow follow-up, so the full workspace receipt above remains
+at `a0442d5`, not falsely relabeled as a new full run. All four hosted jobs pass
+at `a0442d5`; subsequent cleanup/receipt CI and review require their own evidence.
+A successful CodeRabbit status is not a completed review disposition.
+
+Next: review #51 and its current-head checks, then bottom-up merge when authorized.
+P21A/milestones stay in
 progress until relevant reviews are addressed and all layers merge. P21B Mintlify
 follows the implemented API; recovery/P22/P23/P24 remain. No AWS, configured wallet,
 venue, container, subagent or merge used. Preserve `docs/user-journey.md`, `stays/`
@@ -1672,8 +1686,8 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 | 2a — Browser verifier and binding qualification | in progress | Independent AWS/COSE/X.509 validation in a tested strict subset, exact attested channel vectors and native differential fixtures; then reviewed merge, not a shipping/hardware claim. | #48 |
 | 2b — Secret lifetime and transport hardening | in progress | Selected upstream Snow with explicit erasure limitation, NSM entropy/quote adapters and offline SDK lifetime/fencing/assembly; actual hardware and customer-release hardening disposition remain separate. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 3 |
 | 3 — HTTP and shared SDK/service | in progress | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation; offline evidence passes, review/merge pending. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 2b |
-| 4 — Authorized reads and WebSocket | in progress | Own-account projections/paging and bounded revocable committed streams; offline implementation passes, review/merge pending. | Final grouped PR, with 5 |
-| 5 — Joined adversarial acceptance | in progress | Both transports satisfy all four parent-phase criteria; local implementation/acceptance is not reviewed merge or production qualification. | Final grouped PR, with 4 |
+| 4 — Authorized reads and WebSocket | in progress | Own-account projections/paging and bounded revocable committed streams; offline implementation passes, review/merge pending. | [#51](https://github.com/arnabnandikgp/cinder/pull/51), with 5 |
+| 5 — Joined adversarial acceptance | in progress | Both transports satisfy all four parent-phase criteria; local implementation/acceptance is not reviewed merge or production qualification. | [#51](https://github.com/arnabnandikgp/cinder/pull/51), with 4 |
 
 Work: API → public docs → recovery ordering and full API_SCOPE approved 2026-10-03; P21 is not an API prerequisite. Started tee/p21a-web-api-contract on P20 merge 76f32956e3ee5d31707ec1bf7fa81f8711666c97. After the frontend/bot explanation, the user explicitly approved bounded Noise NK qualification. ADR 0021 carries the contract, permission/provenance matrix, bounds and split. Isolated tools/web-channel supplies one Rust core, thin WASM binding, synthetic native responder, published known answer, adversarial tests and disposable browser harness; no shipping dependency or existing Node TLS change.
 Verification: primary browser/Noise/Snow/RFC/AWS sources checked. Native debug/release tests: 10 pass each. Node 24.21.0 and actual Chrome 154.0.8037.93: seven groups each pass, including standard vector, encrypted native round trip, early/replay/tamper/reflection/size refusal and RNG failure. Carrier marker absent in both directions. Complete isolated runner passes: four dependency-guard tests, native/WASM strict Clippy and formatting. Two new teardown regressions pass, including a SIGTERM-resistant descendant writer after its leader exits; the complete isolated runner passes again after this fix. At docs-only a96b5cc hosted plan/Rust/Anchor jobs passed and Linux Chrome 154.0.8037.57/Node passed all channel groups before the cleanup race failed the job. New-fix hosted CI is pending (first evidence-based CI fix); no container run needed. Earlier full pinned repository runner passed default/all-feature Clippy, workspace build/debug/release tests, 29 repository tests and all 17 SDK/process tests; that is not a fresh full-repository run for this harness-only fix. Foundation: 27 phases/36 documents; focused 13 plan-validator tests and diff check pass. On-chain source unchanged, so no local SBF rerun. No HTTP/WS financial workflow or fresh browser Nitro attestation claimed. All four PLAN P21A acceptance criteria remain open.
@@ -1819,17 +1833,25 @@ core groups. Twelve bounded carrier tests, all five native web ingress tests,
 25 API behavior tests, three interop tests and 19 SDK/TLS tests pass. Debug/release
 workspace, default/all-feature and native/WASM strict Clippy/formatting pass.
 Final joined rerun passes after queue tests synchronize real emitted frames,
-not scheduler sleep assumptions. No hosted CI/review result exists for this
-unpublished head yet.
+not scheduler sleep assumptions. First published source `a0442d5` has all four
+hosted jobs passing. A narrow unused-iterator cleanup follows it: strict SDK
+typecheck/all 20 SDK/TLS tests, public bundle build and Node/actual Chrome's 24
+joined groups each pass after the fix. New-head CI/review is not inherited from
+the first publication; the broader workspace/core receipt remains at `a0442d5`.
 No source/check receipt is inherited from earlier PRs. See exact contract for
 command/history/stream scope and synthetic-vs-live boundaries.
 Unexpected: final reply flush must precede orderly socket close; incoming traffic
 cannot starve stream checks; a five-second per-read timeout is not an absolute
 partial-frame budget. Added bounded absolute delivery guards and safe shutdown.
 Dropped-notification harness must assemble public TCP frames before dropping.
+Async-generator `finally` does not run if `return()` precedes first `next()`;
+an explicit single-consumer lifecycle wrapper now closes both iterator layers.
+The joined abandonment regression synchronizes public delivery so its discarded
+read cannot race the next fixture read's journal lock.
 No dependency/security/economic profile changed; Snow erasure remains unqualified.
-Next: commit and publish above #50; review/merge separately.
-PR: none yet.
+Next: review #51's current source/checks, then bottom-up stack merge only when
+authorized. P21B is the next planned implementation, not started in this slice.
+PR: https://github.com/arnabnandikgp/cinder/pull/51, stacked above #50 in stack #49.
 Merge: none.
 
 ## P21B — Public documentation

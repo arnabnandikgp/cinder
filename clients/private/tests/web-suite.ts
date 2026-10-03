@@ -112,6 +112,14 @@ export async function runWebsocket(core:WebCore,signer:MessageSigner,harness:Har
   const order:Command={kind:'order',market:id(7),lots:1n,minimum:90n,maximum:110n,fee:1n,tif:'GTC',reduceOnly:false,goodUntil:BigInt(Date.now()+60000)};
   try{
     const http=await connect('http'),owner=client(http),ch=await connect(),api=client(ch);
+    const earlyChannel=await connect(),early=client(earlyChannel);
+    // Wait for public delivery, not iterator consumption: otherwise this
+    // deliberately abandoned read can contend with the next fixture read.
+    await harness.control('expect-notification');
+    const earlyStream=await early.subscribe(subscription(99));
+    await harness.control('await-notification');
+    await earlyStream[Symbol.asyncIterator]().return?.();
+    await rejects(async()=>earlyChannel.context(),'unused iterator left transport open');
     const stream=await api.subscribe(subscription(100)),it=stream[Symbol.asyncIterator]();
     const initial=await next(it);check(initial.rows.length===0,'initial permitted snapshot');
     const placed=await api.request(req(101,order));check(placed.kind==='receipt'&&placed.outcome==='dispatched','command during subscription');

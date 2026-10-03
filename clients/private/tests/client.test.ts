@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { signingMessage, intentDigest, decodeResponse, PrivateClient, READ_FAMILIES, type Envelope, type Command, type ConfidentialChannel } from '../src/index.ts';
+import { privateIterable } from '../src/private-iteration.ts';
 const id = (n: number) => new Uint8Array(32).fill(n);
 const secret = createPrivateKey({ key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), Buffer.alloc(32, 9)]), format: 'der', type: 'pkcs8' });
 const publicKey = new Uint8Array(createPublicKey(secret).export({ format: 'der', type: 'spki' }).subarray(-32));
@@ -131,4 +132,13 @@ test('read page decoding distinguishes unknown, explicit zero and settled fundin
   assert.throws(()=>decodeResponse(page([],Buffer.concat([Buffer.from(id(12)),number(1n,8)]))));
   const bad=unknown.slice();bad[44]=2;assert.throws(()=>decodeResponse(page([bad])));
   wire.fill(0);assert.deepEqual(parsed.revision,id(11));assert.deepEqual(b.market,id(7));
+});
+test('subscription return before first next closes both semantic and transport iterators',async()=>{
+  let started=false,closed=0;
+  const transport=privateIterable(async function*(){started=true;yield new Uint8Array(1);},()=>{closed++;});
+  const sdk=client({context:()=>ctx,async exchange(){throw Error('not used');},async subscribe(){return transport;}});
+  const stream=await sdk.subscribe({id:id(90),epoch:1n,expiresAt:100n,query:{family:'account',limit:1}});
+  const iterator=stream[Symbol.asyncIterator]();await iterator.return?.();
+  assert.equal(started,false);assert.equal(closed,1);
+  assert.throws(()=>stream[Symbol.asyncIterator](),/subscription unavailable/);
 });

@@ -1,4 +1,5 @@
 // Exact private application protocol. No network defaults, RPC, native signer or retries.
+import { privateIterable } from './private-iteration.ts';
 export type Id = Uint8Array;
 export interface Domain { network: Id; deployment: Id }
 export interface Grant {
@@ -250,9 +251,11 @@ export class PrivateClient {
       stream=await this.#channel.subscribe(wire);
     }finally{message.fill(0);wire.fill(0);}
     const family=query.family;
-    return {async *[Symbol.asyncIterator](){for await(const bytes of stream){try{
+    const iterator=stream[Symbol.asyncIterator]();
+    const source:AsyncIterable<Uint8Array>={[Symbol.asyncIterator]:()=>iterator};
+    return privateIterable(async function*(){for await(const bytes of source){try{
       const reply=decodeResponse(bytes);if(reply.kind!=='page'||reply.family!==family)throw new Error('Private subscription unavailable; resynchronize');yield reply;
-    }finally{bytes.fill(0);}}}};
+    }finally{bytes.fill(0);}}},()=>iterator.return?.());
   }
   /** No retries or native nonce generation. On uncertainty query the original ID.
    * Caller supplies current epoch and re-signs on a new confidential session. */
