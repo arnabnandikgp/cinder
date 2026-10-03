@@ -23,7 +23,7 @@
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
 | [P20 — Nitro application qualification](PLAN.md#p20) | closed | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), merged `76f3295` |
-| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | [#47](https://github.com/arnabnandikgp/cinder/pull/47), contract/core; [#48](https://github.com/arnabnandikgp/cinder/pull/48), browser verifier/binding |
+| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | [#47](https://github.com/arnabnandikgp/cinder/pull/47), contract/core; [#48](https://github.com/arnabnandikgp/cinder/pull/48), browser verifier/binding; [#50](https://github.com/arnabnandikgp/cinder/pull/50), HTTP/shared SDK |
 | [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
@@ -37,8 +37,10 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Current work: `tee/p21a-http-sdk` in `cinder-tee`, implemented above P21A.2a #48
-at `df1e71f9110c4c4b940c689db4540839656ec473` through native stack #49.
+Current work: ready/open [#50](https://github.com/arnabnandikgp/cinder/pull/50),
+`tee/p21a-http-sdk` in `cinder-tee`, above P21A.2a #48 at
+`df1e71f9110c4c4b940c689db4540839656ec473` through native stack #49.
+Published source head: `8cf077298d8cc288223ba88133472d8b52187c61`.
 P21A.1 #47 is at `9aefdd9d3478870ccf58b3cc1cf1ade449f13cd3`; trunk remains
 `product/tee-v1` at `76f32956e3ee5d31707ec1bf7fa81f8711666c97`.
 All four hosted jobs pass at that #48 source-fix head, independently checked
@@ -66,11 +68,14 @@ each in Node 24.21.0 and Chrome 154.0.8037.93. The HTTP groups cover all eight
 signed commands, agents/owner-only authority/revocation, cross-account refusal,
 fresh boots, lost committed replies, restart/dedupe, finite records and witness
 failure. Test data, quote root, wallet binding and storage key are disposable;
-there are no actual fills/payouts or live funds. Hosted results for the new HTTP
-head are pending publication, not inherited from #48.
+there are no actual fills/payouts or live funds. At first published source head
+`8cf0772`, hosted plan/handoff passed; Rust, browser and Anchor jobs were still
+running. CodeRabbit's status is not a completed review disposition. This subsequent
+publication receipt is documentation-only and needs its own exact-head checks;
+do not inherit the source or #48 results.
 
-Next: publish the reviewed-scope HTTP/shared SDK slice in native stack #49, then
-one further grouped PR for authorized reads/WebSocket + joined offline acceptance.
+Next: review #50 and its new-head checks, then one further grouped PR for
+authorized reads/WebSocket + joined offline acceptance above it in native stack #49.
 All four P21A criteria remain open until complete review/merge. API → Mintlify →
 recovery ordering is unchanged. Fresh changed-image/NSM/native workflow qualification
 remains P23. No AWS, external venue, configured wallet, container, subagent or
@@ -1630,8 +1635,8 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 | --- | --- | --- | --- |
 | 1 — Contract and isolated core qualification | in progress | Reviewed contract plus offline native/browser vector and hostile-wire evidence, then merge; not attestation or a shipping API. | #47 |
 | 2a — Browser verifier and binding qualification | in progress | Independent AWS/COSE/X.509 validation in a tested strict subset, exact attested channel vectors and native differential fixtures; then reviewed merge, not a shipping/hardware claim. | #48 |
-| 2b — Secret lifetime and transport hardening | in progress | Selected upstream Snow with explicit erasure limitation, NSM entropy/quote adapters and offline SDK lifetime/fencing/assembly; actual hardware and customer-release hardening disposition remain separate. | HTTP PR, with 3; publication pending |
-| 3 — HTTP and shared SDK/service | in progress | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation; offline evidence passes, review/merge pending. | HTTP PR, with 2b; publication pending |
+| 2b — Secret lifetime and transport hardening | in progress | Selected upstream Snow with explicit erasure limitation, NSM entropy/quote adapters and offline SDK lifetime/fencing/assembly; actual hardware and customer-release hardening disposition remain separate. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 3 |
+| 3 — HTTP and shared SDK/service | in progress | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation; offline evidence passes, review/merge pending. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 2b |
 | 4 — Authorized reads and WebSocket | open | Own-account projections/paging and bounded revocable committed streams; no native pooled-query/global-sequence leakage. | Following PR, with 5 |
 | 5 — Joined adversarial acceptance | open | Both transports satisfy all four parent-phase criteria; then P21A can close after merge. | Following PR, with 4 |
 
@@ -1746,12 +1751,21 @@ also made fragmented reads linear/bounded, protected existing routing from a
 duplicate public handle and retained a complete final ciphertext reply when the
 enclave closes at the record cap. No financial change or Snow fork was needed.
 
-Next: publish this grouped slice through stack #49 and record actual head/PR/CI
-evidence, then authorized reads/WebSocket with joined offline acceptance in one
-further PR. The user's isolated-margin question was answered from BASELINE/API_SCOPE:
+Publication: ready/open #50 through native stack #49, based on
+`tee/p21a-browser-attestation` at `df1e71f9110c4c4b940c689db4540839656ec473`.
+Source head `8cf077298d8cc288223ba88133472d8b52187c61` has hosted plan/handoff
+passing; Rust, browser and Anchor were running at the receipt check. New receipt
+heads need their own checks. No review disposition or merge is claimed. #47 and
+#48 remain open; their source heads are recorded in the current handoff.
+
+Next: review #50 and its checks, then authorized reads/WebSocket with joined
+offline acceptance in one further PR. The user's isolated-margin question was
+answered from BASELINE/API_SCOPE:
 V1 shares a private customer's collateral across markets within the configured
 pool; leverage is not native/customer isolated margin. No new margin feature was
 authorized or introduced.
+PR: https://github.com/arnabnandikgp/cinder/pull/50.
+Merge: none.
 
 ## P21B — Public documentation
 
