@@ -10,6 +10,30 @@ fn redacted(_: crate::Error) -> JsValue {
 pub fn standard_vector() -> bool {
     crate::known_answer::verify()
 }
+/// Independently test canonical context bytes across native and browser builds.
+#[wasm_bindgen]
+pub fn web_context(policy: &[u8], fields: &[u8], expires: u64) -> Result<Vec<u8>, JsValue> {
+    crate::profile::context(policy, fields, expires).map_err(redacted)
+}
+/// Public context digest; this does not validate attestation.
+#[wasm_bindgen]
+pub fn web_user_data(context: &[u8]) -> Vec<u8> {
+    crate::profile::user_data(context).to_vec()
+}
+/// Public prologue digest; callers must independently verify the quote first.
+#[wasm_bindgen]
+pub fn web_prologue(context: &[u8], quote: &[u8]) -> Result<Vec<u8>, JsValue> {
+    crate::profile::prologue(context, quote)
+        .map(|b| b.to_vec())
+        .map_err(redacted)
+}
+/// P18-sized binding digest. Not a readiness check; Endpoint.binding owns that.
+#[wasm_bindgen]
+pub fn web_binding(prologue: &[u8], hash: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let prologue = prologue.try_into().map_err(|_| redacted(crate::Error))?;
+    let hash = hash.try_into().map_err(|_| redacted(crate::Error))?;
+    Ok(crate::profile::binding(prologue, hash).to_vec())
+}
 /// Browser qualification client, not a production attested financial SDK.
 #[wasm_bindgen]
 pub struct BrowserEndpoint(Endpoint);

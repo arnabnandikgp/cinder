@@ -62,6 +62,7 @@ name = "cinder-web-channel-qualification"
 version = "0.1.0"
 dependencies = [
  "getrandom",
+ "sha2",
  "snow",
  "wasm-bindgen",
  "zeroize",

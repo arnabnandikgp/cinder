@@ -21,6 +21,22 @@ Synthetic responder trust is explicit. This does not verify a Nitro quote, prove
 key erasure, qualify an HTTP financial API or close P21A. The recorded opaque-key
 erasure limitation must be resolved/reviewed before candidate production use.
 
+The next stacked slice promotes [browser verifier and binding qualification](../../tools/web-channel/ATTESTATION.md):
+exact public purpose/context vectors, 40 fresh signed synthetic fixtures checked
+against the existing separately compiled native oracle, Node/actual-Chrome tests
+and five historical public AWS DER certificates from P20's public-only clock probe.
+The retained source quote SHA-256 is
+`b9352dd188179fb5492160291b3cd9bb7aefcaf98d673ca971c713e1e103e61e`;
+only its certificates/capture time are promoted, not the original quote or ignored
+research tree. Historical certificate shape/path is not fresh web attestation.
+Source review found PKI.js needs explicit path-length/closed-policy checks, and
+actual AWS leaves use noncritical KU with no AKI/SKI; both have bounded regression
+evidence without weakening the native path. Candidate accepts only a narrower
+AWS-shaped subset, not arbitrary PKIX equivalence. No shipping graph/Node TLS,
+private authority, wallet, AWS resource or customer financial state is changed.
+Snow erasure, SDK lifetime/fencing, HTTP/WS and changed-image qualification remain
+open; passing this candidate must not close them.
+
 ## How to reuse the research
 
 1. **Reuse requirements and test vectors first.** The production implementation

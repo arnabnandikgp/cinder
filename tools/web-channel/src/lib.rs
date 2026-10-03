@@ -4,6 +4,9 @@
 use snow::{Builder, HandshakeState, TransportState};
 use zeroize::Zeroizing;
 
+/// Canonical public attested-context encodings; qualification, not a verifier.
+pub mod profile;
+
 /// The only qualification suite; no negotiation, modifiers, or crypto fallback.
 pub const PROFILE: &str = "Noise_NK_25519_ChaChaPoly_SHA256";
 /// Bound one record independently of any future reply-chunking protocol.
@@ -67,11 +70,20 @@ impl Endpoint {
     /// Generate a fresh synthetic responder using the platform's CSPRNG.
     /// This is not an NSM attester or qualified production entropy provider.
     pub fn server(context: &[u8]) -> Result<Self, Error> {
-        let key = Self::builder(context)?
+        let context: [u8; 32] = context.try_into().map_err(|_| Error)?;
+        Self::server_with_context(|_| Ok(context))
+    }
+    /// Disposable native fixture: generate a fresh key, then obtain the public
+    /// prologue for that exact key. The callback is NOT an NSM/trust provider.
+    pub fn server_with_context(
+        context_for_key: impl FnOnce(&[u8]) -> Result<[u8; 32], Error>,
+    ) -> Result<Self, Error> {
+        let key = Self::builder(&[1; 32])?
             .generate_keypair()
             .map_err(|_| Error)?;
         let private = Zeroizing::new(key.private);
-        let inner = Self::builder(context)?
+        let context = context_for_key(&key.public)?;
+        let inner = Self::builder(&context)?
             .local_private_key(&private)
             .map_err(|_| Error)?
             .build_responder()

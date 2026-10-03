@@ -37,6 +37,40 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+Current work: `tee/p21a-browser-attestation` in `cinder-tee`, stacked above
+P21A.1 #47 at `3c1b593ae3731bea5c5fa619023ef20a546006a7`; trunk remains
+`product/tee-v1` at `76f32956e3ee5d31707ec1bf7fa81f8711666c97`.
+The #47 cleanup fix is green on all four hosted jobs at 3c1b593. CodeRabbit's
+completed review has one minor ADR status-clarity finding; address it on the
+owning base PR before submitting the next layer. No merge is authorized here.
+
+The new candidate supplies independent browser AWS-root/X.509/COSE validation,
+a deliberately narrower strict certificate profile, exact web-purpose context
+and shared native/WASM binding vectors. Forty signed synthetic cases use the
+existing separately compiled native verifier as a local-only certificate/TLS
+oracle. Actual Node 24.21.0 and Chrome 154.0.8037.93 pass fourteen groups each,
+including verified-key native NK and matching final binding with no private
+carrier marker. A historical five-certificate AWS path is checked at capture
+time only; its expired leaf refuses later. The default AWS-only entry point
+rejects synthetic roots. The shipping Cargo graph and P19 Node TLS are unchanged.
+
+Native debug/release tests: twelve each; dependency/process regressions: nine;
+native/WASM strict Clippy, formatting and bundle pass. The root workspace guard
+and 29 repository tests pass. The current candidate's hosted CI/review is pending
+publication; do not reuse base-head green checks. No shipping HTTP/WS handler,
+fresh browser hardware attestation, zeroization proof or full phase closure.
+
+Next: submit this verifier/context slice through the native stack after the
+base's narrow status fix. Separately qualify reviewed secret-lifetime hardening,
+server NSM web quotes/entropy and SDK lifetime/fencing before HTTP integration.
+No Snow fork or production crypto choice has been made; its open erasure gap
+must not be hidden by dropping a wrapper or browser worker. All P21A acceptance
+criteria remain open. API → Mintlify → recovery ordering is unchanged. Preserve
+unrelated `docs/user-journey.md`/`stays/` and ignored work. No AWS, live venue,
+wallet, container or subagent was used.
+
+### Historical P21A.1 publication handoff (superseded)
+
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
 `76f32956e3ee5d31707ec1bf7fa81f8711666c97`. Current branch:
 `tee/p21a-web-api-contract`, a fresh native stack based on that exact merge.
@@ -1527,7 +1561,8 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 | PR-sized slice (ADR 0021) | Progress | Completion boundary |
 | --- | --- | --- |
 | 1 — Contract and isolated core qualification | in progress | Reviewed contract plus offline native/browser vector and hostile-wire evidence, then merge; not attestation or a shipping API. |
-| 2 — Hardened dependency, browser verifier and binding profile | open | Independent AWS/COSE/X.509 verification and exact attested channel vectors match the strict Node policy; no parent verification substitute. |
+| 2a — Browser verifier and binding qualification | in progress | Independent AWS/COSE/X.509 validation in a tested strict subset, exact attested channel vectors and native differential fixtures; then reviewed merge, not a shipping/hardware claim. |
+| 2b — Secret lifetime and transport hardening | open | Reviewed dependency secret erasure, qualified entropy, server quote generation and SDK lifetime/fencing/assembly; no opaque-key wipe or worker-teardown shortcut. |
 | 3 — HTTP and shared SDK/service | open | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation. |
 | 4 — Authorized reads and WebSocket | open | Own-account projections/paging and bounded revocable committed streams; no native pooled-query/global-sequence leakage. |
 | 5 — Joined adversarial acceptance | open | Both transports satisfy all four parent-phase criteria; then P21A can close after merge. |
@@ -1538,6 +1573,43 @@ Unexpected: Snow lacks qualified zeroizing Drop for opaque key/chaining state an
 Review continuation: all four hosted jobs passed at cleanup-fix 3c1b593ae3731bea5c5fa619023ef20a546006a7. The single completed CodeRabbit finding is a valid minor status-clarity issue; fixed in ADR 0021 and locally validated with the foundation checker, 13 focused tests and diff check. The current review-fix tip is documentation-only and awaits its own hosted results. No production/API gate closes.
 Next: #47 remains ready against product/tee-v1 at 76f32956e3ee5d31707ec1bf7fa81f8711666c97. Push the documentation-only finding fix and rebase the unpublished tee/p21a-browser-attestation layer onto it through native gh stack; then publish that bounded verifier/context qualification. Keep source-head and docs-head CI evidence distinct; do not merge automatically. Dependency secret-lifetime hardening remains separate before HTTP/shared SDK, reads/WS and joined acceptance. No parent-readable fallback or execution/onboarding expansion.
 PR: https://github.com/arnabnandikgp/cinder/pull/47.
+Merge: none.
+
+### P21A.2a continuation — independent browser verifier/context
+
+Work: tee/p21a-browser-attestation above #47; isolated pinned PKI.js/ASN1.js/WebCrypto
+verifier, closed CBOR and AWS-shaped typed certificate constraints, fixed AWS root,
+purpose-separated exact 430-byte web context, prologue and P18-sized binding.
+Shared Rust/WASM/native canonical functions agree with WebCrypto vectors; only
+confirmed endpoints expose the handshake hash. Fresh synthetic signing keys are
+never exported to the public corpus. Forty cases use independent native checks;
+the native oracle is not a client trust service. Added root/path/signature/time/
+issuer/context/CBOR/substitution/entropy/input-snapshot tests and historical public
+AWS DER certificates, without promoting the original quote or research tree.
+
+Verification: pinned complete isolated runner passes twelve native tests in each
+debug/release profile, nine dependency/teardown regressions, native/WASM strict
+Clippy and formatting. Node/Chrome 154.0.8037.93 pass fourteen groups each; verified
+synthetic key -> native Noise -> both confirmations -> matching binding/private
+echo passes. Historical AWS path validates at capture time only and expires later.
+Root workspace guard and all 29 repository tests pass; no shipping Rust/Anchor
+source changed and no fresh full workspace/SBF run is claimed for this layer.
+Hosted CI/review for this new layer remains pending. No fresh NSM web quote or
+production API/crypto approval; all four parent-phase criteria stay open.
+
+Unexpected: PKI.js needs explicit path-length checks, and actual AWS CA paths
+include noncritical CRL metadata while the leaf omits identifiers and has
+noncritical KU. Historical hardware-derived public certificates found these
+compatibility details before publication. The candidate is intentionally stricter
+than general OpenSSL PKIX (e.g. ES384 certificate signatures only); unsupported
+shapes fail closed. Native trust/revocation policy is unchanged. NPM lifecycle
+scripts are disabled, exact manifest/lock/integrities guarded, build-only esbuild
+separate. Snow erasure remains open and no vendor fork has been selected.
+
+Next: publish the bounded layer above the clarified #47 base, check its exact-head
+CI/review, then P21A.2b dependency/secret-lifetime and remaining transport gates
+before HTTP/SDK integration. Do not close the parent phase or merge automatically.
+PR: pending publication.
 Merge: none.
 
 ## P21B — Public documentation

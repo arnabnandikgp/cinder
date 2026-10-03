@@ -1,6 +1,8 @@
 {
-  "manifestSha256": "aaf1e26e6c45bd52249997b4a1fd5ac8235fa9bd5d9cdc1b7cac07ee1bb03002",
-  "lockfileSha256": "5e1235d5f146984b05b9a9589be3c27bcbcb83594a8c2c2f3d3537c3f24a9941",
+  "manifestSha256": "cf86c5d41771a079ce6512041504f43329503bdbde391098da140d4fdda571e4",
+  "lockfileSha256": "f13d0f1d3d585c68f326e19b2b7b9db768638fa79ff6b303778c9523843e894b",
+  "npmManifestSha256": "71ba1a4b0a605d11af7f28f52fb7d7b49ac247ade2e552ea35c672dbd4ff6cd6",
+  "npmLockfileSha256": "eac728782e05b9d20cb0ca0e65b8c35f87a59061a4cc3286cc373a86c4de175f",
   "packages": [
     ["aead@0.5.2","",false],
     ["block-buffer@0.10.4","",false],

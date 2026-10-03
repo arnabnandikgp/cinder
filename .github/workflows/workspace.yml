@@ -51,6 +51,11 @@ jobs:
         run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
       - name: Fetch isolated locked dependencies
         run: cargo fetch --manifest-path tools/web-channel/Cargo.toml --locked
+      - name: Prepare independent native verifier and pinned browser verifier tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libssl-dev
+          cargo fetch --locked
+          npm ci --ignore-scripts --prefix tools/web-channel
       - name: Prepare checksum-verified wasm-bindgen tool
         run: |
           curl -fsSL --retry 2 --max-time 90 https://github.com/wasm-bindgen/wasm-bindgen/releases/download/0.2.129/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl.tar.gz -o "$RUNNER_TEMP/wasm-bindgen.tar.gz"

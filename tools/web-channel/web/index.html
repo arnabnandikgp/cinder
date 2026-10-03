@@ -5,10 +5,12 @@
 <script type="module">
 import init, * as core from '/channel.js';
 import { run } from '/suite.mjs';
+import { runAttestation } from '/attestation.js';
 let result;
 try {
   await init();
-  result = { ok: true, checks: await run(core) };
+  const corpus = await (await fetch('/fixtures')).json();
+  result = { ok: true, checks: [...await run(core), ...await runAttestation(core, corpus)] };
 } catch (error) {
   result = { ok: false, error: String(error).slice(0, 256) };
 }

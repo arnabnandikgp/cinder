@@ -1,7 +1,7 @@
 # P21A: confidential web API contract and transport proposal
 
 Date: 2026-10-03. Product scope and bounded Noise NK qualification approved.
-Status: implementation contract; isolated native/browser core locally qualified; shipping channel and fresh browser Nitro attestation remain unqualified.
+Status: contract; isolated native/browser core and verifier locally qualified; shipping channel and fresh browser Nitro attestation remain unqualified.
 This is the implementation contract, not a published or implemented HTTP API.
 Progress belongs in the tracked implementation tracker. No deployment is enabled.
 
@@ -84,9 +84,10 @@ dependency decision before adding it to the shipping workspace.
    approval or retry an uncertain ciphertext. Reconnect freshly and query the
    original economic ID; an HTTP receipt is not a native receipt.
 
-The follow-up implementation must publish exact byte encodings, purpose strings,
-prologue/binding vectors and chosen verifier dependencies before this profile can
-be marked reviewed/implemented. A remote Node verification service is not a browser
+The follow-up [browser attestation candidate](../../tools/web-channel/ATTESTATION.md)
+now publishes exact byte encodings, purpose strings, native/WASM/WebCrypto vectors
+and pinned verifier dependencies with bounded tests. It does not select shipping
+crypto or qualify a fresh browser hardware session. A remote Node verification service is not a browser
 verifier: it would replace independent validation with trust in that service.
 The current OpenSSL verifier cannot simply be compiled unchanged for browser WASM.
 Its complete strict chain/time/strength/root policy needs equivalent browser
@@ -211,8 +212,9 @@ this work adds no live trading, automatic recovery activation or public host.
 The first PR-sized slice qualifies a shared native/browser Noise core in a separate
 `tools/web-channel/` workspace. It has no financial, venue, wallet, AWS or shipping
 service dependency. Synthetic responder-key trust is explicit; it is not fresh
-Nitro attestation and cannot close P21A's transport criterion. The later independent
-browser verifier, complete quote/transcript profile, session lifetime/fencing,
+Nitro attestation and cannot close P21A's transport criterion. The follow-up adds
+independent browser verifier/context qualification and a historical AWS certificate
+shape fixture; key-erasure hardening, server web-purpose quotes, session lifetime/fencing,
 HTTP handlers, private projections and WebSocket subscriptions remain required.
 
 Source review found no zeroizing Drop implementations for Snow 0.10.0's default
