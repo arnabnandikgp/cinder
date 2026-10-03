@@ -4,6 +4,7 @@ import { PrivateClient, READ_FAMILIES, type Command, type MessageSigner, type Re
 import { WebChannel, type WebCore } from '../src/web-channel-core.ts';
 import { connectWebChannel } from '../src/web-channel.ts';
 import { verifyWithRoot } from '../../../tools/web-channel/attestation/verifier.mjs';
+import { expectStreamClosed } from './stream-assertions.ts';
 export const id = (n: number) => new Uint8Array(32).fill(n);
 export const policy = { network:id(1), deployment:id(2), manifest:id(21), pcrs:[new Uint8Array(48).fill(22),new Uint8Array(48).fill(23),new Uint8Array(48).fill(24)] as const };
 interface Fixture { baseUrl: string; root: number[] }
@@ -142,11 +143,11 @@ export async function runWebsocket(core:WebCore,signer:MessageSigner,harness:Har
     const agent=client(await connect(),agentSigner),agentIt=(await agent.subscribe(subscription(107)))[Symbol.asyncIterator]();
     const agentPage=await next(agentIt);check(agentPage.rows.every(r=>r.kind!=='operation'||r.command.kind!=='grant'),'agent directory leaked in subscription');
     const revoked=await owner.request(req(108,{kind:'revoke'}));check(revoked.kind==='receipt','owner revoke');
-    await rejects(()=>next(agentIt),'revoked stream emitted stale authority');
+    await expectStreamClosed(agentIt,'revoked stream emitted stale authority');
     checks.push('current READ-agent permission checked on every server emission; revoke closes stream');
 
     const expiryClient=client(await connect()),exp=(await expiryClient.subscribe(subscription(109,2n,BigInt(Date.now()+1800))))[Symbol.asyncIterator]();
-    await next(exp);await rejects(()=>next(exp),'expired signed subscription kept alive');
+    await next(exp);await expectStreamClosed(exp,'expired signed subscription kept alive');
     checks.push('signed subscription expiry rechecked without client traffic');
 
     const gapClient=client(await connect()),gap=(await gapClient.subscribe(subscription(110,2n)))[Symbol.asyncIterator]();
@@ -154,7 +155,7 @@ export async function runWebsocket(core:WebCore,signer:MessageSigner,harness:Har
     const first=await owner.request(req(111,{kind:'leverage',market:id(7),leverage:20000n,goodUntil:BigInt(Date.now()+20000)},2n));check(first.kind==='receipt','first gap commit');
     await harness.control('await-drop');
     const second=await owner.request(req(113,{kind:'leverage',market:id(7),leverage:20000n,goodUntil:BigInt(Date.now()+20000)},2n));check(second.kind==='receipt','second gap commit');
-    await rejects(()=>next(gap),'missing encrypted record silently continued');
+    await expectStreamClosed(gap,'missing encrypted record silently continued');
     const recovered=client(await connect()),snapshot=await recovered.request(req(114,{kind:'read',query:{family:'operations',limit:64}},2n));
     check(snapshot.kind==='page'&&snapshot.rows.filter(r=>r.kind==='operation'&&r.command.kind==='leverage').length===2,'gap recovery lost committed operations');
     checks.push('dropped delivery fails closed; fresh signed snapshot reconciles without mutation replay');
@@ -170,12 +171,12 @@ export async function runWebsocket(core:WebCore,signer:MessageSigner,harness:Har
     }
     const closeBy=Date.now()+2000;
     while(Date.now()<closeBy){try{slowChannel.context();}catch{break;}await new Promise(resolve=>setTimeout(resolve,10));}
-    await rejects(()=>next(slow),'slow consumer queue grew without bound');
+    await expectStreamClosed(slow,'slow consumer queue grew without bound');
     checks.push('slow consumer overflows the bounded real queue and must resnapshot');
 
     const fenced=client(await connect()),fence=(await fenced.subscribe(subscription(116,2n)))[Symbol.asyncIterator]();
     await next(fence);await harness.control('witness-loss');
-    await rejects(()=>next(fence),'witness loss emitted stale private snapshot');
+    await expectStreamClosed(fence,'witness loss emitted stale private snapshot');
     checks.push('idle stream revalidates witnessed freshness and refuses stale state');
     return checks;
   }finally{for(const ch of channels)ch.close();}

@@ -77,6 +77,22 @@ at `a0442d5`, not falsely relabeled as a new full run. All four hosted jobs pass
 at `a0442d5`; subsequent cleanup/receipt CI and review require their own evidence.
 A successful CodeRabbit status is not a completed review disposition.
 
+CodeRabbit review follow-up: reviewed checkpoint
+`9fa8748d9feb729405473ab91717adbb51f0ec49` has all four hosted jobs passing,
+but its closure assertions accepted a six-second harness timeout as termination.
+The finding is valid: an indefinitely pending iterator reproduced that false
+pass. The test-only fix uses actual iterator rejection or `done: true`; timeout
+and another emitted page now fail. All five revocation/expiry/gap/overflow/
+witness-loss scenarios use it. Four deterministic regressions cover actual
+termination, unwanted pages, stalled streams and termination after the deadline.
+Strict TypeScript and all 24 SDK/assertion/Node-TLS tests pass; Node 24.21.0 and
+actual Chrome 154.0.8037.93 each repeat all 24 joined process groups successfully
+with the stronger assertions. These supersede the earlier five closure claims;
+the earlier green run alone did not establish termination. Production SDK,
+Rust/crypto/financial source and dependency graph are unchanged, so no redundant
+full Rust/SBF/hardware rerun is claimed. Review-fix CI requires its own head;
+the docstring-coverage warning is not a reason for blanket comment changes.
+
 Next: review #51 and its current-head checks, then bottom-up merge when authorized.
 P21A/milestones stay in
 progress until relevant reviews are addressed and all layers merge. P21B Mintlify
@@ -1853,6 +1869,17 @@ Next: review #51's current source/checks, then bottom-up stack merge only when
 authorized. P21B is the next planned implementation, not started in this slice.
 PR: https://github.com/arnabnandikgp/cinder/pull/51, stacked above #50 in stack #49.
 Merge: none.
+
+Review follow-up: CodeRabbit's one actionable finding at `9fa8748` is a legitimate
+assurance gap, not a demonstrated runtime bypass. Reproduced a stalled iterator
+passing the old timeout/rejection composition. Replaced all five terminal checks
+with a shared test-only closure assertion; actual rejection/`done: true` passes,
+timeouts/pages fail. Four deterministic regressions are included in the normal
+SDK runner. Strict typechecking/all 24 SDK/assertion/TLS tests and Node/Chrome's
+24 joined groups each pass. Prior closure evidence is superseded by this rerun;
+all four hosted jobs passed at `9fa8748`, not automatically at the review-fix head.
+No production source, policy, native action or dependency changed. Next: publish
+the narrow fix, record thread disposition and check its own CI; no automatic merge.
 
 ## P21B — Public documentation
 
