@@ -49,7 +49,11 @@ source and have full local locked/offline checks, not new Nitro receipts. The
 three hosted jobs passed at preceding published head `d07038df`; those are not
 checks for the new fixes. CodeRabbit's completed review was at `58abe8b`; its
 rate-limited rebase status was not a new review. Four valid findings and the AKI
-naming nit are addressed below; check CI/review again at the new published tip.
+naming nit are addressed below. Publication `083a6413107763daf29a4605e1a3587e492c45a8`
+has the plan job passing and Rust/SBF plus CodeRabbit still running at the
+2026-10-03 check. All four original threads have fix replies and are resolved;
+the naming nit also has a summary reply. This documentation-only follow-up does
+not inherit those hosted results; check the latest tip before merge.
 Hardware results remain tied to their actual source. Pre-hardware assembly is
 `b67f3947b6eda241bd56912003b22ee90107857f`; real AWS compatibility fixes are
 `37487ca`; the qualified export is `5557d3350f371d616965006a90ea03b55420400f`.
@@ -1419,6 +1423,15 @@ Unexpected: no new economic or custody decision. Review additions are offline
 tested; October 2 hardware receipts remain exact-source evidence, not qualification
 of the new runtime source/PCR. No AWS, live venue, wallet, container or agent was
 used. The focused local review artifact stays ignored under `work/reviews/`.
+
+Publication: runtime fix `82073c2` and roadmap/evidence update `083a641` are pushed
+to #45. All four actionable threads have author fix/test replies and are resolved;
+the safe named-constant alternative is explained in a summary comment. At the
+post-push check, `083a6413107763daf29a4605e1a3587e492c45a8` has successful hosted
+plan validation; Rust and SBF jobs are in progress, CodeRabbit is pending. No new
+review/CI pass or merge is presumed. Final prose-only plan validation and all
+13 validator tests also pass with available Node 26.8.2 after the temporary pinned
+Node binary was removed; the earlier full run used pinned Node 24.21.0.
 
 Next: inspect new-head CI/review and the four addressed thread replies/resolutions,
 and obtain merge authorization before closing P20. Then start
