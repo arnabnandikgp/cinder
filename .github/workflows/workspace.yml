@@ -35,3 +35,29 @@ jobs:
         run: npm ci --ignore-scripts --prefix clients/private
       - name: Offline build, lint and tests
         run: node scripts/check.mjs
+
+  web-channel-qualification:
+    name: Offline browser channel qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - name: Install pinned Rust and WASM target
+        run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
+      - name: Fetch isolated locked dependencies
+        run: cargo fetch --manifest-path tools/web-channel/Cargo.toml --locked
+      - name: Prepare checksum-verified wasm-bindgen tool
+        run: |
+          curl -fsSL --retry 2 --max-time 90 https://github.com/wasm-bindgen/wasm-bindgen/releases/download/0.2.129/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl.tar.gz -o "$RUNNER_TEMP/wasm-bindgen.tar.gz"
+          printf '%s  %s\n' 82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e "$RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/wasm-bindgen.tar.gz" -C "$RUNNER_TEMP"
+      - name: Locked offline native, WASM, Node and Chrome qualification
+        env:
+          CINDER_WASM_BINDGEN: ${{ runner.temp }}/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl/wasm-bindgen
+          CINDER_TEST_CHROME: /usr/bin/google-chrome
+        run: node tools/web-channel/check.mjs

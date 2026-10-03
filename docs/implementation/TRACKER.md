@@ -22,8 +22,8 @@
 | [P17 — Recovery program](PLAN.md#p17) | closed | Authorized, funded final claims pay once; stale roots, wrong recipients and prior ordinary payouts cannot replay. | [#41](https://github.com/arnabnandikgp/cinder/pull/41), merged `1f750b0` |
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
-| [P20 — Nitro application qualification](PLAN.md#p20) | in progress | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), open on `product/tee-v1` |
-| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | open | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | — |
+| [P20 — Nitro application qualification](PLAN.md#p20) | closed | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), merged `76f3295` |
+| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | `tee/p21a-web-api-contract`, contract/transport review |
 | [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
@@ -36,6 +36,39 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
+`76f32956e3ee5d31707ec1bf7fa81f8711666c97`. Current branch:
+`tee/p21a-web-api-contract`, a fresh native stack based on that exact merge.
+P20 #45 merged at 2026-10-03 03:40:39 UTC through the required asynchronous
+`gh stack merge --yes --merge` path. All three hosted jobs passed at checked
+head `311c0a7fa55187357f42f52965e690f73746c4da`; CodeRabbit's completed delta
+review to that head reported no actionable comments. Four earlier inline threads
+are resolved; the outside-diff cloud-parser finding is fixed and regression-tested.
+Local trunk is fast-forwarded. Hardware receipts remain exact-source, not a new
+qualification of the later review fixes. Native/production gates remain separate.
+
+P21A: the user approved all API_SCOPE recommendations, including richer reads,
+history and scoped Cinder agents. Browser/Node HTTP and WebSocket serve both a
+future frontend and programmatic trading clients. Typical frontend use is HTTP
+commands plus WebSocket private updates; WebSocket commands are optional, not a
+requirement to place an order. Public venue market-data feeds remain separate.
+The user subsequently explicitly approved bounded local Noise NK qualification.
+[ADR 0021](../architecture/0021-confidential-web-api.md) is tracked and the separate
+`tools/web-channel/` Rust/WASM core uses pinned Snow 0.10.0 without altering the
+shipping graph or P19 Node TLS. No HTTP trading handler or stream is implemented.
+
+Native tests and actual Node/browser round trips pass with explicit synthetic
+responder-key trust. Independent browser Nitro verification is NOT implemented;
+the opaque library's key-erasure limitation is recorded before shipping. The full
+repository runner also passes (debug/release workspace, 29 repository tests and
+17 SDK/process tests). Next: publish the bounded first-slice native stacked PR
+with its new Linux/browser CI, then qualify hardened dependencies, browser verifier and exact attested binding
+before HTTP/WS integration. Continue API → Mintlify → recovery. Preserve ignored
+work and unrelated `docs/user-journey.md`/`stays/`; no AWS, live venue, wallet,
+container or subagent was used for this merge/qualification.
+
+### Historical P20 pre-merge handoff (superseded)
 
 Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
 `dc5f01ddadb6730886f939693b2b6c0c7d642caf`.
@@ -1457,19 +1490,38 @@ pass. No SDK/program source change, AWS session, live venue call or container.
 Existing hardware receipts are unchanged; the new parser is not hardware-tested.
 Merge is now explicitly authorized, subject to final published-head checks.
 
-Next: push the final fix/receipt, reply to the outside-diff finding, verify
-new-head CI/review and merge #45 onto product/tee-v1. Then start P21A's approved
-scope and transport ADR, implement P21A, publish P21B, and complete P21 recovery. Native trading,
-funding/reads and production policy remain separate G01–G04/P23 gates.
+Merge receipt: #45 merged via `gh stack merge --yes --merge` at 2026-10-03
+03:40:39 UTC. Checked source head
+`311c0a7fa55187357f42f52965e690f73746c4da` passed hosted plan/handoff, offline
+Rust and Anchor/SBF/Surfpool jobs. CodeRabbit run
+`5a1c982f-3ec8-4b5a-b8b5-78681f23c85e` reviewed the delta from `b2c2e8b` to that
+head and reported no actionable comments. The generic docstring percentage warning
+does not identify a remaining defect; no blanket comment churn. Ordinary `gh pr
+merge` refused this stacked PR before making a change; the required native stack
+merge then succeeded. Local product/tee-v1 fast-forwarded to the receipt below.
+
+Next: P20 is closed. P21A starts from the merged TEE trunk with the approved
+scope; finalize its separately reviewed browser transport, implement the API,
+publish P21B, then complete P21 recovery. Native trading/funding/reads and
+production policy remain G01–G04/P23 gates. Later review fixes remain offline-
+tested, not a rerun of the historical hardware matrix.
 PR: https://github.com/arnabnandikgp/cinder/pull/45.
-Merge: none.
+Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 
 ## P21A — HTTP and WebSocket API
 
-Work: transport milestone approved 2026-10-03; implementation not started. The user subsequently approved API → public docs → recovery ordering, replacing the earlier recovery-first schedule. P21 is removed as an API dependency. Compared HyperLink's current documented methods with actual Rust/TypeScript commands in API_SCOPE.md; bounded read/history extensions remain proposals for scope review. Protocol/attestation choices remain an explicit reviewed ADR prerequisite, not an inferred approval of custom cryptography.
-Verification: public HyperLink documentation and actual Rust/TypeScript commands compared on 2026-10-03; plan/link validation and all 13 validator tests pass. HTTP/WebSocket implementation tests not run; acceptance in PLAN P21A. This is a planning change, not a working endpoint.
-Unexpected: the initial P19/P20 automation channel is not browser HTTP/WebSocket; a reviewed confidential browser transport is required, not a parent-side plaintext facade.
-Next: finalize API_SCOPE.md's method/permission/read matrix and transport ADR after P20; implement the shared browser/Node commands and bounded private streams. Define freeze/epoch behavior for later recovery; keep triggers/modify/batching and public market data/onboarding/terminal outside this phase unless separately approved.
+| PR-sized slice (ADR 0021) | Progress | Completion boundary |
+| --- | --- | --- |
+| 1 — Contract and isolated core qualification | in progress | Reviewed contract plus offline native/browser vector and hostile-wire evidence, then merge; not attestation or a shipping API. |
+| 2 — Hardened dependency, browser verifier and binding profile | open | Independent AWS/COSE/X.509 verification and exact attested channel vectors match the strict Node policy; no parent verification substitute. |
+| 3 — HTTP and shared SDK/service | open | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation. |
+| 4 — Authorized reads and WebSocket | open | Own-account projections/paging and bounded revocable committed streams; no native pooled-query/global-sequence leakage. |
+| 5 — Joined adversarial acceptance | open | Both transports satisfy all four parent-phase criteria; then P21A can close after merge. |
+
+Work: API → public docs → recovery ordering and full API_SCOPE approved 2026-10-03; P21 is not an API prerequisite. Started tee/p21a-web-api-contract on P20 merge 76f32956e3ee5d31707ec1bf7fa81f8711666c97. After the frontend/bot explanation, the user explicitly approved bounded Noise NK qualification. ADR 0021 carries the contract, permission/provenance matrix, bounds and split. Isolated tools/web-channel supplies one Rust core, thin WASM binding, synthetic native responder, published known answer, adversarial tests and disposable browser harness; no shipping dependency or existing Node TLS change.
+Verification: primary browser/Noise/Snow/RFC/AWS sources checked. Native debug/release tests: 10 pass each. Node 24.21.0 and actual Chrome 154.0.8037.93: seven groups each pass, including standard vector, encrypted native round trip, early/replay/tamper/reflection/size refusal and RNG failure. Carrier marker absent in both directions. Complete isolated runner passes: four dependency-guard tests, native/WASM strict Clippy and formatting. Full pinned repository runner also passes default/all-feature Clippy, workspace build/debug/release tests, 29 repository tests and all 17 SDK/process tests. Foundation: 27 phases/36 documents; focused 13 plan-validator tests and diff check pass. On-chain source unchanged, so no local SBF rerun. Hosted CI/review receipt to follow; no HTTP/WS financial workflow or fresh browser Nitro attestation claimed. All four PLAN P21A acceptance criteria remain open.
+Unexpected: Snow lacks qualified zeroizing Drop for opaque key/chaining state and has no formal audit; this candidate cannot silently become production crypto. Removed unused Snow std feature (otherwise enables ring/Blake2), pinning only selected suite/entropy and 43 registry packages. Existing risk_report uses journal cut time and needs qualified read-time validation. READ remains own-account scoped. Tool setup used task-local downloads, not global replacement; no AWS, live venue, wallet, container or agent.
+Next: publish the bounded contract/core qualification PR using native gh stack; then qualify hardened implementation, independent browser AWS verifier and exact attested context/binding. Implement HTTP/shared SDK next, followed by read projections/WS and joined adversarial acceptance. No parent-readable fallback, fake recovery, triggers/modify/batching, public feed, onboarding or terminal expansion.
 PR: none.
 Merge: none.
 

@@ -1,10 +1,13 @@
 # Customer API scope and HyperLink comparison
 
 Reviewed 2026-10-03 against Cinder's current source and HyperLink's public docs.
-This is a scope proposal, not an implemented HTTP API or a promise of full native
-venue compatibility. The user approved API implementation, then public docs,
-then P21 recovery integration. The additional read surface below still needs
-scope review before implementation. [PLAN](PLAN.md) and [TRACKER](TRACKER.md)
+The user approved all scope recommendations below on 2026-10-03, including the
+bounded read extensions and scoped agents. This is not an implemented HTTP API or
+a promise of full native venue compatibility. The approved sequence is API
+implementation, public docs, then P21 recovery integration. Exact schemas and
+browser transport security still need full qualification. [ADR 0021](../architecture/0021-confidential-web-api.md)
+records the approved bounded Noise NK/Rust-WASM qualification; it does not approve
+shipping candidate cryptography or expose an endpoint. [PLAN](PLAN.md) and [TRACKER](TRACKER.md)
 own progress; existing financial/authority rules remain in [BASELINE](BASELINE.md).
 
 ## What actually exists
@@ -72,9 +75,10 @@ can be interrupted when the tab closes. We need not build seven server scheduler
 to match a menu. TWAP/DCA/iceberg strategies may later use Cinder's bounded agent
 SDK, with their limits and liveness stated explicitly.
 
-## Recommended first release of the transport surface
+## Approved first release of the transport surface
 
-This is the recommended extension to review, not automatic approval of new commands:
+These scope recommendations are approved; they do not select a cryptographic suite
+or imply that the listed extensions are already implemented:
 
 1. Preserve the existing six mutations and two reads. Add ergonomic SDK helpers,
    exact signed decimal/unit handling and the same immutable operation identity
@@ -115,7 +119,8 @@ API + Mintlify now precede P21, but cannot weaken its eventual recovery contract
 Before coding, finalize a method/permission/response matrix and a transport ADR:
 browser-verifiable enclave attestation, fresh session/key binding, encryption,
 signature encoding, errors, protocol versioning and finite resource limits.
-No concrete HTTP route or cryptographic suite is selected by this comparison.
+This comparison itself selects no live route. The later user approval authorizes
+local qualification of the Noise NK profile in ADR 0021, not production release.
 Existing Node TLS exporter binding cannot simply be read by browser JavaScript.
 TLS at an ordinary host plus a signature does not meet the parent-confidentiality
 contract; sensitive request/reply decryption stays in the enclave.
@@ -137,9 +142,9 @@ Native venue qualification, end-to-end evidence, production policy and customer
 release remain P22/P23/P24 and G01–G04 gates. Documentation publication is not a
 production launch or proof of unconditional exits/complete solvency.
 
-## Remaining scope decisions
+## Approved scope decisions
 
-| Decision | Recommendation / consequence |
+| Decision | Approved recommendation / consequence |
 | --- | --- |
 | Bare eight-command transport or usable account API? | Add the bounded read projections above. More projection/paging tests, but useful for real integrations and a future terminal; no new trading or custody powers. |
 | Triggers, modify and batches now? | Defer to explicitly tracked execution milestones, with TP/SL prioritized for a broader trading release. Initial API is deliberately less feature-rich; never advertise parity. |

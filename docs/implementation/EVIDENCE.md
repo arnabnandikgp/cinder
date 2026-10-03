@@ -5,6 +5,22 @@ Snapshot: 2026-09-30. This is a curated map, not an archive upload. The original
 broken public links. [BASELINE](BASELINE.md) and [CONFORMANCE](CONFORMANCE.md) carry
 the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
+## P21A initial web-channel qualification
+
+[ADR 0021](../architecture/0021-confidential-web-api.md) and the
+[isolated tool](../../tools/web-channel/README.md) promote W06/W08's channel
+requirements and a single public Cacophony NK vector—not ignored experimental
+authority or private data. Snow 0.10.0 package archive SHA-256:
+`599b506ccc4aff8cf7844bc42cf783009a434c1e26c964432560fb6d6ad02d82`.
+Expected vector output is from the upstream release, not calculated by Cinder;
+the retained license/source is in the tool. A separate manifest/lock/graph policy
+pins the candidate suite/entropy and browser build, with no shipping graph change.
+Native debug/release vectors and hostile-wire cases, plus actual Node/WASM and
+Chrome/WASM → native Rust tests, are reproducible without `work/` or live services.
+Synthetic responder trust is explicit. This does not verify a Nitro quote, prove
+key erasure, qualify an HTTP financial API or close P21A. The recorded opaque-key
+erasure limitation must be resolved/reviewed before candidate production use.
+
 ## How to reuse the research
 
 1. **Reuse requirements and test vectors first.** The production implementation

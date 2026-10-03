@@ -1,0 +1,6 @@
+{
+  "name": "cinder-web-channel-qualification",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.21.0" }
+}
