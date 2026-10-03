@@ -6,6 +6,7 @@ pub mod funds;
 pub mod liquidation;
 pub mod model;
 pub mod orders;
+pub mod projection;
 pub mod protection;
 pub mod raw;
 pub mod replicated;
@@ -179,6 +180,7 @@ struct Accepted {
     bytes: Vec<u8>,
     receipt: Receipt,
     head: Head,
+    book_changes: Vec<(cinder_kernel::identity::AccountId, projection::BookChange)>,
 }
 
 /// Private-runtime coordinator around an opaque CAS backend. Default construction
@@ -340,12 +342,14 @@ impl<B: Backend, P: Protection> Journal<B, P> {
                 {
                     return Err(Error::Codec);
                 }
+                let book_changes = projection::capture(&state, &next, &self.config, tx.at)?;
                 state = next;
                 history.push(Accepted {
                     tx,
                     bytes: tx_bytes,
                     receipt,
                     head: frame.head,
+                    book_changes,
                 });
             }
             r.done()?;
@@ -387,6 +391,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             return Err(Error::Limit);
         }
         let (state, receipt) = self.state.advance(&tx)?;
+        let book_changes = projection::capture(&self.state, &state, &self.config, tx.at)?;
         let mut w = wire::Writer::new(11);
         w.raw(&ENGINE_REVISION.to_be_bytes());
         w.blob(&bytes);
@@ -436,6 +441,7 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             bytes,
             receipt: receipt.clone(),
             head: self.head,
+            book_changes,
         });
         Ok(Committed {
             head: self.head,

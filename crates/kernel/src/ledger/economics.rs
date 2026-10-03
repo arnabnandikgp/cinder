@@ -142,6 +142,21 @@ pub(super) struct FundingRecord {
     rounding_residual: QuoteAtoms,
 }
 
+/// Private projection of one owner's frozen funding, never other inventory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FundingView {
+    /// Internal provenance; never expose native identities through the API.
+    pub boundary: EventKey,
+    /// Configured market.
+    pub market: MarketUnit,
+    /// Actual frozen eligible lots.
+    pub lots: i64,
+    /// Recognized allocation, including qualified zero; None is unknown.
+    pub payment: Option<QuoteAtoms>,
+    /// Allocation settled to cash, not a second earning.
+    pub settled: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ExecutionReport {
     pub(super) key: EventKey,
@@ -151,6 +166,22 @@ pub(super) struct ExecutionReport {
 }
 
 impl Ledger {
+    /// Owner-scoped immutable facts for the trusted private API.
+    pub fn funding_views(&self, owner: Owner) -> Vec<FundingView> {
+        self.funding_records
+            .iter()
+            .filter_map(|r| {
+                let (_, lots) = r.inventory.iter().find(|(o, _)| *o == owner)?;
+                Some(FundingView {
+                    boundary: r.key.clone(),
+                    market: r.market,
+                    lots: *lots,
+                    payment: r.posted.iter().find(|(o, _)| *o == owner).map(|(_, p)| *p),
+                    settled: r.settled,
+                })
+            })
+            .collect()
+    }
     pub(super) fn apply_economics(
         &mut self,
         key: &RecordKey,

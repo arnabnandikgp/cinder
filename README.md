@@ -35,8 +35,11 @@ checks is not evidence of complete liabilities or full solvency.
 P18 adds protected-journal wallet/agent authorization, account-private operation
 views and an exact-integer client SDK. P19 adds a runnable TLS 1.3 relay/service
 slice and attestation-gated Node channel, tested with explicit local fixtures.
-Actual Nitro/NSM/key-release qualification remains P20; no deployed private API,
-plaintext fallback or live trading readiness is implied.
+P20's bounded hardware qualification is merged; it does not establish live native
+trading or qualify a later changed image. The open P21A stack adds shared browser/
+Node confidential HTTP/WebSocket, signed bounded reads and private subscriptions,
+tested offline. No public endpoint, plaintext fallback or live trading readiness
+is implied; changed-image/native qualification remains P23.
 
 ## Start here
 
@@ -65,6 +68,8 @@ plaintext fallback or live trading readiness is implied.
 23. [Funding coordinator and exact round-trip settlement](docs/architecture/0016-funding-coordinator.md)
 24. [Private API, grants and operation semantics](docs/architecture/0018-private-api.md)
 25. [Attested TLS, service entrypoints and trust boundaries](docs/architecture/0019-attested-service.md)
+26. [Confidential HTTP/WebSocket and browser attestation](docs/architecture/0021-confidential-web-api.md)
+27. [Exact private reads, paging and WebSocket delivery](docs/architecture/private-read-contract.md)
 
 Resume implementation from the current handoff in the tracker.
 Ignored `work/` contains the original local research; it is not a CI dependency.

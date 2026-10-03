@@ -8,8 +8,8 @@ approved deployment policy. It is not a Pacifica URL-only proxy or native signer
 Inject wallet/agent `signMessage` and a **trusted confidential channel**. P19 adds
 the Node automation profile below; the semantic client still supports a separately
 qualified channel port. A caller-created object with matching fields is not proof
-of confidentiality. No plaintext fallback or browser HTTP/WebSocket transport is
-provided. See [ADR 0018](../../docs/architecture/0018-private-api.md).
+of confidentiality. There is no plaintext fallback. P21A adds the bounded web
+profile below, including bounded private reads and updates. See [ADR 0018](../../docs/architecture/0018-private-api.md).
 
 ```ts
 import { AttestedNodeChannel, nativeQuoteVerifier } from './src/node-channel.ts';
@@ -52,11 +52,66 @@ alone is withdrawable equity. Mutations return protected typed errors on known
 failure; an unknown transport outcome throws a redacted reconciliation warning.
 
 No automatic retry, public account dump, alternate payout recipient, agent payout,
-raw cancel-all, batch/modify/admin endpoint, website or network subscription ships.
+raw cancel-all, batch/modify/admin endpoint or website ships.
 Grants currently permit one market/key, bounded accepted-order counts and scoped
 permissions. Revocation invalidates all account grants, not an escaped venue order.
 
 After installing pinned Node 24.21.0 and building `cinder-service` with
 `--all-features --locked --offline`: `npm ci --ignore-scripts`, then
 `node ../../scripts/check-private-client.mjs`. Tests are offline and use synthetic
-keys/public wire vectors, not configured wallets. Runtime npm dependencies: none.
+keys/public wire vectors, not configured wallets. The Node TLS path has no runtime
+npm dependencies.
+
+## Confidential browser/Node HTTP and WebSocket
+
+`src/browser.ts` is the public web bundle entry. `connectWebChannel` fixes AWS-only
+trust and implements the same `ConfidentialChannel` consumed by `PrivateClient`.
+Load the generated `channel.js`/`channel_bg.wasm` from your trusted client
+distribution and pass its initialized module as `core`, plus an independently
+selected release policy and `baseUrl`. There is no public quote-verifier/root/
+approval option. Do not load the core or policy from the attestation response.
+
+```ts
+import init, * as core from './channel.js';
+import { connectWebChannel, PrivateClient } from './sdk.js';
+await init();
+const channel = await connectWebChannel({
+  baseUrl: configuredHttpsOrigin, policy: independentlyApprovedRelease, core,
+});
+// Inject the same walletSigner/account/domain configuration shown above.
+```
+
+The web bundle includes pinned PKI.js/ASN1.js verification and the WASM core uses
+pinned upstream Snow. No remote verification service decides trust. Full offline
+build and actual Chrome/Node process checks: `node tools/web-channel/check.mjs`
+after [tool preparation](../../tools/web-channel/README.md). It generates ignored
+`pkg/sdk.js`, `pkg/channel.js` and `pkg/channel_bg.wasm`. Fixture trust is separate
+test code, not a public SDK option.
+
+No package release, terminal/onboarding, live endpoint or fresh Nitro qualification
+is claimed. See [ADR 0021](../../docs/architecture/0021-confidential-web-api.md).
+
+Pass `transport: 'websocket'` in the same connection options for encrypted socket
+commands/subscriptions. HTTP is the default; both use the same signed operations.
+
+```ts
+const page = await client.request({
+  id: queryId, epoch: currentAccountEpoch, expiresAt: authExpiry,
+  command: { kind: 'read', query: { family: 'operations', limit: 32 } },
+});
+const updates = await client.subscribe({
+  id: subscriptionId, epoch: currentAccountEpoch, expiresAt: authExpiry,
+  query: { family: 'updates', limit: 64 },
+});
+for await (const snapshot of updates) {
+  // Replace this page. Fetch further rows with its family and next cursor.
+  // Failure requires fresh attestation and a zero-cursor snapshot, not replay.
+}
+```
+
+Streams coalesce replacement pages, not every intermediate notification. Current
+READ authority/epoch is checked even while idle. Returning the iterator closes
+the channel. Finite records, 120-second sessions and a 32-update/1-MiB consumer
+queue require reattestation/resnapshot. No view is a withdrawal promise.
+The [exact read/delivery contract](../../docs/architecture/private-read-contract.md)
+defines rows, time, retention, unavailable fields and reconciliation boundaries.

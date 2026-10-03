@@ -44,6 +44,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(5);
 // public server never accepts a caller-supplied raw descriptor or fake socket.
 pub(crate) trait Socket: Read + Write + Send + Sized + 'static {
     fn prepare(&self) -> std::io::Result<()>;
+    fn idle(&self) -> std::io::Result<()>;
     fn try_clone(&self) -> std::io::Result<Self>;
     fn shutdown(&self, how: Shutdown) -> std::io::Result<()>;
 }
@@ -53,6 +54,9 @@ pub(crate) trait Listener {
     fn accept(&self) -> std::io::Result<Self::Stream>;
 }
 impl Socket for TcpStream {
+    fn idle(&self) -> std::io::Result<()> {
+        self.set_read_timeout(Some(Duration::from_secs(120)))
+    }
     fn prepare(&self) -> std::io::Result<()> {
         self.set_nonblocking(false)?;
         self.set_read_timeout(Some(IO_TIMEOUT))?;
@@ -101,6 +105,15 @@ pub struct Session {
     domain: Domain,
     binding: [u8; 32],
     expires: u64,
+}
+impl Session {
+    pub(crate) fn established(domain: Domain, binding: [u8; 32], expires: u64) -> Self {
+        Self {
+            domain,
+            binding,
+            expires,
+        }
+    }
 }
 impl ConfidentialChannel for Session {
     fn domain(&self) -> Domain {
@@ -263,7 +276,7 @@ impl Lifetime {
             worker: Some(worker),
         }
     }
-    fn ready(&self) {
+    pub(crate) fn ready(&self) {
         let (l, c) = &*self.state;
         if let Ok(mut s) = l.lock() {
             s.1 = true;

@@ -45,6 +45,11 @@ use zeroize::Zeroizing;
 
 /// Local OS wall clock, not a qualified enclave clock.
 pub struct FixtureClock;
+impl cinder_web_channel::Entropy for FixtureClock {
+    fn fill(&self, output: &mut [u8]) -> Result<(), cinder_web_channel::Error> {
+        openssl::rand::rand_bytes(output).map_err(|_| cinder_web_channel::Error)
+    }
+}
 impl Clock for FixtureClock {
     fn now(&self) -> Result<u64, Error> {
         u64::try_from(
@@ -61,6 +66,25 @@ pub struct FixtureAttester {
     key: PKey<Private>,
     leaf: X509,
     root: X509,
+}
+impl crate::web::Attester for FixtureAttester {
+    fn web_quote(
+        &self,
+        policy: &Policy,
+        fields: &[u8; 128],
+        expires: u64,
+        _now: u64,
+    ) -> Result<Vec<u8>, Error> {
+        let context = cinder_web_channel::profile::context(&policy.encode(), fields, expires)
+            .map_err(|_| Error)?;
+        self.quote_fields(
+            policy,
+            FixtureClock.now()?,
+            &fields[96..],
+            &fields[..32],
+            &cinder_web_channel::profile::user_data(&context),
+        )
+    }
 }
 impl FixtureAttester {
     /// Fresh disposable CA, not a static secret/root accepted by production.

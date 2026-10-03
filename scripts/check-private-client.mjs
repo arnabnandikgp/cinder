@@ -6,4 +6,4 @@ const expected = readFileSync(new URL('../.node-version', import.meta.url), 'utf
 if (process.versions.node !== expected) throw new Error(`Use Node ${expected}`);
 const root = new URL('../', import.meta.url);
 execFileSync(process.execPath, ['clients/private/node_modules/typescript/bin/tsc', '--project', 'clients/private/tsconfig.json'], { cwd: root, stdio: 'inherit' });
-execFileSync(process.execPath, ['--test', 'clients/private/tests/client.test.ts', 'clients/private/tests/transport.test.ts'], { cwd: root, stdio: 'inherit' });
+execFileSync(process.execPath, ['--test', 'clients/private/tests/client.test.ts', 'clients/private/tests/transport.test.ts', 'clients/private/tests/stream-assertions.test.ts'], { cwd: root, stdio: 'inherit' });

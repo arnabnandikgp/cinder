@@ -41,6 +41,8 @@ pub struct Grant {
 /// Supported strategy surface; unsupported admin/batch/modify actions do not decode.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Command {
+    /// Versioned owner-scoped read projection; no durable financial mutation.
+    Read(crate::reads::Query),
     /// Fresh, authenticated private snapshot; not a public account dump.
     View,
     /// Current state of a stable private operation identity.
@@ -101,10 +103,14 @@ pub enum Command {
 impl Command {
     /// Reads have no durable financial side effect and do not consume operation IDs.
     pub fn is_read(&self) -> bool {
-        matches!(self, Self::View | Self::Operation(_))
+        matches!(self, Self::View | Self::Operation(_) | Self::Read(_))
     }
     pub(crate) fn encode(&self, w: &mut Writer) {
         match self {
+            Self::Read(q) => {
+                w.byte(8);
+                q.encode(w);
+            }
             Self::View => w.byte(0),
             Self::Operation(id) => {
                 w.byte(1);
@@ -177,6 +183,7 @@ impl Command {
     }
     fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
         Ok(match r.byte()? {
+            8 => Self::Read(crate::reads::Query::decode(r)?),
             0 => Self::View,
             1 => Self::Operation(RequestId::new(r.array()?).map_err(|_| Error::Invalid)?),
             2 => {

@@ -1,0 +1,11 @@
+{
+  "name": "cinder-web-channel-qualification",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.21.0" },
+  "dependencies": {
+    "asn1js": "3.0.10",
+    "pkijs": "3.4.1"
+  },
+  "devDependencies": { "esbuild": "0.28.2" }
+}

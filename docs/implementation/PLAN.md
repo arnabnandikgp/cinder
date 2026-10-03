@@ -514,7 +514,8 @@ the bounded P20 matrix, including actual recipient/upstream negatives, concurren
 CAS, orphan/lost-ack recovery, debug refusal, natural loaded-lease and actual
 credential expiry/restart refusal. Native capabilities remain disabled: this is
 runtime qualification, not an approved production topology or P23 trading test.
-P20 remains in progress pending review/merge.
+P20 is closed after the reviewed, green-head merge recorded in TRACKER. Historical
+hardware receipts remain exact-source; later source changes qualify separately.
 
 - [x] Venue TLS/auth terminates inside enclave; parent cannot read payloads or replace upstream responses undetected. Actual paper-origin TLS-only negatives pass; native credentials/actions remain gated off until P23.
 - [x] Wrong measurement/debug/replayed release denies keys; old loaded keys and outstanding capabilities are fenced, not merely KMS-disabled. Actual retained-head epoch, natural lease and issued STS expiry/restart checks pass; no native capability was enabled or escaped in this qualification.
@@ -537,18 +538,55 @@ fee/price bounds and payout-recipient restrictions; no second authority/replay s
 Define finite message/queue/session limits, revocation checks, account-local stream
 ordering and snapshot/gap recovery without exposing global journal sequence. HTTP
 and WebSocket are alternate ingress paths, not independent financial engines.
-First scope is existing commands plus private updates; no batch/modify/trigger,
+Scope is existing commands, approved bounded reads and private updates; no batch/modify/trigger,
 public market-data feeds, self-service onboarding, new payout recipient or automatic
 uncertain-order retry. Stop for review if the proposed cryptographic/authority
 profile changes an approved security guarantee. No live customer release is implied.
-The [API comparison and scope proposal](API_SCOPE.md) distinguishes current commands,
-recommended bounded account/history reads and separate execution enhancements.
-Finalize that surface before coding; richer reads are proposed, not automatically
-approved by the sequencing change. Define journal freeze/writer-epoch and API
+The [approved API scope](API_SCOPE.md) distinguishes current commands, bounded
+account/history reads and separate execution enhancements. The user approved
+these recommendations, including richer reads and scoped agents, on 2026-10-03.
+Finalize exact schemas and transport security before coding. Define journal freeze/writer-epoch and API
 availability behavior now so P21 can later integrate without a second authority
 store. Do not implement fake claim/recovery endpoints to satisfy a transport test.
 Evidence: W06, ADR 0018/0019/0020, P18/P19 accepted history and tracked Rust/TypeScript
 protocol vectors; runnable offline browser/Node transport and adversarial process tests.
+
+Bounded split: [ADR 0021](../architecture/0021-confidential-web-api.md) records the
+2026-10-03 approval for local standard Noise NK qualification in a separate
+Rust/WASM tool workspace. The first PR carries the contract, candidate dependency
+policy and native/actual-browser tests; it neither links the candidate into the
+shipping service nor supplies independent browser attestation. Subsequent slices
+own the selected dependency/verifier and exact binding profile, HTTP integration,
+read projections/WebSocket and joined acceptance. Keep P21A in progress throughout;
+the four phase criteria below remain open after the first slice.
+
+PR grouping clarification, 2026-10-03: milestone boundaries are not mandatory PR
+boundaries. After #47 (contract/core) and #48 (browser verifier/binding), target
+**two further stacked PRs**: (A) dependency/transport hardening, server quotes,
+SDK session safeguards and HTTP integration; (B) owner-scoped reads, WebSocket
+commands/updates and joined offline acceptance. Keep the submilestones/evidence
+visible in TRACKER, but include their tests and documentation in the owning PR
+rather than creating separate bookkeeping or test-only PRs. Split further only
+for a material security choice or a genuinely unreviewable implementation, and
+explain the reason. This grouping does not waive any criterion. Stop for review
+before selecting a dependency fork or changing the approved security profile.
+Provider decision, 2026-10-03: use pinned upstream Snow 0.10.0 for the bounded
+offline V1 API implementation, not a custom handshake or local crypto fork.
+Its opaque-secret erasure limitation is retained in ADR 0021. It does not block
+synthetic-data offline integration; an explicit hardening/security disposition
+remains required before customer use. Do not treat this decision as erasure,
+audit or production qualification, or close any phase criterion without evidence.
+P21A completion is offline implementation/acceptance; fresh changed-image Nitro
+and actual venue/chain workflow qualification remain P23, not a new P21A PR.
+HTTP implementation: shared Rust/WASM core in `crates/web-channel`, enclave ingress
+in `crates/service::web`, fixed-target Node built-in HTTP relay in `services/web-relay`
+and `clients/private`'s AWS-only browser/Node SDK. ADR 0021 defines exact bounds
+and framing; the tool runner joins real processes to the existing journal.
+The final grouped slice adds signed owner-scoped reads, immutable replay-derived
+book history, the same commands over WebSocket and bounded replacement-page
+subscriptions. The [versioned read/delivery contract](../architecture/private-read-contract.md)
+defines exact schemas/provenance/bounds and Node/actual-browser acceptance.
+Implemented/tested criteria remain open for review and bottom-up stack merge.
 
 - [ ] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
 - [ ] Both transports reach the same command authorization, durable IDs, reservations and journal; exact retries reconcile, conflicting IDs reject, and agents cannot obtain payout or administrative authority.

@@ -267,6 +267,262 @@ fn receipt(response: Response) -> cinder_api::Receipt {
 fn owner_request(n: u8, command: Command) -> Request {
     request(n, 1, 1, command, &wallet(1), [8; 32])
 }
+fn query(kind: u8, limit: u16, cursor: [u8; 40]) -> Command {
+    Command::Read(reads::Query {
+        kind,
+        limit,
+        cursor,
+    })
+}
+fn page(r: Response) -> reads::Page {
+    match r {
+        Response::Read(p) => p,
+        _ => panic!("expected private page"),
+    }
+}
+
+#[test]
+fn read_families_are_signed_scoped_bounded_and_do_not_commit() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    let head = s.head();
+    for kind in 0..reads::KINDS {
+        let req = owner_request(90, query(kind, 64, [0; 40]));
+        assert_eq!(
+            Request::decode(req.encode().unwrap().as_bytes()).unwrap(),
+            req
+        );
+        let p = page(call(&mut s, &req).unwrap());
+        assert_eq!(p.kind, kind);
+        assert!(p.rows.len() <= 64);
+        assert!(p.revision.iter().any(|b| *b != 0));
+        assert!(Response::Read(p).encode().unwrap().as_bytes().len() < 1_048_576);
+        let foreign = request(90, 2, 1, query(kind, 64, [0; 40]), &wallet(1), [8; 32]);
+        assert_eq!(call(&mut s, &foreign), Err(Error::Unauthorized));
+    }
+    assert_eq!(s.head(), head);
+    for (kind, limit) in [(10, 1), (0, 0), (0, 65)] {
+        assert_eq!(
+            call(&mut s, &owner_request(91, query(kind, limit, [0; 40]))),
+            Err(Error::Invalid)
+        );
+    }
+}
+#[test]
+fn read_cursors_bind_own_query_and_changed_snapshot_but_not_other_activity() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    call(&mut s, &owner_request(30, grant(&wallet(2)))).unwrap();
+    call(&mut s, &owner_request(40, order())).unwrap();
+    let first = page(call(&mut s, &owner_request(90, query(2, 1, [0; 40]))).unwrap());
+    assert_ne!(first.next, [0; 40]);
+    let other = request(31, 2, 1, grant(&wallet(1)), &wallet(2), [8; 32]);
+    call(&mut s, &other).unwrap();
+    let same = page(call(&mut s, &owner_request(90, query(2, 1, [0; 40]))).unwrap());
+    assert_eq!(same, first);
+    let second = page(call(&mut s, &owner_request(90, query(2, 1, first.next))).unwrap());
+    assert_eq!(second.rows.len(), 1);
+    assert_eq!(
+        call(&mut s, &owner_request(90, query(3, 1, first.next))),
+        Err(Error::Conflict)
+    );
+    call(
+        &mut s,
+        &owner_request(
+            42,
+            Command::Cancel {
+                target: RequestId::new([40; 32]).unwrap(),
+                attempt: AttemptId::new([43; 32]).unwrap(),
+                good_until: 90,
+            },
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        call(&mut s, &owner_request(90, query(2, 1, first.next))),
+        Err(Error::Conflict)
+    );
+    drop(s);
+    let mut s = open(&t);
+    let a = page(call(&mut s, &owner_request(90, query(2, 64, [0; 40]))).unwrap());
+    let mut q = request(90, 1, 1, query(2, 64, [0; 40]), &wallet(1), [9; 32]);
+    q.signature = wallet(1).sign(&q.message()).to_bytes();
+    assert_eq!(page(call(&mut s, &q).unwrap()), a);
+}
+#[test]
+fn read_agent_directory_and_history_do_not_leak_other_grant_keys() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    let agent = wallet(2);
+    let second = SigningKey::from_bytes(&[77; 32]);
+    call(&mut s, &owner_request(30, grant(&agent))).unwrap();
+    call(&mut s, &owner_request(31, grant(&second))).unwrap();
+    let owner = page(call(&mut s, &owner_request(90, query(7, 64, [0; 40]))).unwrap());
+    assert_eq!(owner.rows.len(), 2);
+    for kind in [2, 7] {
+        let q = request(90, 1, 1, query(kind, 64, [0; 40]), &agent, [8; 32]);
+        let p = page(call(&mut s, &q).unwrap());
+        assert!(p.rows.iter().all(|r| {
+            !r.as_bytes()
+                .windows(32)
+                .any(|b| b == second.verifying_key().to_bytes())
+        }));
+        if kind == 7 {
+            assert_eq!(p.rows.len(), 1);
+        }
+    }
+    call(&mut s, &owner_request(32, Command::Revoke)).unwrap();
+    assert_eq!(
+        call(
+            &mut s,
+            &request(90, 1, 1, query(7, 64, [0; 40]), &agent, [8; 32])
+        ),
+        Err(Error::Unauthorized)
+    );
+}
+#[test]
+fn read_history_includes_ingested_book_effects_and_replays_without_duplicate_fills() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    call(&mut s, &owner_request(40, order())).unwrap();
+    let attempt = AttemptKey {
+        request: RequestKey {
+            domain: config().domain,
+            account: user(1),
+            request: RequestId::new([40; 32]).unwrap(),
+        },
+        attempt: AttemptId::new([40; 32]).unwrap(),
+    };
+    commit(
+        &mut s,
+        81,
+        vec![],
+        vec![
+            Control::Order(orders::Action::Prepare { attempt }),
+            Control::Expose(attempt),
+        ],
+    );
+    let fill = event(
+        81,
+        Change::Economics(EconomicChange::Execution {
+            target: FillTarget::Customer(attempt),
+            quantity: q(1),
+            price: p(100),
+            fee: cash(1),
+            pnl: None,
+        }),
+    );
+    commit(&mut s, 82, vec![fill.clone()], vec![]);
+    commit(&mut s, 83, vec![fill], vec![]);
+    let f = page(call(&mut s, &owner_request(90, query(4, 64, [0; 40]))).unwrap());
+    assert_eq!(f.rows.len(), 1);
+    let h = page(call(&mut s, &owner_request(90, query(6, 64, [0; 40]))).unwrap());
+    assert_eq!(h.rows.len(), 2);
+    let head = s.head();
+    assert_eq!(
+        s.customer_book_history(user(1))
+            .unwrap()
+            .last()
+            .unwrap()
+            .after
+            .cash()
+            .atoms(),
+        1999
+    );
+    assert_eq!(s.head(), head);
+    drop(s);
+    let mut s = open(&t);
+    assert_eq!(
+        page(call(&mut s, &owner_request(90, query(4, 64, [0; 40]))).unwrap()),
+        f
+    );
+    assert_eq!(
+        page(call(&mut s, &owner_request(90, query(6, 64, [0; 40]))).unwrap()),
+        h
+    );
+}
+#[test]
+fn derived_risk_checks_read_clock_without_mutating_or_silently_refreshing_marks() {
+    let t = Temp::new();
+    let s = seed(&t);
+    let before = s.state().unwrap().clone();
+    assert!(before.risk_report_at(10).is_ok());
+    assert!(before.risk_report_at(10_000).is_err());
+    assert!(before.read_marks(10_000).is_err());
+    assert_eq!(s.state().unwrap(), &before);
+}
+#[test]
+fn read_funding_unknown_zero_and_settlement_are_distinct_and_owner_scoped() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    let version = s.state().unwrap().ledger().version();
+    commit(
+        &mut s,
+        84,
+        vec![event(
+            84,
+            Change::Economics(EconomicChange::FundingBoundary {
+                market: q(0).unit(),
+                expected_version: version,
+            }),
+        )],
+        vec![],
+    );
+    let unknown = page(call(&mut s, &owner_request(90, query(5, 64, [0; 40]))).unwrap());
+    assert_eq!(unknown.rows.len(), 1);
+    // market(36) + eligible lots(8), then private allocation's Option tag.
+    assert_eq!(unknown.rows[0].as_bytes()[44], 0);
+    assert_eq!(unknown.rows[0].as_bytes()[45], 0);
+    commit(
+        &mut s,
+        85,
+        vec![event(
+            85,
+            Change::Economics(EconomicChange::FundingInputs {
+                boundary: key(84),
+                rate: Some(cinder_kernel::ledger::economics::FundingRate {
+                    numerator: cash(0),
+                    denominator: 1,
+                    rounding: cinder_kernel::math::Rounding::TowardZero,
+                }),
+                native: Some(cash(0)),
+            }),
+        )],
+        vec![],
+    );
+    let known = page(call(&mut s, &owner_request(90, query(5, 64, [0; 40]))).unwrap());
+    assert_eq!(known.rows[0].as_bytes()[44], 1);
+    assert_eq!(&known.rows[0].as_bytes()[45..61], &[0; 16]);
+    assert_eq!(known.rows[0].as_bytes()[61], 0);
+    commit(
+        &mut s,
+        86,
+        vec![event(
+            86,
+            Change::Economics(EconomicChange::FundingSettlement {
+                boundary: key(84),
+                native: cash(0),
+            }),
+        )],
+        vec![],
+    );
+    let settled = page(call(&mut s, &owner_request(90, query(5, 64, [0; 40]))).unwrap());
+    assert_eq!(settled.rows[0].as_bytes()[61], 1);
+    assert_eq!(
+        s.state()
+            .unwrap()
+            .ledger()
+            .funding_views(Owner::Customer(user(1)))[0]
+            .payment,
+        Some(cash(0))
+    );
+    drop(s);
+    let mut s = open(&t);
+    assert_eq!(
+        page(call(&mut s, &owner_request(90, query(5, 64, [0; 40]))).unwrap()),
+        settled
+    );
+}
 fn grant(agent: &SigningKey) -> Command {
     Command::Grant(Grant {
         key: agent.verifying_key().to_bytes(),
