@@ -48,6 +48,17 @@ The original 233 research groups remain separate evidence, not production covera
 
 ## Files and packages
 
+### Confidential browser/Node HTTP (P21A)
+
+`crates/web-channel` owns the pinned Snow core; the isolated WASM tool compiles
+the same source. `crates/service::web` invokes the existing private handler and
+journal, while `services/web-relay` routes public framing/ciphertext only. See
+[HTTP architecture](architecture/0021-confidential-web-api.md),
+[SDK](../clients/private/README.md) and
+[offline browser preparation](../tools/web-channel/README.md). The root runner
+includes the relay/Rust regressions; the separate browser job runs shared actual
+Node/Chrome SDK process workflows. No live endpoint or hardware claim follows.
+
 ### Solana custody checks (P15)
 
 `programs/` is a separate Anchor 1.2.0 Cargo workspace with its own lockfile;

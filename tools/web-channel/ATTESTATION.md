@@ -122,7 +122,10 @@ Tests validate this historical AWS path at capture time and reject its expired
 leaf later. That evidence verifies actual certificate shapes, not a current web
 quote, running application measurement or hardware session.
 
-The root shipping Cargo graph and P19 Node TLS are unchanged. The isolated Rust
+The original verifier-only slice left the root shipping graph unchanged. P21A's
+HTTP slice now links the SAME core source from `crates/web-channel` into the
+service and adds bounded browser/Node SDK integration. P19 Node TLS is unchanged.
+The isolated Rust
 graph still has 43 registry packages; SHA2 0.10.9 is now also an exact direct edge
 for canonical binding, with no new package/feature. NPM manifest/lock SHA-256 and
 all registry integrity/source/lifecycle changes are guarded. Runtime candidates:

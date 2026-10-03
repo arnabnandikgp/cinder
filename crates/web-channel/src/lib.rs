@@ -1,11 +1,16 @@
-//! Bounded shared Noise qualification core, NOT an attestation verifier or API.
-//! The fixture harness independently supplies responder-key trust and context.
-//! No financial identities, signer, journal, persistence, or HTTP listener exists.
+//! Bounded shared Noise core, not an attestation verifier or financial authority.
+//! Clients must independently verify the exact responder key and quote context.
+//! The same source is compiled by the native service and isolated WASM build.
 use snow::{Builder, HandshakeState, TransportState};
 use zeroize::Zeroizing;
 
+mod entropy;
 /// Canonical public attested-context encodings; qualification, not a verifier.
 pub mod profile;
+/// Authenticated correlation and complete bounded response assembly.
+pub mod records;
+/// Explicit responder entropy; production uses NSM without platform fallback.
+pub use entropy::Entropy;
 
 /// The only qualification suite; no negotiation, modifiers, or crypto fallback.
 pub const PROFILE: &str = "Noise_NK_25519_ChaChaPoly_SHA256";
@@ -40,6 +45,47 @@ pub struct Endpoint {
     received: u32,
 }
 impl Endpoint {
+    /// Irreversibly discard this session after a framing/delivery failure.
+    /// This is a state-access boundary, not proof of opaque-secret erasure.
+    pub fn close(&mut self) {
+        self.phase = Phase::Closed;
+    }
+    /// Server key generation AND handshake entropy use this exact source. No
+    /// RNG fallback, fixed testing key or custom cryptographic primitive exists.
+    pub fn server_with_entropy(
+        entropy: std::sync::Arc<dyn Entropy>,
+        context_for_key: impl FnOnce(&[u8]) -> Result<[u8; 32], Error>,
+    ) -> Result<Self, Error> {
+        let key = entropy::builder(&[1; 32], entropy.clone())?
+            .generate_keypair()
+            .map_err(|_| Error)?;
+        let private = Zeroizing::new(key.private);
+        let context = context_for_key(&key.public)?;
+        let inner = entropy::builder(&context, entropy)?
+            .local_private_key(&private)
+            .map_err(|_| Error)?
+            .build_responder()
+            .map_err(|_| Error)?;
+        Ok(Self {
+            phase: Phase::ServerWait(inner),
+            public: key.public,
+            binding: None,
+            sent: 0,
+            received: 0,
+        })
+    }
+    /// Reserve a whole response's record budget before sealing any part. An
+    /// insufficient budget closes the session instead of emitting a partial reply.
+    pub fn require_records(&mut self, count: u32) -> Result<(), Error> {
+        if !self.ready()
+            || count == 0
+            || self.sent.checked_add(count).is_none_or(|n| n > MAX_RECORDS)
+        {
+            self.phase = Phase::Closed;
+            return Err(Error);
+        }
+        Ok(())
+    }
     fn builder(context: &[u8]) -> Result<Builder<'_>, Error> {
         if context.len() != 32 || context.iter().all(|b| *b == 0) {
             return Err(Error);

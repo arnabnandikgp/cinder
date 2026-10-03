@@ -37,6 +37,48 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+Current work: `tee/p21a-http-sdk` in `cinder-tee`, implemented above P21A.2a #48
+at `df1e71f9110c4c4b940c689db4540839656ec473` through native stack #49.
+P21A.1 #47 is at `9aefdd9d3478870ccf58b3cc1cf1ade449f13cd3`; trunk remains
+`product/tee-v1` at `76f32956e3ee5d31707ec1bf7fa81f8711666c97`.
+All four hosted jobs pass at that #48 source-fix head, independently checked
+before this decision-doc update; this is not CI for subsequent changes.
+
+The user selected pinned upstream Snow 0.10.0 for V1 after the alternatives
+research. Continue bounded offline integration with synthetic data; no custom
+handshake or crypto fork. Opaque DH/cipher/chaining-key erasure is not qualified
+and must remain explicitly documented. Customer use requires an explicit
+hardening/security disposition and the applicable production/release gates.
+Do not claim a wrapper drop or browser teardown fixes that limitation.
+
+The shared core is now in `crates/web-channel`; the isolated WASM tool compiles
+the exact same source. The service adds NSM-only responder entropy, purpose-bound
+web quotes and a bounded ingress to the existing P18 Session/Handler/journal.
+The fixed-target parent Node HTTP relay handles public framing/ciphertext only.
+The shared browser/Node SDK fixes AWS-root trust and supplies complete correlated
+replies, finite records, deadlines/expiry and no ciphertext retry. P19 TLS remains
+supported; this changes no financial, custody or margin policy.
+
+Local full pinned workspace and native/WASM/verifier/actual-browser runners pass.
+New checks include 6 core assembly/entropy regressions, 3 service expiry/fence/
+clock failures, bounded relay regressions, and 8 actual HTTP/SDK process groups
+each in Node 24.21.0 and Chrome 154.0.8037.93. The HTTP groups cover all eight
+signed commands, agents/owner-only authority/revocation, cross-account refusal,
+fresh boots, lost committed replies, restart/dedupe, finite records and witness
+failure. Test data, quote root, wallet binding and storage key are disposable;
+there are no actual fills/payouts or live funds. Hosted results for the new HTTP
+head are pending publication, not inherited from #48.
+
+Next: publish the reviewed-scope HTTP/shared SDK slice in native stack #49, then
+one further grouped PR for authorized reads/WebSocket + joined offline acceptance.
+All four P21A criteria remain open until complete review/merge. API → Mintlify →
+recovery ordering is unchanged. Fresh changed-image/NSM/native workflow qualification
+remains P23. No AWS, external venue, configured wallet, container, subagent or
+merge was used for this implementation.
+Preserve unrelated `docs/user-journey.md`/`stays/` and ignored research.
+
+### Historical pre-provider-selection handoff (superseded)
+
 Current work: `tee/p21a-browser-attestation` in `cinder-tee`, stacked above
 P21A.1 #47 at `9aefdd9d3478870ccf58b3cc1cf1ade449f13cd3`; trunk remains
 `product/tee-v1` at `76f32956e3ee5d31707ec1bf7fa81f8711666c97`.
@@ -1588,8 +1630,8 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 | --- | --- | --- | --- |
 | 1 — Contract and isolated core qualification | in progress | Reviewed contract plus offline native/browser vector and hostile-wire evidence, then merge; not attestation or a shipping API. | #47 |
 | 2a — Browser verifier and binding qualification | in progress | Independent AWS/COSE/X.509 validation in a tested strict subset, exact attested channel vectors and native differential fixtures; then reviewed merge, not a shipping/hardware claim. | #48 |
-| 2b — Secret lifetime and transport hardening | open | Reviewed dependency secret erasure, qualified entropy, server quote generation and SDK lifetime/fencing/assembly; no opaque-key wipe or worker-teardown shortcut. | Next PR, with 3 |
-| 3 — HTTP and shared SDK/service | open | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation. | Next PR, with 2b |
+| 2b — Secret lifetime and transport hardening | in progress | Selected upstream Snow with explicit erasure limitation, NSM entropy/quote adapters and offline SDK lifetime/fencing/assembly; actual hardware and customer-release hardening disposition remain separate. | HTTP PR, with 3; publication pending |
+| 3 — HTTP and shared SDK/service | in progress | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation; offline evidence passes, review/merge pending. | HTTP PR, with 2b; publication pending |
 | 4 — Authorized reads and WebSocket | open | Own-account projections/paging and bounded revocable committed streams; no native pooled-query/global-sequence leakage. | Following PR, with 5 |
 | 5 — Joined adversarial acceptance | open | Both transports satisfy all four parent-phase criteria; then P21A can close after merge. | Following PR, with 4 |
 
@@ -1649,6 +1691,67 @@ P21A.2b dependency/secret-lifetime and remaining transport gates
 before HTTP/SDK integration. Do not close the parent phase or merge automatically.
 PR: https://github.com/arnabnandikgp/cinder/pull/48 (ready; native stack #49 above #47).
 Merge: none.
+
+### P21A provider-selection continuation — 2026-10-03
+
+Work: user selected Snow for V1 after the transport-alternatives research. Recorded
+pinned upstream 0.10.0, shared native/WASM Noise NK, no custom handshake/fork and
+the explicit opaque-secret erasure limitation. Offline implementation with
+synthetic data is permitted; production dependency/security review is not waived.
+Updated PLAN/ADR and the tip handoff; HTTP/WS implementation has not advanced in
+this decision-only continuation. Existing P19 Node TLS is unchanged.
+Verification: #48 source-fix head df1e71f9110c4c4b940c689db4540839656ec473 has all
+four hosted jobs green. Decision-doc foundation validation (27 phases/36 docs),
+all 13 focused validator tests and diff check pass. No fresh crypto, API, SBF or
+hardware receipt is inferred from this selection.
+Unexpected: key-erasure hardening and client-to-enclave confidentiality are
+different requirements. The known cleanup gap remains visible before customer use,
+without holding synthetic-data API integration behind an unselected fork.
+Next: implement P21A.2b/3 on tee/p21a-http-sdk above #48; server web quotes/entropy,
+SDK bounds/lifetime/fencing and HTTP commands over the same financial journal.
+Keep the two-further-PR target and all four parent-phase acceptance gates open.
+PR: none yet for this branch; stack #49 above #48 and #47.
+Merge: none.
+
+### HTTP/shared SDK implementation, 2026-10-03
+
+Work: grouped milestones 2b/3 on `tee/p21a-http-sdk` above #48. Promoted the one
+Noise core into an explicit guarded root package; the WASM workspace compiles its
+source through a frozen manifest path. Added NSM-only RNG resolution and distinct
+web quotes, finite socket/session ingress and exact complete-response framing.
+Explicit `--web` selects the existing enclave runtime, not another financial
+server. Node built-in HTTP/net was selected for a fixed-target opaque parent
+carrier with no new runtime framework dependency. AWS-only web SDK and public
+bundle use the same signed command client and independent browser verifier.
+
+Verification: pinned complete root runner passes default/all-feature Clippy,
+workspace build, debug/release tests, 30 repository guard/vector tests and all
+17 existing SDK/TLS-process tests. Complete isolated runner passes original 12
+native tests per profile, 9 dependency/teardown tests, 2 serial regressions,
+native/WASM Clippy/build and 14 original verifier/channel groups per Node/Chrome.
+New HTTP suite passes eight groups each in actual Node/Chrome, with accepted
+cancel/payout/leverage receipts, scoped agent signatures and revocation, encrypted
+errors, record exhaustion, killed-service restart and no second economic attempt
+after a lost reply. Core maximum-reply/entropy and service fence/clock/expiry
+regressions pass; targeted relay checks pass after the final routing fixes.
+These are synthetic offline qualifications, not fresh NSM web hardware evidence,
+completed venue fills or final customer payout receipts. Full phase stays open.
+
+Unexpected: first local end-to-end test exposed `ServerResponse.close` occurring
+after a successful flush but before promise continuation. The relay now treats
+only an unfinished response as a disconnect, with a regression. Full-run checks
+caught a test tuple complexity warning and a fixture binary path incorrectly
+depending on working directory; both fixed locally before any push. Self-review
+also made fragmented reads linear/bounded, protected existing routing from a
+duplicate public handle and retained a complete final ciphertext reply when the
+enclave closes at the record cap. No financial change or Snow fork was needed.
+
+Next: publish this grouped slice through stack #49 and record actual head/PR/CI
+evidence, then authorized reads/WebSocket with joined offline acceptance in one
+further PR. The user's isolated-margin question was answered from BASELINE/API_SCOPE:
+V1 shares a private customer's collateral across markets within the configured
+pool; leverage is not native/customer isolated margin. No new margin feature was
+authorized or introduced.
 
 ## P21B — Public documentation
 

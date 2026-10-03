@@ -102,6 +102,15 @@ pub struct Session {
     binding: [u8; 32],
     expires: u64,
 }
+impl Session {
+    pub(crate) fn established(domain: Domain, binding: [u8; 32], expires: u64) -> Self {
+        Self {
+            domain,
+            binding,
+            expires,
+        }
+    }
+}
 impl ConfidentialChannel for Session {
     fn domain(&self) -> Domain {
         self.domain
@@ -263,7 +272,7 @@ impl Lifetime {
             worker: Some(worker),
         }
     }
-    fn ready(&self) {
+    pub(crate) fn ready(&self) {
         let (l, c) = &*self.state;
         if let Ok(mut s) = l.lock() {
             s.1 = true;

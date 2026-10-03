@@ -28,9 +28,10 @@ own progress; existing financial/authority rules remain in [BASELINE](BASELINE.m
 | Revoke | Owner advances the account epoch and revokes all old grants. Selective per-agent revocation is not currently implemented. |
 | Leverage | Owner selects private leverage under the configured market cap; this is not a switch to a native isolated-margin account. |
 
-P19/P20 supply the attested Node transport and confidential service. Browser HTTP,
-WebSocket command entry/subscriptions and richer read projections are not yet
-implemented. Current deployment qualification disables native trading/funding/reads;
+P19/P20 supply the attested Node transport and confidential service. P21A's HTTP
+slice adds browser/Node confidential HTTP for these eight commands, tested offline
+against the same handler/journal. WebSocket entry/subscriptions and richer read
+projections remain the next slice. Current deployment qualification disables native trading/funding/reads;
 implemented application semantics do not establish a live brokerage service.
 Account/owner/recipient bindings are currently governed configuration, not a
 self-service account-creation API. Wallet connection alone does not register a

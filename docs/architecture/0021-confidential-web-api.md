@@ -1,7 +1,9 @@
 # P21A: confidential web API contract and transport proposal
 
-Date: 2026-10-03. Product scope and bounded Noise NK qualification approved.
-Status: contract; isolated native/browser core and verifier locally qualified; shipping channel and fresh browser Nitro attestation remain unqualified.
+Date: 2026-10-03. Product scope, Noise NK qualification and upstream Snow for offline V1 implementation approved.
+Status: native/browser core, independent verifier and HTTP/shared-service path
+implemented with offline fixtures; WebSocket/reads and fresh changed-image Nitro
+qualification remain open. Not a customer release.
 This is the implementation contract, not a published or implemented HTTP API.
 Progress belongs in the tracked implementation tracker. No deployment is enabled.
 
@@ -55,12 +57,26 @@ useful as delivery, without trusting it with private plaintext.
 | Standard attested Noise NK | Recommended local qualification: known responder key comes from independent attestation, then a standard two-message handshake supplies the session |
 | Keep P19 Node-only TLS | Safe fallback if the web-channel qualification fails, but does not satisfy approved browser support; report that gap rather than weakening privacy |
 
+### V1 provider decision, 2026-10-03
+
+After comparing HyperLink's audited application encryption, TLS-in-WASM, HPKE
+and alternative Noise providers, the user selected **pinned upstream Snow 0.10.0**
+for V1. Continue the bounded offline HTTP/WebSocket implementation with the shared
+Rust/WASM core; do not introduce a custom handshake or maintain a crypto fork.
+The opaque-secret erasure limitation is explicitly retained, not fixed by this
+decision. Local integration with synthetic accounts/data may proceed; customer
+use still requires an explicit dependency-hardening/security disposition and
+the applicable release gates. No secret-erasure, independent-audit or production
+qualification claim follows from provider selection. Session bounds, attestation,
+key confirmation, fencing and no-parent-plaintext requirements are unchanged.
+
 The earlier local experiment used Snow 0.10.0 and published-vector tests. It did
 not test browsers or an attested application channel. Snow's maintainer explicitly
 states it has not received a formal audit. Those results are provenance, not
 acceptance or a selected production dependency. Confirm/pin the implementation,
-features, dependency graph, entropy, zeroization and browser build in a follow-up
-dependency decision before adding it to the shipping workspace.
+features, dependency graph, entropy and browser build during integration. Record
+the unresolved zeroization boundary explicitly; the V1 decision permits offline
+integration, not customer deployment or a claim that dropping Snow wipes secrets.
 
 ### Proposed handshake safeguards
 
@@ -93,11 +109,12 @@ The current OpenSSL verifier cannot simply be compiled unchanged for browser WAS
 Its complete strict chain/time/strength/root policy needs equivalent browser
 validation and differential negative fixtures; no weaker parser/path fallback.
 
-## Proposed HTTP and WebSocket envelope
+## HTTP envelope and planned WebSocket
 
 Use one private method dispatcher rather than account/market/operation IDs in URLs.
-Proposed routes are `/v1/attestation`, `/v1/session`, `/v1/exchange` and `/v1/ws`.
-Route names are not yet live. Attestation/handshake data is public and bounded;
+Implemented offline routes are `/v1/attestation`, `/v1/session` and `/v1/exchange`;
+`/v1/ws` remains the next slice. These are not public live services.
+Attestation/handshake data is public and bounded;
 the exchange and WebSocket application bodies are ciphertext.
 
 The random outer session handle routes state but grants no account authority.
@@ -125,6 +142,74 @@ Enclave session state is ephemeral and bounded, not a separate replay/financial
 database. Use the existing journal for accepted intents and exact retries.
 Review server-framework/dependency choices separately from the crypto profile.
 Parent routing is fixed to the selected enclave, not a caller-selected host/URL.
+
+### HTTP/shared-service implementation, 2026-10-03
+
+`crates/web-channel` owns the shared Snow state machine, exact public profile and
+authenticated record envelope. The isolated WASM tool's `lib.path` compiles those
+same source files, not a copied JavaScript/native handshake. The root dependency
+guard adds this explicit package and pinned Snow 0.10.0 graph; kernel/financial
+dependencies and the existing command/signature vectors do not change.
+
+`crates/service::web::Server` generates fresh per-session responder and ephemeral
+keys through Snow's unmodified primitives with an explicit NSM-only RNG resolver.
+Boot/handle entropy also comes from NSM. Its separate web-purpose quote includes
+the canonical policy, nonce, boot, handle, responder key and expiry. The local NSM
+adapter checks signature/PCR/context/time; the SDK separately verifies the AWS
+root using independent client time before starting Noise. The runtime never
+falls back to synthetic root/time/RNG providers on missing hardware.
+
+After both confirmation records, the final attestation/transcript binding creates
+the same P18 `Session`. Requests call the same `Handler`, runtime fence, owner/agent
+authorization and protected journal used by TLS. `cinder-enclave --web` explicitly
+selects this ingress on the measured manifest's AF_VSOCK port; no flag keeps P19
+TLS. One runtime/journal is constructed, not one per transport. Changed image,
+actual NSM web quotes and native workflows still require P23 qualification.
+
+The parent uses Node's built-in HTTP/net servers in `services/web-relay`, with no
+framework/crypto dependency or private dispatcher. Its one fixed loopback target
+is the existing opaque Rust relay to AF_VSOCK. Outer production HTTPS remains a
+deployment prerequisite, not a substitute for enclave confidentiality. The SDK
+permits plain HTTP only on loopback for offline tests. No new public AWS listener
+or deployment is created by this slice.
+
+All POST bodies use `application/octet-stream`:
+
+| Route | Request | Response |
+| --- | --- | --- |
+| `/v1/attestation` | Fresh caller-owned nonce, exactly 32 bytes | nonce/boot/handle/key (32 each), expiry (u64 BE), exact signed quote (1–16,384 bytes) |
+| `/v1/session` | handle (32) + one NK/confirmation message | One NK/confirmation message; early private payloads refuse |
+| `/v1/session` disposal | handle (32) + single zero byte | 204; only drops routing/socket state, never a financial action |
+| `/v1/exchange` | handle (32) + one encrypted correlated request | Exact batch of length-prefixed encrypted reply chunks |
+
+Inside authenticated plaintext, a request is `version=1:u8, type=1:u8,
+sequence:u32 BE, existing signed command wire`. A reply chunk is
+`version=1:u8, type=2:u8, sequence:u32 BE, total:u32 BE, offset:u32 BE, bytes`.
+Sequence starts at one for each confirmed session, not a financial operation ID.
+The 14-byte reply header leaves 16,370 data bytes per 16 KiB plaintext record;
+1 MiB needs at most 65 chunks. Each outer chunk is `length:u32 BE + ciphertext`.
+The exact batch bound is `1,048,576 + 65*(14+16+4) = 1,050,786` bytes.
+Complete-response assembly checks sequence, total, contiguous offsets, exact
+chunk sizes and final/trailing bytes. Nothing is returned until all records
+authenticate. Before sealing, the server reserves the entire directional record
+budget; it does not emit an incomplete reply because later chunks exhaust it.
+
+Bounds: eight upstream sessions, 32 parent HTTP sockets, 8 KiB HTTP headers,
+five-second absolute delivery/handshake budgets, 120-second attested lifetime,
+1,024-byte signed command and 128 records per direction including confirmation.
+Delivery timeout is not rollback of an escaped application operation. The SDK
+never queues concurrent requests, retries ciphertext or resumes counters.
+Missing/corrupt/expired replies close the channel; reconnect reattests and queries
+the original economic ID. The parent sees delivery errors only; application
+errors remain encrypted. Fixed paths reject query/private headers/cookies;
+bounded CORS optionally permits one explicitly configured origin, no credentials.
+
+The public `connectWebChannel` fixes AWS-only trust. Rust/WASM and browser verifier
+artifacts must come from the client's trusted distribution, never the response's
+URL/key or an operator approval flag. Node and actual Chrome exercise all eight
+signed commands, agent scope/revocation, cross-account refusal, lost replies,
+process restart, finite budgets and protected-store failure. This is synthetic
+offline evidence, not real fills, funds, root provenance or hardware qualification.
 
 ## Read provenance, bounds and stream semantics
 
@@ -220,8 +305,9 @@ The first PR-sized slice qualifies a shared native/browser Noise core in a separ
 service dependency. Synthetic responder-key trust is explicit; it is not fresh
 Nitro attestation and cannot close P21A's transport criterion. The follow-up adds
 independent browser verifier/context qualification and a historical AWS certificate
-shape fixture; key-erasure hardening, server web-purpose quotes, session lifetime/fencing,
-HTTP handlers, private projections and WebSocket subscriptions remain required.
+shape fixture. The current slice adds shared-service HTTP and bounded SDK/NSM
+adapters. Private projections/WebSocket, release erasure disposition and fresh
+changed-image hardware/native workflow qualification remain required.
 
 Source review found no zeroizing Drop implementations for Snow 0.10.0's default
 DH/cipher key arrays or chaining state. This does not invalidate a known-answer

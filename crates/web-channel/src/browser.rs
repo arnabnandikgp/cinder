@@ -71,4 +71,15 @@ impl BrowserEndpoint {
     pub fn open(&mut self, wire: &[u8]) -> Result<Vec<u8>, JsValue> {
         self.0.open(wire).map(|b| b.to_vec()).map_err(redacted)
     }
+    /// Encrypt an application request with its session-local correlation.
+    pub fn request(&mut self, sequence: u32, body: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let clear = crate::records::request(sequence, body).map_err(redacted)?;
+        self.0.seal(&clear).map_err(redacted)
+    }
+    /// Return only an authenticated COMPLETE correlated application response.
+    pub fn response(&mut self, sequence: u32, batch: &[u8]) -> Result<Vec<u8>, JsValue> {
+        crate::records::read_response(&mut self.0, sequence, batch)
+            .map(|b| b.to_vec())
+            .map_err(redacted)
+    }
 }

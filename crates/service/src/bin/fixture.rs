@@ -8,7 +8,8 @@ fn run() -> Result<(), cinder_service::Error> {
         sync::Arc,
     };
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 3 {
+    let web = args.len() == 4 && args[3] == "--web";
+    if args.len() != 3 && !web {
         return Err(Error);
     }
     let listen: SocketAddr = args[0].parse().map_err(|_| Error)?;
@@ -21,13 +22,8 @@ fn run() -> Result<(), cinder_service::Error> {
     let handler = FixtureHandler::open(Path::new(&args[1]), key, wallet)?;
     let attester = FixtureAttester::new()?;
     let root = attester.root().to_der()?;
-    let server = Server::new(
-        Identity::generate(&FixtureClock)?,
-        policy(),
-        Arc::new(attester),
-        Arc::new(FixtureClock),
-        Arc::new(handler),
-    )?;
+    let attester = Arc::new(attester);
+    let handler = Arc::new(handler);
     let listener = TcpListener::bind(listen)?;
     println!(
         "{} {}",
@@ -35,7 +31,25 @@ fn run() -> Result<(), cinder_service::Error> {
         root.iter().map(|b| format!("{b:02x}")).collect::<String>()
     );
     std::io::stdout().flush()?;
-    server.run(listener, stop_on_stdin())
+    if web {
+        cinder_service::web::Server::new(
+            policy(),
+            Arc::new(FixtureClock),
+            attester,
+            Arc::new(FixtureClock),
+            handler,
+        )?
+        .run(listener, stop_on_stdin())
+    } else {
+        Server::new(
+            Identity::generate(&FixtureClock)?,
+            policy(),
+            attester,
+            Arc::new(FixtureClock),
+            handler,
+        )?
+        .run(listener, stop_on_stdin())
+    }
 }
 fn decode_hex(s: &str) -> Result<Vec<u8>, cinder_service::Error> {
     if s.len() != 64 || !s.is_ascii() {

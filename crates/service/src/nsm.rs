@@ -305,6 +305,60 @@ impl Clock for Nsm {
         state.time.observe(result)
     }
 }
+impl cinder_web_channel::Entropy for Nsm {
+    fn fill(&self, output: &mut [u8]) -> Result<(), cinder_web_channel::Error> {
+        if output.is_empty() || output.len() > 4096 {
+            return Err(cinder_web_channel::Error);
+        }
+        for piece in output.chunks_mut(32) {
+            let random = self.random().map_err(|_| cinder_web_channel::Error)?;
+            piece.copy_from_slice(&random[..piece.len()]);
+        }
+        Ok(())
+    }
+}
+impl crate::web::Attester for Nsm {
+    fn web_quote(
+        &self,
+        policy: &Policy,
+        fields: &[u8; 128],
+        expires: u64,
+        now: u64,
+    ) -> Result<Vec<u8>, Error> {
+        if policy.encode() != self.policy.encode() || expires <= now || expires - now > MAX_SESSION
+        {
+            return Err(Error);
+        }
+        let context = cinder_web_channel::profile::context(&policy.encode(), fields, expires)
+            .map_err(|_| Error)?;
+        let data = cinder_web_channel::profile::user_data(&context);
+        let nonce: &[u8; 32] = fields[..32].try_into().map_err(|_| Error)?;
+        let key = &fields[96..];
+        let mut state = self.state.lock().map_err(|_| Error)?;
+        state.time.active()?;
+        let start = Instant::now();
+        let result = (|| {
+            let Response::Attestation { document } =
+                state.device.exchange(Request::Attestation {
+                    user_data: Some(data.to_vec().into()),
+                    nonce: Some(nonce.to_vec().into()),
+                    public_key: Some(key.to_vec().into()),
+                })?
+            else {
+                return Err(Error);
+            };
+            let at = attestation::verify_recipient(&document, policy, nonce, key, &data, now)?;
+            if expires <= at || expires > at.checked_add(MAX_SESSION).ok_or(Error)? {
+                return Err(Error);
+            }
+            timely(start.elapsed())?;
+            Ok((document, at))
+        })();
+        let (document, at) = result.inspect_err(|_| state.time.failed = true)?;
+        state.time.observe(Ok(at))?;
+        Ok(document)
+    }
+}
 impl Attester for Nsm {
     fn quote(&self, policy: &Policy, context: &Context<'_>) -> Result<Vec<u8>, Error> {
         if policy.encode() != self.policy.encode() {

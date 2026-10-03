@@ -16,6 +16,11 @@ fn run() -> Result<(), cinder_service::Error> {
         },
         time::Duration,
     };
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    let web = args.as_slice() == ["--web"];
+    if !args.is_empty() && !web {
+        return Err(Error);
+    }
     let mut bytes = Vec::new();
     std::fs::File::open("/etc/cinder/manifest.cbor")?
         .take(131073)
@@ -50,13 +55,27 @@ fn run() -> Result<(), cinder_service::Error> {
         stop.clone(),
     )?);
     runtime.tick()?;
-    let server = Server::new(
-        Identity::generate(nsm.as_ref())?,
-        nsm.policy(),
-        nsm.clone(),
-        nsm.clone(),
-        runtime.clone(),
-    )?;
+    enum Ingress {
+        Tls(Server),
+        Web(cinder_service::web::Server),
+    }
+    let server = if web {
+        Ingress::Web(cinder_service::web::Server::new(
+            nsm.policy(),
+            nsm.clone(),
+            nsm.clone(),
+            nsm.clone(),
+            runtime.clone(),
+        )?)
+    } else {
+        Ingress::Tls(Server::new(
+            Identity::generate(nsm.as_ref())?,
+            nsm.policy(),
+            nsm.clone(),
+            nsm.clone(),
+            runtime.clone(),
+        )?)
+    };
     let listener = VsockListener::bind(manifest.ingress, 3)?;
     // Joinable finite supervisor. No unbounded queue; one cut each second, at
     // most one escaped dispatch. Each cut rechecks independent witness + time.
@@ -71,7 +90,10 @@ fn run() -> Result<(), cinder_service::Error> {
         }
     });
     println!("cinder runtime ready"); // No identities, balances, roots or secrets.
-    let result = server.run_vsock(listener, stop.clone());
+    let result = match server {
+        Ingress::Tls(s) => s.run_vsock(listener, stop.clone()),
+        Ingress::Web(s) => s.run_vsock(listener, stop.clone()),
+    };
     runtime.fence();
     let _ = worker.join();
     nsm.now()?;

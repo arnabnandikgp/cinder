@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 function fixture() {
   const pkg = name => ({ name, id: name, version: '0.1.0', source: null, targets: [{ kind: ['lib'] }], dependencies: [] });
-  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica', 'cinder-api', 'cinder-service'].map(pkg);
+  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica', 'cinder-api', 'cinder-service', 'cinder-web-channel'].map(pkg);
   packages[2].dependencies = [
     { name: 'cinder-ports', kind: null, path: '/repo/crates/ports', req: '=0.1.0', target: null },
     { name: 'cinder-kernel', kind: 'dev', path: '/repo/crates/kernel', req: '=0.1.0', target: null },
@@ -21,6 +21,7 @@ function fixture() {
   ];
   packages[5].dependencies = packages[4].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal', 'sha2', 'ed25519-dalek', 'zeroize'].includes(dep.name));
   packages[6].dependencies = [
+    {name:'cinder-web-channel',kind:null,path:'/repo/crates/web-channel',req:'=0.1.0',target:null},
     ...packages[5].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal'].includes(dep.name)),
     {name: 'cinder-api',kind:null,path:'/repo/crates/api',req:'=0.1.0',target:null},
     {name: 'cinder-pacifica',kind:null,path:'/repo/crates/pacifica',req:'=0.1.0',target:null},
@@ -28,6 +29,13 @@ function fixture() {
     {name:'socket2',kind:null,source:dependencyPolicy.registry,req:'=0.6.5',target:null,features:['all'],uses_default_features:false,optional:false},
     ...['serde','serde_json','base64','aws-sigv4','aws-credential-types'].map(name=>({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p=>p.name===name).version}`,target:null,features:name==='serde'?['derive']:name==='base64'?['alloc']:name==='aws-sigv4'?['sign-http','http1']:[],uses_default_features:!['base64','aws-sigv4'].includes(name),optional:false})),
   ];
+  packages[7].dependencies = ['snow','zeroize','sha2','getrandom','wasm-bindgen'].map(name => ({
+    name, kind:null, source:dependencyPolicy.registry,
+    req: name === 'getrandom' ? '=0.3.4' : `=${dependencyPolicy.packages.find(p=>p.name===name).version}`,
+    target:['getrandom','wasm-bindgen'].includes(name) ? 'cfg(target_arch = "wasm32")' : null,
+    features:name==='snow'?['use-curve25519','use-chacha20poly1305','use-sha2','use-getrandom']:name==='getrandom'?['wasm_js']:[],
+    uses_default_features:!['snow','sha2'].includes(name), optional:false,
+  }));
   packages[6].features={default:[], 'local-fixture':[]};
   packages[6].targets.push(...['cinder-service-fixture','cinder-verify-fixture'].map(name => ({name,kind:['bin'],'required-features':['local-fixture']})));
   const workspace_members = packages.map(p => p.id);
@@ -38,6 +46,14 @@ function fixture() {
 test('the intended local graph passes', () => {
   assert.deepEqual(validateWorkspace(fixture()), []);
   assert.deepEqual(validateKernelSource('#![no_std]\npub trait Transition {}'), []);
+});
+test('web crypto cannot select a fork, extra resolver, platform fallback or loose pin', () => {
+  for(const mutate of [d=>{d.req='^0.10';},d=>{d.source='git+https://unreviewed.invalid';},d=>{d.features.push('ring-resolver');},d=>{d.uses_default_features=true;}]){
+    const m=fixture();mutate(m.packages[7].dependencies.find(d=>d.name==='snow'));
+    assert.match(validateWorkspace(m).join('\n'),/Noise\/WASM/);
+  }
+  const m=fixture();m.packages[7].dependencies.find(d=>d.name==='getrandom').target=null;
+  assert.match(validateWorkspace(m).join('\n'),/Noise\/WASM/);
 });
 test('kernel cannot acquire a port or third-party edge unnoticed', () => {
   const metadata = fixture();

@@ -1,15 +1,11 @@
 [package]
-name = "cinder-web-channel-qualification"
+name = "cinder-web-channel"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97.1"
 publish = false
 
-# Isolated WASM qualification/build of the same core used by the service.
-[workspace]
-
 [lib]
-path = "../../crates/web-channel/src/lib.rs"
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
@@ -24,6 +20,3 @@ wasm-bindgen = "=0.2.129"
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "deny"
-
-[profile.release]
-overflow-checks = true

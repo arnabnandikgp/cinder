@@ -46,5 +46,5 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     ...validateNpm(readFileSync(resolve(root, 'package.json')), readFileSync(resolve(root, 'package-lock.json'))),
   ];
   if (errors.length) throw Error(errors.join('; '));
-  console.log(`Isolated qualification graph checked: ${policy.packages.length - 1} registry packages; shipping graph unchanged.`);
+  console.log(`Isolated WASM build graph checked: ${policy.packages.length - 1} registry packages; service compiles the same shared core source.`);
 }

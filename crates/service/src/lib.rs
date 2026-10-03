@@ -12,6 +12,8 @@ pub mod runtime;
 pub mod transport;
 pub mod verifier;
 pub mod vsock;
+/// Attested Noise ingress into the same private financial handler as TLS.
+pub mod web;
 
 /// Deliberately redacted failures; neither OpenSSL nor application bodies escape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

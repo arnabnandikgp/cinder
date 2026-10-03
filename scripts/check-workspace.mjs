@@ -19,7 +19,8 @@ const allowed = new Map([
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
   ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'ed25519-dalek:normal', 'bs58:normal', 'zeroize:normal']],
   ['cinder-api', ['cinder-kernel:normal', 'cinder-journal:normal', 'sha2:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
-  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal', 'serde:normal', 'serde_json:normal', 'base64:normal', 'aws-sigv4:normal', 'aws-credential-types:normal']],
+  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'cinder-web-channel:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal', 'serde:normal', 'serde_json:normal', 'base64:normal', 'aws-sigv4:normal', 'aws-credential-types:normal']],
+  ['cinder-web-channel', ['snow:normal', 'zeroize:normal', 'sha2:normal', 'getrandom:normal', 'wasm-bindgen:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
@@ -54,6 +55,15 @@ export function validateWorkspace(metadata) {
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
+      if (pkg.name === 'cinder-web-channel') {
+        const features = dep.name === 'snow' ? ['use-curve25519','use-chacha20poly1305','use-sha2','use-getrandom'] : dep.name === 'getrandom' ? ['wasm_js'] : [];
+        const target = ['getrandom','wasm-bindgen'].includes(dep.name) ? 'cfg(target_arch = "wasm32")' : null;
+        const expected = dependencyPolicy.packages.find(p => p.name === dep.name && dep.req === `=${p.version}`);
+        if (!expected || dep.source !== dependencyPolicy.registry || dep.path || dep.target !== target || dep.optional
+            || dep.uses_default_features !== !['snow','sha2'].includes(dep.name)
+            || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push('cinder-web-channel: selected Noise/WASM dependencies changed');
+        continue;
+      }
       if (pkg.name === 'cinder-service' && ['serde','serde_json','base64','aws-sigv4','aws-credential-types'].includes(dep.name)) {
         const features = dep.name === 'serde' ? ['derive'] : dep.name === 'base64' ? ['alloc'] : dep.name === 'aws-sigv4' ? ['sign-http','http1'] : [];
         const expected=dependencyPolicy.packages.find(p=>p.name===dep.name && dep.req===`=${p.version}`);
@@ -112,6 +122,6 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
     for (const error of errors) process.stderr.write(`${error}\n`);
     process.exitCode = 1;
   } else {
-    process.stdout.write('Workspace boundaries OK: 7 local packages; dependency-free kernel; pinned storage/crypto/JSON/transport graph; fixture-only binaries gated.\n');
+    process.stdout.write('Workspace boundaries OK: 8 local packages; dependency-free kernel; pinned storage/crypto/JSON/transport graph; fixture-only binaries gated.\n');
   }
 }

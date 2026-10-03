@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Offline HTTP SDK qualification</title>
+<pre id="result">Running synthetic process tests</pre>
+<script type="module">
+import init,* as core from '/channel.js';
+import {runHttp} from '/http-fixture.js';
+let result;
+try{
+  await init();
+  const wallet=await crypto.subtle.generateKey('Ed25519',false,['sign','verify']);
+  const publicKey=new Uint8Array(await crypto.subtle.exportKey('raw',wallet.publicKey));
+  const setup=await fetch('/test/setup',{method:'POST',body:publicKey});
+  if(!setup.ok)throw Error('Browser fixture setup');
+  let current=await setup.json();
+  const signer={publicKey,signMessage:async bytes=>new Uint8Array(await crypto.subtle.sign('Ed25519',wallet.privateKey,bytes))};
+  const harness={current:()=>current,control:async action=>{
+    const response=await fetch('/test/control',{method:'POST',body:action});
+    if(!response.ok)throw Error('Browser fixture control');current=await response.json();
+  }};
+  result={ok:true,checks:await runHttp(core,signer,harness)};
+}catch(error){result={ok:false,error:String(error).slice(0,512)};}
+document.querySelector('#result').textContent=JSON.stringify(result);
+await fetch('/test/result',{method:'POST',body:JSON.stringify(result)});
+</script>

@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "7550e0a91ed766e2c7ed2d40fd2be2d21697f66e7764864ef5a562332ad8eaf5",
+  "lockfileSha256": "f113f7ddb0a37cc045aa0304188627a4f03567669215f0c488a9db2f41172bd3",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
     {
@@ -1434,6 +1434,48 @@
     {
       "name": "zmij",
       "version": "1.0.23",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "getrandom",
+      "version": "0.3.4",
+      "buildScript": true,
+      "features": [
+        "wasm_js"
+      ]
+    },
+    {
+      "name": "r-efi",
+      "version": "5.3.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "snow",
+      "version": "0.10.0",
+      "buildScript": true,
+      "features": [
+        "chacha20poly1305",
+        "curve25519-dalek",
+        "default-resolver",
+        "getrandom",
+        "sha2",
+        "use-chacha20poly1305",
+        "use-curve25519",
+        "use-getrandom",
+        "use-sha2"
+      ]
+    },
+    {
+      "name": "wasip2",
+      "version": "1.0.4+wasi-0.2.12",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "wit-bindgen",
+      "version": "0.57.1",
       "buildScript": true,
       "features": []
     }

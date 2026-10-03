@@ -556,7 +556,7 @@ Bounded split: [ADR 0021](../architecture/0021-confidential-web-api.md) records 
 Rust/WASM tool workspace. The first PR carries the contract, candidate dependency
 policy and native/actual-browser tests; it neither links the candidate into the
 shipping service nor supplies independent browser attestation. Subsequent slices
-own the hardened dependency/verifier and exact binding profile, HTTP integration,
+own the selected dependency/verifier and exact binding profile, HTTP integration,
 read projections/WebSocket and joined acceptance. Keep P21A in progress throughout;
 the four phase criteria below remain open after the first slice.
 
@@ -569,9 +569,20 @@ visible in TRACKER, but include their tests and documentation in the owning PR
 rather than creating separate bookkeeping or test-only PRs. Split further only
 for a material security choice or a genuinely unreviewable implementation, and
 explain the reason. This grouping does not waive any criterion. Stop for review
-before selecting a dependency fork or linking unqualified crypto into the service.
+before selecting a dependency fork or changing the approved security profile.
+Provider decision, 2026-10-03: use pinned upstream Snow 0.10.0 for the bounded
+offline V1 API implementation, not a custom handshake or local crypto fork.
+Its opaque-secret erasure limitation is retained in ADR 0021. It does not block
+synthetic-data offline integration; an explicit hardening/security disposition
+remains required before customer use. Do not treat this decision as erasure,
+audit or production qualification, or close any phase criterion without evidence.
 P21A completion is offline implementation/acceptance; fresh changed-image Nitro
 and actual venue/chain workflow qualification remain P23, not a new P21A PR.
+HTTP implementation: shared Rust/WASM core in `crates/web-channel`, enclave ingress
+in `crates/service::web`, fixed-target Node built-in HTTP relay in `services/web-relay`
+and `clients/private`'s AWS-only browser/Node SDK. ADR 0021 defines exact bounds
+and framing; the tool runner joins real processes to the existing journal.
+HTTP does not close the read/WebSocket/combined acceptance criteria.
 
 - [ ] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
 - [ ] Both transports reach the same command authorization, durable IDs, reservations and journal; exact retries reconcile, conflicting IDs reject, and agents cannot obtain payout or administrative authority.
