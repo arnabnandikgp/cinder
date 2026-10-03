@@ -44,20 +44,18 @@ Current branch: `tee/p20-nitro-runtime`. Native stack #46 originally placed
 [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44); P19 is now merged and
 P20 is rebased directly on the updated TEE trunk. Historical code/evidence
 checkpoint `b6e0f4c` became `adf42ea`; that rebase changed documentation only.
-The later review fixes in `82073c221895f505e4d029f2b4e99c2a6e13031e` change runtime
-source and have full local locked/offline checks, not new Nitro receipts. The
-three hosted jobs passed at preceding published head `d07038df`; those are not
-checks for the new fixes. CodeRabbit's completed review was at `58abe8b`; its
-rate-limited rebase status was not a new review. Four valid findings and the AKI
-naming nit are addressed below. Publication `083a6413107763daf29a4605e1a3587e492c45a8`
-has the plan job passing and Rust/SBF plus CodeRabbit still running at the
-2026-10-03 check. All four original threads have fix replies and are resolved;
-the naming nit also has a summary reply. This documentation-only follow-up does
-not inherit those hosted results; check the latest tip before merge.
-Subsequent read-only check at `b2c2e8b6a0fa724d497b1ca323a05d930f8558d1`:
-all three hosted jobs pass; CodeRabbit is still pending. The API-first planning
-changes below alter documentation only, not the tested runtime; their later
-publication still needs its own hosted status.
+The runtime review fixes in `82073c221895f505e4d029f2b4e99c2a6e13031e` and
+`c94adc94c3fa72b545c0aa5ce1448668309e239c` change source and are offline-tested,
+not newly Nitro-qualified. All three hosted jobs passed at preceding published
+head `479ef98155a3da2ccdbcb03973f96a5462f23656`. Four original CodeRabbit threads
+are resolved; the completed review at `b2c2e8b` also identified one valid
+outside-diff cloud-header finding, now fixed in `c94adc9`. Its regression failed
+before the fix and passes afterward; complete Rust workspace debug/release tests,
+strict all-feature Clippy and format pass. Plan validation and all 13 validator
+tests pass using available Node 26.8.2. The final publication needs its own hosted
+CI check before merge. The user authorized P20's merge and approved the complete
+API_SCOPE.md recommendations, including bounded richer reads and scoped agents,
+on 2026-10-03. Browser transport security selection still requires ADR review.
 Hardware results remain tied to their actual source. Pre-hardware assembly is
 `b67f3947b6eda241bd56912003b22ee90107857f`; real AWS compatibility fixes are
 `37487ca`; the qualified export is `5557d3350f371d616965006a90ea03b55420400f`.
@@ -73,7 +71,8 @@ reads are deliberately disabled until qualified G01/G02/P23 ports and policy.
 Local assembly is not a completed hardware criterion. Dated results below apply
 to their exact source, not a later change. P19's authorized merge, exact checked
 head and review disposition are recorded in its owning phase below. P20 remains
-open; no P20 merge or production activation is authorized.
+open pending final-fix CI and the authorized merge; no production activation is
+authorized.
 
 AWS: initial disposable test allowance **$5**, replacement profile `cinder_new`,
 region `us-east-1`, no mainnet/customer funds. Fresh STS on 2026-10-02 verifies
@@ -1446,9 +1445,21 @@ read/history extensions. Local plan validation passes 27 phases/35 documents,
 all 13 validator tests and diff checks on available Node 26.8.2. No runtime
 change or additional Rust/SBF/hardware test is implied by this planning update.
 
-Next: inspect new-head CI/review and the four addressed thread replies/resolutions,
-and obtain merge authorization before closing P20. Then finalize P21A's scope
-and transport ADR, implement P21A, publish P21B, and complete P21 recovery. Native trading,
+Final outside-diff review follow-up: review #5398556153 correctly identified
+that `cloud.rs` still rejected harmless repeated fields. Runtime commit
+`c94adc94c3fa72b545c0aa5ce1448668309e239c` validates/counts every field line,
+retains only consumed metadata and rejects its case-insensitive duplicates.
+Regression covers repeated Set-Cookie/Vary, duplicate Content-Length and exactly
+64 versus 65 field lines; it failed before the fix. Cloud tests (4/4), full
+offline Rust debug/release workspace suites, strict all-feature Clippy, format,
+plan validation (27 phases/35 documents), all 13 validator tests and diff checks
+pass. No SDK/program source change, AWS session, live venue call or container.
+Existing hardware receipts are unchanged; the new parser is not hardware-tested.
+Merge is now explicitly authorized, subject to final published-head checks.
+
+Next: push the final fix/receipt, reply to the outside-diff finding, verify
+new-head CI/review and merge #45 onto product/tee-v1. Then start P21A's approved
+scope and transport ADR, implement P21A, publish P21B, and complete P21 recovery. Native trading,
 funding/reads and production policy remain separate G01–G04/P23 gates.
 PR: https://github.com/arnabnandikgp/cinder/pull/45.
 Merge: none.

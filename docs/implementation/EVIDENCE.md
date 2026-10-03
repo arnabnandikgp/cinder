@@ -135,6 +135,13 @@ macOS debug/release/workspace and 17 SDK checks pass. This changes source; the
 earlier measured export and actual Nitro receipts are not relabeled as hardware
 qualification for it. The updated joined release is qualified separately in P23.
 
+Final outside-diff review fix: `c94adc94c3fa72b545c0aa5ce1448668309e239c`
+applies the same bounded duplicate-field policy to cloud responses. Its new
+regression fails before the fix and passes afterward, including 64/65 total
+field-line boundaries. Full offline Rust debug/release workspace tests, strict
+all-feature Clippy and format pass. This is new offline evidence, not a new AWS
+hardware receipt; no native capability is enabled.
+
 ### P19: attestation-gated runnable service slice
 
 [ADR 0019](../architecture/0019-attested-service.md) promotes W06–W08's exact-key
