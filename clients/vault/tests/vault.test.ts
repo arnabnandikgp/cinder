@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { mkdtemp,mkdir,readFile,rm } from 'node:fs/promises';
+import { cp,mkdtemp,mkdir,readFile,rm,writeFile } from 'node:fs/promises';
 import { createHash,createPrivateKey,generateKeyPairSync,randomBytes,sign } from 'node:crypto';
 import { spawn,type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
@@ -180,6 +180,13 @@ for(const carrier of ['http','websocket'] as const)test(`P21 ${carrier} accepted
   let service:ChildProcessWithoutNullStreams|undefined,worker:ChildProcessWithoutNullStreams|undefined;
   let relay:ReturnType<typeof createWebRelay>|undefined,channel:WebChannel|undefined;
   try {
+    const refuseRestart=async(path:string,bytes:Buffer)=>{
+      const length=Buffer.alloc(4);length.writeUInt32BE(bytes.length);
+      service=spawn(binary,['127.0.0.1:0',path,f.owner.publicKey.toBuffer().toString('hex'),'--recovery-web']);
+      const exited=once(service,'exit');let output='';service.stdout.on('data',b=>{output+=b;});
+      service.stdin.on('error',()=>{});service.stdin.end(Buffer.concat([storageKey,length,bytes]));
+      assert.notEqual((await exited)[0],0);assert.equal(output,'');service=undefined;
+    };
     service=spawn(binary,['127.0.0.1:0',store,f.owner.publicKey.toBuffer().toString('hex'),'--recovery-web']);
     const line=await childLines(service);service.stdin.write(Buffer.concat([storageKey,prefix,configBytes]));
     const [address,ca]=(await line()).split(' ');
@@ -198,6 +205,31 @@ for(const carrier of ['http','websocket'] as const)test(`P21 ${carrier} accepted
     assert(payout.kind==='receipt'&&payout.outcome==='accepted');
     const accepted=await readFile(join(store,'accepted'));assert.equal(accepted.length,40);
     channel.close();await relay.close();relay=undefined;await stopFixture(service);service=undefined;
+    // A valid epoch-1 restart must succeed with the exact registered keys and
+    // recover pending operations without a second registration or journal write.
+    service=spawn(binary,['127.0.0.1:0',store,f.owner.publicKey.toBuffer().toString('hex'),'--recovery-web']);
+    const resumedLine=await childLines(service);service.stdin.write(Buffer.concat([storageKey,prefix,configBytes]));
+    const [resumedAddress,resumedCa]=(await resumedLine()).split(' ');
+    relay=createWebRelay({target:{host:'127.0.0.1',port:Number(resumedAddress!.split(':')[1])}});
+    relay.server.listen(0,'127.0.0.1');await once(relay.server,'listening');
+    channel=await WebChannel.connect({baseUrl:`http://127.0.0.1:${relay.server.address().port}`,policy,core,transport:carrier},(q,p,c)=>verifyWithRoot(q,p,c,Buffer.from(resumedCa!,'hex')));
+    const resumedApi=new PrivateClient(channel,signer,{domain:policy,account:Buffer.alloc(32,1),policy:1});
+    assert.deepEqual(await resumedApi.request(req(42,{kind:'operation',target:Buffer.alloc(32,40)})),order);
+    assert.deepEqual(await resumedApi.request(req(43,{kind:'operation',target:Buffer.alloc(32,41)})),payout);
+    assert.deepEqual(await readFile(join(store,'accepted')),accepted);
+    channel.close();await relay.close();relay=undefined;await stopFixture(service);service=undefined;
+    await refuseRestart(store,Buffer.from(JSON.stringify({...binding,keys:[]})));
+    const wrong=generateKeyPairSync('rsa',{modulusLength:3072}),changedSpki=wrong.publicKey.export({format:'der',type:'spki'});
+    await refuseRestart(store,Buffer.from(JSON.stringify({...binding,keys:[{owner:binding.keys[0]!.owner,spki:toBytes(changedSpki),
+      signature:Array.from(sign(null,recoveryKeyAuthorization(domain,pool,changedSpki),ownerKey))}]})));
+    assert.deepEqual(await readFile(join(store,'accepted')),accepted);
+    // Isolate the epoch gate: identical valid journal, route and registered keys;
+    // ONLY the witness epoch changes in this disposable copy. Never roll back
+    // the actual recovery store's fence to make a negative startup test pass.
+    const probe=join(directory,'epoch-probe');await cp(store,probe,{recursive:true});
+    const epochOnly=Buffer.concat([Buffer.alloc(8),accepted]);epochOnly.writeBigUInt64BE(2n);
+    await writeFile(join(probe,'accepted'),epochOnly);
+    await refuseRestart(probe,configBytes);assert.deepEqual(await readFile(join(probe,'accepted')),epochOnly);
     // Restore the SAME accepted encrypted journal, not another seeded ledger.
     worker=spawn(binary,[store,'--recovery-worker']);const response=await childLines(worker);worker.stdin.write(Buffer.concat([storageKey,prefix,configBytes]));
     const ask=async(v:unknown)=>{worker!.stdin.write(JSON.stringify(v)+'\n');return JSON.parse(await response());};
@@ -245,7 +277,7 @@ for(const carrier of ['http','websocket'] as const)test(`P21 ${carrier} accepted
     const kit=decryptKit(kitWire,locator,enc.privateKey,manifest);assert.equal(kit.claim.amount,980n);assert.equal(kit.claim.paidBase,20n);
     assert.equal(kit.claim.destination.toBase58(),source.toBase58());
     const altered=Buffer.from(kitWire);altered[altered.length-2]^=1;assert.throws(()=>decryptKit(altered,locator,enc.privateKey,manifest));
-    const wrong=generateKeyPairSync('rsa',{modulusLength:3072});assert.throws(()=>decryptKit(kitWire,locator,wrong.privateKey,manifest));
+    assert.throws(()=>decryptKit(kitWire,locator,wrong.privateKey,manifest));
     const publicBytes=Buffer.concat([wire,saved]);for(const marker of ['"owner":','"destination":','"paid_base":','"salt":','"proof":'])assert.equal(publicBytes.includes(Buffer.from(marker)),false);
     await rm(second);await assert.rejects(retrieveKit(locator,manifest,[async()=>readFile(first),async()=>readFile(second)]));
     // Saved ciphertext remains independently verifiable even with both stores lost.
@@ -261,9 +293,10 @@ for(const carrier of ['http','websocket'] as const)test(`P21 ${carrier} accepted
     assert.equal((await getAccount(connection,vault)).amount,1000n); // House capital stays distinct.
     assert.equal((await program.account.recoveryEpoch.fetch(root)).remaining.toString(),'0');
     await assert.rejects(independentClaim(program,await chainSnapshot(expected),expected,kit));
-    const denied=spawn(binary,['127.0.0.1:0',store,f.owner.publicKey.toBuffer().toString('hex'),'--recovery-web']);
-    const exited=once(denied,'exit');denied.stdin.on('error',()=>{});denied.stdin.end(Buffer.concat([storageKey,prefix,configBytes]));
-    assert.notEqual((await exited)[0],0); // Restart at the old writer epoch cannot reopen trading.
+    const fenced=await readFile(join(store,'accepted'));
+    assert.equal(fenced.length,48);assert.equal(fenced.readBigUInt64BE(),2n);
+    await refuseRestart(store,configBytes); // Same keys that reopened epoch 1 cannot reopen a fenced epoch 2.
+    assert.deepEqual(await readFile(join(store,'accepted')),fenced);
   } finally {channel?.close();await relay?.close();if(service)await stopFixture(service);if(worker)await stopFixture(worker);
     storageKey.fill(0);binding.broker_seed.fill(0);configBytes.fill(0);await rm(directory,{recursive:true,force:true});}
 });

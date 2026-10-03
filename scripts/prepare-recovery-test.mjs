@@ -8,7 +8,11 @@ import { fileURLToPath } from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const bindgen=process.env.CINDER_WASM_BINDGEN??'wasm-bindgen';
 assert.equal(process.versions.node,'24.21.0');
-assert.equal(execFileSync(bindgen,['--version'],{encoding:'utf8'}).trim(),'wasm-bindgen 0.2.129');
+const setup='See programs/README.md for the full vault/recovery setup; CINDER_WASM_BINDGEN may select a separately installed binary.';
+let bindgenVersion;
+try { bindgenVersion=execFileSync(bindgen,['--version'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim(); }
+catch { throw new Error(`Recovery tests require wasm-bindgen 0.2.129. ${setup}`); }
+assert.equal(bindgenVersion,'wasm-bindgen 0.2.129',`Recovery tests require wasm-bindgen 0.2.129. ${setup}`);
 function run(command,args,cwd=root,target=resolve(root,'target')){
   execFileSync(command,args,{cwd,env:{...process.env,CARGO_TARGET_DIR:target},stdio:'inherit'});
 }

@@ -331,7 +331,7 @@ impl FixtureHandler {
     /// Key arrives through harness stdin, never parent disk/logs. Reuse on restart
     /// is a test harness responsibility, not a production key-release design.
     pub fn open(root: &Path, key: Zeroizing<[u8; 32]>, wallet: [u8; 32]) -> Result<Self, Error> {
-        Self::open_inner(root, key, wallet, [81; 32], None)
+        Self::open_inner(root, key, wallet, [81; 32], None).map(|(handler, _)| handler)
     }
     /// Same service/journal with SBF customer custody and synthetic venue house capital.
     /// Only the explicit joined offline harness may choose this fixture setup.
@@ -346,7 +346,7 @@ impl FixtureHandler {
         if route.beneficiaries.len() != 1 || route.beneficiaries[0].wallet != wallet {
             return Err(Error);
         }
-        let h = Self::open_inner(
+        let (h, fresh) = Self::open_inner(
             root,
             key,
             wallet,
@@ -354,13 +354,17 @@ impl FixtureHandler {
             Some(controller),
         )?;
         let mut store = h.store.lock().map_err(|_| Error)?;
-        crate::recovery::register_keys(
-            controller,
-            &mut *store,
-            recovery::commit_id()?,
-            FixtureClock.now()?,
-            keys,
-        )?;
+        if fresh {
+            crate::recovery::register_keys(
+                controller,
+                &mut *store,
+                recovery::commit_id()?,
+                FixtureClock.now()?,
+                keys,
+            )?;
+        } else {
+            crate::recovery::require_registered(controller, &mut *store, keys)?;
+        }
         drop(store);
         Ok(h)
     }
@@ -370,7 +374,7 @@ impl FixtureHandler {
         wallet: [u8; 32],
         tokens: [u8; 32],
         controller: Option<&cinder_pacifica::funding::Controller>,
-    ) -> Result<Self, Error> {
+    ) -> Result<(Self, bool), Error> {
         let fresh = !root.join("accepted").exists();
         if fresh {
             // A dirty/missing accepted register must never silently initialize.
@@ -453,10 +457,13 @@ impl FixtureHandler {
             }
         }
         service.initialize(&mut store, now).map_err(|_| Error)?;
-        Ok(Self {
-            store: Mutex::new(store),
-            service,
-        })
+        Ok((
+            Self {
+                store: Mutex::new(store),
+                service,
+            },
+            fresh,
+        ))
     }
 }
 impl Handler for FixtureHandler {

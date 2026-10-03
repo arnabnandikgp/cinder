@@ -135,6 +135,24 @@ pub fn register_keys<B: Backend, P: Protection>(
     j.commit(tx).map_err(|_| Error)?;
     Ok(())
 }
+/// Verify the complete immutable recipient inventory against the fresh journal.
+/// Reopening never registers, replaces or rotates keys, including after cutover.
+pub fn require_registered<B: Backend, P: Protection>(
+    controller: &Controller,
+    j: &mut Journal<B, P>,
+    keys: &[RecipientKey],
+) -> Result<(), Error> {
+    j.verified_state().map_err(|_| Error)?;
+    let registered = key_record(controller, keys)?;
+    let mut records = j
+        .transactions()
+        .flat_map(|t| &t.evidence)
+        .filter(|e| e.as_bytes().starts_with(REGISTRY));
+    if records.next().is_none_or(|e| e.as_bytes() != registered) || records.next().is_some() {
+        return Err(Error);
+    }
+    Ok(())
+}
 fn hash(parts: &[&[u8]]) -> [u8; 32] {
     let mut h = openssl::sha::Sha256::new();
     for p in parts {
@@ -570,15 +588,7 @@ pub fn prepare<B: Backend, P: Protection>(
     let b = controller
         .recovery_backing(j, expected, check.clone(), custody)
         .map_err(|_| Error)?;
-    let registered = key_record(controller, keys)?;
-    let records = j
-        .transactions()
-        .flat_map(|t| &t.evidence)
-        .filter(|e| e.as_bytes().starts_with(REGISTRY))
-        .collect::<Vec<_>>();
-    if records.len() != 1 || records[0].as_bytes() != registered {
-        return Err(Error);
-    }
+    require_registered(controller, j, keys)?;
     if b.claims().is_empty()
         || b.claims().len() > MAX_CLAIMS
         || keys.len() != b.cut().accounts().len()
