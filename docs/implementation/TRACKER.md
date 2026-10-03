@@ -30,7 +30,7 @@
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-03. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-04. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
@@ -74,7 +74,8 @@ retrieval/decryption/live-custody verification and unsigned claim construction.
 Actual HTTP/WebSocket SDK/service tails survive process death and end in compiled
 local payout/return/claim instructions with ordinary service unavailable.
 
-Final verification on macOS arm64, Rust 1.97.1 / Node 24.21.0:
+Initial P21 verification on macOS arm64, Rust 1.97.1 / Node 24.21.0 (before the
+review follow-up below):
 `node scripts/check.mjs` passes foundation/boundaries, strict default/all-feature
 Clippy, all-target build, workspace debug/release tests and all 24 SDK/TLS tests.
 `node scripts/check-vault.mjs` passes locked build/IDL/strict Rust/TypeScript and
@@ -112,10 +113,42 @@ single inspected native stack layer against `product/tee-v1` at
 `dcb685f277d2c04e1256258d7cb3b10d2c0be266`. Both joined outage flows and strict
 build/IDL/TypeScript checks were repeated successfully at that committed checkpoint
 with `node scripts/check-vault.mjs --recovery-only`; the focus is **not** another
-55-test full-suite receipt. This publication bookkeeping is a docs-only successor;
-its own hosted CI/review are pending, not inherited from P21A or an earlier head.
+55-test full-suite receipt. The initial publication head
+`bfe4ae64e05bb3504df9332a83149abbf7e6ecbc` passed all four hosted CI jobs;
+CodeRabbit then posted two actionable findings at that head.
 
-Next: await #52's own hosted CI and focused review, then merge only with user
+PR #52 review follow-up — 2026-10-04, tested source checkpoint
+`8e528db870d81a7cd8011780726b8ab32795b1be`:
+
+- Recovery keys register only on a fresh store; reopen validates the exact
+  complete owner-authorized inventory against the currently witnessed journal.
+  Preparation reuses the same validation. Both HTTP/WebSocket tests now prove a
+  successful pre-cutover restart with retained order/payout receipts and unchanged
+  head; missing keys and an owner-signed replacement key refuse without mutation.
+  A disposable identical-store probe changes ONLY the witness epoch to demonstrate
+  old-writer refusal independently of key registration or final recovery state.
+  The original store's fence is never rolled back, and the final epoch-2 refusal
+  also checks no listening output or accepted-head mutation.
+- Default vault checks retain the joined recovery coverage. The vault README now
+  includes exact wasm-bindgen 0.2.129, the WASM target and root/browser dependency
+  hydration; hosted vault CI already provisions these prerequisites. Missing or
+  incorrect bindgen fails with an actionable setup reference instead of a bare
+  process-launch/version error. No dependency pin or CI coverage was weakened.
+
+Repeated offline verification: `node scripts/check.mjs` passes foundation/graph,
+strict default/all-feature Clippy, all-target build, workspace debug/release and
+all 24 SDK/TLS tests. The DEFAULT `node scripts/check-vault.mjs` passes all 55
+tests, both strengthened carrier flows, locked SBF/IDL and strict Rust/TypeScript.
+Two explicit missing/wrong-bindgen diagnostic checks also pass. Initial local
+compilation identified that witness verification needs mutable port access; the
+helper was corrected before all successful reruns. No AWS, live venue, devnet,
+wallet, container or unrelated docs-workspace edit was used. The earlier Chrome
+qualification above is historical, not a new-browser receipt for this follow-up.
+This tracker-only successor does not inherit hosted CI from the initial head;
+fresh hosted checks/review remain required after the review-fix push.
+
+Next: publish these review fixes, reply to the two addressed threads, and await
+#52's new-head hosted CI and focused review; merge only with user
 authorization; do not auto-merge or call P21/P21B closed. P22 is the next
 planning boundary, expanding complete adversarial
 lifecycle acceptance; P23 alone qualifies actual ports/changed Nitro image.
@@ -2007,8 +2040,9 @@ Merge: none.
 Work: completed the approved offline phase on `tee/p21-recovery-integration`, base `0530374`. One accepted journal derives complete settled claims and P16 payment bases. Explicit recovery permissions fence ordinary paths, bound closes/returns and durably seal dispatch. Wallet-authorized RSA-3072 keys are immutably registered before cutover; OAEP-SHA256/AES-256-GCM kits require both ciphertext readbacks. The governed signed manifest and independent Node claimant retain exact P17 root/context/counter semantics. Actual SDK HTTP/WebSocket outages join normal payout, return, sealing, replica failure and independent compiled SBF claims. No parallel seeded recovery ledger or amount supplied by a claimant exists.
 Verification: all three PLAN criteria are checked for offline scope. Final pinned workspace runner passes 30 foundation/boundary tests, 12 carrier tests, both strict Clippy configurations, all-target build, workspace debug/release and all 24 SDK/TLS tests. All 55 vault codec/SBF tests pass. Full native/WASM/browser runner passes, including 14 verifier/core and 24 joined process groups each in Node/Chrome. Focused additions include 16 journal cut tests, recovery-close allocation/replay, 26 passing P16 funding tests, actual signed bounded recovery dispatch and four package/key/readback/tree tests. Limits/commands/environment are in Current handoff; known Nitro tests remain explicitly ignored, not silently counted as passing hardware. Initial failures and fixes are recorded there. Earlier slice-only receipts are superseded, not rebranded as final checks.
 Unexpected: integration revealed token-recipient, create/cancel routing and synthetic fixture margin/readiness mismatches; these were corrected without weakening guards. New controls/state require engine revision 21 and reject old revision 20 histories pending explicit migration. Delivery evidence precommits store/locator layout before root construction; separately signed final ciphertext digests avoid a circular commitment. Package availability is not code-enforced live store independence or a proof of complete liabilities. Dedicated keys are retained, not derivable/reissuable by the operator.
-Next: obtain #52's own hosted CI/focused review and await merge authorization. P21 and local-only P21B remain in progress until merge. P22 expands complete offline adversarial lifecycle; P23/G01/G03 own live capability/source/store/entropy and changed-image qualification. Public recovery MDX is updated locally and stays ignored/untracked with the user's docs.json preserved. Implementation and committed focused rerun checkpoint: `dcb685f277d2c04e1256258d7cb3b10d2c0be266`; this docs-only successor updates publication provenance.
-PR: [#52](https://github.com/arnabnandikgp/cinder/pull/52), ready/open, `tee/p21-recovery-integration` → `product/tee-v1`; hosted CI/review pending for the actual publication head.
+Review follow-up (2026-10-04): both CodeRabbit findings at `bfe4ae64e05bb3504df9332a83149abbf7e6ecbc` were relevant. Source checkpoint `8e528db870d81a7cd8011780726b8ab32795b1be` fixes register-once/exact-key resume and strengthens both joined carrier tests with positive restart, missing/replacement-key refusal and an epoch-only fencing probe. The default vault setup now documents/provisions the recovery prerequisites and reports missing/wrong bindgen clearly; mandatory full-suite recovery coverage remains. Full `scripts/check.mjs`, DEFAULT `scripts/check-vault.mjs` (55 tests) and two prerequisite-diagnostic checks pass at this source checkpoint; see Current handoff for scope and limits.
+Next: publish review fixes and thread dispositions, obtain #52's fresh hosted CI/focused review and await merge authorization. P21 and local-only P21B remain in progress until merge. P22 expands complete offline adversarial lifecycle; P23/G01/G03 own live capability/source/store/entropy and changed-image qualification. Public recovery MDX remains local/untracked with the user's docs.json preserved. Initial implementation/focused rerun checkpoint `dcb685f277d2c04e1256258d7cb3b10d2c0be266` is historical, not the reviewed source head.
+PR: [#52](https://github.com/arnabnandikgp/cinder/pull/52), ready/open, `tee/p21-recovery-integration` → `product/tee-v1`; all four hosted jobs passed at the initial `bfe4ae6` publication head, but fresh CI/review remain required for the review-fix successor.
 Merge: none.
 
 ## P22 — Offline adversarial acceptance
