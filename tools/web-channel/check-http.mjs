@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { fixture } from './http-fixture.mjs';
-import { runHttp } from '../../clients/private/tests/web-suite.ts';
+import { runHttp,runWebsocket } from '../../clients/private/tests/web-suite.ts';
 import { stopChild } from './stop-child.mjs';
 
 const dir=fileURLToPath(new URL('.',import.meta.url));
@@ -22,12 +22,13 @@ const core=await import('./pkg/channel.js');
 await core.default({module_or_path:await readFile(join(dir,'pkg/channel_bg.wasm'))});
 const keys=generateKeyPairSync('ed25519');
 const publicKey=new Uint8Array(keys.publicKey.export({format:'der',type:'spki'}).subarray(-32));
-const node=await fixture(publicKey);
-let nodeChecks;
-try{
-  nodeChecks=await runHttp(core,{publicKey,signMessage:async b=>sign(null,b,keys.privateKey)},node);
-  await node.assertPrivate();
-}finally{await node.close();}
+const nodeChecks=[];
+for(const run of [h=>runHttp(core,{publicKey,signMessage:async b=>sign(null,b,keys.privateKey)},h),
+  h=>runHttp(core,{publicKey,signMessage:async b=>sign(null,b,keys.privateKey)},h,'websocket'),
+  h=>runWebsocket(core,{publicKey,signMessage:async b=>sign(null,b,keys.privateKey)},h)]){
+  const node=await fixture(publicKey);
+  try{nodeChecks.push(...await run(node));await node.assertPrivate();}finally{await node.close();}
+}
 const profile=await mkdtemp(join(tmpdir(),'cinder-http-chrome-'));
 let browserHarness,browser,resultResolve,timer;
 const result=new Promise(resolve=>{resultResolve=resolve;});
@@ -37,8 +38,8 @@ const server=createServer(async(req,res)=>{
   try{
     if(req.method==='GET'&&files.has(req.url)){const[p,type]=files.get(req.url);res.setHeader('Content-Type',type);res.end(await readFile(join(dir,p)));return;}
     if(req.method==='POST'&&req.url==='/test/setup'){
-      if(browserHarness)throw Error('Fixture already allocated');
       const key=await body(req,32);if(key.length!==32)throw Error('Fixture public key');
+      if(browserHarness){await browserHarness.assertPrivate();await browserHarness.close();}
       browserHarness=await fixture(key,`http://127.0.0.1:${server.address().port}`);
       res.setHeader('Content-Type','application/json');res.end(JSON.stringify(browserHarness.current()));return;
     }
@@ -60,9 +61,9 @@ try{
   const r=await Promise.race([result,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('HTTP browser test timeout')),60000);})]);
   if(!r.ok||r.checks?.length!==nodeChecks.length)throw Error(r.error??'Incomplete browser HTTP acceptance');
   await browserHarness.assertPrivate();
-  console.log(`Node ${process.version}: ${nodeChecks.length} HTTP/private SDK process groups passed`);
-  console.log(`${execFileSync(chrome,['--version'],{encoding:'utf8'}).trim()}: ${r.checks.length} HTTP/private SDK process groups passed`);
-  console.log('All eight signed commands, durable lost-reply/crash reconciliation and parent plaintext observation: synthetic offline fixtures only.');
+  console.log(`Node ${process.version}: ${nodeChecks.length} HTTP/WebSocket/private SDK process groups passed`);
+  console.log(`${execFileSync(chrome,['--version'],{encoding:'utf8'}).trim()}: ${r.checks.length} HTTP/WebSocket/private SDK process groups passed`);
+  console.log('All eight commands, ten reads, live private subscriptions, restart/gap/queue/revocation and parent observation: synthetic offline fixtures only.');
 }finally{
   clearTimeout(timer);await stopChild(browser,{group:true});await browserHarness?.close();
   server.closeAllConnections();if(server.listening)await new Promise(resolve=>server.close(resolve));

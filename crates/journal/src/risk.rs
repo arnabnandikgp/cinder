@@ -919,6 +919,38 @@ impl State {
     }
     /// Recompute current/pending margin and every configured stress prefix under
     /// this exact journal state. Errors mean unqualified, never an empty safe report.
+    /// Read-time validation uses this same engine at a qualified newer clock,
+    /// without writing a clock-only transaction or changing financial state.
+    pub fn risk_report_at(&self, now: u64) -> Result<Report> {
+        if now < self.now {
+            return Err(ControlError::Unqualified);
+        }
+        let mut read = self.clone();
+        read.now = now;
+        read.risk_report()
+    }
+    /// Configured private cap/preference, not a native leverage selection.
+    pub fn private_leverage(&self, account: AccountId, market: MarketUnit) -> Option<(u64, u64)> {
+        let rule = self
+            .risk
+            .as_ref()?
+            .markets
+            .iter()
+            .find(|r| r.market == market)?;
+        Some((rule.maximum_leverage, self.leverage(account, rule)))
+    }
+    /// Qualified exact marks at read time. Missing/expired evidence is not zero.
+    pub fn read_marks(&self, now: u64) -> Result<Vec<PriceTicks>> {
+        if now < self.now {
+            return Err(ControlError::Unqualified);
+        }
+        let cut = self.collateral.as_ref().ok_or(ControlError::Unqualified)?;
+        self.ledger
+            .qualified_diagnostics(&cut.marks, now, cut.policy.evidence)
+            .map_err(|_| ControlError::Unqualified)?;
+        Ok(cut.marks.iter().map(|m| m.price).collect())
+    }
+    /// Recompute current/pending margin at the durable logical cut.
     pub fn risk_report(&self) -> Result<Report> {
         let policy = self.risk.as_ref().ok_or(ControlError::Unqualified)?;
         self.validate_risk(policy)?;

@@ -44,6 +44,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(5);
 // public server never accepts a caller-supplied raw descriptor or fake socket.
 pub(crate) trait Socket: Read + Write + Send + Sized + 'static {
     fn prepare(&self) -> std::io::Result<()>;
+    fn idle(&self) -> std::io::Result<()>;
     fn try_clone(&self) -> std::io::Result<Self>;
     fn shutdown(&self, how: Shutdown) -> std::io::Result<()>;
 }
@@ -53,6 +54,9 @@ pub(crate) trait Listener {
     fn accept(&self) -> std::io::Result<Self::Stream>;
 }
 impl Socket for TcpStream {
+    fn idle(&self) -> std::io::Result<()> {
+        self.set_read_timeout(Some(Duration::from_secs(120)))
+    }
     fn prepare(&self) -> std::io::Result<()> {
         self.set_nonblocking(false)?;
         self.set_read_timeout(Some(IO_TIMEOUT))?;

@@ -41,13 +41,21 @@ implementation is a separate workstream, not the template for this architecture.
 | Recovery claims | Implemented for offline review in the same vault; immutable statements, funded activation, owner claims/shared counters; actual joined preparation/delivery remains P21 | P17 |
 | Private API/SDK | Implemented against trusted confidential-channel/admission ports; encrypted journal auth/replay, no public plaintext listener | P18 |
 | Attested client channel and runnable service | TLS 1.3/pinned-root verification and actual local SDK/relay/API/journal processes; fixture attestation/time/witness only | P19 |
-| Actual Nitro runtime | Measured application/key release/vsock/NSM and independent storage qualification remain gated | P20 |
+| Actual Nitro runtime | Merged bounded actual hardware qualification; later changed-image/native workflows still need fresh P23 evidence | P20 |
+| Confidential web API | Open implementation stack: shared browser/Node attestation and Noise core, HTTP/WebSocket commands, signed private reads and bounded subscriptions; offline only | P21A |
 | Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one
 native account, multiple linear-perp markets, private customer books, house and
 suspense. It is not a multi-venue clearing engine. It introduces no new native
 account topology or fee/insurance promise.
+
+The web surface's exact rows, authorization, paging/time/provenance limits,
+correlation, queues and resync are in [the private read/socket contract](architecture/private-read-contract.md)
+and [ADR 0021](architecture/0021-confidential-web-api.md). It changes no financial
+or custody policy. P19 TLS, HTTP and WebSocket share the same private handler/journal;
+the parent never becomes a readable financial server. Public hosting/docs and
+native/hardware workflow qualification are distinct later work.
 
 ## 2. Components and trust boundaries
 
@@ -484,7 +492,8 @@ inside the enclave. Outer HTTPS/WSS may terminate at a relay only while the priv
 payload remains encrypted to the verified enclave session. Outbound venue TLS is
 validated inside the enclave too; host-decrypted account responses are not trusted
 inputs. [ADR 0019](architecture/0019-attested-service.md) specifies the P19 transport
-and exact dependencies; production ports and actual enclave qualification remain P20.
+and exact dependencies. P20 qualified a bounded prior image; changed-image/native
+workflow qualification remains P23, and production policy/release review remains P24.
 
 Verify attestation chain/signature, approved nondebug measurement, freshness and
 exact session-key binding before releasing private data. Bind customer authentication

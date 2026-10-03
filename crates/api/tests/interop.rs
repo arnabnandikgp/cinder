@@ -13,6 +13,42 @@ fn decode(s: &str) -> Vec<u8> {
         .collect()
 }
 #[test]
+fn signed_read_schema_has_the_same_p18_envelope_and_typescript_suffix() {
+    let signer = SigningKey::from_bytes(&[9; 32]);
+    let mut req = Request {
+        domain: Domain {
+            network: NetworkId::new([1; 32]).unwrap(),
+            deployment: DeploymentId::new([2; 32]).unwrap(),
+        },
+        account: AccountId::new([1; 32]).unwrap(),
+        id: RequestId::new([40; 32]).unwrap(),
+        policy: PolicyVersion::new(1).unwrap(),
+        epoch: 1,
+        signer: signer.verifying_key().to_bytes(),
+        session: [8; 32],
+        expires_at: 100,
+        command: Command::View,
+        signature: [0; 64],
+    };
+    let original = req.message();
+    let prefix = &original[..original.len() - 1];
+    for kind in 0..10 {
+        req.command = Command::Read(cinder_api::reads::Query {
+            kind,
+            cursor: [0; 40],
+            limit: 64,
+        });
+        let message = req.message();
+        assert_eq!(&message[..prefix.len()], prefix);
+        let mut suffix = vec![8, 1, kind];
+        suffix.extend_from_slice(&[0; 40]);
+        suffix.extend_from_slice(&64u16.to_be_bytes());
+        assert_eq!(&message[prefix.len()..], suffix);
+        req.signature = signer.sign(&message).to_bytes();
+        assert!(Request::decode(req.encode().unwrap().as_bytes()).is_ok());
+    }
+}
+#[test]
 fn all_request_methods_match_typescript_bytes_digests_and_signatures() {
     let signer = SigningKey::from_bytes(&[9; 32]);
     let market = MarketId::new([7; 32]).unwrap();

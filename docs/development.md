@@ -48,12 +48,13 @@ The original 233 research groups remain separate evidence, not production covera
 
 ## Files and packages
 
-### Confidential browser/Node HTTP (P21A)
+### Confidential browser/Node HTTP/WebSocket (P21A)
 
 `crates/web-channel` owns the pinned Snow core; the isolated WASM tool compiles
 the same source. `crates/service::web` invokes the existing private handler and
 journal, while `services/web-relay` routes public framing/ciphertext only. See
-[HTTP architecture](architecture/0021-confidential-web-api.md),
+[web architecture](architecture/0021-confidential-web-api.md),
+[private read/socket contract](architecture/private-read-contract.md),
 [SDK](../clients/private/README.md) and
 [offline browser preparation](../tools/web-channel/README.md). The root runner
 includes the relay/Rust regressions; the separate browser job runs shared actual

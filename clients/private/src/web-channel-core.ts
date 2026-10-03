@@ -8,6 +8,7 @@ export interface WebEndpoint {
   start(): Uint8Array; advance(bytes: Uint8Array): Uint8Array;
   ready(): boolean; binding(): Uint8Array;
   request(sequence: number, bytes: Uint8Array): Uint8Array;
+  socket_request(sequence: number, bytes: Uint8Array, subscribe: boolean): Uint8Array;
   response(sequence: number, bytes: Uint8Array): Uint8Array;
   free(): void;
 }
@@ -17,7 +18,7 @@ export interface WebCore {
   BrowserEndpoint: new (key: Uint8Array, prologue: Uint8Array) => WebEndpoint;
   web_binding(prologue: Uint8Array, hash: Uint8Array): Uint8Array;
 }
-export interface WebOptions { baseUrl: string; policy: ReleasePolicy; core: WebCore }
+export interface WebOptions { baseUrl: string; policy: ReleasePolicy; core: WebCore; transport?: 'http'|'websocket' }
 type Verifier = (quote: Uint8Array, policy: Uint8Array, context: QuoteContext) => Promise<VerifiedQuote>;
 const MAX_BATCH = 1048576 + 65 * 34, DEADLINE = 5000;
 const failed = () => Error('Confidential web channel unavailable; reconcile on a fresh session');
@@ -33,6 +34,10 @@ export class WebChannel implements ConfidentialChannel {
   #endpoint?: WebEndpoint; #context?: ChannelContext; #handle?: Uint8Array;
   #base: string; #closed = false; #busy = false; #sequence = 0;
   #active?: AbortController; #lifetime?: ReturnType<typeof setTimeout>;
+  #socket?: WebSocket;
+  #pending?: {sequence:number;resolve:(b:Uint8Array)=>void;reject:(e:Error)=>void};
+  #watch?: {sequence:number;ordinal:bigint;queue:Uint8Array[];bytes:number;wait?:()=>void};
+  #subscriptionDeadline?:ReturnType<typeof setTimeout>;
   private constructor(base: string) { this.#base = base; }
   static async connect(options: WebOptions, verify: Verifier): Promise<WebChannel> {
     const url = new URL(options.baseUrl);
@@ -65,6 +70,8 @@ export class WebChannel implements ConfidentialChannel {
       if (ch.#endpoint.advance(ack).length || !ch.#endpoint.ready() || ch.#closed || expires <= BigInt(Date.now())) throw failed();
       ch.#context = { network: policy.slice(0,32), deployment: policy.slice(32,64),
         binding: copy(core.web_binding(trusted.prologue, ch.#endpoint.binding()),32), expiresAt: expires };
+      if(options.transport!==undefined&&!['http','websocket'].includes(options.transport))throw failed();
+      if(options.transport==='websocket')await ch.#openSocket();
       ch.#lifetime = setTimeout(() => ch.close(), Number(expires - BigInt(Date.now())));
       return ch;
     } catch { ch.close(); throw failed(); }
@@ -77,6 +84,11 @@ export class WebChannel implements ConfidentialChannel {
   close() {
     const handle = this.#handle;
     this.#closed = true; this.#active?.abort(); this.#active = undefined;
+    this.#pending?.reject(failed());this.#pending=undefined;
+    const watch=this.#watch;this.#watch=undefined;
+    if(watch){for(const b of watch.queue)b.fill(0);watch.queue=[];watch.wait?.();}
+    clearTimeout(this.#subscriptionDeadline);this.#subscriptionDeadline=undefined;
+    this.#socket?.close();this.#socket=undefined;
     clearTimeout(this.#lifetime); this.#lifetime = undefined;
     this.#endpoint?.free(); this.#endpoint = undefined;
     this.#handle = undefined; this.#context = undefined;
@@ -93,7 +105,8 @@ export class WebChannel implements ConfidentialChannel {
     const timer = setTimeout(() => this.close(), DEADLINE);
     try {
       const sequence = ++this.#sequence;
-      const wire = this.#endpoint!.request(sequence, clear); clear.fill(0);
+      const wire = this.#socket?this.#endpoint!.socket_request(sequence,clear,false):this.#endpoint!.request(sequence, clear); clear.fill(0);
+      if(this.#socket){const reply=await this.#exchangeSocket(sequence,wire);this.context();return reply;}
       const batch = await this.#post('/v1/exchange', concat(this.#handle!, wire), MAX_BATCH, abort.signal);
       this.context();
       const reply = this.#endpoint!.response(sequence, batch);
@@ -101,6 +114,55 @@ export class WebChannel implements ConfidentialChannel {
       return reply;
     } catch { this.close(); throw failed(); }
     finally { clear.fill(0); clearTimeout(timer); this.#active = undefined; this.#busy = false; }
+  }
+  /** One server-driven read subscription. Closing/returning it closes the
+   * connection; reattest and fetch a fresh snapshot, never replay a mutation. */
+  async subscribe(input:Uint8Array):Promise<AsyncIterable<Uint8Array>>{
+    if(!this.#socket||this.#watch||this.#busy||this.#closed||!(input instanceof Uint8Array)||!input.length||input.length>1024){this.close();throw failed();}
+    this.context();const clear=Uint8Array.from(input),sequence=++this.#sequence;
+    try{const wire=this.#endpoint!.socket_request(sequence,clear,true);
+      this.#watch={sequence,ordinal:0n,queue:[],bytes:0};this.#socket.send(Uint8Array.from(wire).buffer);
+      this.#subscriptionDeadline=setTimeout(()=>this.close(),DEADLINE);
+    }catch{this.close();throw failed();}finally{clear.fill(0);}
+    const self=this;let consumed=false;
+    return {async *[Symbol.asyncIterator](){
+      try{if(consumed)throw failed();consumed=true;for(;;){
+        const watch=self.#watch;if(self.#closed||!watch)throw failed();
+        if(!watch.queue.length){await new Promise<void>(resolve=>{watch.wait=resolve;});continue;}
+        const bytes=watch.queue.shift()!;watch.bytes-=bytes.length;
+        yield bytes;
+      }}finally{self.close();}
+    }};
+  }
+  async #openSocket(){
+    const url=new URL('/v1/ws',this.#base);url.protocol=url.protocol==='https:'?'wss:':'ws:';
+    const socket=new WebSocket(url);socket.binaryType='arraybuffer';this.#socket=socket;
+    await new Promise<void>((resolve,reject)=>{
+      socket.onopen=()=>{if(this.#closed){reject(failed());return;}socket.send(Uint8Array.from(this.#handle!).buffer);resolve();};
+      socket.onerror=()=>{reject(failed());this.close();};socket.onclose=()=>{reject(failed());this.close();};
+      socket.onmessage=event=>{
+        try{
+          this.context();if(!(event.data instanceof ArrayBuffer)||event.data.byteLength<5||event.data.byteLength>MAX_BATCH+4)throw failed();
+          const b=new Uint8Array(event.data),sequence=new DataView(event.data).getUint32(0);
+          const reply=this.#endpoint!.response(sequence,b.subarray(4));
+          if(this.#watch?.sequence===sequence){
+            const prefix=new TextEncoder().encode('CINDER-PRIVATE-UPDATE-1\0');
+            if(reply.length<=prefix.length+8||!prefix.every((b,i)=>reply[i]===b))throw failed();
+            const ordinal=new DataView(reply.buffer,reply.byteOffset+prefix.length,8).getBigUint64(0);
+            const watch=this.#watch;if(ordinal!==watch.ordinal+1n)throw failed();watch.ordinal=ordinal;
+            clearTimeout(this.#subscriptionDeadline);this.#subscriptionDeadline=undefined;
+            const payload=reply.slice(prefix.length+8);reply.fill(0);
+            if(watch.queue.length>=32||watch.bytes+payload.length>1_048_576){payload.fill(0);throw failed();}
+            watch.queue.push(payload);watch.bytes+=payload.length;const wake=watch.wait;watch.wait=undefined;wake?.();
+          }else if(this.#pending?.sequence===sequence){const p=this.#pending;this.#pending=undefined;p.resolve(reply);}
+          else{reply.fill(0);throw failed();}
+        }catch{this.close();}
+      };
+    });
+  }
+  #exchangeSocket(sequence:number,wire:Uint8Array):Promise<Uint8Array>{
+    return new Promise((resolve,reject)=>{if(!this.#socket||this.#pending||this.#closed){reject(failed());return;}
+      this.#pending={sequence,resolve,reject};try{this.#socket.send(Uint8Array.from(wire).buffer);}catch{this.close();}});
   }
   async #post(path: string, body: Uint8Array, maximum: number, signal: AbortSignal): Promise<Uint8Array> {
     if (this.#closed || signal.aborted) throw failed();

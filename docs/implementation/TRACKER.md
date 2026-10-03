@@ -37,6 +37,41 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+Current work: `tee/p21a-reads-websocket` in `cinder-tee`, final grouped P21A.4/5
+slice above ready/open #50 at `4841c7044dc7d1080c5ad8f45ddc14277bae4bca` through
+native stack #49. #47/#48/#50 stay unmerged while the user reviews them.
+Trunk remains `product/tee-v1` at `76f32956e3ee5d31707ec1bf7fa81f8711666c97`.
+
+Implemented: signed read version/paging, own account/risk/position/operation/order/
+fill/funding/book-history/grant/metadata projections, shared WebSocket commands,
+currently authorized coalesced private snapshots, finite queues/records/deadlines,
+gap/reconnect/revoke/expiry and joined offline acceptance. Immutable book-history
+index derives from the same committed/replayed journal, not a second ledger.
+[Exact contract](../architecture/private-read-contract.md) states unavailable
+fields, source/time/retention limits and deliberately narrower forced-fill/native
+metadata coverage. P19 TLS and financial/custody/margin policy are unchanged.
+
+Verification: final pinned full workspace runner passes default/all-feature strict
+Clippy, all-feature build, debug/release tests, 30 foundation/boundary regressions,
+12 carrier tests and 19 SDK/Node-TLS tests. API signing/history/funding and all five
+native web ingress regressions pass. Full native/WASM/verifier/browser runner passes;
+final joined acceptance passes again with emitted-frame queue synchronization.
+Actual Node 24.21.0 and Chrome 154.0.8037.93 each pass 24 joined HTTP/WebSocket
+process groups, in addition to 14 verifier/core groups each. Native/WASM debug/
+release/Clippy and 12 carrier tests passed. Fixture-only dropped-delivery control
+now assembles TCP frames before dropping; packet boundaries are not frame boundaries.
+Parent traffic/logs/disk private-marker checks pass. No actual venue fill/payment,
+hardware qualification, live endpoint or key-erasure guarantee is claimed.
+
+Next: publish one ready stacked PR
+above #50, then review/bottom-up merge when authorized. P21A/milestones stay in
+progress until relevant reviews are addressed and all layers merge. P21B Mintlify
+follows the implemented API; recovery/P22/P23/P24 remain. No AWS, configured wallet,
+venue, container, subagent or merge used. Preserve `docs/user-journey.md`, `stays/`
+and ignored research.
+
+### Historical HTTP publication handoff (superseded)
+
 Current work: ready/open [#50](https://github.com/arnabnandikgp/cinder/pull/50),
 `tee/p21a-http-sdk` in `cinder-tee`, above P21A.2a #48 at
 `df1e71f9110c4c4b940c689db4540839656ec473` through native stack #49.
@@ -1637,8 +1672,8 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 | 2a — Browser verifier and binding qualification | in progress | Independent AWS/COSE/X.509 validation in a tested strict subset, exact attested channel vectors and native differential fixtures; then reviewed merge, not a shipping/hardware claim. | #48 |
 | 2b — Secret lifetime and transport hardening | in progress | Selected upstream Snow with explicit erasure limitation, NSM entropy/quote adapters and offline SDK lifetime/fencing/assembly; actual hardware and customer-release hardening disposition remain separate. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 3 |
 | 3 — HTTP and shared SDK/service | in progress | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation; offline evidence passes, review/merge pending. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 2b |
-| 4 — Authorized reads and WebSocket | open | Own-account projections/paging and bounded revocable committed streams; no native pooled-query/global-sequence leakage. | Following PR, with 5 |
-| 5 — Joined adversarial acceptance | open | Both transports satisfy all four parent-phase criteria; then P21A can close after merge. | Following PR, with 4 |
+| 4 — Authorized reads and WebSocket | in progress | Own-account projections/paging and bounded revocable committed streams; offline implementation passes, review/merge pending. | Final grouped PR, with 5 |
+| 5 — Joined adversarial acceptance | in progress | Both transports satisfy all four parent-phase criteria; local implementation/acceptance is not reviewed merge or production qualification. | Final grouped PR, with 4 |
 
 Work: API → public docs → recovery ordering and full API_SCOPE approved 2026-10-03; P21 is not an API prerequisite. Started tee/p21a-web-api-contract on P20 merge 76f32956e3ee5d31707ec1bf7fa81f8711666c97. After the frontend/bot explanation, the user explicitly approved bounded Noise NK qualification. ADR 0021 carries the contract, permission/provenance matrix, bounds and split. Isolated tools/web-channel supplies one Rust core, thin WASM binding, synthetic native responder, published known answer, adversarial tests and disposable browser harness; no shipping dependency or existing Node TLS change.
 Verification: primary browser/Noise/Snow/RFC/AWS sources checked. Native debug/release tests: 10 pass each. Node 24.21.0 and actual Chrome 154.0.8037.93: seven groups each pass, including standard vector, encrypted native round trip, early/replay/tamper/reflection/size refusal and RNG failure. Carrier marker absent in both directions. Complete isolated runner passes: four dependency-guard tests, native/WASM strict Clippy and formatting. Two new teardown regressions pass, including a SIGTERM-resistant descendant writer after its leader exits; the complete isolated runner passes again after this fix. At docs-only a96b5cc hosted plan/Rust/Anchor jobs passed and Linux Chrome 154.0.8037.57/Node passed all channel groups before the cleanup race failed the job. New-fix hosted CI is pending (first evidence-based CI fix); no container run needed. Earlier full pinned repository runner passed default/all-feature Clippy, workspace build/debug/release tests, 29 repository tests and all 17 SDK/process tests; that is not a fresh full-repository run for this harness-only fix. Foundation: 27 phases/36 documents; focused 13 plan-validator tests and diff check pass. On-chain source unchanged, so no local SBF rerun. No HTTP/WS financial workflow or fresh browser Nitro attestation claimed. All four PLAN P21A acceptance criteria remain open.
@@ -1765,6 +1800,36 @@ V1 shares a private customer's collateral across markets within the configured
 pool; leverage is not native/customer isolated margin. No new margin feature was
 authorized or introduced.
 PR: https://github.com/arnabnandikgp/cinder/pull/50.
+Merge: none.
+
+### P21A.4/5 — reads, WebSocket and joined offline acceptance
+
+Work: `tee/p21a-reads-websocket` above #50. New signed Read version/fixed rows,
+account-local filtered cursors, current READ/owner checks, original eight tags
+unchanged. Existing risk/mark evaluation gives absent derived fields on stale
+evidence. Actual applied ordinary fills/funding and immutable pre/post book-history
+index are private projections of the authoritative journal. Active grants are
+owner/self-scoped. One opaque binary socket ingress shares Handler/Session/API;
+one signed read subscription coalesces replacement pages with authenticated
+correlation/ordinal, fresh authorization/witness checks, finite budgets and resync.
+
+Verification: final complete pinned workspace and web-channel runners pass;
+local Node/actual Chrome each pass 24 HTTP/WebSocket process groups and 14 verifier/
+core groups. Twelve bounded carrier tests, all five native web ingress tests,
+25 API behavior tests, three interop tests and 19 SDK/TLS tests pass. Debug/release
+workspace, default/all-feature and native/WASM strict Clippy/formatting pass.
+Final joined rerun passes after queue tests synchronize real emitted frames,
+not scheduler sleep assumptions. No hosted CI/review result exists for this
+unpublished head yet.
+No source/check receipt is inherited from earlier PRs. See exact contract for
+command/history/stream scope and synthetic-vs-live boundaries.
+Unexpected: final reply flush must precede orderly socket close; incoming traffic
+cannot starve stream checks; a five-second per-read timeout is not an absolute
+partial-frame budget. Added bounded absolute delivery guards and safe shutdown.
+Dropped-notification harness must assemble public TCP frames before dropping.
+No dependency/security/economic profile changed; Snow erasure remains unqualified.
+Next: commit and publish above #50; review/merge separately.
+PR: none yet.
 Merge: none.
 
 ## P21B — Public documentation

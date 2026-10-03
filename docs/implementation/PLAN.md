@@ -582,7 +582,11 @@ HTTP implementation: shared Rust/WASM core in `crates/web-channel`, enclave ingr
 in `crates/service::web`, fixed-target Node built-in HTTP relay in `services/web-relay`
 and `clients/private`'s AWS-only browser/Node SDK. ADR 0021 defines exact bounds
 and framing; the tool runner joins real processes to the existing journal.
-HTTP does not close the read/WebSocket/combined acceptance criteria.
+The final grouped slice adds signed owner-scoped reads, immutable replay-derived
+book history, the same commands over WebSocket and bounded replacement-page
+subscriptions. The [versioned read/delivery contract](../architecture/private-read-contract.md)
+defines exact schemas/provenance/bounds and Node/actual-browser acceptance.
+Implemented/tested criteria remain open for review and bottom-up stack merge.
 
 - [ ] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
 - [ ] Both transports reach the same command authorization, durable IDs, reservations and journal; exact retries reconcile, conflicting IDs reject, and agents cannot obtain payout or administrative authority.

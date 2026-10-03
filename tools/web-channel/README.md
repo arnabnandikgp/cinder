@@ -1,11 +1,11 @@
 # Shared web channel and offline qualification
 
-Cinder's bounded HTTP transport uses one Rust Noise core in
+Cinder's bounded HTTP/WebSocket transport uses one Rust Noise core in
 `crates/web-channel`. This isolated tool workspace compiles those SAME source
 files for native qualification and browser/WASM; it does not maintain a second
 handshake. See [ADR 0021](../../docs/architecture/0021-confidential-web-api.md).
-The HTTP service/SDK is implemented offline. WebSocket/reads, fresh changed-image
-Nitro qualification and customer release approval remain open.
+The service/SDK and bounded private reads/updates are implemented offline.
+Fresh changed-image Nitro qualification and customer release approval remain open.
 
 The suite is `Noise_NK_25519_ChaChaPoly_SHA256` through pinned upstream Snow 0.10.0.
 Both handshake payloads are empty. Independent AWS-root/X.509/COSE verification
@@ -52,11 +52,15 @@ path validation, every-prefix/closed-CBOR refusal, strict context/key substituti
 input snapshots and native/WASM/WebCrypto binding equality. Historical AWS evidence
 is NOT a fresh browser NSM web quote; see [attestation evidence](ATTESTATION.md).
 
-Eight shared HTTP/SDK groups run in Node AND actual Chrome against a separate
+Nine shared command/read groups per transport run in Node AND actual Chrome against a separate
 Rust service process and the existing protected journal: AWS-only/wrong-release
 refusal; all eight signed commands and ownership; scoped agents/revocation;
 fresh-boot reconnect; corrupt request/lost committed reply/restart reconciliation;
 request/backpressure bounds; finite directional records; witness-loss containment.
+Six additional socket groups cover initial/correlated snapshots, other-ingress
+commits/pagination, agent privacy/revocation, idle expiry, dropped delivery/fresh
+reconciliation, real slow-consumer overflow and witness loss. Both transports
+run all eight original commands and ten reads.
 The fixture seeds disposable balance/dispatches, not actual fills or payouts.
 The test observer checks opaque carrier bytes, parent logs and encrypted replicas
 for private markers, fixture signer and storage key. This is targeted evidence,

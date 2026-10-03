@@ -1,6 +1,6 @@
 # Opaque web relay
 
-Node 24.21.0's built-in HTTP/net server handles public paths, bounded framing and
+Node 24.21.0's built-in HTTP/net server handles public HTTP/WebSocket paths, bounded framing and
 random session routing only. It has no customer signer, plaintext dispatcher,
 venue credentials, private persistence or cryptographic provider.
 
@@ -18,9 +18,13 @@ Production ingress must supply HTTPS; loopback HTTP is only the offline fixture
 profile. Optional CORS permits one configured exact origin, without cookies or
 credentials. TLS alone does not substitute for the SDK's fresh Nitro verification
 and Noise channel. The protocol, failure/reconciliation rules and limits are in
-[ADR 0021](../../docs/architecture/0021-confidential-web-api.md).
+[ADR 0021](../../docs/architecture/0021-confidential-web-api.md) and the
+[read/socket contract](../../docs/architecture/private-read-contract.md).
+`/v1/ws` is a strict binary carrier attached to an already confirmed handle;
+all commands/subscriptions remain encrypted and authorized inside the service.
+No text/subprotocol/compression/private headers or arbitrary upstream is supported.
 
-Offline regressions: `node --test services/web-relay/server.test.mjs`. Actual
+Offline regressions: `node --test services/web-relay/*.test.mjs`. Actual
 Node/Chrome signed SDK and protected-journal process workflows run through
 `node tools/web-channel/check.mjs`. No RPC, venue endpoint, configured wallet,
 cloud credentials or customer funds are used.

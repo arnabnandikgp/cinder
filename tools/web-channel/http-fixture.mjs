@@ -16,7 +16,8 @@ export async function fixture(publicKey, origin) {
   const store = join(root,'parent-storage'); await mkdir(store,{mode:0o700});
   const storageKey = randomBytes(32), captured = [], sockets = new Set();
   const binary = resolve(fileURLToPath(new URL('../..',import.meta.url)),process.env.CARGO_TARGET_DIR ?? 'target','debug/cinder-service-fixture');
-  let child, proxy, relay, info, requestCorrupt=false, replyCorrupt=false, logs='';
+  let child, proxy, relay, info, requestCorrupt=false, replyCorrupt=false, dropNotification=false, dropped,
+    expectNotification=false,notified,logs='';
   async function start() {
     let out='', error='';
     child=spawn(binary,['127.0.0.1:0',store,Buffer.from(publicKey).toString('hex'),'--web'],{stdio:['pipe','pipe','pipe']});
@@ -32,10 +33,27 @@ export async function fixture(publicKey, origin) {
     const [address,ca]=line.split(' '); const port=Number(address.split(':')[1]);
     proxy=net.createServer(client=>{
       const upstream=net.connect(port,'127.0.0.1'); sockets.add(client);sockets.add(upstream);
+      let responseBuffer=Buffer.alloc(0);
       client.on('data',b=>{captured.push(Buffer.from(b));if(requestCorrupt){requestCorrupt=false;b[b.length-1]^=1;}});
-      upstream.on('data',b=>{captured.push(Buffer.from(b));if(replyCorrupt){replyCorrupt=false;b[b.length-1]^=1;}});
+      upstream.on('data',b=>{captured.push(Buffer.from(b));
+        // Rust's four-byte header and payload need not arrive in one TCP chunk.
+        // Fixture controls act on complete PUBLIC frames, not packet boundaries.
+        responseBuffer=Buffer.concat([responseBuffer,b]);
+        if(responseBuffer.length>2_101_588){client.destroy();upstream.destroy();return;}
+        while(responseBuffer.length>=4){
+          const n=responseBuffer.readUInt32BE(0);if(n>1_050_790){client.destroy();upstream.destroy();return;}
+          if(responseBuffer.length<n+4)break;
+          const framed=Buffer.from(responseBuffer.subarray(0,n+4));responseBuffer=responseBuffer.subarray(n+4);
+          if(replyCorrupt){replyCorrupt=false;framed[framed.length-1]^=1;}
+        // Public stream correlation only. Require one complete fixture frame;
+        // never inspect/decrypt a customer payload or drop a partial record.
+          if(dropNotification&&framed.length>8&&framed.readUInt32BE(4)===1){dropNotification=false;dropped?.();continue;}
+          client.write(framed);
+          if(expectNotification&&framed.length>8&&framed.readUInt32BE(4)===1){expectNotification=false;notified?.();}
+        }
+      });
       for(const s of [client,upstream]){s.on('error',()=>{client.destroy();upstream.destroy();});s.on('close',()=>{sockets.delete(s);client.destroy();upstream.destroy();});}
-      client.pipe(upstream);upstream.pipe(client);
+      client.pipe(upstream);
     });
     proxy.listen(0,'127.0.0.1');await once(proxy,'listening');
     relay=createWebRelay({target:{host:'127.0.0.1',port:proxy.address().port},origin});
@@ -52,6 +70,14 @@ export async function fixture(publicKey, origin) {
     if(action==='restart'){await stopNetwork();await start();}
     else if(action==='corrupt-request')requestCorrupt=true;
     else if(action==='corrupt-reply')replyCorrupt=true;
+    else if(action==='drop-notification'){dropNotification=true;}
+    else if(action==='await-drop'){if(dropNotification)await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{dropped=undefined;reject(Error('Missing fixture drop'));},5000);
+      dropped=()=>{clearTimeout(timer);dropped=undefined;resolve();};});}
+    else if(action==='expect-notification')expectNotification=true;
+    else if(action==='await-notification'){if(expectNotification)await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{notified=undefined;reject(Error('Missing fixture notification'));},5000);
+      notified=()=>{clearTimeout(timer);notified=undefined;resolve();};});}
     else if(action==='witness-loss')await rm(join(store,'accepted'));
     else throw Error('Unknown fixture control');
   }, relay:()=>relay, assertPrivate:async()=>{

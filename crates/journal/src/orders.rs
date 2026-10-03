@@ -211,6 +211,11 @@ impl Order {
 }
 
 impl State {
+    /// Retained original and actually applied fill payloads. The applied side
+    /// is decisive for ownership: out-of-bound fills may belong to suspense.
+    pub fn applied_order_fills(&self) -> &[(Event, Event)] {
+        &self.order_fills
+    }
     pub(crate) fn abandon_order(&mut self, request: RequestKey) -> Result<(), ControlError> {
         let index = self
             .orders

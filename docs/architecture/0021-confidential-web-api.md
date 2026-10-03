@@ -306,8 +306,10 @@ service dependency. Synthetic responder-key trust is explicit; it is not fresh
 Nitro attestation and cannot close P21A's transport criterion. The follow-up adds
 independent browser verifier/context qualification and a historical AWS certificate
 shape fixture. The current slice adds shared-service HTTP and bounded SDK/NSM
-adapters. Private projections/WebSocket, release erasure disposition and fresh
-changed-image hardware/native workflow qualification remain required.
+adapters. The final slice adds private reads/WebSocket and joined offline acceptance;
+the [versioned read/delivery contract](private-read-contract.md) defines exact
+schemas/bounds/evidence. Release erasure disposition and fresh changed-image
+hardware/native workflow qualification remain required.
 
 Source review found no zeroizing Drop implementations for Snow 0.10.0's default
 DH/cipher key arrays or chaining state. This does not invalidate a known-answer

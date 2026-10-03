@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
-import { signingMessage, intentDigest, decodeResponse, PrivateClient, type Envelope, type Command, type ConfidentialChannel } from '../src/index.ts';
+import { signingMessage, intentDigest, decodeResponse, PrivateClient, READ_FAMILIES, type Envelope, type Command, type ConfidentialChannel } from '../src/index.ts';
 const id = (n: number) => new Uint8Array(32).fill(n);
 const secret = createPrivateKey({ key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), Buffer.alloc(32, 9)]), format: 'der', type: 'pkcs8' });
 const publicKey = new Uint8Array(createPublicKey(secret).export({ format: 'der', type: 'spki' }).subarray(-32));
@@ -101,4 +101,34 @@ test('Node Buffers never alias retained identifiers or zeroized reply scratch', 
   const bytes = Buffer.from(reply); const out = decodeResponse(bytes); assert.equal(out.kind, 'receipt'); if (out.kind !== 'receipt') throw new Error();
   const originalId = out.id.slice(), originalDigest = out.digest.slice(); bytes.fill(0);
   assert.deepEqual(out.id, originalId); assert.deepEqual(out.digest, originalDigest);
+});
+test('all signed read families retain the P18 envelope and exact version/cursor/limit suffix',()=>{
+  const prefix=signingMessage(envelope({kind:'view'})).subarray(0,-1);
+  for(const [tag,family] of READ_FAMILIES.entries()){
+    const wire=signingMessage(envelope({kind:'read',query:{family,limit:64}}));
+    assert.deepEqual(wire.subarray(0,prefix.length),prefix);
+    assert.deepEqual(wire.subarray(prefix.length),Uint8Array.from([8,1,tag,...new Uint8Array(40),0,64]));
+  }
+  for(const limit of [0,65,1.5])assert.throws(()=>signingMessage(envelope({kind:'read',query:{family:'account',limit}})));
+  for(const cursor of [new Uint8Array(39),new Uint8Array(40).fill(0).map((b,i)=>i===0?1:b)])
+    assert.throws(()=>signingMessage(envelope({kind:'read',query:{family:'account',limit:1,cursor}})));
+});
+test('read page decoding distinguishes unknown, explicit zero and settled funding with strict bounds',()=>{
+  const number=(n:bigint,width:number)=>Buffer.from(n.toString(16).padStart(width*2,'0'),'hex');
+  const unit=Buffer.concat([Buffer.from(id(7)),number(1n,4),number(2n,8)]);
+  const unknown=Buffer.concat([unit,Buffer.from([0,0,0])]);
+  const zero=Buffer.concat([unit,Buffer.from([1]),number(0n,16),Buffer.from([1,1]),number(123n,8)]);
+  const page=(rows:Buffer[],next=Buffer.alloc(40),count=BigInt(rows.length))=>new Uint8Array(Buffer.concat([
+    Buffer.from('CINDER-API-REPLY\0\x00\x01'),Buffer.from([3,1,5]),Buffer.from(id(11)),next,number(124n,8),number(count,8),
+    ...rows.flatMap(row=>[number(BigInt(row.length),4),row]) ]));
+  const wire=page([unknown,zero]),parsed=decodeResponse(wire);assert.equal(parsed.kind,'page');
+  if(parsed.kind!=='page')throw Error();
+  const [a,b]=parsed.rows;assert.equal(a.kind,'funding');assert.equal(b.kind,'funding');
+  if(a.kind!=='funding'||b.kind!=='funding')throw Error();
+  assert.equal(a.payment,undefined);assert.equal(a.settled,false);assert.equal(b.payment,0n);assert.equal(b.settled,true);assert.equal(b.observedAt,123n);
+  for(let n=0;n<wire.length;n++)assert.throws(()=>decodeResponse(wire.slice(0,n)));
+  assert.throws(()=>decodeResponse(page([],Buffer.alloc(40),65n)));
+  assert.throws(()=>decodeResponse(page([],Buffer.concat([Buffer.from(id(12)),number(1n,8)]))));
+  const bad=unknown.slice();bad[44]=2;assert.throws(()=>decodeResponse(page([bad])));
+  wire.fill(0);assert.deepEqual(parsed.revision,id(11));assert.deepEqual(b.market,id(7));
 });

@@ -9,7 +9,7 @@ Inject wallet/agent `signMessage` and a **trusted confidential channel**. P19 ad
 the Node automation profile below; the semantic client still supports a separately
 qualified channel port. A caller-created object with matching fields is not proof
 of confidentiality. There is no plaintext fallback. P21A adds the bounded web
-profile below; WebSocket remains the next slice. See [ADR 0018](../../docs/architecture/0018-private-api.md).
+profile below, including bounded private reads and updates. See [ADR 0018](../../docs/architecture/0018-private-api.md).
 
 ```ts
 import { AttestedNodeChannel, nativeQuoteVerifier } from './src/node-channel.ts';
@@ -52,7 +52,7 @@ alone is withdrawable equity. Mutations return protected typed errors on known
 failure; an unknown transport outcome throws a redacted reconciliation warning.
 
 No automatic retry, public account dump, alternate payout recipient, agent payout,
-raw cancel-all, batch/modify/admin endpoint, website or network subscription ships.
+raw cancel-all, batch/modify/admin endpoint or website ships.
 Grants currently permit one market/key, bounded accepted-order counts and scoped
 permissions. Revocation invalidates all account grants, not an escaped venue order.
 
@@ -62,7 +62,7 @@ After installing pinned Node 24.21.0 and building `cinder-service` with
 keys/public wire vectors, not configured wallets. The Node TLS path has no runtime
 npm dependencies.
 
-## Confidential browser/Node HTTP
+## Confidential browser/Node HTTP and WebSocket
 
 `src/browser.ts` is the public web bundle entry. `connectWebChannel` fixes AWS-only
 trust and implements the same `ConfidentialChannel` consumed by `PrivateClient`.
@@ -90,3 +90,28 @@ test code, not a public SDK option.
 
 No package release, terminal/onboarding, live endpoint or fresh Nitro qualification
 is claimed. See [ADR 0021](../../docs/architecture/0021-confidential-web-api.md).
+
+Pass `transport: 'websocket'` in the same connection options for encrypted socket
+commands/subscriptions. HTTP is the default; both use the same signed operations.
+
+```ts
+const page = await client.request({
+  id: queryId, epoch: currentAccountEpoch, expiresAt: authExpiry,
+  command: { kind: 'read', query: { family: 'operations', limit: 32 } },
+});
+const updates = await client.subscribe({
+  id: subscriptionId, epoch: currentAccountEpoch, expiresAt: authExpiry,
+  query: { family: 'updates', limit: 64 },
+});
+for await (const snapshot of updates) {
+  // Replace this page. Fetch further rows with its family and next cursor.
+  // Failure requires fresh attestation and a zero-cursor snapshot, not replay.
+}
+```
+
+Streams coalesce replacement pages, not every intermediate notification. Current
+READ authority/epoch is checked even while idle. Returning the iterator closes
+the channel. Finite records, 120-second sessions and a 32-update/1-MiB consumer
+queue require reattestation/resnapshot. No view is a withdrawal promise.
+The [exact read/delivery contract](../../docs/architecture/private-read-contract.md)
+defines rows, time, retention, unavailable fields and reconciliation boundaries.

@@ -12,14 +12,19 @@ use cinder_journal::model::PrivateBytes;
 use cinder_kernel::identity::{DeploymentId, Domain, NetworkId};
 use cinder_web_channel::{Endpoint, Entropy, profile, records};
 use std::{
+    io::{Cursor, Read},
     net::{Shutdown, TcpListener},
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
+use zeroize::Zeroizing;
+
+/// Authenticated application prefix; public outer sequence is only routing.
+pub const UPDATE: &[u8] = b"CINDER-PRIVATE-UPDATE-1\0";
 
 /// Public connection fields: nonce, boot, opaque handle, responder X25519 key.
 pub const FIELDS: usize = 128;
@@ -181,28 +186,166 @@ impl Server {
             expires,
         );
         lifetime.ready();
-        for sequence in 1..cinder_web_channel::MAX_RECORDS {
-            let wire = read_frame(&mut socket, records::MAX_REQUEST + 22)?;
+        // One bounded reader, one cipher/handler writer. The idle first byte
+        // does not turn a partial frame into a 120-second delivery budget.
+        let mut reader = socket.try_clone()?;
+        let shutdown = socket.try_clone()?;
+        let (send, receive) = std::sync::mpsc::sync_channel(1);
+        thread::scope(|scope| {
+            let worker = scope.spawn(move || {
+                let result = (|| -> Result<(), Error> {
+                    loop {
+                        reader.idle()?;
+                        let mut first = [0];
+                        reader.read_exact(&mut first)?;
+                        reader.prepare()?;
+                        let delivery = Lifetime::new(reader.try_clone()?);
+                        let wire = read_frame(
+                            &mut Cursor::new(first).chain(&mut reader),
+                            records::MAX_REQUEST + 22,
+                        )?;
+                        drop(delivery);
+                        send.try_send(wire).map_err(|_| Error)?;
+                    }
+                })();
+                if result.is_err() {
+                    let _ = shutdown.shutdown(Shutdown::Both);
+                }
+            });
+            let result = self.application(&mut socket, &mut endpoint, &session, expires, receive);
+            let _ = socket.shutdown(Shutdown::Both);
+            let _ = worker.join();
+            result
+        })
+    }
+    fn application(
+        &self,
+        socket: &mut impl Socket,
+        endpoint: &mut Endpoint,
+        session: &Session,
+        expires: u64,
+        receive: std::sync::mpsc::Receiver<Zeroizing<Vec<u8>>>,
+    ) -> Result<(), Error> {
+        let mut sequence = 1;
+        let mut socket_mode = false;
+        let mut watch: Option<(u32, PrivateBytes, Option<[u8; 32]>, u64)> = None;
+        let mut next_poll = Instant::now();
+        loop {
+            if self.clock.now()? >= expires {
+                return Err(Error);
+            }
+            // Poll independently of ingress activity: a stream of valid commands
+            // must not starve updates, expiry or current READ authorization.
+            if Instant::now() >= next_poll {
+                next_poll = Instant::now() + Duration::from_millis(500);
+                if let Some((correlation, request, revision, ordinal)) = &mut watch {
+                    let reply = self
+                        .handler
+                        .handle(session, request.clone(), self.clock.now()?)?;
+                    if self.clock.now()? >= expires {
+                        return Err(Error);
+                    }
+                    let fresh = revision_of(reply.as_bytes());
+                    if fresh.is_none() || fresh != *revision {
+                        *ordinal = ordinal.checked_add(1).ok_or(Error)?;
+                        self.deliver(socket, endpoint, *correlation, &reply, true, Some(*ordinal))?;
+                        *revision = fresh;
+                        if fresh.is_none() {
+                            return Err(Error);
+                        }
+                    }
+                }
+            }
+            let wire = match receive.recv_timeout(Duration::from_millis(250)) {
+                Ok(wire) => wire,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err(Error),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            };
+            if sequence >= cinder_web_channel::MAX_RECORDS {
+                return Err(Error);
+            }
             let clear = endpoint.open(&wire).map_err(|_| Error)?;
-            let request = records::read_request(sequence, &clear).map_err(|_| Error)?;
+            let (delivery, request) =
+                records::read_delivery(sequence, &clear).map_err(|_| Error)?;
+            if socket_mode && delivery == 1 {
+                return Err(Error);
+            }
+            socket_mode |= delivery != 1;
             let now = self.clock.now()?;
             if now >= expires {
                 return Err(Error);
             }
-            let reply = self.handler.handle(
-                &session,
-                PrivateBytes::new(request.to_vec()).map_err(|_| Error)?,
-                now,
-            )?;
+            let request = PrivateBytes::new(request.to_vec()).map_err(|_| Error)?;
+            if delivery == 3 {
+                // Never dispatch a mutation disguised as a subscription.
+                let valid = cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r|
+                    matches!(r.command,cinder_api::wire::Command::Read(q) if q.cursor == [0;40]));
+                if !valid || watch.is_some() {
+                    return Err(Error);
+                }
+            }
+            let reply = self.handler.handle(session, request.clone(), now)?;
             if self.clock.now()? >= expires {
                 return Err(Error);
             }
-            let batch =
-                records::response(&mut endpoint, sequence, reply.as_bytes()).map_err(|_| Error)?;
-            write_frame(&mut socket, &batch, records::MAX_BATCH)?;
+            self.deliver(
+                socket,
+                endpoint,
+                sequence,
+                &reply,
+                socket_mode,
+                (delivery == 3).then_some(1),
+            )?;
+            if delivery == 3 {
+                let revision = revision_of(reply.as_bytes());
+                if revision.is_none() {
+                    return Err(Error);
+                }
+                watch = Some((sequence, request, revision, 1));
+                next_poll = Instant::now() + Duration::from_millis(500);
+            }
+            sequence += 1;
+            if sequence == cinder_web_channel::MAX_RECORDS && watch.is_none() {
+                return Ok(());
+            }
         }
-        Ok(())
     }
+    fn deliver(
+        &self,
+        socket: &mut impl Socket,
+        endpoint: &mut Endpoint,
+        sequence: u32,
+        reply: &PrivateBytes,
+        websocket: bool,
+        update: Option<u64>,
+    ) -> Result<(), Error> {
+        let clear = if let Some(ordinal) = update {
+            Zeroizing::new([UPDATE, &ordinal.to_be_bytes(), reply.as_bytes()].concat())
+        } else {
+            Zeroizing::new(reply.as_bytes().to_vec())
+        };
+        let batch = records::response(endpoint, sequence, &clear).map_err(|_| Error)?;
+        let _delivery = Lifetime::new(socket.try_clone()?);
+        if websocket {
+            write_frame(
+                socket,
+                &[&sequence.to_be_bytes()[..], &batch].concat(),
+                records::MAX_BATCH + 4,
+            )
+        } else {
+            write_frame(socket, &batch, records::MAX_BATCH)
+        }
+    }
+}
+fn revision_of(bytes: &[u8]) -> Option<[u8; 32]> {
+    let prefix = b"CINDER-API-REPLY\0\x00\x01";
+    if !bytes.starts_with(prefix) || bytes.get(prefix.len()..prefix.len() + 2)? != [3, 1] {
+        return None;
+    }
+    bytes
+        .get(prefix.len() + 3..prefix.len() + 35)?
+        .try_into()
+        .ok()
 }
 #[cfg(all(test, feature = "local-fixture"))]
 mod tests {
@@ -321,6 +464,38 @@ mod tests {
         send(&mut socket, &mut endpoint, 1);
         assert!(read_frame(&mut socket, records::MAX_BATCH).is_err());
         assert!(application.0.lock().unwrap().is_empty());
+        stop.store(true, Ordering::SeqCst);
+        assert!(worker.join().unwrap().is_ok());
+    }
+    #[test]
+    fn subscription_delivery_cannot_disguise_a_command_or_invoke_handler() {
+        let (port, _clock, application, stop, worker) = start();
+        let (mut socket, mut endpoint, _expires, _binding) = client(port);
+        let clear = records::socket_request(1, b"PRIVATE-APPLICATION", true).unwrap();
+        write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+        assert!(read_frame(&mut socket, records::MAX_BATCH + 4).is_err());
+        assert!(application.0.lock().unwrap().is_empty());
+        stop.store(true, Ordering::SeqCst);
+        assert!(worker.join().unwrap().is_ok());
+    }
+    #[test]
+    fn socket_correlation_is_authenticated_and_http_cannot_mix_after_upgrade() {
+        let (port, _clock, application, stop, worker) = start();
+        let (mut socket, mut endpoint, _expires, binding) = client(port);
+        let clear = records::socket_request(1, b"PRIVATE-APPLICATION", false).unwrap();
+        write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+        let batch = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+        assert_eq!(&batch[..4], &1u32.to_be_bytes());
+        assert_eq!(
+            records::read_response(&mut endpoint, 1, &batch[4..])
+                .unwrap()
+                .as_slice(),
+            b"PRIVATE-APPLICATION"
+        );
+        assert_eq!(*application.0.lock().unwrap(), vec![binding]);
+        send(&mut socket, &mut endpoint, 2);
+        assert!(read_frame(&mut socket, records::MAX_BATCH + 4).is_err());
+        assert_eq!(application.0.lock().unwrap().len(), 1);
         stop.store(true, Ordering::SeqCst);
         assert!(worker.join().unwrap().is_ok());
     }

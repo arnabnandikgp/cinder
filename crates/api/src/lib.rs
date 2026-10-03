@@ -2,6 +2,7 @@
 //! No listener, HTTP client, wallet loader, native signing or plaintext fallback.
 //! The confidential-channel and admission ports are trusted runtime interfaces,
 //! not proof of attestation. P19/P20 qualify their actual implementations.
+pub mod reads;
 pub mod wire;
 use cinder_journal::{Backend, Journal, Protection, funds, model::*, orders, risk};
 use cinder_kernel::{
@@ -161,6 +162,8 @@ pub struct View {
 /// Returned only inside the same established confidential channel.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Response {
+    /// Bounded authorized projection of retained state/evidence, not a spend permit.
+    Read(reads::Page),
     /// Fresh authenticated snapshot; polling/reconnect always obtains a full snapshot.
     View(View),
     /// Fresh current operation state, including on an exact retry.
@@ -171,6 +174,10 @@ impl Response {
     pub fn encode(&self) -> Result<PrivateBytes, Error> {
         let mut w = Writer::new(b"CINDER-API-REPLY\0\x00\x01");
         match self {
+            Self::Read(p) => {
+                w.byte(3);
+                p.encode(&mut w)?;
+            }
             Self::View(v) => {
                 w.byte(0);
                 w.u64(v.epoch);
@@ -231,6 +238,7 @@ private_debug!(
 struct Record {
     request: Request,
     accepted: bool,
+    at: u64,
 }
 /// Runtime handler has no independently authoritative balances or replay database.
 pub struct Service<A> {
@@ -382,7 +390,11 @@ impl<A: Admission> Service<A> {
                     if !seen.insert((request.account.bytes(), request.id.bytes())) {
                         return Err(Error::Unavailable);
                     }
-                    records.push(Record { request, accepted });
+                    records.push(Record {
+                        request,
+                        accepted,
+                        at: tx.at,
+                    });
                 }
             }
         }
@@ -436,6 +448,11 @@ impl<A: Admission> Service<A> {
             self.authorize_agent(&req, &records, now)?;
         }
         match &req.command {
+            Command::Read(query) => {
+                return self
+                    .read(journal, &req, &records, *query, is_owner, now)
+                    .map(Response::Read);
+            }
             Command::View => {
                 let book = state
                     .ledger()
@@ -499,6 +516,7 @@ impl<A: Admission> Service<A> {
         let record = Record {
             request: req,
             accepted: committed.receipt.controls.is_none(),
+            at: now,
         };
         self.receipt(journal.state().map_err(|_| Error::Unavailable)?, &record)
             .map(Response::Receipt)
@@ -522,7 +540,11 @@ impl<A: Admission> Service<A> {
             return Err(Error::Unauthorized);
         }
         match &req.command {
-            Command::View | Command::Operation(_) if grant.methods & wire::READ != 0 => Ok(()),
+            Command::View | Command::Operation(_) | Command::Read(_)
+                if grant.methods & wire::READ != 0 =>
+            {
+                Ok(())
+            }
             Command::Order {
                 market,
                 lots,

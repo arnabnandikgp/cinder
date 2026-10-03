@@ -20,6 +20,30 @@ pub fn request(sequence: u32, body: &[u8]) -> Result<Zeroizing<Vec<u8>>, Error> 
         [&[1, 1][..], &sequence.to_be_bytes(), body].concat(),
     ))
 }
+/// Authenticated WebSocket request/subscribe type; this does not change Noise,
+/// signatures or economic IDs. Subscription authority remains in the API.
+pub fn socket_request(
+    sequence: u32,
+    body: &[u8],
+    subscribe: bool,
+) -> Result<Zeroizing<Vec<u8>>, Error> {
+    let mut wire = request(sequence, body)?;
+    wire[1] = if subscribe { 3 } else { 5 };
+    Ok(wire)
+}
+/// Decode the next request and its authenticated delivery mode before dispatch.
+pub fn read_delivery(sequence: u32, body: &[u8]) -> Result<(u8, &[u8]), Error> {
+    if body.len() <= 6
+        || body.len() > MAX_REQUEST + 6
+        || body[0] != 1
+        || ![1, 3, 5].contains(&body[1])
+        || body[2..6] != sequence.to_be_bytes()
+        || sequence == 0
+    {
+        return Err(Error);
+    }
+    Ok((body[1], &body[6..]))
+}
 /// Decode the next authenticated request; trailing data belongs to the signed
 /// application's exact decoder, not a second parsing/authorization authority.
 pub fn read_request(sequence: u32, body: &[u8]) -> Result<&[u8], Error> {

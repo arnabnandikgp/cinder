@@ -10,7 +10,7 @@ const bindgen = process.env.CINDER_WASM_BINDGEN ?? 'wasm-bindgen';
 if (execFileSync(bindgen, ['--version'], { encoding: 'utf8' }).trim() !== 'wasm-bindgen 0.2.129') throw Error('Use wasm-bindgen 0.2.129');
 command(process.execPath, ['check-dependencies.mjs']);
 command(process.execPath, ['--test', 'check-dependencies.test.mjs', 'check-npm.test.mjs', 'stop-child.test.mjs']);
-command(process.execPath, ['--test', '../../services/web-relay/server.test.mjs']);
+command(process.execPath, ['--test', '../../services/web-relay/server.test.mjs', '../../services/web-relay/websocket.test.mjs']);
 command('cargo', ['fmt', '--check']);
 command('cargo', ['clippy', '--all-targets', '--locked', '--offline', '--', '-D', 'warnings']);
 for (const mode of [[], ['--release']]) command('cargo', ['test', '--locked', '--offline', ...mode]);

@@ -82,6 +82,9 @@ impl Write for VsockStream {
     }
 }
 impl Socket for VsockStream {
+    fn idle(&self) -> io::Result<()> {
+        self.inner.set_read_timeout(Some(Duration::from_secs(120)))
+    }
     fn prepare(&self) -> io::Result<()> {
         self.inner.set_nonblocking(false)?;
         self.inner.set_read_timeout(Some(Duration::from_secs(5)))?;

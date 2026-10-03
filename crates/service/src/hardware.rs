@@ -701,6 +701,9 @@ impl Write for FaultSocket {
     }
 }
 impl crate::transport::Socket for FaultSocket {
+    fn idle(&self) -> io::Result<()> {
+        self.socket.idle()
+    }
     fn prepare(&self) -> io::Result<()> {
         self.socket.prepare()
     }

@@ -2,6 +2,7 @@
 // method, journal or caller-controlled upstream. Logs must remain coarse.
 import { createServer } from 'node:http';
 import { connect } from 'node:net';
+import { upgrade } from './websocket.mjs';
 
 export const MAX_BATCH = 1048576 + 65 * 34;
 const MAX_RECORD = 16400, MAX_ENVELOPE = 16520, DEADLINE = 5000;
@@ -16,18 +17,20 @@ class Peer {
     this.socket.on('close', () => this.close());
     this.onClose = onClose;
     this.socket.on('data', data => {
-      const p = this.pending;
-      if (!p || this.total + data.length > p.maximum + 4 || this.chunks.length >= 4096) return this.close();
-      this.chunks.push(data); this.total += data.length;
-      if (this.size === undefined && this.total >= 4) {
-        this.size = Buffer.concat(this.chunks, 4).readUInt32BE();
-        if (!this.size || this.size > p.maximum) return this.close();
-      }
-      if (this.size !== undefined && this.total > this.size + 4) return this.close();
-      if (this.size !== undefined && this.total === this.size + 4) {
-        const body = Buffer.concat(this.chunks, this.total).subarray(4);
-        this.chunks = []; this.total = 0; this.size = undefined;
-        this.pending = undefined; p.resolve(body);
+      let at=0;
+      while(at<data.length&&!this.dead){
+        const maximum=this.stream?MAX_BATCH+4:this.pending?.maximum;
+        if(!maximum||this.chunks.length>=4096)return this.close();
+        const needed=this.size===undefined?4-this.total:this.size+4-this.total;
+        const part=data.subarray(at,at+Math.min(needed,data.length-at));at+=part.length;
+        this.chunks.push(part);this.total+=part.length;
+        if(this.size===undefined&&this.total===4){this.size=Buffer.concat(this.chunks,4).readUInt32BE();if(!this.size||this.size>maximum)return this.close();}
+        if(this.size!==undefined&&this.total===this.size+4){
+          const body=Buffer.concat(this.chunks,this.total).subarray(4);
+          this.chunks=[];this.total=0;this.size=undefined;
+          if(this.stream){try{this.stream(body);}catch{return this.close();}}
+          else{if(at!==data.length)return this.close();const p=this.pending;this.pending=undefined;p.resolve(body);}
+        }
       }
     });
   }
@@ -99,7 +102,7 @@ export function createWebRelay({ target, origin }) {
         if (peer && req.url === '/v1/session' && body.length === 33 && body[32] === 0) {
           peer.close(); finished = true; res.writeHead(204, { 'Cache-Control': 'no-store' }).end(); return;
         }
-        if (!peer || peer.busy || peer.dead) throw unavailable();
+        if (!peer || peer.busy || peer.dead || peer.stream) throw unavailable();
         peer.busy = true;
         if (req.url === '/v1/session') {
           if (peer.phase > 1) throw unavailable();
@@ -133,9 +136,35 @@ export function createWebRelay({ target, origin }) {
   server.keepAliveTimeout = DEADLINE; server.maxConnections = 32;
   server.maxRequestsPerSocket = 256;
   server.on('clientError', (_error, socket) => socket.destroy());
+  const sockets=new Set();
+  server.on('upgrade',(req,socket,head)=>{
+    let peer,web,timer;
+    const close=()=>{clearTimeout(timer);sockets.delete(socket);peer?.close();socket.destroy();};
+    try{
+      if(stopping||sockets.size>=8||req.headers.authorization||req.headers.cookie
+        ||req.headers['content-encoding']||req.headers.origin&&req.headers.origin!==origin)throw unavailable();
+      sockets.add(socket);timer=setTimeout(close,DEADLINE);
+      web=upgrade(req,socket,head,body=>{
+        try{
+          if(!peer){
+            if(body.length!==32)throw unavailable();peer=sessions.get(body.toString('hex'));
+            if(!peer||peer.dead||peer.busy||peer.phase!==2||peer.stream)throw unavailable();
+            peer.stream=reply=>web.send(reply);clearTimeout(timer);
+            const original=peer.onClose;peer.onClose=()=>{original();web.close();};return;
+          }
+          if(!body.length||body.length>1046||peer.dead||peer.busy)throw unavailable();
+          // The enclave owns correlation, command authority and subscriptions.
+          // This parent writes opaque frames once; it never resends them.
+          const frame=Buffer.alloc(4+body.length);frame.writeUInt32BE(body.length);body.copy(frame,4);
+          if(peer.socket.writableLength+frame.length>4096)throw unavailable();
+          peer.socket.write(frame,e=>{if(e)close();});
+        }catch{close();}
+      },close);
+    }catch{close();}
+  });
   return { server, activeSessions: () => peers.size,
     close: async () => {
-      stopping = true; for (const p of peers) p.close(); server.closeAllConnections();
+      stopping = true; for (const p of peers) p.close();for(const s of sockets)s.destroy();server.closeAllConnections();
       if (server.listening) await new Promise(resolve => server.close(resolve));
     } };
 }

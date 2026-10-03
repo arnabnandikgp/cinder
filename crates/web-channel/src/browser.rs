@@ -76,6 +76,16 @@ impl BrowserEndpoint {
         let clear = crate::records::request(sequence, body).map_err(redacted)?;
         self.0.seal(&clear).map_err(redacted)
     }
+    /// Same encrypted application record with authenticated WebSocket mode.
+    pub fn socket_request(
+        &mut self,
+        sequence: u32,
+        body: &[u8],
+        subscribe: bool,
+    ) -> Result<Vec<u8>, JsValue> {
+        let clear = crate::records::socket_request(sequence, body, subscribe).map_err(redacted)?;
+        self.0.seal(&clear).map_err(redacted)
+    }
     /// Return only an authenticated COMPLETE correlated application response.
     pub fn response(&mut self, sequence: u32, batch: &[u8]) -> Result<Vec<u8>, JsValue> {
         crate::records::read_response(&mut self.0, sequence, batch)
