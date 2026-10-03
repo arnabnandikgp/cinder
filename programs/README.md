@@ -26,7 +26,7 @@ npm ci --prefix clients/vault --ignore-scripts --no-audit --no-fund
 rustup target add wasm32-unknown-unknown --toolchain 1.97.1
 # Omit this override if the exact CLI is already on PATH:
 export CINDER_WASM_BINDGEN=/absolute/path/to/cinder-test-tools/bin/wasm-bindgen
-"$CINDER_WASM_BINDGEN" --version # must print wasm-bindgen 0.2.129
+"${CINDER_WASM_BINDGEN:-wasm-bindgen}" --version # must print wasm-bindgen 0.2.129
 # One-time platform-tools hydration if not already installed:
 NO_DNA=1 cargo build-sbf --manifest-path programs/cinder-vault/Cargo.toml --tools-version v1.52 --arch v0 -- --locked
 node scripts/check-vault.mjs
@@ -41,6 +41,7 @@ The normal financial workspace checks remain `node scripts/check.mjs`.
 Do not deploy the fixed local identity or unused generated keypair. External
 deployment requires G03/G05 approval. P17 extends the same program with
 [immutable final recovery claims](../docs/architecture/0017-recovery-claims.md),
-separate operator activation and the existing shared payout counters. Actual
-ledger reconciliation, native fencing and private claim delivery are exercised
-by P21's joined offline tests; actual venue/hardware qualification remains P23.
+separate operator activation and the existing shared payout counters. P21's
+joined offline tests exercise ledger reconciliation and private claim delivery,
+and use fake evidence for native fencing. Live native-fencing and venue/hardware
+qualification remain P23.

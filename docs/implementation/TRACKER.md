@@ -37,6 +37,16 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+Merge follow-up — 2026-10-04 (Asia/Kolkata): all four hosted CI jobs and
+CodeRabbit passed at `ea23a17abcf8d91525962ce6ec2c50579ed21b66`. The user
+authorized merging #52. Two subsequent minor README findings are corrected:
+the version check retains the PATH fallback, and offline native-fencing
+evidence is explicitly fake rather than live qualification. The date warning
+is a UTC/local-time difference: the review-fix commits at 2026-10-03 19:58–20:03
+UTC occurred on 2026-10-04 in Asia/Kolkata, not in the future. This docs-only
+successor still needs fresh hosted checks before merge; no runtime change or
+additional implementation phase is included.
+
 Current work: `tee/p21-recovery-integration` in `cinder-tee`, based on merged
 `product/tee-v1` at `05303740dd00129eeb038c9963f44301405725d7`.
 Native stack #49 merged #47/#48/#50/#51 after explicit user authorization and
@@ -2047,6 +2057,7 @@ Verification: all three PLAN criteria are checked for offline scope. Final pinne
 Unexpected: integration revealed token-recipient, create/cancel routing and synthetic fixture margin/readiness mismatches; these were corrected without weakening guards. New controls/state require engine revision 21 and reject old revision 20 histories pending explicit migration. Delivery evidence precommits store/locator layout before root construction; separately signed final ciphertext digests avoid a circular commitment. Package availability is not code-enforced live store independence or a proof of complete liabilities. Dedicated keys are retained, not derivable/reissuable by the operator.
 Review follow-up (2026-10-04): both CodeRabbit findings at `bfe4ae64e05bb3504df9332a83149abbf7e6ecbc` were relevant. Source checkpoint `8e528db870d81a7cd8011780726b8ab32795b1be` fixes register-once/exact-key resume and strengthens both joined carrier tests with positive restart, missing/replacement-key refusal and an epoch-only fencing probe. The default vault setup now documents/provisions the recovery prerequisites and reports missing/wrong bindgen clearly; mandatory full-suite recovery coverage remains. Full `scripts/check.mjs`, DEFAULT `scripts/check-vault.mjs` (55 tests) and two prerequisite-diagnostic checks pass at this source checkpoint; see Current handoff for scope and limits.
 Publication: review fixes pushed at `521dcceed2b3bcc063140061407af9dfb43ed1e4`; both CodeRabbit threads replied/resolved. Plan CI passed at that head; Rust/vault/browser CI were still running, not success receipts for this documentation-only successor.
+Merge follow-up: all four hosted jobs and CodeRabbit passed at `ea23a17abcf8d91525962ce6ec2c50579ed21b66`; the user authorized merge. Two new minor README findings are fixed (PATH fallback and explicit fake native-fencing evidence); the date warning is explained by Asia/Kolkata versus UTC. Foundation validation, all 13 validator tests, both shell fallback cases and diff checks pass locally. This docs-only successor needs its own hosted checks before merging; runtime evidence above is unchanged.
 Next: obtain #52's final-tip hosted CI/focused review and await merge authorization. P21 and local-only P21B remain in progress until merge. P22 expands complete offline adversarial lifecycle; P23/G01/G03 own live capability/source/store/entropy and changed-image qualification. Public recovery MDX remains local/untracked with the user's docs.json preserved. Initial implementation/focused rerun checkpoint `dcb685f277d2c04e1256258d7cb3b10d2c0be266` is historical, not the reviewed source head.
 PR: [#52](https://github.com/arnabnandikgp/cinder/pull/52), ready/open, `tee/p21-recovery-integration` → `product/tee-v1`; all four hosted jobs passed at the initial `bfe4ae6` publication head, but fresh CI/review remain required for the review-fix successor.
 Merge: none.
