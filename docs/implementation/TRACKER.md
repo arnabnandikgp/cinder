@@ -147,8 +147,13 @@ qualification above is historical, not a new-browser receipt for this follow-up.
 This tracker-only successor does not inherit hosted CI from the initial head;
 fresh hosted checks/review remain required after the review-fix push.
 
-Next: publish these review fixes, reply to the two addressed threads, and await
-#52's new-head hosted CI and focused review; merge only with user
+Published review fixes and handoff at
+`521dcceed2b3bcc063140061407af9dfb43ed1e4`; both CodeRabbit threads were replied
+to and resolved. At that exact head the plan job passed and the three executable
+jobs were in progress. This publication-receipt successor is documentation only;
+its fresh hosted CI remains required, not inferred from those running checks.
+
+Next: await #52's final-tip hosted CI and focused review; merge only with user
 authorization; do not auto-merge or call P21/P21B closed. P22 is the next
 planning boundary, expanding complete adversarial
 lifecycle acceptance; P23 alone qualifies actual ports/changed Nitro image.
@@ -2041,7 +2046,8 @@ Work: completed the approved offline phase on `tee/p21-recovery-integration`, ba
 Verification: all three PLAN criteria are checked for offline scope. Final pinned workspace runner passes 30 foundation/boundary tests, 12 carrier tests, both strict Clippy configurations, all-target build, workspace debug/release and all 24 SDK/TLS tests. All 55 vault codec/SBF tests pass. Full native/WASM/browser runner passes, including 14 verifier/core and 24 joined process groups each in Node/Chrome. Focused additions include 16 journal cut tests, recovery-close allocation/replay, 26 passing P16 funding tests, actual signed bounded recovery dispatch and four package/key/readback/tree tests. Limits/commands/environment are in Current handoff; known Nitro tests remain explicitly ignored, not silently counted as passing hardware. Initial failures and fixes are recorded there. Earlier slice-only receipts are superseded, not rebranded as final checks.
 Unexpected: integration revealed token-recipient, create/cancel routing and synthetic fixture margin/readiness mismatches; these were corrected without weakening guards. New controls/state require engine revision 21 and reject old revision 20 histories pending explicit migration. Delivery evidence precommits store/locator layout before root construction; separately signed final ciphertext digests avoid a circular commitment. Package availability is not code-enforced live store independence or a proof of complete liabilities. Dedicated keys are retained, not derivable/reissuable by the operator.
 Review follow-up (2026-10-04): both CodeRabbit findings at `bfe4ae64e05bb3504df9332a83149abbf7e6ecbc` were relevant. Source checkpoint `8e528db870d81a7cd8011780726b8ab32795b1be` fixes register-once/exact-key resume and strengthens both joined carrier tests with positive restart, missing/replacement-key refusal and an epoch-only fencing probe. The default vault setup now documents/provisions the recovery prerequisites and reports missing/wrong bindgen clearly; mandatory full-suite recovery coverage remains. Full `scripts/check.mjs`, DEFAULT `scripts/check-vault.mjs` (55 tests) and two prerequisite-diagnostic checks pass at this source checkpoint; see Current handoff for scope and limits.
-Next: publish review fixes and thread dispositions, obtain #52's fresh hosted CI/focused review and await merge authorization. P21 and local-only P21B remain in progress until merge. P22 expands complete offline adversarial lifecycle; P23/G01/G03 own live capability/source/store/entropy and changed-image qualification. Public recovery MDX remains local/untracked with the user's docs.json preserved. Initial implementation/focused rerun checkpoint `dcb685f277d2c04e1256258d7cb3b10d2c0be266` is historical, not the reviewed source head.
+Publication: review fixes pushed at `521dcceed2b3bcc063140061407af9dfb43ed1e4`; both CodeRabbit threads replied/resolved. Plan CI passed at that head; Rust/vault/browser CI were still running, not success receipts for this documentation-only successor.
+Next: obtain #52's final-tip hosted CI/focused review and await merge authorization. P21 and local-only P21B remain in progress until merge. P22 expands complete offline adversarial lifecycle; P23/G01/G03 own live capability/source/store/entropy and changed-image qualification. Public recovery MDX remains local/untracked with the user's docs.json preserved. Initial implementation/focused rerun checkpoint `dcb685f277d2c04e1256258d7cb3b10d2c0be266` is historical, not the reviewed source head.
 PR: [#52](https://github.com/arnabnandikgp/cinder/pull/52), ready/open, `tee/p21-recovery-integration` → `product/tee-v1`; all four hosted jobs passed at the initial `bfe4ae6` publication head, but fresh CI/review remain required for the review-fix successor.
 Merge: none.
 
