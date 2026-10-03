@@ -154,6 +154,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Operator-qualified recovery-only cutover and irreversible dispatch seal.
+    Recovery(crate::recovery::Action),
     /// Trusted source qualification for one exact retained input; not an admin reset.
     ResolveRaw(crate::raw::Resolution),
     /// Fixed ADL declaration and funded RF1/RF2 replacement lifecycle.
@@ -288,6 +290,7 @@ pub struct State {
     pub(crate) funds_observations: Vec<crate::funds::Observation>,
     pub(crate) funds_receipts: Vec<(EventKey, Option<u64>)>,
     pub(crate) frozen: bool,
+    pub(crate) recovery: Option<crate::recovery::Permission>,
     pub(crate) native_funding_ready: bool,
     pub(crate) raw_unresolved: u64,
     pub(crate) raw_inputs: Vec<crate::raw::Entry>,
@@ -333,6 +336,7 @@ impl State {
             funds_observations: Vec::new(),
             funds_receipts: Vec::new(),
             frozen: false,
+            recovery: None,
             native_funding_ready,
             raw_unresolved: 0,
             raw_inputs: Vec::new(),
@@ -448,6 +452,9 @@ impl State {
         }
     }
     pub(crate) fn all_capacity(&self) -> Result<(), ControlError> {
+        if self.recovery_flat_returns() {
+            return self.recovery_return_capacity();
+        }
         if self.close_contained() {
             return Err(ControlError::Unqualified);
         }
@@ -474,6 +481,7 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Recovery(action) => self.recovery_action(action)?,
             Control::ResolveRaw(resolution) => self.resolve_raw(resolution)?,
             Control::Restoration(action) => self.restoration_action(action)?,
             Control::Liquidation(action) => self.liquidation_action(action)?,
@@ -593,6 +601,9 @@ impl State {
         Ok(())
     }
     fn exposure_qualified(&self, attempt: &Attempt) -> Result<(), ControlError> {
+        if self.recovery_sealed() {
+            return Err(ControlError::Unqualified);
+        }
         // Attributed cancellation grants no additional exposure. Permit cleanup
         // under freeze or late evidence, including at the final proposal cut.
         if attempt.kind == AttemptKind::Cancel {
@@ -607,7 +618,7 @@ impl State {
         {
             return Err(ControlError::Unqualified);
         }
-        if self.frozen
+        if self.frozen && !self.recovery_exposure(attempt)
             || self.raw_unresolved != 0
             || self.ledger.issues().iter().any(|i| i.open)
             || self.ledger.unresolved_attribution() != 0

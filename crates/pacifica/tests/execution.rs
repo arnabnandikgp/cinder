@@ -176,6 +176,207 @@ fn signature_valid(r: &Outbound) -> bool {
         .is_ok()
 }
 #[test]
+fn recovery_close_is_a_bounded_signed_ioc_not_an_ordinary_or_reusable_capability() {
+    use cinder_journal::{collateral, liquidation as lc, recovery, risk};
+    use cinder_kernel::ledger::evidence::*;
+    let t = Temp::new();
+    let mut s = t.create();
+    let g = gateway();
+    seed(&mut s, &g);
+    let mut tx = transaction(
+        s.head(),
+        3,
+        vec![
+            receipt(2, Owner::House, 10000),
+            Event {
+                key: RecordKey::Attempt(attempt(1)),
+                policy: config().policy,
+                change: Change::BindExecution {
+                    market: q(0).unit(),
+                    side: Side::Buy,
+                },
+            },
+            event(
+                4,
+                Change::Fill {
+                    target: FillTarget::Customer(attempt(1)),
+                    quantity: q(2),
+                    price: p(100),
+                },
+            ),
+        ],
+        vec![],
+    );
+    assert_eq!(s.commit(tx.clone()).unwrap().receipt.controls, None);
+    let l = s.state().unwrap().ledger();
+    tx = transaction(
+        s.head(),
+        4,
+        vec![event(
+            5,
+            Change::Reconcile(NativeCheck {
+                expected_version: l.version(),
+                cash: Some(l.venue().cash()),
+                funding: Some(l.venue().funding()),
+                positions: Some(l.venue().positions().to_vec()),
+                complete: true,
+                resolves: vec![],
+            }),
+        )],
+        vec![],
+    );
+    s.commit(tx).unwrap();
+    let version = s.state().unwrap().ledger().version();
+    let cut = collateral::Cut {
+        expected_version: version,
+        policy: collateral::Policy {
+            revision: config().policy,
+            markets: vec![collateral::MarginRule {
+                market: q(0).unit(),
+                private_bps: 1000,
+                native_bps: 1000,
+            }],
+            evidence: EvidencePolicy {
+                max_issue_age: 1000,
+                max_mark_age: 1000,
+                max_check_age: 1000,
+            },
+        },
+        marks: vec![MarkObservation {
+            price: p(100),
+            evidence: key(99),
+            observed_at: 10,
+            valid_until: 1000,
+            qualified: true,
+        }],
+    };
+    let r = risk::Policy {
+        revision: config().policy,
+        markets: vec![risk::MarketRule {
+            market: q(0).unit(),
+            maximum_leverage: 100000,
+            maintenance_bps: 500,
+            native_maintenance_bps: 500,
+            gross_limit: cash(100000),
+            net_limit: cash(100000),
+        }],
+        buffer: cash(0),
+        horizon_ms: 50,
+        valid_until: 1000,
+        paths: vec![risk::Path {
+            id: [1; 32],
+            steps: vec![risk::Step {
+                after_ms: 1,
+                marks: vec![p(100)],
+                events: vec![],
+                liquidity: vec![
+                    risk::Liquidity {
+                        location: Location::Vault,
+                        accessible_bps: 10000,
+                        due: cash(0),
+                    },
+                    risk::Liquidity {
+                        location: Location::Venue,
+                        accessible_bps: 10000,
+                        due: cash(0),
+                    },
+                ],
+            }],
+        }],
+    };
+    let tx = transaction(
+        s.head(),
+        5,
+        vec![],
+        vec![
+            Control::Collateral(cut),
+            Control::Risk(risk::Action::Install {
+                expected_version: version,
+                policy: Box::new(r),
+            }),
+            Control::Liquidation(lc::Action::Install {
+                expected_version: version,
+                policy: Box::new(lc::Policy {
+                    revision: config().policy,
+                    authority_epoch: 1,
+                    valid_until: 1000,
+                    limits: vec![lc::Limit {
+                        market: q(0).unit(),
+                        maximum_lots: 2,
+                        minimum: p(90),
+                        maximum: p(110),
+                        fee_per_lot: cash(1),
+                        additional_per_lot: cash(5),
+                    }],
+                }),
+            }),
+            Control::Recovery(recovery::Action::Begin {
+                expected_version: version,
+                authority_epoch: 1,
+                valid_until: 1000,
+                fence: [41; 32],
+            }),
+        ],
+    );
+    assert_eq!(s.commit(tx).unwrap().receipt.controls, None);
+    let p = lc::Proposal {
+        attempt: attempt(20),
+        kind: lc::Kind::RecoveryClose,
+        market: q(0).unit(),
+        expected_version: version,
+        policy: config().policy,
+        authority_epoch: 1,
+        expires_at: 1000,
+    };
+    let tx = transaction(
+        s.head(),
+        6,
+        vec![],
+        vec![Control::Liquidation(lc::Action::Prepare {
+            authenticated_digest: p.digest().unwrap(),
+            proposal: Box::new(p),
+        })],
+    );
+    assert_eq!(s.commit(tx).unwrap().receipt.controls, None);
+    let mut fake = Fake::default();
+    assert!(g.dispatch(&mut s, dispatch(20, 11), &mut fake).is_err());
+    assert!(fake.requests.is_empty());
+    assert_eq!(
+        g.dispatch_recovery(&mut s, dispatch(20, 11), &mut fake)
+            .unwrap(),
+        Outcome::Unknown
+    );
+    assert_eq!(fake.requests.len(), 1);
+    assert!(signature_valid(&fake.requests[0]));
+    let body = parsed(&fake.requests[0]);
+    assert_eq!(body["tif"], "IOC");
+    assert_eq!(body["side"], "ask");
+    assert_eq!(body["amount"], "2");
+    assert_eq!(body["price"], "90");
+    assert_eq!(body["reduce_only"], false);
+    assert!(s.state().unwrap().frozen());
+    assert!(s.state().unwrap().holds().iter().any(|h| h.active));
+    assert_eq!(
+        s.state()
+            .unwrap()
+            .ledger()
+            .book(Owner::Customer(user(1)))
+            .unwrap()
+            .positions()[0]
+            .quantity()
+            .lots(),
+        2
+    );
+    assert!(
+        g.dispatch_recovery(&mut s, dispatch(20, 12), &mut fake)
+            .is_err()
+    );
+    assert_eq!(fake.requests.len(), 1);
+    let expected = s.state().unwrap().clone();
+    drop(s);
+    assert_eq!(t.open().state().unwrap(), &expected);
+}
+#[test]
 fn gtc_alo_ioc_both_sides_are_real_signatures_over_exact_native_fields() {
     for tif in [
         TimeInForce::GoodTilCancelled,

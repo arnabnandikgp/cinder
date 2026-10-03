@@ -329,6 +329,35 @@ fn liquidation_requires_maintenance_breach_caps_depth_and_rechecks_before_exposu
     );
 }
 #[test]
+fn healthy_recovery_close_requires_explicit_cutover_and_retains_bounded_house_support() {
+    let t = Temp::new();
+    let mut s = live(&t, 5, 100);
+    let c = proposal(&s, 20, lc::Kind::RecoveryClose);
+    assert!(run(&mut s, vec![], vec![c]).receipt.controls.is_some());
+    let begin = Control::Recovery(cinder_journal::recovery::Action::Begin {
+        expected_version: s.state().unwrap().ledger().version(),
+        authority_epoch: 1,
+        valid_until: 100,
+        fence: [41; 32],
+    });
+    assert_eq!(run(&mut s, vec![], vec![begin]).receipt.controls, None);
+    let c = proposal(&s, 20, lc::Kind::RecoveryClose);
+    let r = run(&mut s, vec![], vec![c, Control::Expose(attempt(20))]);
+    assert_eq!(r.receipt.controls, None);
+    assert_eq!(r.exposures.len(), 1);
+    assert_eq!(s.state().unwrap().orders()[0].intent.quantity, q(-2));
+    run(&mut s, vec![actual(100, 20, -1, 100, 1)], vec![]);
+    assert_eq!(
+        qty(s.state().unwrap().ledger(), Owner::Customer(user(1))),
+        4
+    );
+    terminal(&mut s, 20, -1, &[100]);
+    assert!(s.state().unwrap().frozen());
+    let expected = s.state().unwrap().clone();
+    drop(s);
+    assert_eq!(t.open().state().unwrap(), &expected);
+}
+#[test]
 fn liquidation_partial_ack_timeout_and_restart_retain_residual_and_holds() {
     let t = Temp::new();
     let mut s = live(&t, 5, 81);

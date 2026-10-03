@@ -38,12 +38,12 @@ implementation is a separate workstream, not the template for this architecture.
 | Pacifica signing adapter | Durable native preimages, scoped Ed25519 signer, shared credit reservation and fake transport implemented; no live-qualified deployment | P14 |
 | Solana custody vault and normal authorization | Anchor 1.2 program, public receipts/shared paid counters and offline signed SBF tests implemented; deployment gated | P15 |
 | Funding round trip | Durable three-location coordinator, original-wire/attempt reconciliation and shared credit budget tested offline; source/live qualification gated | P16 |
-| Recovery claims | Implemented for offline review in the same vault; immutable statements, funded activation, owner claims/shared counters; actual joined preparation/delivery remains P21 | P17 |
+| Recovery claims | Same-vault immutable statements, funded activation and shared counters; sealed-journal matching, encrypted delivery and independent claims tested through local HTTP/WebSocket outages/SBF | P17/P21 |
 | Private API/SDK | Implemented against trusted confidential-channel/admission ports; encrypted journal auth/replay, no public plaintext listener | P18 |
 | Attested client channel and runnable service | TLS 1.3/pinned-root verification and actual local SDK/relay/API/journal processes; fixture attestation/time/witness only | P19 |
 | Actual Nitro runtime | Merged bounded actual hardware qualification; later changed-image/native workflows still need fresh P23 evidence | P20 |
-| Confidential web API | Open implementation stack: shared browser/Node attestation and Noise core, HTTP/WebSocket commands, signed private reads and bounded subscriptions; offline only | P21A |
-| Integrated recovery, adversarial/live qualification, release review | Planned acceptance gates | P21–P24 |
+| Confidential web API | Merged: shared browser/Node attestation and Noise core, HTTP/WebSocket commands, signed private reads and bounded subscriptions; offline only, changed-image/native qualification remains P23 | P21A |
+| Adversarial/live qualification and release review | Planned acceptance gates; local P21 ports do not qualify live custody/native effects | P22–P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one
 native account, multiple linear-perp markets, private customer books, house and
@@ -559,7 +559,9 @@ other customers' private statements. The approved recovery runtime prepares it,
 encrypts it to the customer's wallet-authorized encryption key, and makes it
 retrievable without the ordinary API. A root cannot reconstruct missing packages.
 P17 defines [exact encoding and the immutable payout contract](architecture/0017-recovery-claims.md).
-P21 integrates authoritative finalization, private delivery and lost-key procedures.
+P21 integrates authoritative finalization, immutable registered encryption keys,
+private delivery and the independent Node claimant. Keys and locators must be backed
+up; rotation/lost-key reissue is not implemented or silently delegated to operators.
 
 Normal and recovery payout paths share claim capacity and paid-counter semantics.
 Prior settled payouts are subtracted once; exposed unknown payouts remain held.

@@ -26,7 +26,7 @@ jobs:
         with:
           node-version-file: .node-version
       - name: Install pinned Rust
-        run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+        run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
       - name: Install checksum-verified local test tools
         env:
           NO_DNA: '1'
@@ -44,6 +44,15 @@ jobs:
           printf '%s  %s\n' a7205ff29bcf0f7199740225ecae2b85a28ea9668892d5ec21bd9749882984a1 "$vault_tools/agave.tar.bz2" | sha256sum --check -
           tar -xjf "$vault_tools/agave.tar.bz2" -C "$vault_tools"
           printf '%s\n' "$vault_tools" "$vault_tools/solana-release/bin" >> "$GITHUB_PATH"
+      - name: Prepare pinned private service and browser recovery fixture dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libssl-dev
+          cargo fetch --locked
+          cargo fetch --manifest-path tools/web-channel/Cargo.toml --locked
+          npm ci --ignore-scripts --prefix tools/web-channel
+          curl -fsSL --retry 2 --max-time 90 https://github.com/wasm-bindgen/wasm-bindgen/releases/download/0.2.129/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl.tar.gz -o "$RUNNER_TEMP/wasm-bindgen.tar.gz"
+          printf '%s  %s\n' 82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e "$RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/wasm-bindgen.tar.gz" -C "$RUNNER_TEMP"
       - name: Hydrate exact build dependencies
         working-directory: programs
         run: |
@@ -55,4 +64,6 @@ jobs:
         working-directory: clients/vault
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Locked SBF build and offline transaction suite
+        env:
+          CINDER_WASM_BINDGEN: ${{ runner.temp }}/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl/wasm-bindgen
         run: node scripts/check-vault.mjs

@@ -230,6 +230,9 @@ pub fn policy() -> Policy {
     }
 }
 
+/// Joined SBF recovery fixture helpers, never available in the production build.
+pub mod recovery;
+
 // Public accepted-head file for the local crash test only. Same-host storage is
 // NOT an authenticated independent witness and cannot qualify G03 freshness.
 struct LocalWitness(PathBuf);
@@ -237,20 +240,32 @@ impl Witness for LocalWitness {
     fn read(&mut self, _: Stream) -> Result<Anchor, cinder_journal::Error> {
         let f = File::open(&self.0).map_err(|_| cinder_journal::Error::Storage)?;
         let mut b = Vec::new();
-        f.take(41)
+        f.take(49)
             .read_to_end(&mut b)
             .map_err(|_| cinder_journal::Error::Storage)?;
-        let head = if b == [0] {
-            None
-        } else if b.len() == 40 {
-            Some(Head {
-                sequence: u64::from_be_bytes(b[..8].try_into().unwrap()),
-                hash: b[8..].try_into().unwrap(),
-            })
+        if b == [0] {
+            return Ok(Anchor {
+                epoch: 1,
+                head: None,
+            });
+        }
+        let (epoch, at) = if b.len() == 40 {
+            (1, 0)
+        } else if b.len() == 48 {
+            (u64::from_be_bytes(b[..8].try_into().unwrap()), 8)
         } else {
             return Err(cinder_journal::Error::Storage);
         };
-        Ok(Anchor { epoch: 1, head })
+        if epoch == 0 {
+            return Err(cinder_journal::Error::Storage);
+        }
+        Ok(Anchor {
+            epoch,
+            head: Some(Head {
+                sequence: u64::from_be_bytes(b[at..at + 8].try_into().unwrap()),
+                hash: b[at + 8..].try_into().unwrap(),
+            }),
+        })
     }
     fn accept(
         &mut self,
@@ -267,7 +282,17 @@ impl Witness for LocalWitness {
             .create_new(true)
             .open(&tmp)
             .map_err(|_| cinder_journal::Error::Storage)?;
-        f.write_all(&[&next.sequence.to_be_bytes()[..], &next.hash].concat())
+        let bytes = if expected.epoch == 1 {
+            [&next.sequence.to_be_bytes()[..], &next.hash].concat()
+        } else {
+            [
+                &expected.epoch.to_be_bytes()[..],
+                &next.sequence.to_be_bytes(),
+                &next.hash,
+            ]
+            .concat()
+        };
+        f.write_all(&bytes)
             .and_then(|_| f.sync_all())
             .map_err(|_| cinder_journal::Error::Storage)?;
         std::fs::rename(tmp, &self.0).map_err(|_| cinder_journal::Error::Storage)?;
@@ -306,6 +331,46 @@ impl FixtureHandler {
     /// Key arrives through harness stdin, never parent disk/logs. Reuse on restart
     /// is a test harness responsibility, not a production key-release design.
     pub fn open(root: &Path, key: Zeroizing<[u8; 32]>, wallet: [u8; 32]) -> Result<Self, Error> {
+        Self::open_inner(root, key, wallet, [81; 32], None)
+    }
+    /// Same service/journal with SBF customer custody and synthetic venue house capital.
+    /// Only the explicit joined offline harness may choose this fixture setup.
+    pub fn open_recovery(
+        root: &Path,
+        key: Zeroizing<[u8; 32]>,
+        wallet: [u8; 32],
+        controller: &cinder_pacifica::funding::Controller,
+        keys: &[crate::recovery::RecipientKey],
+    ) -> Result<Self, Error> {
+        let route = controller.route();
+        if route.beneficiaries.len() != 1 || route.beneficiaries[0].wallet != wallet {
+            return Err(Error);
+        }
+        let h = Self::open_inner(
+            root,
+            key,
+            wallet,
+            route.beneficiaries[0].tokens,
+            Some(controller),
+        )?;
+        let mut store = h.store.lock().map_err(|_| Error)?;
+        crate::recovery::register_keys(
+            controller,
+            &mut *store,
+            recovery::commit_id()?,
+            FixtureClock.now()?,
+            keys,
+        )?;
+        drop(store);
+        Ok(h)
+    }
+    fn open_inner(
+        root: &Path,
+        key: Zeroizing<[u8; 32]>,
+        wallet: [u8; 32],
+        tokens: [u8; 32],
+        controller: Option<&cinder_pacifica::funding::Controller>,
+    ) -> Result<Self, Error> {
         let fresh = !root.join("accepted").exists();
         if fresh {
             // A dirty/missing accepted register must never silently initialize.
@@ -345,7 +410,7 @@ impl FixtureHandler {
                 owners: vec![OwnerBinding {
                     account: user(),
                     wallet,
-                    tokens: [81; 32],
+                    tokens,
                 }],
                 maximum_auth_lifetime: 120_000,
                 maximum_grant_lifetime: 3_600_000,
@@ -355,7 +420,37 @@ impl FixtureHandler {
         .map_err(|_| Error)?;
         let now = FixtureClock.now()?;
         if fresh {
-            seed(&mut store, now)?;
+            seed(&mut store, now, controller.is_some())?;
+            if let Some(c) = controller {
+                c.bind(&mut store, recovery::commit_id()?, now)
+                    .map_err(|_| Error)?;
+                c.observe_setup(
+                    &mut store,
+                    recovery::commit_id()?,
+                    now,
+                    cinder_pacifica::funding::Setup {
+                        account: c.route().broker,
+                        observed_at: now,
+                        lending_disabled: true,
+                        borrowed: "0".into(),
+                        interest: "0".into(),
+                        complete: true,
+                    },
+                )
+                .map_err(|_| Error)?;
+            } else {
+                // The legacy transport-only fixture has no native controller.
+                // Its readiness is explicitly synthetic, never a production
+                // fallback or a replacement for the joined controller's Setup.
+                commit(
+                    &mut store,
+                    now,
+                    vec![],
+                    vec![Control::Funds(
+                        cinder_journal::funds::Action::NativeCreditReady(true),
+                    )],
+                )?;
+            }
         }
         service.initialize(&mut store, now).map_err(|_| Error)?;
         Ok(Self {
@@ -439,15 +534,19 @@ fn config() -> Config {
         venue,
         venue_account: account,
         policy: PolicyVersion::new(1).unwrap(),
-        sources: vec![Source {
-            scope: EventScope {
-                domain,
-                venue,
-                account,
-                namespace: NamespaceId::new([6; 32]).unwrap(),
-            },
-            location: Location::Venue,
-        }],
+        sources: [Location::Venue, Location::Vault, Location::Broker]
+            .into_iter()
+            .enumerate()
+            .map(|(n, location)| Source {
+                scope: EventScope {
+                    domain,
+                    venue,
+                    account,
+                    namespace: NamespaceId::new([6 + n as u8; 32]).unwrap(),
+                },
+                location,
+            })
+            .collect(),
         markets: vec![
             Market::new(
                 MarketUnit {
@@ -505,7 +604,10 @@ fn commit(
     tx.inputs = events
         .into_iter()
         .map(|e| Input {
-            source: config().sources[0].scope,
+            source: match &e.key {
+                RecordKey::Economic(k) => k.scope,
+                _ => config().sources[0].scope,
+            },
             source_cut: Some(0),
             authority_epoch: 1,
             observed_at: now,
@@ -524,27 +626,40 @@ fn commit(
     }
     Ok(())
 }
-fn seed(store: &mut Store, now: u64) -> Result<(), Error> {
+fn seed(store: &mut Store, now: u64, recovery: bool) -> Result<(), Error> {
+    let initial = |n, owner, location| {
+        let mut e = event(
+            n,
+            Change::Receipt {
+                owner,
+                location,
+                amount: cash(1000),
+            },
+        );
+        if let RecordKey::Economic(k) = &mut e.key {
+            k.scope = config()
+                .sources
+                .iter()
+                .find(|s| s.location == location)
+                .unwrap()
+                .scope;
+        }
+        e
+    };
     commit(
         store,
         now,
         vec![
-            event(
+            initial(
                 1,
-                Change::Receipt {
-                    owner: Owner::Customer(user()),
-                    location: Location::Venue,
-                    amount: cash(1000),
+                Owner::Customer(user()),
+                if recovery {
+                    Location::Vault
+                } else {
+                    Location::Venue
                 },
             ),
-            event(
-                2,
-                Change::Receipt {
-                    owner: Owner::House,
-                    location: Location::Venue,
-                    amount: cash(1000),
-                },
-            ),
+            initial(2, Owner::House, Location::Venue),
         ],
         vec![],
     )?;
@@ -610,7 +725,7 @@ fn seed(store: &mut Store, now: u64) -> Result<(), Error> {
                 after_ms: 1,
                 marks: vec![price],
                 events: vec![],
-                liquidity: [Location::Vault, Location::Venue]
+                liquidity: [Location::Vault, Location::Venue, Location::Broker]
                     .into_iter()
                     .map(|location| risk::Liquidity {
                         location,

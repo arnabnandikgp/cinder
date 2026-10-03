@@ -929,6 +929,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Recovery(action) => {
+                w.byte(12);
+                crate::recovery::encode_action(&mut w, action);
+            }
             Control::ResolveRaw(resolution) => {
                 w.byte(11);
                 crate::raw::encode_resolution(&mut w, resolution);
@@ -1058,6 +1062,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             9 => Control::Liquidation(crate::liquidation::decode_action(&mut r)?),
             10 => Control::Restoration(crate::restoration::decode_action(&mut r)?),
             11 => Control::ResolveRaw(crate::raw::decode_resolution(&mut r)?),
+            12 => Control::Recovery(crate::recovery::decode_action(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -1325,8 +1330,15 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
         w.blob(&encode_event(classified)?);
     }
     w.byte(u8::from(s.frozen));
+    w.option(&s.recovery, |w, p| {
+        w.u64(p.authority_epoch);
+        w.u64(p.valid_until);
+        w.raw(&p.fence);
+        w.byte(u8::from(p.sealed));
+    });
     w.count(s.funds.len());
     for o in &s.funds {
+        w.byte(u8::from(o.recovery));
         crate::funds::encode_intent(&mut w, &o.intent);
         w.option(&o.attempt, |w, a| w.item(a));
         w.option(&o.proof, crate::funds::encode_terminal);

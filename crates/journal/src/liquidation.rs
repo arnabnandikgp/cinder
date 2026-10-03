@@ -45,6 +45,9 @@ pub struct Policy {
 /// Distinct source of authority and financial owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
+    /// Operator-assisted wind-down of an existing customer position, including a
+    /// healthy one, only under the explicit durable recovery permission.
+    RecoveryClose,
     /// Previously customer-authorized private reduce-only intent.
     PrivateClose,
     /// Only a maintenance-breached customer; not a healthy-customer pool bail-out.
@@ -323,6 +326,10 @@ impl State {
                     return Err(ControlError::Invalid);
                 }
                 let limit = self.close_limit(p.market)?.clone();
+                if p.kind == Kind::RecoveryClose && self.recovery_epoch() != Some(p.authority_epoch)
+                {
+                    return Err(ControlError::Unqualified);
+                }
                 let report = self.risk_report()?;
                 if p.kind == Kind::Liquidation
                     && report
@@ -360,7 +367,7 @@ impl State {
                             && self.closes.iter().any(|c| {
                                 c.request == o.intent.request && c.kind == Kind::HouseUnwind
                             })
-                            || p.kind == Kind::Liquidation
+                            || matches!(p.kind, Kind::Liquidation | Kind::RecoveryClose)
                                 && o.intent.request.account == p.attempt.request.account)
                 }) {
                     return Err(ControlError::Unqualified);
@@ -494,6 +501,9 @@ impl State {
             return Err(ControlError::Unqualified);
         }
         if a.kind == AttemptKind::Emergency {
+            if c.kind == Kind::RecoveryClose && self.recovery_epoch() != Some(c.authority_epoch) {
+                return Err(ControlError::Unqualified);
+            }
             let order = self
                 .orders
                 .iter()
@@ -541,6 +551,7 @@ fn kind(w: &mut Writer, k: Kind) {
         Kind::PrivateClose => 0,
         Kind::Liquidation => 1,
         Kind::HouseUnwind => 2,
+        Kind::RecoveryClose => 3,
     })
 }
 fn read_kind(r: &mut Reader<'_>) -> Result<Kind, Error> {
@@ -548,6 +559,7 @@ fn read_kind(r: &mut Reader<'_>) -> Result<Kind, Error> {
         0 => Ok(Kind::PrivateClose),
         1 => Ok(Kind::Liquidation),
         2 => Ok(Kind::HouseUnwind),
+        3 => Ok(Kind::RecoveryClose),
         _ => Err(Error::Codec),
     }
 }

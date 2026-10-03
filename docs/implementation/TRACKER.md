@@ -23,9 +23,9 @@
 | [P18 — Private API and SDK](PLAN.md#p18) | closed | Customers access only their own scoped operations and views through a secure SDK, never raw pooled-account authority. | [#42](https://github.com/arnabnandikgp/cinder/pull/42), merged `1f750b0` |
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
 | [P20 — Nitro application qualification](PLAN.md#p20) | closed | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), merged `76f3295` |
-| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | in progress | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | [#47](https://github.com/arnabnandikgp/cinder/pull/47), contract/core; [#48](https://github.com/arnabnandikgp/cinder/pull/48), browser verifier/binding; [#50](https://github.com/arnabnandikgp/cinder/pull/50), HTTP/shared SDK; [#51](https://github.com/arnabnandikgp/cinder/pull/51), reads/WebSocket/acceptance |
-| [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
-| [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
+| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | closed | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | #47, #48, #50 and [#51](https://github.com/arnabnandikgp/cinder/pull/51), merged `0530374` |
+| [P21B — Public documentation](PLAN.md#p21b) | in progress | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
+| [P21 — Recovery integration](PLAN.md#p21) | in progress | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
@@ -36,6 +36,84 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+Current work: `tee/p21-recovery-integration` in `cinder-tee`, based on merged
+`product/tee-v1` at `05303740dd00129eeb038c9963f44301405725d7`.
+Native stack #49 merged #47/#48/#50/#51 after explicit user authorization and
+fresh successful checks at all four exact heads; P21A is closed for offline scope.
+
+P21B contains 37 copy-ready `.mdx` pages in `docs-content/`, for the user's
+existing Mintlify repository. At the user's request the entire directory is
+ignored/untracked; their own local `docs.json` is preserved. No new
+site/package/hosting/CI is included.
+Eight commands and ten read families use native field, request-example and
+response-example components; actual shared binary route and SDK semantics remain
+explicit. No public endpoint, self-service onboarding or live financial workflow
+is invented. Content references the merged code and approved baseline.
+
+Verification: 37 MDX pages compile with a temporary pinned MDX 3.1.1 compiler;
+158 internal page links resolve; all 56 API TypeScript examples strictly typecheck
+with pinned TypeScript 7.0.2 against the merged SDK. All 18 command/read references
+have the required field/example components and the real encrypted carrier with
+playground disabled. The foundation checker and all 13 focused tests pass.
+No new-format Mintlify hosted rendering or publication is inferred from compilation.
+
+Metadata follow-up: all 18 command/read references use ordinary encrypted-carrier
+text instead of relative `api:` frontmatter; the incompatible playground stays
+disabled. All 37 MDX pages compile and all 37 user-supplied navigation entries
+resolve after the edit. `git ls-files docs-content` is empty. Content delivery is
+complete; P21B remains in progress only until this tracked delivery record merges
+with P21, not because a separate docs-source PR or hosted site is required.
+
+P21 now satisfies its three **offline** acceptance criteria. Implemented: complete
+settled-cut derivation; original P16 lifetime counter/backing matching; explicit
+recovery cutover, bounded IOC closes/flat returns and irreversible sealing; immutable
+wallet-authorized dedicated encryption-key registration; recipient-encrypted packages
+with both store readbacks; separately signed opaque manifest; independent Node
+retrieval/decryption/live-custody verification and unsigned claim construction.
+Actual HTTP/WebSocket SDK/service tails survive process death and end in compiled
+local payout/return/claim instructions with ordinary service unavailable.
+
+Final verification on macOS arm64, Rust 1.97.1 / Node 24.21.0:
+`node scripts/check.mjs` passes foundation/boundaries, strict default/all-feature
+Clippy, all-target build, workspace debug/release tests and all 24 SDK/TLS tests.
+`node scripts/check-vault.mjs` passes locked build/IDL/strict Rust/TypeScript and
+all **55** codec/SBF/recovery tests, including both accepted-tail outage rehearsals.
+`node tools/web-channel/check.mjs` passes native/WASM debug/release/Clippy plus
+14 verifier/core groups and 24 HTTP/WebSocket/private process groups **each** in
+Node and actual Chrome 154.0.8037.93. The SBF runner uses Anchor 1.2.0, Surfpool
+1.5.0 and cargo-build-sbf 3.1.10/platform-tools 1.52. Reproducible low-disk settings:
+`CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`;
+the isolated WASM target uses the previously installed task-specific Rustup home.
+No container, AWS, live venue, devnet, deployed key or real funds were used.
+
+Initial joined failures were diagnosed locally: missing broker scenario coverage,
+all fixture assets parked in the vault instead of native margin, and a preexisting
+wallet-versus-token payout recipient mismatch. The real signed close test also
+caught cleanup-credit eligibility incorrectly choosing the cancel endpoint. Fixes
+preserve admission/signature/economic gates. Adding the broker source required
+explicit synthetic readiness in the old transport-only fixture; all affected
+SDK/TLS/browser regressions passed after that correction. Earlier failed runs
+are not passing receipts. The initial 16-cut/23-funding slice receipt remains
+historical; the final funding file now has 26 passing tests plus its parent-invoked
+worker, and all 16 cut tests still pass.
+
+Limits: native capability closure/completion, chain authentication and independent
+store failure domains are explicit ports tested with offline fixtures, not live
+proof. Preparation and claimant parsing are implemented, but package hosting,
+public onboarding, key rotation/lost-key reissue, new-image hardware qualification
+and production entropy/erasure are not inferred. Engine revision 21 rejects prior
+revision 20 histories; migration is not implemented. No heartbeat payout, parallel
+ledger, debt-as-cash, loss-sharing or venue/mainnet policy is introduced.
+
+Next: publish one P21 PR against `product/tee-v1`, record its actual source/head,
+then await its own hosted CI and focused review; do not auto-merge or call P21/P21B
+closed. P22 is the next authorized-planning boundary, expanding complete adversarial
+lifecycle acceptance; P23 alone qualifies actual ports/changed Nitro image.
+Preserve user-owned `docs/user-journey.md`, `stays/`, local `docs-content/docs.json`
+and ignored `work/`.
+
+### Historical final P21A publication handoff (superseded)
 
 Current work: published [#51](https://github.com/arnabnandikgp/cinder/pull/51),
 `tee/p21a-reads-websocket` in `cinder-tee`, final grouped P21A.4/5 slice above
@@ -1702,14 +1780,31 @@ Merge: 76f32956e3ee5d31707ec1bf7fa81f8711666c97.
 
 ## P21A — HTTP and WebSocket API
 
+Closure, 2026-10-03: all four PLAN criteria and six submilestones are complete
+for the approved offline scope. Final exact heads #47 `9aefdd9`, #48 `df1e71f`,
+#50 `4841c70` and #51 `e54d429` each had all four hosted jobs successful.
+Relevant review threads were addressed/resolved; #48's last source follow-up
+could not receive another bot run because of its limit, disclosed before merge.
+The user authorized merge. `gh stack merge 49 --yes --merge` completed; fresh
+GitHub PR states and fetched local trunk confirm the same merge commit.
+The stricter stream-termination regressions supersede the earlier false-pass
+closure evidence. Node/actual Chrome each passed all 24 joined groups at that
+review fix, with all 24 SDK/assertion/TLS tests. Earlier broader Rust/core checks
+keep their own source checkpoints below. No live native action, changed-image
+Nitro qualification, production release or secret-erasure guarantee is claimed.
+PR: https://github.com/arnabnandikgp/cinder/pull/51.
+Merge: 05303740dd00129eeb038c9963f44301405725d7.
+
+Earlier implementation records below are historical, not current merge status.
+
 | Milestone (ADR 0021) | Progress | Completion boundary | PR grouping |
 | --- | --- | --- | --- |
-| 1 — Contract and isolated core qualification | in progress | Reviewed contract plus offline native/browser vector and hostile-wire evidence, then merge; not attestation or a shipping API. | #47 |
-| 2a — Browser verifier and binding qualification | in progress | Independent AWS/COSE/X.509 validation in a tested strict subset, exact attested channel vectors and native differential fixtures; then reviewed merge, not a shipping/hardware claim. | #48 |
-| 2b — Secret lifetime and transport hardening | in progress | Selected upstream Snow with explicit erasure limitation, NSM entropy/quote adapters and offline SDK lifetime/fencing/assembly; actual hardware and customer-release hardening disposition remain separate. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 3 |
-| 3 — HTTP and shared SDK/service | in progress | Encrypted browser/Node commands reach the same authoritative API/journal, including lost-response/restart reconciliation; offline evidence passes, review/merge pending. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 2b |
-| 4 — Authorized reads and WebSocket | in progress | Own-account projections/paging and bounded revocable committed streams; offline implementation passes, review/merge pending. | [#51](https://github.com/arnabnandikgp/cinder/pull/51), with 5 |
-| 5 — Joined adversarial acceptance | in progress | Both transports satisfy all four parent-phase criteria; local implementation/acceptance is not reviewed merge or production qualification. | [#51](https://github.com/arnabnandikgp/cinder/pull/51), with 4 |
+| 1 — Contract and isolated core qualification | closed | Reviewed contract and offline native/browser vector and hostile-wire evidence, merged; not a hardware qualification. | #47 |
+| 2a — Browser verifier and binding qualification | closed | Independent AWS/COSE/X.509 validation in a tested strict subset, exact binding vectors and native differential fixtures, reviewed/merged; not a hardware claim. | #48 |
+| 2b — Secret lifetime and transport hardening | closed | Selected upstream Snow with explicit erasure limitation, NSM entropy/quote adapters and offline SDK lifetime/fencing/assembly; customer-release hardening remains separate. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 3 |
+| 3 — HTTP and shared SDK/service | closed | Encrypted browser/Node commands reach the same API/journal with lost-response/restart reconciliation; offline evidence reviewed and merged. | [#50](https://github.com/arnabnandikgp/cinder/pull/50), with 2b |
+| 4 — Authorized reads and WebSocket | closed | Own-account projections/paging and bounded revocable committed streams; offline evidence reviewed and merged. | [#51](https://github.com/arnabnandikgp/cinder/pull/51), with 5 |
+| 5 — Joined adversarial acceptance | closed | Both transports satisfy all four parent-phase criteria; stricter termination assertions pass; reviewed and merged, not production-qualified. | [#51](https://github.com/arnabnandikgp/cinder/pull/51), with 4 |
 
 Work: API → public docs → recovery ordering and full API_SCOPE approved 2026-10-03; P21 is not an API prerequisite. Started tee/p21a-web-api-contract on P20 merge 76f32956e3ee5d31707ec1bf7fa81f8711666c97. After the frontend/bot explanation, the user explicitly approved bounded Noise NK qualification. ADR 0021 carries the contract, permission/provenance matrix, bounds and split. Isolated tools/web-channel supplies one Rust core, thin WASM binding, synthetic native responder, published known answer, adversarial tests and disposable browser harness; no shipping dependency or existing Node TLS change.
 Verification: primary browser/Noise/Snow/RFC/AWS sources checked. Native debug/release tests: 10 pass each. Node 24.21.0 and actual Chrome 154.0.8037.93: seven groups each pass, including standard vector, encrypted native round trip, early/replay/tamper/reflection/size refusal and RNG failure. Carrier marker absent in both directions. Complete isolated runner passes: four dependency-guard tests, native/WASM strict Clippy and formatting. Two new teardown regressions pass, including a SIGTERM-resistant descendant writer after its leader exits; the complete isolated runner passes again after this fix. At docs-only a96b5cc hosted plan/Rust/Anchor jobs passed and Linux Chrome 154.0.8037.57/Node passed all channel groups before the cleanup race failed the job. New-fix hosted CI is pending (first evidence-based CI fix); no container run needed. Earlier full pinned repository runner passed default/all-feature Clippy, workspace build/debug/release tests, 29 repository tests and all 17 SDK/process tests; that is not a fresh full-repository run for this harness-only fix. Foundation: 27 phases/36 documents; focused 13 plan-validator tests and diff check pass. On-chain source unchanged, so no local SBF rerun. No HTTP/WS financial workflow or fresh browser Nitro attestation claimed. All four PLAN P21A acceptance criteria remain open.
@@ -1891,19 +1986,19 @@ No automatic merge; subsequent docs-only receipt checks are not inherited.
 
 ## P21B — Public documentation
 
-Work: scope approved 2026-10-03; implementation not started. Public docs follow the implemented HTTP/WebSocket layer; planned endpoints will not be published as available integrations.
-Verification: not run; acceptance in PLAN P21B. No Mintlify project, hosted site or deployment is claimed.
-Unexpected: local implementation and actual deployment availability are distinct; public examples must identify the supported environment and qualified release.
-Next: after P21A, build the separate docs-site/ tree from checked handlers/schemas/examples and product/security/recovery decisions, then record actual publication if authorized/performed.
+Work: started `tee/p21b-public-docs` on P21A merge `0530374`. 37 MDX content pages cover product/account/funds/trading/agents, security/risk/recovery, SDK/authentication/units/lifecycle/errors, eight commands, ten private read families, paging, WebSocket and limits. References use native Mintlify request/response examples and field schemas, while accurately identifying the encrypted binary carrier. Content is for the user's existing separately hosted Mintlify repo; no new site, config, package, dev server or CI is included.
+Verification: source mapping and the initial 26 temporary documentation/codec checks, strict TypeScript, Mintlify validation/local links and a real-browser order-page preview passed before the format revision. Final native-component MDX: all 37 pages compile with temporary MDX 3.1.1; all 158 internal page links resolve; all 56 API examples strictly typecheck with pinned TypeScript 7.0.2 against merged SDK types. All 18 command/read pages contain the reference components and real encrypted carrier with playground disabled. The foundation checker (27 phases/37 documents), all 13 validator tests and tracked diff check pass. Final rendering in the user's existing Mintlify repo is separate; the earlier preview is not claimed for this revision. No hosted publication, live endpoint or independent audit is claimed.
+Unexpected: the initial local site/tooling scaffold exceeded the intended content-only scope and was removed after clarification. Public pages stay `.mdx`, not `.md`; the README is only a copying/navigation note. Temporary validation tools stay outside the repo. Structured examples must document SDK objects without implying a plaintext JSON exchange or unsupported interactive playground.
+Next: local delivery is complete. The user supplied `docs.json`; all 37 navigation entries resolve and all pages compile after replacing relative `api:` metadata with ordinary carrier text. `/docs-content/` is ignored and contains no tracked files. Per user instruction no docs-source PR will be created; merge this tracked delivery record with P21, then close P21B using that actual bookkeeping merge. Hosted publication remains separate.
 PR: none.
 Merge: none.
 
 ## P21 — Recovery integration
 
-Work: not started; scheduled after HTTP/WebSocket implementation and public docs by the user's 2026-10-03 decision. No recovery criterion is removed.
-Verification: not run; acceptance in PLAN P21.
-Unexpected: none yet.
-Next: recover the implemented service's accepted journal, fence/reconcile/unwind/return funds, finalize backed claims and independently deliver/submit kits with the ordinary API unavailable. Keep explicit hardware/witness doubles and actual local SBF evidence distinct. Update public recovery docs only when this integrated path is tested.
+Work: completed the approved offline phase on `tee/p21-recovery-integration`, base `0530374`. One accepted journal derives complete settled claims and P16 payment bases. Explicit recovery permissions fence ordinary paths, bound closes/returns and durably seal dispatch. Wallet-authorized RSA-3072 keys are immutably registered before cutover; OAEP-SHA256/AES-256-GCM kits require both ciphertext readbacks. The governed signed manifest and independent Node claimant retain exact P17 root/context/counter semantics. Actual SDK HTTP/WebSocket outages join normal payout, return, sealing, replica failure and independent compiled SBF claims. No parallel seeded recovery ledger or amount supplied by a claimant exists.
+Verification: all three PLAN criteria are checked for offline scope. Final pinned workspace runner passes 30 foundation/boundary tests, 12 carrier tests, both strict Clippy configurations, all-target build, workspace debug/release and all 24 SDK/TLS tests. All 55 vault codec/SBF tests pass. Full native/WASM/browser runner passes, including 14 verifier/core and 24 joined process groups each in Node/Chrome. Focused additions include 16 journal cut tests, recovery-close allocation/replay, 26 passing P16 funding tests, actual signed bounded recovery dispatch and four package/key/readback/tree tests. Limits/commands/environment are in Current handoff; known Nitro tests remain explicitly ignored, not silently counted as passing hardware. Initial failures and fixes are recorded there. Earlier slice-only receipts are superseded, not rebranded as final checks.
+Unexpected: integration revealed token-recipient, create/cancel routing and synthetic fixture margin/readiness mismatches; these were corrected without weakening guards. New controls/state require engine revision 21 and reject old revision 20 histories pending explicit migration. Delivery evidence precommits store/locator layout before root construction; separately signed final ciphertext digests avoid a circular commitment. Package availability is not code-enforced live store independence or a proof of complete liabilities. Dedicated keys are retained, not derivable/reissuable by the operator.
+Next: publish this single PR, record actual heads/URL, obtain its own hosted CI/focused review and await merge authorization. P21 and local-only P21B remain in progress until that bookkeeping merge. P22 expands complete offline adversarial lifecycle; P23/G01/G03 own live capability/source/store/entropy and changed-image qualification. Public recovery MDX is updated locally and stays ignored/untracked with the user's docs.json preserved.
 PR: none.
 Merge: none.
 
