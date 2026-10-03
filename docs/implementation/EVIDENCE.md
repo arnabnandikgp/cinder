@@ -127,6 +127,14 @@ and a live parent relay. The bounded P20 hardware matrix is complete; PR
 review/merge and production/native gates remain separate. Teardown is recorded
 in the follow-up; no native workflow or production governance is inferred.
 
+Review fixes, 2026-10-03: runtime commit
+`82073c221895f505e4d029f2b4e99c2a6e13031e` adds offline regressions for repeated
+ignored response headers, interrupted-genesis funding binding, per-connection
+IPv4 resolution without retries and the named strict-path AKI error. Full pinned
+macOS debug/release/workspace and 17 SDK checks pass. This changes source; the
+earlier measured export and actual Nitro receipts are not relabeled as hardware
+qualification for it. The updated joined release is qualified separately in P23.
+
 ### P19: attestation-gated runnable service slice
 
 [ADR 0019](../architecture/0019-attested-service.md) promotes W06–W08's exact-key

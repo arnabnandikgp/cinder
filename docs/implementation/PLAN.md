@@ -1,6 +1,6 @@
 # Implementation plan
 
-Updated 2026-10-01. Canonical scope and acceptance criteria; actual progress lives in
+Updated 2026-10-03. Canonical scope and acceptance criteria; actual progress lives in
 [TRACKER](TRACKER.md). Read [BASELINE](BASELINE.md) for approved policy and
 [EVIDENCE](EVIDENCE.md) for research/prototype provenance and regression obligations.
 P00 establishes this foundation; it does not implement or deploy the broker.
@@ -83,12 +83,19 @@ A failed or unsupported capability stays named and disabled. P24 reviews the
 evidence and remaining release gates; it is not a substitute for runnable services.
 
 Use the thin SDK/CLI and explicitly preconfigured disposable accounts for initial
-application tests. Self-service private-account onboarding, browser-agent key UX,
-public market-data UI and a trading terminal are **separate product-integration
-follow-ups** requiring their own scope/acceptance before public user access. They
-are not implicitly delivered by P19–P24 or an imported Phoenix website. Do not
-block backend testing on a frontend or claim configured fixture accounts prove
-runtime account creation.
+application tests. Scope addition approved 2026-10-03: after P21 recovery, implement
+browser-compatible confidential HTTP/WebSocket operations in P21A, then author
+the public Mintlify reference against that implementation in P21B. Do not publish
+planned endpoints as working ones. P22 must exercise the implemented transports
+and P23 must qualify the changed application, not inherit P20's old measured image.
+These suffixes preserve existing phase IDs; they are explicit new scope, not a
+claim that P19/P20 already shipped HTTP or streaming. Browser attestation/session
+security needs its own reviewed ADR before coding the transport.
+Self-service private-account onboarding, full browser-agent management UX, public
+market-data UI and a trading terminal remain separate product-integration follow-ups.
+P21A's preconfigured browser/SDK test client is not a completed terminal or account
+creation flow. Do not import the Phoenix website or block backend/recovery tests
+on a frontend. HTTP/WebSocket and the Node profile share one financial journal.
 
 ## PR and stack workflow
 
@@ -530,13 +537,64 @@ local compiled custody/recovery program or an explicitly separately checked SBF 
 - [ ] Claimants obtain and verify kits without the ordinary API; package loss, stale package and privacy are tested.
 - [ ] Final funded claims match remaining entitlements; unavailable venue assets do not become payout cash or disappear as liabilities.
 
+<a id="p21a"></a>
+## P21A — Confidential HTTP and WebSocket API
+
+Depends on: P18, P19, P20, P21.
+
+Deliver: a versioned customer HTTP/WebSocket contract and browser/Node SDK transport
+over the existing eight P18 commands, with correlated command responses and private
+operation/account subscriptions derived from committed journal state. Finalize a
+reviewed ADR for browser-verifiable enclave attestation, confidential session/key
+binding, signature encoding, replay/expiry and ingress topology before implementation.
+Never terminate readable private requests at the parent or replace attestation with
+ordinary web-PKI or an operator approval flag. Preserve financial IDs, permissions,
+fee/price bounds and payout-recipient restrictions; no second authority/replay store.
+Define finite message/queue/session limits, revocation checks, account-local stream
+ordering and snapshot/gap recovery without exposing global journal sequence. HTTP
+and WebSocket are alternate ingress paths, not independent financial engines.
+First scope is existing commands plus private updates; no batch/modify/trigger,
+public market-data feeds, self-service onboarding, new payout recipient or automatic
+uncertain-order retry. Stop for review if the proposed cryptographic/authority
+profile changes an approved security guarantee. No live customer release is implied.
+Evidence: W06, ADR 0018/0019/0020, P21 accepted history and tracked Rust/TypeScript
+protocol vectors; runnable offline browser/Node transport and adversarial process tests.
+
+- [ ] Reviewed transport ADR and exact schemas/signing vectors establish client-to-enclave confidentiality and fresh attestation before private authentication; malformed/replayed/expired/altered sessions fail closed.
+- [ ] Both transports reach the same command authorization, durable IDs, reservations and journal; exact retries reconcile, conflicting IDs reject, and agents cannot obtain payout or administrative authority.
+- [ ] Private updates follow committed owner-attributed state; bounded queues, missed-message snapshots, reconnect, revocation and cross-account isolation are exercised with no global-sequence leakage.
+- [ ] Actual browser and Node clients run order/query/cancel and owner-payout fixtures; relay plaintext/log checks and mid-operation disconnect/restart regressions pass offline. No synthetic fill or unavailable native rail is advertised as live.
+
+<a id="p21b"></a>
+## P21B — Public documentation from the implemented API
+
+Depends on: P21A.
+
+Deliver: a separate docs-site/ Mintlify source tree with product/funds/trading,
+security/risk/recovery guides, SDK quickstart and one page for each implemented
+customer method plus WebSocket commands/subscriptions. Document the actual P21A
+version, units, permissions, lifecycle, errors, limits and reconnect handling.
+Generate/check examples against the real contract and offline tests; no invented
+HTTP route, fake deployment URL or unimplemented interactive playground. Public
+publication follows implementation, with explicit environment/qualification status.
+Local/tested implementation is not production availability; update live evidence
+after P23. Publishing credentials, ignored research or unverified mainnet/privacy/
+solvency/unconditional-exit claims is prohibited. Hosting/account setup is a distinct
+external step; lack of hosting must not masquerade as a published docs deployment.
+Evidence: P21A schemas/examples, BASELINE B01–B08/F01–F14/S01–S05/R01–R05,
+tracked implementation and sanitized qualification receipts; docs build/link checks.
+
+- [ ] Guides accurately state pooled execution, customer ownership, fees/protection limits, private versus public data and operator-assisted recovery; unsupported features and environments are clearly distinguished.
+- [ ] Every advertised method/stream maps to implemented handlers and checked examples, including authorization, exact units, uncertain outcomes, disconnect and reconciliation; spec/example drift fails CI.
+- [ ] Mintlify preview/build/navigation and safe publication checks pass without secrets or ignored work; hosted publication has its own recorded receipt if performed, not a claim based on a local build.
+
 <a id="p22"></a>
 ## P22 — Joined offline adversarial acceptance suite
 
-Depends on: P09, P12, P16, P17, P18, P19, P21.
+Depends on: P09, P12, P16, P17, P18, P19, P21, P21A.
 
 Deliver: deterministic end-to-end fake venue/chain/time harness driving the actual
-SDK, runnable relay/private service, protected journal and production controllers/
+HTTP/WebSocket SDKs, runnable relay/private service, protected journal and production controllers/
 adapters. Cover deposit → credit → native funding → order → partial fills/cancel →
 funding/fees → close → return → beneficiary payout, plus outage/recovery/claim.
 Specify per-step customer/house claims, external exposure, physical locations,
@@ -550,7 +608,7 @@ Evidence: all W IDs and V01–V10; fresh-checkout repeatable seed manifest.
 - [ ] Opposing winners/defaults, ADL gaps, funding boundaries, house exhaustion, inaccessible cash and payout races preserve attribution/claims.
 - [ ] Duplicate/conflicting/late events, restart, rollback and malicious ordering cannot double-spend or silently omit loss.
 - [ ] Test bounds, counterexamples and unresolved proofs are explicit; measurements meet declared load/resource budgets without weakening economics.
-- [ ] Normal, partial/cancel and recovery workflows start through the SDK/service boundary, not only direct Rust method calls. Fresh-checkout offline CI reruns the recorded manifest with no live API/RPC/AWS dependency.
+- [ ] Normal, partial/cancel and recovery workflows start through actual HTTP/WebSocket SDK/service paths, not only direct Rust method calls; private streams recover after gaps/reconnect without duplicate financial actions. Fresh-checkout offline CI reruns the recorded manifest with no live API/RPC/AWS dependency.
 
 <a id="p23"></a>
 ## P23 — Bounded devnet/testnet integration qualification
@@ -561,6 +619,9 @@ Deliver: current G05-approved account/funding/environment/cleanup manifest, tagg
 release tests using the actual program, adapter, enclave and recovery path. Reuse
 M1/M2 scenarios but obtain new implementation evidence. No mainnet inference.
 Carry P22's SDK/service workflow assertions onto actual approved infrastructure;
+qualify the P21A transport and changed measured application on hardware, rather
+than treating P20's exact-source receipts as evidence for a later image. Refresh
+P21B public environment/availability documentation from actual current receipts;
 verify implementation receipts and current native authority/precision/completeness,
 not a replay labeled as live integration. Use bounded scenarios and preconfigured
 test accounts; an unavailable capability is a named blocker, not a simulated pass.

@@ -24,11 +24,13 @@
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
 | [P20 — Nitro application qualification](PLAN.md#p20) | in progress | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), open on `product/tee-v1` |
 | [P21 — Recovery integration](PLAN.md#p21) | open | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | — |
+| [P21A — HTTP and WebSocket API](PLAN.md#p21a) | open | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | — |
+| [P21B — Public documentation](PLAN.md#p21b) | open | Published guides and method pages describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | — |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-02. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-03. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
@@ -40,15 +42,19 @@ Worktree: `cinder-tee`. Trunk: `product/tee-v1` at
 Current branch: `tee/p20-nitro-runtime`. Native stack #46 originally placed
 [P20 #45](https://github.com/arnabnandikgp/cinder/pull/45) above
 [P19 #44](https://github.com/arnabnandikgp/cinder/pull/44); P19 is now merged and
-P20 is rebased directly on the updated TEE trunk. Code/evidence checkpoint
-`b6e0f4c` was rebased to `adf42ea`; only tracker/publication text differs from the
-previous P20 tip `58abe8b`. All non-documentation source and qualified code-export
-inputs remain identical. Hosted CI and CodeRabbit at the new tip are pending; local
-and hardware results are recorded for their actual source, not inherited hosted
-checks. Pre-hardware assembly is `b67f3947b6eda241bd56912003b22ee90107857f`;
-real AWS compatibility fixes are `37487ca`. Preserve that earlier provenance.
-The complete bounded hardware matrix now passes; review is next, but do not
-mark P20 closed before review/merge.
+P20 is rebased directly on the updated TEE trunk. Historical code/evidence
+checkpoint `b6e0f4c` became `adf42ea`; that rebase changed documentation only.
+The later review fixes in `82073c221895f505e4d029f2b4e99c2a6e13031e` change runtime
+source and have full local locked/offline checks, not new Nitro receipts. The
+three hosted jobs passed at preceding published head `d07038df`; those are not
+checks for the new fixes. CodeRabbit's completed review was at `58abe8b`; its
+rate-limited rebase status was not a new review. Four valid findings and the AKI
+naming nit are addressed below; check CI/review again at the new published tip.
+Hardware results remain tied to their actual source. Pre-hardware assembly is
+`b67f3947b6eda241bd56912003b22ee90107857f`; real AWS compatibility fixes are
+`37487ca`; the qualified export is `5557d3350f371d616965006a90ea03b55420400f`.
+The bounded hardware matrix completed on 2026-10-02. Do not mark P20 closed
+before review/merge or relabel the later review changes hardware-tested.
 P20's pre-hardware assembly includes the consumed public manifest, actual NSM
 clock/recipient, role-separated KMS release, encrypted S3 replicas, strong-read
 DynamoDB witness, default-feature enclave executable and bounded private API/
@@ -64,8 +70,8 @@ open; no P20 merge or production activation is authorized.
 AWS: initial disposable test allowance **$5**, replacement profile `cinder_new`,
 region `us-east-1`, no mainnet/customer funds. Fresh STS on 2026-10-02 verifies
 the intended IAM user; read-only EC2 inspection confirms the candidate
-`c6g.large` supports Nitro. The root-identity blocker is resolved, not the
-remaining qualifications. After the user's explicit Paid-plan upgrade, the actual
+`c6g.large` supports Nitro. The root-identity and Free-plan launch blockers are
+historical. After the user's explicit Paid-plan upgrade, the actual
 disposable Nitro session now has positive application/KMS/SDK and encrypted
 restore/fault receipts; see [hardware evidence](../operations/nitro-hardware-2026-10-02.md).
 The former Free-plan/no-resource/$0 blocker is historical. Three real AWS format
@@ -97,7 +103,15 @@ compile-fail doctests per debug/release profile, 24 repository tests, strict
 Clippy/format/build and 9/9 private SDK tests. Dated results and actual merge
 receipts remain in the owning phases below.
 
-Next: review hosted CI and CodeRabbit on rebased P20 #45, now on the TEE trunk;
+Next: inspect latest-head CI/review for P20 #45's locally verified fixes and
+approved roadmap, and verify the relevant thread replies/resolutions. No automatic
+merge. After P20's reviewed merge, proceed with P21 recovery, P21A HTTP/WebSocket
+implementation, P21B public docs, then P22/P23 joined offline/live acceptance.
+Public docs follow implemented APIs, not speculative endpoint promises. Browser
+transport needs its reviewed ADR before implementation; onboarding/terminal and
+public market-data feeds remain separate scope.
+
+Historical exact-source hardware closeout, 2026-10-02:
 see [follow-up evidence](../operations/nitro-hardware-followup-2026-10-02.md).
 The complete security batch now has an actual independently verified attested
 PASS, including recipient/upstream TLS negatives and journal recovery. A real
@@ -120,8 +134,8 @@ scoped prerequisite policies and user-selected Paid upgrade resolved the prior
 IAM/account-plan blockers. Technical P20 criteria are satisfied in the bounded
 disabled-native profile; review/merge remains pending. No automatic merge or
 production-key approval. P19 is closed after verified merge. P21 joins recovery
-to the journal; P22/P23 reuse
-workflow assertions offline/live. Onboarding/browser-agent UX/terminal remain
+to the journal; P21A adds customer HTTP/WebSocket ingress; P21B documents it;
+P22/P23 reuse workflow assertions offline/live. Onboarding/terminal remain
 separate scope. Preserve ignored `work/`, untracked `docs/user-journey.md` and
 unrelated `stays/`. Local fixtures alone do not establish
 hardware qualification or authorize live keys, tests or deployment.
@@ -130,7 +144,8 @@ test EBS/buckets/table/runtime roles/SSH/security group absent, five fresh KMS
 keys PendingDeletion and existing managed policies preserved. Exactly 45
 generated local secret files were deleted; operator source and public/ciphertext
 evidence remain. Only the task build container was removed. No additional
-hardware tests remain; CI and external review begin after publication.
+hardware categories remain from that approved batch. Later runtime changes have
+their own source/test evidence; P23 qualifies the updated joined application.
 
 ### CodeRabbit coverage snapshot (2026-09-30)
 
@@ -1375,6 +1390,43 @@ published tip. No further hardware categories without discussion. P20 stays
 PR: https://github.com/arnabnandikgp/cinder/pull/45.
 Merge: none.
 
+### Review follow-up — 2026-10-03
+
+Work: CodeRabbit #4168125099/#4168125110/#4168125139 are valid. Runtime fix
+`82073c221895f505e4d029f2b4e99c2a6e13031e` permits repeated unconsumed HTTP fields
+while counting every field and rejecting duplicate consumed metadata; repairs a
+missing funding-route bind from verified history after interrupted genesis; and
+resolves fresh IPv4 routing per connection with one TCP attempt and no address
+fallback. The AKI nit uses a documented named constant: the pinned safe OpenSSL
+wrapper omits that constant and `from_raw` requires forbidden unsafe code. No new
+dependency or certificate waiver is introduced. #4168125151 updates the ADR and
+current handoff so historical pending launch/qualification checkpoints are not
+presented as current. PLAN/TRACKER now include approved P21A/P21B insertion after
+recovery, with dependencies, PR-sized criteria and implementation-before-docs.
+
+Verification: header and interrupted-boot regressions were red before fixes.
+Full pinned macOS `node scripts/check.mjs` passes format, strict default/all-feature
+Clippy, all-target build, debug/release workspace tests, TypeScript and 17/17 SDK
+tests. The new DNS test checks fresh IPv4 selection, resolver failures and no
+retry; the AKI fixture pins the actual strict-path error/depth. Plan validation
+passes 27 phases/34 documents and all 29 repository tests, including the new
+letter-suffixed phase dependency/handoff regression. One local Clippy run found
+test-module placement; moving it to the end fixed it without suppressing lint.
+Pre-fix hosted plan/Rust/SBF jobs passed at `d07038df`; latest publication needs
+its own CI/review. No local SBF rerun: program/client sources are unchanged.
+
+Unexpected: no new economic or custody decision. Review additions are offline
+tested; October 2 hardware receipts remain exact-source evidence, not qualification
+of the new runtime source/PCR. No AWS, live venue, wallet, container or agent was
+used. The focused local review artifact stays ignored under `work/reviews/`.
+
+Next: inspect new-head CI/review and the four addressed thread replies/resolutions,
+and obtain merge authorization before closing P20. Then start
+P21 recovery integration; implement P21A before publishing P21B. Native trading,
+funding/reads and production policy remain separate G01–G04/P23 gates.
+PR: https://github.com/arnabnandikgp/cinder/pull/45.
+Merge: none.
+
 ## P21 — Recovery integration
 
 Work: not started.
@@ -1384,12 +1436,30 @@ Next: recover the runnable service's accepted journal, fence/reconcile/unwind/re
 PR: none.
 Merge: none.
 
+## P21A — HTTP and WebSocket API
+
+Work: scope approved 2026-10-03; implementation not started. Added a bounded browser/Node API milestone after recovery, preserving the P18 commands and one journal. Protocol/attestation choices remain an explicit reviewed ADR prerequisite, not an inferred approval of custom cryptography.
+Verification: not run; acceptance in PLAN P21A. This tracker entry is a planning change, not a working HTTP/WebSocket endpoint.
+Unexpected: the initial P19/P20 automation channel is not browser HTTP/WebSocket; a reviewed confidential browser transport is required, not a parent-side plaintext facade.
+Next: after P21, finalize the enclave-attested browser/Node contract and implement commands plus bounded private streams; keep public market data, onboarding and terminal UI outside this milestone.
+PR: none.
+Merge: none.
+
+## P21B — Public documentation
+
+Work: scope approved 2026-10-03; implementation not started. Public docs follow the implemented HTTP/WebSocket layer; planned endpoints will not be published as available integrations.
+Verification: not run; acceptance in PLAN P21B. No Mintlify project, hosted site or deployment is claimed.
+Unexpected: local implementation and actual deployment availability are distinct; public examples must identify the supported environment and qualified release.
+Next: after P21A, build the separate docs-site/ tree from checked handlers/schemas/examples and product/security/recovery decisions, then record actual publication if authorized/performed.
+PR: none.
+Merge: none.
+
 ## P22 — Offline adversarial acceptance
 
 Work: not started.
 Verification: not run; acceptance in PLAN P22.
 Unexpected: none yet.
-Next: drive complete deposit/trade/partial-cancel/funding/close/return/payout and recovery paths through the actual SDK/service/controllers with offline external fixtures. Assert claims, exposure, locations, reservations and payment at each boundary; kill/restart service processes and preserve reproducible seeds/counterexamples. No live endpoints in ordinary CI.
+Next: after P21/P21A, drive complete deposit/trade/partial-cancel/funding/close/return/payout and recovery paths through actual HTTP/WebSocket SDK/service/controllers with offline external fixtures. Assert claims, exposure, locations, reservations and payment at each boundary; kill/restart service processes and test private-stream gap recovery with reproducible seeds/counterexamples. No live endpoints in ordinary CI.
 PR: none.
 Merge: none.
 

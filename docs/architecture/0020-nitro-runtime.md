@@ -1,7 +1,9 @@
 # ADR 0020: Nitro application assembly and qualification
 
-Date: 2026-10-02. Status: assembled; partial hardware qualification recorded in
-[dated evidence](../operations/nitro-hardware-2026-10-02.md); full matrix pending.
+Date: 2026-10-02. Status: assembled; bounded disabled-native hardware matrix passed
+for the sources in the [first](../operations/nitro-hardware-2026-10-02.md) and
+[follow-up](../operations/nitro-hardware-followup-2026-10-02.md) receipts.
+Review and merge remain pending; later offline review fixes are not new hardware receipts.
 Scope: [P20](../implementation/PLAN.md#p20). [ADR 0019](0019-attested-service.md)
 and [BASELINE](../implementation/BASELINE.md) remain the security/economic contract.
 
@@ -367,15 +369,29 @@ matrix, exact measured releases, failures and cleanup. Review/merge remains
 pending; G01–G04 production policy/governance and P23 native workflow gates are
 not approved by a disposable test. Native trading/funding/reads stayed disabled.
 
+## Review follow-up — 2026-10-03
+
+Runtime fixes in `82073c221895f505e4d029f2b4e99c2a6e13031e` accept repeated
+unconsumed HTTP fields while retaining framing/metadata uniqueness and total
+header limits, repair an interrupted boot's missing funding binding without
+rebinding accepted history, and resolve a fresh IPv4 route per accepted socket
+without multiple connection attempts. The missing-AKI code now has a documented
+local name and a strict-path regression; the narrow certificate exception is
+unchanged. The complete pinned macOS offline check passes, including debug/release
+tests and all 17 SDK checks. These are review fixes, not newly measured hardware
+receipts. Historical launch refusals below remain provenance, not current blockers.
+P23 qualifies the later joined application and updated measured release.
+
 ## Primary sources
 
-Hardware launch prerequisite observed 2026-10-02: exact scoped managed-policy
+Historical pre-upgrade launch prerequisite observed 2026-10-02: exact scoped managed-policy
 documents, quota, price/AMI metadata and EC2 permission dry-run pass. Actual
 c6g.large launch is refused by the AWS Free account plan. All eight currently
 Free Tier eligible types report Nitro Enclaves unsupported; no accepted hardware
 substitute exists in that list. Temporary SSH setup was deleted and verified
 absent; no instance/application cloud resource or compute charge resulted.
-Hardware qualification remains pending a user-selected account-plan change.
+Hardware qualification was then pending a user-selected account-plan change;
+the Paid-plan upgrade and completed bounded matrix supersede that launch refusal.
 AWS's [account-plan guidance](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html)
 and [Free Tier FAQ](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-FAQ.html)
 describe direct upgrade and retained credits; these are not permission to change
