@@ -24,18 +24,62 @@
 | [P19 — Attested transport and runnable service](PLAN.md#p19) | closed | A runnable relay/private-service slice carries authenticated SDK operations through verified encrypted sessions; parent sees no private plaintext. | [#44](https://github.com/arnabnandikgp/cinder/pull/44), merged `dc5f01d` |
 | [P20 — Nitro application qualification](PLAN.md#p20) | closed | The assembled confidential application runs on actual Nitro with qualified key release, egress, restore and fencing; mocks are not hardware evidence. | [#45](https://github.com/arnabnandikgp/cinder/pull/45), merged `76f3295` |
 | [P21A — HTTP and WebSocket API](PLAN.md#p21a) | closed | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | #47, #48, #50 and [#51](https://github.com/arnabnandikgp/cinder/pull/51), merged `0530374` |
-| [P21B — Public documentation](PLAN.md#p21b) | in progress | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52) (tracked delivery receipt only) |
-| [P21 — Recovery integration](PLAN.md#p21) | in progress | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), ready/open |
-| [P22 — Offline adversarial acceptance](PLAN.md#p22) | open | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | — |
+| [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
+| [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
+| [P22 — Offline adversarial acceptance](PLAN.md#p22) | in progress | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), ready/open; local acceptance passed |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-04. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-06. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+Current work: P22 review follow-up on `tee/p22-offline-acceptance` in `cinder-tee`,
+based on merged trunk `1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7`.
+Ready/open [PR #53](https://github.com/arnabnandikgp/cinder/pull/53) targets
+`product/tee-v1` through native `gh stack`. All four hosted Linux jobs passed at
+`9a4174527757e120ee81bfaf8d073480b153a37e`; CodeRabbit then identified two relevant
+minor acceptance-harness findings. Both are corrected at source checkpoint
+`b7ba0c9bb28bec6b58b2a8d8c4a5c87e9514dda2` and documented in P22 below.
+Full local workspace debug/release, Clippy, boundary and SDK checks pass; focused
+HTTP/WebSocket SBF normal lifecycles pass after first reproducing both failures.
+The final manifest/metadata regression rerun passes all 34 tests. This successor
+only records that evidence and awaits its own hosted checks; it does not inherit
+the prior head's CI success. Earlier full browser/57-case receipts stay historical.
+Publication receipt: source/evidence pushed at `baf340f239223067d95b856e17bf28d14b67c47e`;
+both CodeRabbit threads were answered and resolved, and hosted reruns were queued.
+This documentation-only successor records that receipt, not a fresh CI success.
+No AWS, live venue, remote RPC, configured wallet or customer funds are in scope.
+Next: check the current tip's hosted results and await merge authorization. P22 remains
+`in progress` until review and merge; P23 is not started. The CI audit recommends
+targeted improvements but does not authorize workflow or branch-rule changes.
+Preserve untracked `docs/user-journey.md`, `stays/`, ignored `work/` and docs content.
+
+### Historical P21 merge handoff (superseded)
+
+PR #52 merged into `product/tee-v1` on 2026-10-04 (Asia/Kolkata), at
+`1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7`; local trunk fast-forwarded to that
+exact commit. Reviewed head: `ff3b4c3752656ffeffdc1b88e92da0a223b5f710`.
+All original runtime review fixes passed full local checks and all four hosted
+jobs at `ea23a17abcf8d91525962ce6ec2c50579ed21b66`. The final successor changes
+only README wording and tracker bookkeeping; its focused local checks passed.
+The user explicitly authorized merge without waiting for its CI rerun; pending
+checks at that head are not claimed as passed. All five review threads were
+resolved, including the two minor README corrections and the timezone explanation.
+Native `gh stack merge 52` reported no remote stack; standard `gh pr merge` with
+the exact-head guard succeeded, and GitHub's merge receipt was independently read.
+
+P21 is closed for its approved offline acceptance, and P21B's tracked delivery
+receipt is merged. Neither means production qualification or hosted publication.
+Next: await authorization for P22's offline adversarial acceptance; P23 still
+owns live ports and changed-image qualification. No next implementation phase
+was started. Preserve the user's untracked/ignored files. This merge closure is
+recorded locally for the next authorized PR; no extra trunk commit/push is made.
+
+### Historical final P21 publication handoff (superseded)
 
 Merge follow-up — 2026-10-04 (Asia/Kolkata): all four hosted CI jobs and
 CodeRabbit passed at `ea23a17abcf8d91525962ce6ec2c50579ed21b66`. The user
@@ -2046,9 +2090,9 @@ No automatic merge; subsequent docs-only receipt checks are not inherited.
 Work: started `tee/p21b-public-docs` on P21A merge `0530374`. 37 MDX content pages cover product/account/funds/trading/agents, security/risk/recovery, SDK/authentication/units/lifecycle/errors, eight commands, ten private read families, paging, WebSocket and limits. References use native Mintlify request/response examples and field schemas, while accurately identifying the encrypted binary carrier. Content is for the user's existing separately hosted Mintlify repo; no new site, config, package, dev server or CI is included.
 Verification: source mapping and the initial 26 temporary documentation/codec checks, strict TypeScript, Mintlify validation/local links and a real-browser order-page preview passed before the format revision. Final native-component MDX: all 37 pages compile with temporary MDX 3.1.1; all 158 internal page links resolve; all 56 API examples strictly typecheck with pinned TypeScript 7.0.2 against merged SDK types. All 18 command/read pages contain the reference components and real encrypted carrier with playground disabled. The foundation checker (27 phases/37 documents), all 13 validator tests and tracked diff check pass. Final rendering in the user's existing Mintlify repo is separate; the earlier preview is not claimed for this revision. No hosted publication, live endpoint or independent audit is claimed.
 Unexpected: the initial local site/tooling scaffold exceeded the intended content-only scope and was removed after clarification. Public pages stay `.mdx`, not `.md`; the README is only a copying/navigation note. Temporary validation tools stay outside the repo. Structured examples must document SDK objects without implying a plaintext JSON exchange or unsupported interactive playground.
-Next: local delivery is complete. The user supplied `docs.json`; all 37 navigation entries resolve and all pages compile after replacing relative `api:` metadata with ordinary carrier text. `/docs-content/` is ignored and contains no tracked files. Per user instruction no docs-source PR will be created; merge this tracked delivery record with P21, then close P21B using that actual bookkeeping merge. Hosted publication remains separate.
-PR: [#52](https://github.com/arnabnandikgp/cinder/pull/52), tracked delivery receipt only; public MDX remains local/untracked.
-Merge: none.
+Next: local delivery is complete and its tracked receipt merged with P21. The user supplied `docs.json`; all 37 navigation entries resolve and all pages compile after replacing relative `api:` metadata with ordinary carrier text. `/docs-content/` is ignored and contains no tracked files. Per user instruction no docs-source PR was created. Hosted publication remains separate.
+PR: https://github.com/arnabnandikgp/cinder/pull/52.
+Merge: 1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7.
 
 ## P21 — Recovery integration
 
@@ -2058,17 +2102,21 @@ Unexpected: integration revealed token-recipient, create/cancel routing and synt
 Review follow-up (2026-10-04): both CodeRabbit findings at `bfe4ae64e05bb3504df9332a83149abbf7e6ecbc` were relevant. Source checkpoint `8e528db870d81a7cd8011780726b8ab32795b1be` fixes register-once/exact-key resume and strengthens both joined carrier tests with positive restart, missing/replacement-key refusal and an epoch-only fencing probe. The default vault setup now documents/provisions the recovery prerequisites and reports missing/wrong bindgen clearly; mandatory full-suite recovery coverage remains. Full `scripts/check.mjs`, DEFAULT `scripts/check-vault.mjs` (55 tests) and two prerequisite-diagnostic checks pass at this source checkpoint; see Current handoff for scope and limits.
 Publication: review fixes pushed at `521dcceed2b3bcc063140061407af9dfb43ed1e4`; both CodeRabbit threads replied/resolved. Plan CI passed at that head; Rust/vault/browser CI were still running, not success receipts for this documentation-only successor.
 Merge follow-up: all four hosted jobs and CodeRabbit passed at `ea23a17abcf8d91525962ce6ec2c50579ed21b66`; the user authorized merge. Two new minor README findings are fixed (PATH fallback and explicit fake native-fencing evidence); the date warning is explained by Asia/Kolkata versus UTC. Foundation validation, all 13 validator tests, both shell fallback cases and diff checks pass locally. This docs-only successor needs its own hosted checks before merging; runtime evidence above is unchanged.
-Next: obtain #52's final-tip hosted CI/focused review and await merge authorization. P21 and local-only P21B remain in progress until merge. P22 expands complete offline adversarial lifecycle; P23/G01/G03 own live capability/source/store/entropy and changed-image qualification. Public recovery MDX remains local/untracked with the user's docs.json preserved. Initial implementation/focused rerun checkpoint `dcb685f277d2c04e1256258d7cb3b10d2c0be266` is historical, not the reviewed source head.
-PR: [#52](https://github.com/arnabnandikgp/cinder/pull/52), ready/open, `tee/p21-recovery-integration` → `product/tee-v1`; all four hosted jobs passed at the initial `bfe4ae6` publication head, but fresh CI/review remain required for the review-fix successor.
-Merge: none.
+Merge disposition: all four hosted jobs passed at `ea23a17abcf8d91525962ce6ec2c50579ed21b66`; all five review threads were resolved. Final head `ff3b4c3752656ffeffdc1b88e92da0a223b5f710` contains only the two minor README corrections and bookkeeping, verified with the foundation checker, 13 validator tests, shell fallback cases and diff checks. The user explicitly waived waiting for that docs-only head's CI rerun; no fresh executable success is inferred.
+Next: P22 expands complete offline adversarial lifecycle after authorization; P23/G01/G03 own live capability/source/store/entropy and changed-image qualification. Public recovery MDX remains local/untracked with the user's docs.json preserved. Initial implementation/focused rerun checkpoint `dcb685f277d2c04e1256258d7cb3b10d2c0be266` is historical, not the reviewed source head.
+PR: https://github.com/arnabnandikgp/cinder/pull/52.
+Merge: 1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7.
 
 ## P22 — Offline adversarial acceptance
 
-Work: not started.
-Verification: not run; acceptance in PLAN P22.
-Unexpected: none yet.
-Next: after P21/P21A, drive complete deposit/trade/partial-cancel/funding/close/return/payout and recovery paths through actual HTTP/WebSocket SDK/service/controllers with offline external fixtures. Assert claims, exposure, locations, reservations and payment at each boundary; kill/restart service processes and test private-stream gap recovery with reproducible seeds/counterexamples. No live endpoints in ordinary CI.
-PR: none.
+Work: full HTTP/WebSocket normal lifecycle with actual SDK/relay/private service, Gateway/funding Controller, risk-derived holds, replicated AEAD journal and SBF vault movements. Checks each independent customer/house/native book, physical cash, positive claims, holds, source cuts, late fills, funding settlement, streams and final recipient payment. A separate widened-integer reference covers 4,632 position transitions and eight fixed seeds/576 financial cuts; reverse stress retains net-flat shortfall counterexamples. The 25-case manifest links all W01–W09/V01–V10 to existing and new executable tests; default CI includes the manifest and joined tests without another duplicate job.
+Verification: `node scripts/check-acceptance.mjs` passes at source `f14a4400f9bf3664193f51fb5c055dc10bccac65`, using Rust 1.97.1, Node 24.21.0, Anchor 1.2.0, Surfpool 1.5.0, Agave/SBF 3.1.10/platform tools 1.52 and wasm-bindgen 0.2.129 on local Apple silicon. Default workspace debug/release, Clippy and SDK checks: 91.402s (600s budget). Real Node and Chrome 154.0.8037.98 each pass 14 core/attestation and 24 HTTP/WebSocket/private-SDK process groups: browser runner 59.101s (600s budget). Default vault runner passes all 57 tests, none skipped: 456.807s (1,500s budget), including both normal and recovery carriers. HTTP/WebSocket normal cases take 67.768s/66.557s; each checks 64 signed reads in 64ms/47ms. Encrypted journals are 249,130/249,124 bytes and Node-harness RSS 155,566,080/158,187,520 bytes, below the declared 8MiB/512MiB bounds. These are test-workload measurements, not production service/Nitro benchmarks. All 16 observation regressions and three new reference tests pass, including 576 differential cuts and 289 shortfall cuts. Tracked-only source export independently passes manifest/foundation checks (27 phases/37 tracked documents) and all 33 metadata regressions with no `work/` or user docs. Earlier failed/focused runs are diagnostic history, not the final success receipt. Actual hardware/live qualification is intentionally not run; crash-helper tests marked ignored are invoked explicitly by their parent matrices. Hosted CI/review for the published head remain pending.
+Unexpected: ordinary native history parsing has no certified causal cut; introduced an explicit trusted covered-input port, not inferred completeness or an enabled live provider. The fixture control codec required canonical decimal strings for lossless i128 values. Initial SPL mint setup expired under implicit helper defaults; explicit execution/confirmation settings match the existing sandbox sender. Duplicate native observations correctly advance audit version while economics stay unchanged; the regression now asserts both facts. The first reverse-stress range included downward shocks; its named upward-shock search now starts at 100. Regenerated Rust caches were removed after disk exhaustion and the pinned WASM target installed; no source/research or global toolchain versions were changed.
+Publication: ready/open #53, `tee/p22-offline-acceptance` → `product/tee-v1`, using native `gh stack init/submit`. Initial published head `ed32d9f6624b5b6ec705d95227d5e72ecdf6947e` contains only evidence documentation after the fully tested `f14a4400f9bf3664193f51fb5c055dc10bccac65` source. This final bookkeeping-only successor records the actual PR and passes focused foundation/plan/manifest/diff checks. Hosted Linux CI and CodeRabbit review remain pending for its own head; no automatic merge.
+Review follow-up — 2026-10-06, tested source `b7ba0c9bb28bec6b58b2a8d8c4a5c87e9514dda2`: all four hosted Linux jobs passed at `9a4174527757e120ee81bfaf8d073480b153a37e`, but the two minor CodeRabbit findings were valid. Deposit/reconciliation controls now inspect normalization receipts; reconciliation also rejects an open NativeSnapshot issue for its own event. Zero deposits, changed same-signature amounts, mismatched native cash and repeat mismatches return errors without erasing committed evidence. Valid duplicate deposits and separate matching snapshots remain accepted. Both joined carriers reproduce the original false-success failure before the fix, then pass with unchanged financial books and retained restart state. Local `node scripts/check.mjs` passes complete debug/release, Clippy, boundaries and all 24 SDK/TLS tests. `node scripts/check-vault.mjs --acceptance-only` passes strict build/IDL/TypeScript checks and both joined normal lifecycles (71.216s HTTP / 68.169s WebSocket); its four reported passes include the two empty filtered file wrappers, not a new 57-case full-suite receipt. The manifest now checks bounded declaration/registration forms, rather than arbitrary substrings; nine stale-comment/string/renamed-entry substitutions are rejected, and all 34 metadata regressions pass after the final edit. Declaration presence is not proof of runner reachability or execution. No shipping protocol, Solana program or economic policy changes. New-head hosted checks and thread disposition are pending publication; earlier source receipts are not reused as new-head success.
+Review publication receipt: source/evidence pushed at `baf340f239223067d95b856e17bf28d14b67c47e`. Both CodeRabbit threads were answered and resolved; hosted checks were queued when inspected. The ensuing documentation-only successor records this receipt and still requires its own current-head hosted results. No merge was requested or performed.
+Next: obtain #53's current tip hosted results before merge authorization. Preserve fake-port versus SBF evidence limits; P23 and all live gates remain unopened. The next phase requires a current bounded G05 environment/account/funding/cleanup manifest, not reuse of P20 permission or historical experiment receipts. The requested CI audit is read-only; targeted coverage/reporting/enforcement improvements need separate authorization.
+PR: https://github.com/arnabnandikgp/cinder/pull/53.
 Merge: none.
 
 ## P23 — Live integration qualification

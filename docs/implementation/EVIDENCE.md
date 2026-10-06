@@ -39,6 +39,13 @@ open; passing this candidate must not close them.
 
 ## How to reuse the research
 
+P22's [tracked acceptance manifest](acceptance-manifest.json) maps W01–W09 and
+V01–V10 to named executable owning-layer/joined tests. Its
+[acceptance contract](../architecture/0022-offline-acceptance.md) distinguishes
+fake native ports, compiled local SBF and historical/hardware limits. All required
+seeds and expected outcomes are tracked; no ignored research is needed to run it.
+This promotes reproducible requirements/economics, not experimental authority.
+
 1. **Reuse requirements and test vectors first.** The production implementation
    must reproduce approved economics, not the accidental structure of a prototype.
 2. **Adapt reviewed mechanisms.** Extract canonical encodings, authority checks,

@@ -9,9 +9,9 @@ From the repository root, with Node 24.21.0, Rust 1.97.1/rustfmt/Clippy,
 Anchor CLI 1.2.0, Agave/SBF 3.1.10/platform-tools 1.52, Surfpool 1.5.0,
 OpenSSL development headers/pkg-config and **wasm-bindgen CLI 0.2.129**:
 
-The default vault suite includes the joined HTTP/WebSocket recovery tests. It
+The default vault suite includes joined HTTP/WebSocket normal lifecycle and recovery tests. It
 therefore also builds the private service and browser WASM core; these are
-required even without `--recovery-only` (which only narrows the tests run).
+required even without `--recovery-only` or `--acceptance-only` (which only narrow the tests run).
 Install the exact wasm-bindgen CLI separately, for example with
 `cargo install wasm-bindgen-cli --version 0.2.129 --locked --root /absolute/path/to/cinder-test-tools`.
 The [vault CI workflow](../.github/workflows/vault.yml) instead provisions a
@@ -45,3 +45,9 @@ separate operator activation and the existing shared payout counters. P21's
 joined offline tests exercise ledger reconciliation and private claim delivery,
 and use fake evidence for native fencing. Live native-fencing and venue/hardware
 qualification remain P23.
+
+The [P22 normal lifecycle](../docs/architecture/0022-offline-acceptance.md) adds
+actual local vault deposit/release/return/payout checks and real private position
+updates. Native deposit/credit, trading history/funding and withdrawal observations
+are explicitly synthetic. Local SPL burn/mint supplies the fake venue boundary;
+it is not a deployed Pacifica program, bridge payment or testnet trade.

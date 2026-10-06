@@ -55,7 +55,7 @@ impl Drop for Binding {
         self.broker_seed.zeroize();
     }
 }
-fn profile(account: &str) -> Profile {
+pub(super) fn profile(account: &str) -> Profile {
     Profile {
         config: config(),
         source: config().sources[0].scope,

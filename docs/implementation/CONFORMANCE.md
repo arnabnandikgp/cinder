@@ -1,9 +1,10 @@
 # Initial portable conformance cases
 
 Tracked extraction of approved toy economics from W01/W02/W09 in [EVIDENCE](EVIDENCE.md).
-These are expected outcomes, **not tests of a production engine that already exists**.
-Owning phases convert them and the broader named suites into executable fixtures,
-record units/provenance and run differential checks. Prices below are normalized
+These were the initial expected outcomes. Their current named owning-layer and
+joined SDK/controller tests are traced in the [P22 manifest](acceptance-manifest.json)
+and [acceptance contract](../architecture/0022-offline-acceptance.md). This is bounded
+test evidence, not proof of live qualification or universal solvency. Prices below are normalized
 linear-perp quote per lot, not native Pacifica decimals or spot payment obligations.
 
 | ID | Setup / events | Required outcome | Owner |

@@ -13,7 +13,8 @@ fn run() -> Result<(), cinder_service::Error> {
     }
     let web = args.len() == 4 && args[3] == "--web";
     let recovery_web = args.len() == 4 && args[3] == "--recovery-web";
-    if args.len() != 3 && !web && !recovery_web {
+    let acceptance_web = args.len() == 4 && args[3] == "--acceptance-web";
+    if args.len() != 3 && !web && !recovery_web && !acceptance_web {
         return Err(Error);
     }
     let listen: SocketAddr = args[0].parse().map_err(|_| Error)?;
@@ -23,7 +24,9 @@ fn run() -> Result<(), cinder_service::Error> {
     let wallet = decode_hex(&args[2])?.try_into().map_err(|_| Error)?;
     let mut key = zeroize::Zeroizing::new([0; 32]);
     std::io::stdin().read_exact(&mut *key)?;
-    let handler = if recovery_web {
+    let handler = if acceptance_web {
+        FixtureHandler::open_acceptance(Path::new(&args[1]), key, wallet, &read_binding()?)?
+    } else if recovery_web {
         let binding = read_binding()?;
         let c = recovery::controller(&binding)?;
         FixtureHandler::open_recovery(Path::new(&args[1]), key, wallet, &c, &binding.keys()?)?
@@ -41,7 +44,12 @@ fn run() -> Result<(), cinder_service::Error> {
         root.iter().map(|b| format!("{b:02x}")).collect::<String>()
     );
     std::io::stdout().flush()?;
-    if web || recovery_web {
+    let stop = if acceptance_web {
+        acceptance_controls(handler.clone())
+    } else {
+        stop_on_stdin()
+    };
+    if web || recovery_web || acceptance_web {
         cinder_service::web::Server::new(
             policy(),
             Arc::new(FixtureClock),
@@ -49,7 +57,7 @@ fn run() -> Result<(), cinder_service::Error> {
             Arc::new(FixtureClock),
             handler,
         )?
-        .run(listener, stop_on_stdin())
+        .run(listener, stop)
     } else {
         Server::new(
             Identity::generate(&FixtureClock)?,
@@ -58,8 +66,45 @@ fn run() -> Result<(), cinder_service::Error> {
             Arc::new(FixtureClock),
             handler,
         )?
-        .run(listener, stop_on_stdin())
+        .run(listener, stop)
     }
+}
+// Harness messages terminate at the private fixture process's stdin. The public
+// relay has no reference to this channel, and malformed controls never log input.
+fn acceptance_controls(
+    handler: std::sync::Arc<cinder_service::fixture::FixtureHandler>,
+) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+    use std::io::{BufRead, Read, Write};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let stop = Arc::new(AtomicBool::new(false));
+    let flag = stop.clone();
+    std::thread::spawn(move || {
+        let mut input = std::io::BufReader::new(std::io::stdin());
+        loop {
+            let mut line = String::new();
+            let Ok(n) = input.by_ref().take(131_073).read_line(&mut line) else {
+                break;
+            };
+            if n == 0 || line.len() > 131_072 {
+                break;
+            }
+            let response = serde_json::from_str(&line)
+                .ok()
+                .and_then(|c| handler.acceptance_control(c).ok())
+                .unwrap_or_else(|| serde_json::json!({"error":"fixture-control-rejected"}));
+            if writeln!(std::io::stdout(), "{response}")
+                .and_then(|_| std::io::stdout().flush())
+                .is_err()
+            {
+                break;
+            }
+        }
+        flag.store(true, Ordering::Release);
+    });
+    stop
 }
 fn read_binding() -> Result<cinder_service::fixture::recovery::Binding, cinder_service::Error> {
     use std::io::Read;

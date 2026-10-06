@@ -20,6 +20,7 @@ import { PrivateClient,type MessageSigner } from '../../private/src/index.ts';
 import { WebChannel,type WebCore } from '../../private/src/web-channel-core.ts';
 // Deliberately fixture-rooted verifier; never accepted by the production client.
 import { verifyWithRoot } from '../../../tools/web-channel/attestation/verifier.mjs';
+import { runAcceptance } from './acceptance.ts';
 // @ts-expect-error parent-only JavaScript framing layer has no custody API
 import { createWebRelay } from '../../../services/web-relay/server.mjs';
 
@@ -124,6 +125,10 @@ async function fixture() {
     customer, auth, receipt, depositReceipt, initialize, deposit, release, payout, returned, freeze, state };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+for (const carrier of ['http','websocket'] as const) test(`P22 ${carrier} complete controller lifecycle and process faults`, {timeout:120_000}, async()=>{
+  await runAcceptance({program,connection,governance,programData,fund,send},carrier);
+});
 
 const signerKey=(k:Keypair)=>createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.from(k.secretKey.subarray(0,32))]),format:'der',type:'pkcs8'});
 const toBytes=(p:PublicKey|Uint8Array)=>Array.from(p instanceof PublicKey?p.toBytes():p);

@@ -230,6 +230,8 @@ pub fn policy() -> Policy {
     }
 }
 
+/// Full offline lifecycle controls; never a public endpoint or production port.
+pub mod acceptance;
 /// Joined SBF recovery fixture helpers, never available in the production build.
 pub mod recovery;
 
@@ -302,13 +304,18 @@ impl Witness for LocalWitness {
     }
 }
 type Store = Journal<Replicated<FileReplica, FileReplica, LocalWitness>, RecordCipher>;
-struct Holds;
+struct Holds(bool);
 impl Admission for Holds {
     fn order_holds(
         &self,
-        _: &State,
+        state: &State,
         i: &orders::Intent,
     ) -> Result<Vec<Reservation>, cinder_api::Error> {
+        if self.0 {
+            return state
+                .order_reservations(i)
+                .map_err(|_| cinder_api::Error::Unavailable);
+        }
         Ok(vec![
             Reservation {
                 resource: Resource::Customer(i.request.account),
@@ -326,12 +333,13 @@ impl Admission for Holds {
 pub struct FixtureHandler {
     store: Mutex<Store>,
     service: Service<Holds>,
+    native: Option<Mutex<acceptance::Native>>,
 }
 impl FixtureHandler {
     /// Key arrives through harness stdin, never parent disk/logs. Reuse on restart
     /// is a test harness responsibility, not a production key-release design.
     pub fn open(root: &Path, key: Zeroizing<[u8; 32]>, wallet: [u8; 32]) -> Result<Self, Error> {
-        Self::open_inner(root, key, wallet, [81; 32], None).map(|(handler, _)| handler)
+        Self::open_inner(root, key, wallet, [81; 32], None, false).map(|(handler, _)| handler)
     }
     /// Same service/journal with SBF customer custody and synthetic venue house capital.
     /// Only the explicit joined offline harness may choose this fixture setup.
@@ -352,6 +360,7 @@ impl FixtureHandler {
             wallet,
             route.beneficiaries[0].tokens,
             Some(controller),
+            false,
         )?;
         let mut store = h.store.lock().map_err(|_| Error)?;
         if fresh {
@@ -368,12 +377,49 @@ impl FixtureHandler {
         drop(store);
         Ok(h)
     }
+    /// Explicit synthetic native ports with joined risk, no seeded customer credit.
+    pub fn open_acceptance(
+        root: &Path,
+        key: Zeroizing<[u8; 32]>,
+        wallet: [u8; 32],
+        binding: &recovery::Binding,
+    ) -> Result<Self, Error> {
+        let native = acceptance::Native::new(binding)?;
+        if binding.route.beneficiaries.len() != 1
+            || binding.route.beneficiaries[0].wallet != wallet
+            || binding.route.beneficiaries[0].account != user().bytes()
+        {
+            return Err(Error);
+        }
+        let tokens = binding.route.beneficiaries[0].tokens;
+        let (mut h, fresh) =
+            Self::open_inner(root, key, wallet, tokens, Some(&native.controller), true)?;
+        if fresh {
+            native.activate(&mut *h.store.lock().map_err(|_| Error)?)?;
+        }
+        h.native = Some(Mutex::new(native));
+        Ok(h)
+    }
+    /// Private test-harness stdin only. No control is reachable through the relay.
+    pub fn acceptance_control(
+        &self,
+        command: acceptance::Command,
+    ) -> Result<serde_json::Value, Error> {
+        let mut store = self.store.lock().map_err(|_| Error)?;
+        self.native
+            .as_ref()
+            .ok_or(Error)?
+            .lock()
+            .map_err(|_| Error)?
+            .control(&mut store, command)
+    }
     fn open_inner(
         root: &Path,
         key: Zeroizing<[u8; 32]>,
         wallet: [u8; 32],
         tokens: [u8; 32],
         controller: Option<&cinder_pacifica::funding::Controller>,
+        acceptance: bool,
     ) -> Result<(Self, bool), Error> {
         let fresh = !root.join("accepted").exists();
         if fresh {
@@ -419,12 +465,12 @@ impl FixtureHandler {
                 maximum_auth_lifetime: 120_000,
                 maximum_grant_lifetime: 3_600_000,
             },
-            Holds,
+            Holds(acceptance),
         )
         .map_err(|_| Error)?;
         let now = FixtureClock.now()?;
         if fresh {
-            seed(&mut store, now, controller.is_some())?;
+            seed(&mut store, now, controller.is_some(), !acceptance)?;
             if let Some(c) = controller {
                 c.bind(&mut store, recovery::commit_id()?, now)
                     .map_err(|_| Error)?;
@@ -461,6 +507,7 @@ impl FixtureHandler {
             Self {
                 store: Mutex::new(store),
                 service,
+                native: None,
             },
             fresh,
         ))
@@ -501,15 +548,34 @@ impl Handler for FixtureHandler {
                     attempt: AttemptId::new(r.id.bytes()).map_err(|_| Error)?,
                 };
                 let mut tx = empty(&store, now);
-                tx.controls = vec![
-                    Control::Order(orders::Action::Prepare { attempt }),
-                    Control::Expose(attempt),
-                ];
+                tx.controls = vec![Control::Order(orders::Action::Prepare { attempt })];
+                if self.native.is_none() {
+                    tx.controls.push(Control::Expose(attempt));
+                }
                 let committed = store.commit(tx).map_err(|_| Error)?;
                 if committed.receipt.controls.is_some() {
                     return Err(Error);
                 }
+                if let Some(native) = &self.native {
+                    native
+                        .lock()
+                        .map_err(|_| Error)?
+                        .dispatch(&mut store, now)?;
+                }
                 // Query the same signed request after durable fixture dispatch.
+                return self
+                    .service
+                    .handle(&mut store, channel, &request, now)
+                    .and_then(|r| r.encode())
+                    .map_err(|_| Error);
+            }
+        }
+        if let Some(native) = &self.native {
+            native
+                .lock()
+                .map_err(|_| Error)?
+                .dispatch(&mut store, now)?;
+            if matches!(&response, Ok(cinder_api::Response::Receipt(_))) {
                 return self
                     .service
                     .handle(&mut store, channel, &request, now)
@@ -633,7 +699,7 @@ fn commit(
     }
     Ok(())
 }
-fn seed(store: &mut Store, now: u64, recovery: bool) -> Result<(), Error> {
+fn seed(store: &mut Store, now: u64, recovery: bool, customer_credit: bool) -> Result<(), Error> {
     let initial = |n, owner, location| {
         let mut e = event(
             n,
@@ -653,10 +719,10 @@ fn seed(store: &mut Store, now: u64, recovery: bool) -> Result<(), Error> {
         }
         e
     };
-    commit(
-        store,
-        now,
-        vec![
+    let mut receipts = vec![initial(2, Owner::House, Location::Venue)];
+    if customer_credit {
+        receipts.insert(
+            0,
             initial(
                 1,
                 Owner::Customer(user()),
@@ -666,10 +732,9 @@ fn seed(store: &mut Store, now: u64, recovery: bool) -> Result<(), Error> {
                     Location::Venue
                 },
             ),
-            initial(2, Owner::House, Location::Venue),
-        ],
-        vec![],
-    )?;
+        );
+    }
+    commit(store, now, receipts, vec![])?;
     let l = store.state().map_err(|_| Error)?.ledger();
     let check = event(
         3,
