@@ -30,7 +30,7 @@
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-06. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
@@ -44,13 +44,15 @@ merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 local checklist and remaining capability gates. The historical pre-review
 application checkpoints and receipts remain in the P23 log below.
 
-### Latest remediation implementation — 2026-10-06
+### Latest remediation implementation — 2026-10-07
 
 The user approved the broad remediation recommendations. Work now follows the
 [C1–C5 plan](P23-REMEDIATION.md): shared interpretation/pure authorization first,
 then accepted publication and bounded scheduling, a fixed joined local matrix,
-and separately authorized changed-source hardware qualification. C1 is implemented
-and locally verified; review/merge remain open, so its progress stays in progress.
+and separately authorized changed-source hardware qualification. C1 is committed
+locally as `5b77b11cc0101430f432c236e415577d83622588`. C2 is now implemented locally;
+its verification/handoff is below. Review/merge remain open, so neither slice is
+closed merely because its local tests pass.
 Current durability/repair checks are retained for bounded dev/test;
 a production segment/checkpoint/retention contract is not implicitly approved.
 
@@ -84,13 +86,76 @@ private SDK (24) pass. Actual Node/Chrome HTTP/WebSocket suites each pass all 26
 groups against synthetic loopback fixtures. These fixture results do not join
 slow real Runtime/witness I/O or qualify the unresolved live WS gap.
 
-Next: C2's central accepted read publication and independent per-reply witness
-qualification, reusing C1 authorization/projection rather than adding another
-handler. Resolve/test exact writer metadata, post-CAS/publication, poison/replay,
-revoke/expiry and old-generation memory before Runtime read jobs use it. C3 then
-joins bounded external I/O and connection-owned cipher/delivery scheduling. Keep
-the fixed C4 matrix and current application deadline; no new AWS or financial
-run until a separately reviewed manifest. No C2–C5 completion is claimed.
+#### C2 implementation and next handoff
+
+Central `journal::read` publication shares immutable accepted State and individual
+retained transaction/receipt/book-change records; bounded non-cloneable tickets
+own at most four read slots. Boot attaches only after initialization and writer
+freshness. All central commits publish after acceptance/postchecks; rejected
+controls advance the accepted head, exact retries do not. Writer/polling paths
+cannot bypass this publication. Panic/uncertain write, failed freshness/replay,
+poison, dropped journal and runtime stop invalidate outstanding tickets. Reload
+cannot revive an attached read boot. No wire, ledger revision, stored authority,
+new dependency or persistence format changes.
+
+Read/View/Operation take independent fresh Dynamo strong reads without acquiring
+Runtime.active. The immutable cloud client shares finite credentials, not a
+network mutex, cached response or CAS authority in its read-only port. Completion
+rechecks finite credentials and existing elapsed/signed-time limits. Existing
+API envelope/epoch/grant authorization and exact account/history projection are
+shared across the writer and sealed read source. The final gate uses a fresh
+signed clock outside the pointer latch, a 250-ms entire processing budget,
+conservative expiry revalidation, the same generation/head and the actual sticky
+runtime stop flag. NSM, signature checks, history/index work, encoding and network
+I/O never run under that latch. Known exact newer local heads refuse without
+poisoning; unknown/backward heads, wrong epoch or failed witness fence. No TTL,
+cached freshness, read retry or longer application-reply deadline.
+
+Eight new AEAD/SQLite publication regressions plus a latch-poison unit case cover
+pre-CAS/post-CAS timing, accepted/rejected/duplicate records, uncertainty/panics,
+wrong/missing/backward witness, final deadline/boot stop, journal drop and shared
+bounded retention. The ten-family/paging/View/Operation golden comparison now
+also covers independent reads before and after AEAD replay. One new API unit
+case covers final grant expiry, read-only mutation exclusion and exact contract
+binding. Four new direct Runtime cases cover fresh calls without writer backend
+I/O, slow writes, parallel reads, revoke during I/O, request/boot expiry, bounded
+final signed-clock work and panic. One cloud completion regression checks STS
+safety/clock/elapsed boundaries. Synthetic timing/authority ports remain explicit;
+these are not live AWS, deployed funding or queued WebSocket-delivery receipts.
+
+Final C2 local verification — 2026-10-07: the implementation commit containing
+this receipt follows `5b77b11cc0101430f432c236e415577d83622588`. Pinned Rust 1.97.1 /
+Node 24.21.0 on Apple silicon pass complete locked/offline `node scripts/check.mjs`:
+42 contracts/inventory tests, dependency boundaries, formatting, shipping/default
+and all-feature all-target Clippy/builds, all-feature debug/release and shipping-
+default Rust suites, 14 relay tests and 24 private SDK tests. API has 36 passing
+tests; the all-feature service has 88 passing unit and eight integration tests,
+with seven named Nitro tests still explicitly gated. The new publication suite
+passes all eight cases and its separate latch-poison unit case. Named killed-child
+helpers remain parent-invoked, not silently waived. Actual Node and Chrome
+154.0.8037.98 each additionally pass all 26 existing HTTP/WebSocket/private-SDK
+process groups against synthetic loopback fixtures. These carrier regressions do
+not join slow Runtime/dependency I/O and are not C4/live qualification.
+
+One unplanned harness constraint: SQLite's all-feature fault callback is not
+Send. The publication race test keeps SQLite/writer on its owning thread and
+moves only the read capability, rather than weakening that hook or adding unsafe
+Send. An initially undersized disposable credential fixture was corrected to
+satisfy existing validation; the final full run, not that failed run, is the
+success receipt. Logs: `/private/tmp/cinder-c2-tools.NhSWw8/check-verified.log` and
+`http.log`. Regression source is tracked; those logs/tool downloads are temporary,
+not a new ignored experiment or required private dependency. No Linux/SBF/ARM/
+AWS/venue/funded test was run for this source, and previous hardware/hosted
+success is not inherited as new-source evidence.
+
+Next: C3's bounded external
+prepare/I/O/completion and connection-owned scheduling. Do not enqueue already
+released C2 responses: the connection must own unreleased candidates until its
+final generation/auth/time gate and sole Noise cipher writer. Keep C4's fixed
+Node/Chrome matrix, sustained-write/memory bounds and C5's separately reviewed
+changed-image manifest. The existing full-history append/repair remains unchanged
+and is still a finite/quadratic dev-test limitation. No C3–C5/P23 closure, push,
+merge, financial activity or new AWS run is claimed.
 
 ### Earlier architecture review — 2026-10-06
 

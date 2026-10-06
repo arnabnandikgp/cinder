@@ -4,7 +4,7 @@ use crate::{
     Admission, Error, INIT, RECORD, Record, Service,
     wire::{Command, Grant, Request},
 };
-use cinder_journal::{Backend, Head, Journal, Protection};
+use cinder_journal::{Head, read::Source};
 use cinder_kernel::identity::{AccountId, RequestId};
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
@@ -39,10 +39,7 @@ impl Records {
             _ => None,
         }
     }
-    fn build<B: Backend, P: Protection>(
-        journal: &Journal<B, P>,
-        fingerprint: [u8; 32],
-    ) -> Result<Self, Error> {
+    fn build(journal: &impl Source, fingerprint: [u8; 32]) -> Result<Self, Error> {
         let mut installed = false;
         let mut result = Self {
             head: journal.head(),
@@ -97,10 +94,7 @@ impl Records {
 }
 
 impl<A: Admission> Service<A> {
-    pub(crate) fn records<B: Backend, P: Protection>(
-        &self,
-        journal: &Journal<B, P>,
-    ) -> Result<Arc<Records>, Error> {
+    pub(crate) fn records(&self, journal: &impl Source) -> Result<Arc<Records>, Error> {
         // Even an exact cached head cannot reopen a poisoned journal. The handler
         // additionally performs verified_state BEFORE calling this interpreter.
         journal.state().map_err(|_| Error::Unavailable)?;

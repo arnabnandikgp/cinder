@@ -26,6 +26,11 @@ struct Metrics {
     accepts: AtomicUsize,
     witness_delay_ms: AtomicU64,
     entered: Mutex<Option<mpsc::Sender<()>>>,
+    anchor: Mutex<Option<Arc<Mutex<Anchor>>>>,
+    private_delay_ms: AtomicU64,
+    private_reads: AtomicUsize,
+    private_entered: Mutex<Option<mpsc::Sender<()>>>,
+    private_failure: AtomicBool,
 }
 impl Metrics {
     fn counts(&self) -> [usize; 4] {
@@ -138,6 +143,7 @@ fn store(metrics: Arc<Metrics>) -> Store {
         })),
         metrics: metrics.clone(),
     };
+    *metrics.anchor.lock().unwrap() = Some(witness.anchor.clone());
     Journal::create(
         Replicated::new(stream, 1, replica(1), replica(2), witness).unwrap(),
         RecordCipher::new(Zeroizing::new([55; 32]), 1, stream.id).unwrap(),
@@ -278,7 +284,58 @@ fn application(metrics: Arc<Metrics>) -> Application {
             native_reads: false,
             maximum_boot_ms: 120_000,
         },
+        reads: None,
     }
+}
+struct IndependentWitness {
+    metrics: Arc<Metrics>,
+    anchor: Arc<Mutex<Anchor>>,
+}
+impl ReadWitness for IndependentWitness {
+    fn read(&self, stream: Stream) -> Result<Anchor, JournalError> {
+        if stream
+            != (Stream {
+                domain: configuration().domain,
+                id: [42; 32],
+            })
+        {
+            return Err(JournalError::Stale);
+        }
+        self.metrics.private_reads.fetch_add(1, Ordering::SeqCst);
+        if let Some(entered) = self.metrics.private_entered.lock().unwrap().take() {
+            entered.send(()).unwrap();
+        }
+        std::thread::sleep(Duration::from_millis(
+            self.metrics.private_delay_ms.load(Ordering::SeqCst),
+        ));
+        if self.metrics.private_failure.load(Ordering::SeqCst) {
+            return Err(JournalError::Storage);
+        }
+        Ok(*self.anchor.lock().unwrap())
+    }
+}
+fn independent(metrics: Arc<Metrics>) -> Application {
+    let mut app = application(metrics.clone());
+    let mut active = app.active.lock().unwrap();
+    let binding = ReadBinding {
+        stream: Stream {
+            domain: configuration().domain,
+            id: [42; 32],
+        },
+        epoch: 1,
+        api: app
+            .api
+            .release_commitment(active.store.configuration())
+            .unwrap(),
+    };
+    let reader = active.store.attach_reader(binding).unwrap();
+    drop(active);
+    let anchor = metrics.anchor.lock().unwrap().as_ref().unwrap().clone();
+    app.reads = Some(ReadRuntime {
+        reader,
+        witness: Arc::new(IndependentWitness { metrics, anchor }),
+    });
+    app
 }
 fn session() -> Session {
     Session::established(configuration().domain, [8; 32], NOW + 120_000)
@@ -442,5 +499,179 @@ fn real_runtime_slow_reads_and_writes_refuse_initial_reads_but_skip_busy_polls()
                     .is_empty()
             );
         });
+    }
+}
+
+#[test]
+fn independent_runtime_reads_do_not_wait_for_a_slow_writer_or_recheck_its_backend() {
+    let metrics = Arc::new(Metrics::default());
+    let app = independent(metrics.clone());
+    let channel = session();
+    metrics.reset();
+    for _ in 0..3 {
+        success(&app.handle(&channel, read(1, 11, 1), NOW).unwrap(), 3);
+    }
+    assert_eq!(metrics.private_reads.load(Ordering::SeqCst), 3);
+    assert_eq!(metrics.counts(), [0; 4]);
+    metrics.witness_delay_ms.store(400, Ordering::SeqCst);
+    let (entered, observed) = mpsc::channel();
+    *metrics.entered.lock().unwrap() = Some(entered);
+    std::thread::scope(|scope| {
+        let write = scope.spawn(|| app.handle(&channel, grant(40), NOW).unwrap());
+        observed.recv_timeout(Duration::from_secs(5)).unwrap();
+        let start = Instant::now();
+        success(&app.handle(&channel, read(2, 11, 1), NOW).unwrap(), 3);
+        assert!(start.elapsed() < REQUEST_WAIT);
+        assert!(app.active.try_lock().is_err());
+        success(
+            &app.poll(&channel, read(3, 11, 1), NOW).unwrap().unwrap(),
+            3,
+        );
+        success(&write.join().unwrap(), 1);
+    });
+    metrics.witness_delay_ms.store(0, Ordering::SeqCst);
+    success(&app.handle(&channel, read(4, 31, 1), NOW).unwrap(), 3);
+    assert!(app.health() == Health::Ready);
+}
+
+#[test]
+fn slow_independent_reads_do_not_block_each_other_or_mutations_and_revoke_refuses_old_reply() {
+    let metrics = Arc::new(Metrics::default());
+    let app = independent(metrics.clone());
+    let channel = session();
+    success(&app.handle(&channel, grant(40), NOW).unwrap(), 1);
+    metrics.private_delay_ms.store(400, Ordering::SeqCst);
+    let (entered, observed) = mpsc::channel();
+    *metrics.private_entered.lock().unwrap() = Some(entered);
+    std::thread::scope(|scope| {
+        let agent = scope.spawn(|| app.poll(&channel, read(1, 31, 1), NOW).unwrap());
+        observed.recv_timeout(Duration::from_secs(5)).unwrap();
+        // Mutation completes while the old epoch's read is waiting on its witness.
+        success(
+            &app.handle(&channel, request(41, Command::Revoke, 11, 1), NOW)
+                .unwrap(),
+            1,
+        );
+        assert!(agent.join().unwrap().is_none());
+    });
+    assert!(app.health() == Health::Ready);
+    metrics.private_delay_ms.store(0, Ordering::SeqCst);
+    let denied = app.handle(&channel, read(2, 31, 1), NOW).unwrap();
+    assert_eq!(
+        denied.as_bytes(),
+        cinder_api::Error::Unauthorized
+            .encode_private()
+            .unwrap()
+            .as_bytes()
+    );
+    // Concurrent witness I/O has no shared network lock, unlike the old runtime.
+    metrics.private_delay_ms.store(400, Ordering::SeqCst);
+    let (entered, observed) = mpsc::channel();
+    *metrics.private_entered.lock().unwrap() = Some(entered);
+    std::thread::scope(|scope| {
+        let first = scope.spawn(|| app.handle(&channel, read(3, 11, 2), NOW).unwrap());
+        observed.recv_timeout(Duration::from_secs(5)).unwrap();
+        let start = Instant::now();
+        success(&app.handle(&channel, read(4, 11, 2), NOW).unwrap(), 3);
+        assert!(start.elapsed() < Duration::from_millis(750));
+        success(&first.join().unwrap(), 3);
+    });
+}
+struct AdjustableTime(AtomicU64);
+impl Clock for AdjustableTime {
+    fn now(&self) -> Result<u64, Error> {
+        Ok(self.0.load(Ordering::SeqCst))
+    }
+}
+#[test]
+fn independent_runtime_rechecks_expiry_after_io_and_fences_failed_witnesses() {
+    let metrics = Arc::new(Metrics::default());
+    let mut app = independent(metrics.clone());
+    let time = Arc::new(AdjustableTime(AtomicU64::new(NOW)));
+    app.clock = time.clone();
+    let channel = session();
+    metrics.private_delay_ms.store(400, Ordering::SeqCst);
+    let (entered, observed) = mpsc::channel();
+    *metrics.private_entered.lock().unwrap() = Some(entered);
+    std::thread::scope(|scope| {
+        let work = scope.spawn(|| app.handle(&channel, read(1, 11, 1), NOW).unwrap());
+        observed.recv_timeout(Duration::from_secs(5)).unwrap();
+        time.0.store(NOW + 60_000, Ordering::SeqCst);
+        assert_eq!(
+            work.join().unwrap().as_bytes(),
+            cinder_api::Error::Unauthorized
+                .encode_private()
+                .unwrap()
+                .as_bytes()
+        );
+    });
+    assert!(app.health() == Health::Ready);
+    time.0.store(NOW, Ordering::SeqCst);
+    metrics.private_delay_ms.store(0, Ordering::SeqCst);
+    metrics.private_failure.store(true, Ordering::SeqCst);
+    assert!(app.handle(&channel, read(2, 11, 1), NOW).is_err());
+    assert!(app.health() == Health::Fenced);
+    assert!(app.handle(&channel, grant(42), NOW).is_err());
+    assert!(app.tick().is_err());
+}
+struct FinalTime {
+    calls: AtomicUsize,
+    final_now: u64,
+    delay: u64,
+    panic: bool,
+}
+impl Clock for FinalTime {
+    fn now(&self) -> Result<u64, Error> {
+        if self.calls.fetch_add(1, Ordering::SeqCst) == 2 {
+            assert!(!self.panic, "synthetic final clock panic");
+            std::thread::sleep(Duration::from_millis(self.delay));
+            Ok(self.final_now)
+        } else {
+            Ok(NOW)
+        }
+    }
+}
+#[test]
+fn final_read_gate_bounds_time_work_boot_expiry_and_panics_without_stale_output() {
+    for case in 0..4 {
+        let metrics = Arc::new(Metrics::default());
+        let mut app = independent(metrics);
+        app.clock = Arc::new(FinalTime {
+            calls: AtomicUsize::new(0),
+            final_now: match case {
+                1 => NOW + 59_800,
+                2 => NOW + 120_000,
+                _ => NOW,
+            },
+            delay: if case == 0 { 400 } else { 0 },
+            panic: case == 3,
+        });
+        let attempted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            app.poll(&session(), read(1, 11, 1), NOW)
+        }));
+        match case {
+            0 => {
+                assert!(attempted.unwrap().unwrap().is_none());
+                assert!(app.health() == Health::Ready);
+            }
+            1 => {
+                assert_eq!(
+                    attempted.unwrap().unwrap().unwrap().as_bytes(),
+                    cinder_api::Error::Unauthorized
+                        .encode_private()
+                        .unwrap()
+                        .as_bytes()
+                );
+                assert!(app.health() == Health::Ready);
+            }
+            2 => {
+                assert!(attempted.unwrap().is_err());
+                assert!(app.health() == Health::Fenced);
+            }
+            _ => {
+                assert!(attempted.is_err());
+                assert!(app.health() == Health::Fenced);
+            }
+        }
     }
 }

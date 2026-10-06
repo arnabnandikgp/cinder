@@ -9,6 +9,7 @@ pub mod orders;
 pub mod projection;
 pub mod protection;
 pub mod raw;
+pub mod read;
 pub mod recovery;
 pub mod replicated;
 pub mod restoration;
@@ -18,7 +19,7 @@ pub mod wire;
 use cinder_kernel::{identity::Domain, ledger::Config};
 use model::*;
 use sha2::{Digest, Sha256};
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 // Order classification/authority/lifecycle changes replay semantics.
 const ENGINE_REVISION: u16 = 21;
@@ -190,11 +191,12 @@ pub struct Journal<B: Backend, P: Protection> {
     backend: B,
     protection: P,
     config: Config,
-    state: State,
+    state: Arc<State>,
     head: Head,
-    history: Vec<Accepted>,
+    history: Vec<Arc<Accepted>>,
     opaque_bytes: usize,
     poisoned: bool,
+    publication: Option<read::Publication>,
 }
 impl<B: Backend, P: Protection> fmt::Debug for Journal<B, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -227,11 +229,12 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             backend,
             protection,
             config,
-            state,
+            state: Arc::new(state),
             head: frame.head,
             history: Vec::new(),
             opaque_bytes: frame.opaque.as_bytes().len(),
             poisoned: false,
+            publication: None,
         })
     }
     /// Replay against an independently supplied expected configuration. Missing,
@@ -242,18 +245,24 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             backend,
             protection,
             config,
-            state,
+            state: Arc::new(state),
             head: Head::default(),
             history: Vec::new(),
             opaque_bytes: 0,
             poisoned: true,
+            publication: None,
         };
         s.reload()?;
         Ok(s)
     }
     /// Current private projection; disabled after uncertain storage outcome.
     pub fn state(&self) -> Result<&State, Error> {
-        if self.poisoned {
+        if self.poisoned
+            || self
+                .publication
+                .as_ref()
+                .is_some_and(read::Publication::fenced)
+        {
             Err(Error::Poisoned)
         } else {
             Ok(&self.state)
@@ -263,8 +272,10 @@ impl<B: Backend, P: Protection> Journal<B, P> {
     /// view. A cached `state()` is not present writer authority. Read freshness is
     /// linearized at this check; it does not revoke already escaped capabilities.
     pub fn verified_state(&mut self) -> Result<&State, Error> {
+        let _panic = self.publication.as_ref().map(read::Publication::checking);
         if let Err(error) = self.backend.check_current(self.head) {
             self.poisoned = true;
+            self.close_publication();
             return Err(error);
         }
         self.state()
@@ -305,13 +316,15 @@ impl<B: Backend, P: Protection> Journal<B, P> {
     /// P06 must add independent freshness; this detects no full valid-history rollback.
     pub fn reload(&mut self) -> Result<(), Error> {
         self.poisoned = true;
+        // An attached read boot is not silently revived by reconciliation.
+        self.close_publication();
         let frames = self.backend.load()?;
         if frames.is_empty() || frames.len() > MAX_RECORDS {
             return Err(Error::Codec);
         }
         let mut total = 0_usize;
         let mut head = Head::default();
-        let mut history: Vec<Accepted> = Vec::new();
+        let mut history: Vec<Arc<Accepted>> = Vec::new();
         let mut state = State::new(self.config.clone())?;
         for (n, frame) in frames.iter().enumerate() {
             total = total
@@ -352,18 +365,18 @@ impl<B: Backend, P: Protection> Journal<B, P> {
                 }
                 let book_changes = projection::capture(&state, &next, &self.config, tx.at)?;
                 state = next;
-                history.push(Accepted {
+                history.push(Arc::new(Accepted {
                     tx,
                     bytes: tx_bytes,
                     receipt,
                     head: frame.head,
                     book_changes,
-                });
+                }));
             }
             r.done()?;
             head = frame.head;
         }
-        self.state = state;
+        self.state = Arc::new(state);
         self.head = head;
         self.history = history;
         self.opaque_bytes = total;
@@ -373,11 +386,55 @@ impl<B: Backend, P: Protection> Journal<B, P> {
     /// Compute, protect and atomically append one transition. There is no network
     /// dispatch callback before/during commit and no automatic resend after errors.
     pub fn commit(&mut self, tx: Transaction) -> Result<Committed, Error> {
-        if self.poisoned {
+        if self.poisoned
+            || self
+                .publication
+                .as_ref()
+                .is_some_and(read::Publication::fenced)
+        {
             return Err(Error::Poisoned);
         }
+        // Guard the entire writer operation, including preparation and freshness:
+        // unwinding cannot leave an independent reader serving the old boot.
+        let publication = self
+            .publication
+            .as_ref()
+            .map(read::Publication::enter)
+            .transpose()?;
+        match self.commit_inner(tx, publication.as_ref()) {
+            Ok(committed) => {
+                if let Some(guard) = publication {
+                    if committed.duplicate {
+                        guard.cancel_known()?;
+                    } else {
+                        let view = self.read_view(guard.binding());
+                        if let Err(error) = guard.publish(view) {
+                            self.poisoned = true;
+                            self.close_publication();
+                            return Err(error);
+                        }
+                    }
+                }
+                Ok(committed)
+            }
+            Err(error) => {
+                if !self.poisoned
+                    && let Some(guard) = publication
+                {
+                    guard.cancel_known()?;
+                }
+                Err(error)
+            }
+        }
+    }
+    fn commit_inner(
+        &mut self,
+        tx: Transaction,
+        publication: Option<&read::Writing>,
+    ) -> Result<Committed, Error> {
         if let Err(error) = self.backend.check_current(self.head) {
             self.poisoned = true;
+            self.close_publication();
             return Err(error);
         }
         let bytes = wire::encode_transaction(&tx)?;
@@ -435,27 +492,35 @@ impl<B: Backend, P: Protection> Journal<B, P> {
                 }
             }
         }
+        if let Some(guard) = publication {
+            guard.propose(frame.head)?;
+        }
         if let Err(e) = self.backend.append(Some(self.head), &frame) {
             if !matches!(e, Error::Stale | Error::Busy) {
                 self.poisoned = true;
             }
             return Err(e);
         }
-        self.state = state;
+        self.state = Arc::new(state);
         self.head = frame.head;
         self.opaque_bytes = opaque_bytes;
-        self.history.push(Accepted {
+        self.history.push(Arc::new(Accepted {
             tx,
             bytes,
             receipt: receipt.clone(),
             head: self.head,
             book_changes,
-        });
+        }));
         Ok(Committed {
             head: self.head,
             receipt,
             duplicate: false,
             exposures,
         })
+    }
+}
+impl<B: Backend, P: Protection> Drop for Journal<B, P> {
+    fn drop(&mut self) {
+        self.close_publication();
     }
 }

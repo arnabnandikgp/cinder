@@ -16,6 +16,7 @@ use cinder_journal::{
     encrypted::RecordCipher,
     model::*,
     orders,
+    read::{Binding as ReadBinding, Failure as ReadFailure, Reader, Witness as ReadWitness},
     replicated::{Replicated, Stream, Witness},
 };
 use cinder_kernel::{identity::*, ledger::Config};
@@ -35,6 +36,27 @@ use std::{
 use zeroize::Zeroizing;
 
 const REQUEST_WAIT: std::time::Duration = std::time::Duration::from_millis(250);
+// Budget from BEFORE the final signed clock sample through authorization and
+// metadata release. Not a clock source, freshness TTL or wire reply timeout.
+const READ_RELEASE: std::time::Duration = std::time::Duration::from_millis(250);
+struct ReadRuntime {
+    reader: Reader,
+    witness: Arc<dyn ReadWitness>,
+}
+struct PanicFence<'a> {
+    stop: &'a AtomicBool,
+    reads: Option<&'a ReadRuntime>,
+}
+impl Drop for PanicFence<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.stop.store(true, Ordering::SeqCst);
+            if let Some(reads) = self.reads {
+                reads.reader.close();
+            }
+        }
+    }
+}
 fn lock_bounded<T>(
     mutex: &Mutex<T>,
     timeout: std::time::Duration,
@@ -303,6 +325,7 @@ pub struct Runtime<B: Backend + Send, P: Protection + Send> {
     stop: Arc<AtomicBool>,
     deadline: u64,
     gates: Gates,
+    reads: Option<ReadRuntime>,
 }
 impl Loaded {
     /// Actual application component for trusted provisioning before KMS Encrypt.
@@ -357,6 +380,7 @@ impl Loaded {
             stream,
         )?;
         let anchor = witness.read(stream).map_err(|_| Error)?;
+        let read_witness = witness.reader();
         if anchor.epoch != manifest.epoch {
             return Err(Error);
         }
@@ -406,6 +430,16 @@ impl Loaded {
             Trust::from_der(&manifest.venue_root, manifest.venue_root_hash)?,
             private_clock,
         )?;
+        let reader = store
+            .attach_reader(ReadBinding {
+                stream,
+                epoch: manifest.epoch,
+                api: self
+                    .api
+                    .release_commitment(store.configuration())
+                    .map_err(|_| Error)?,
+            })
+            .map_err(|_| Error)?;
         Ok(Runtime {
             active: Mutex::new(Active {
                 store,
@@ -423,6 +457,10 @@ impl Loaded {
             stop,
             deadline,
             gates: manifest.gates.clone(),
+            reads: Some(ReadRuntime {
+                reader,
+                witness: Arc::new(read_witness),
+            }),
         })
     }
 }
@@ -460,7 +498,10 @@ fn commit_id() -> Result<CommitId, Error> {
 
 impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
     fn active_time(&self) -> Result<u64, Error> {
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.load(Ordering::SeqCst)
+            || self.reads.as_ref().is_some_and(|r| r.reader.fenced())
+        {
+            self.fence();
             return Err(Error);
         }
         let now = match self.clock.now() {
@@ -479,10 +520,15 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
     /// Stop new sessions and scheduling; shutdown drops loaded key material.
     pub fn fence(&self) {
         self.stop.store(true, Ordering::SeqCst);
+        if let Some(reads) = &self.reads {
+            reads.reader.close();
+        }
     }
     /// Coarse local status; never exposes customer state or secret errors.
     pub fn health(&self) -> Health {
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.load(Ordering::SeqCst)
+            || self.reads.as_ref().is_some_and(|r| r.reader.fenced())
+        {
             Health::Fenced
         } else {
             Health::Ready
@@ -491,6 +537,10 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
     /// One bounded scheduler cut. No new policy, automatic funding or synthetic
     /// native evidence. Restarts do not resend any possibly-exposed attempt.
     pub fn tick(&self) -> Result<(), Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
         let result = (|| {
             let now = self.active_time()?;
             let mut active = self.active.lock().map_err(|_| Error)?;
@@ -670,6 +720,22 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
         request: PrivateBytes,
         now: u64,
     ) -> Result<Option<PrivateBytes>, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        if let Some(reads) = &self.reads
+            && cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r| {
+                matches!(
+                    r.command,
+                    cinder_api::wire::Command::Read(_)
+                        | cinder_api::wire::Command::View
+                        | cinder_api::wire::Command::Operation(_)
+                )
+            })
+        {
+            return self.read_available(reads, channel, &request, now);
+        }
         let result = (|| {
             self.active_time()?;
             let Some(mut active) = lock_bounded(&self.active, REQUEST_WAIT)? else {
@@ -697,6 +763,77 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
         // Contention is not a permanent key revocation. Journal/clock failures
         // are caught by tick and private API already refuses stale state.
         result
+    }
+    fn read_failure(&self, failure: ReadFailure) -> Result<Option<PrivateBytes>, Error> {
+        match failure {
+            ReadFailure::Busy | ReadFailure::Raced => Ok(None),
+            ReadFailure::Fenced => {
+                self.fence();
+                Err(Error)
+            }
+        }
+    }
+    fn read_available(
+        &self,
+        reads: &ReadRuntime,
+        channel: &Session,
+        request: &PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        let initial = self.active_time()?;
+        if initial < now {
+            self.fence();
+            return Err(Error);
+        }
+        let ticket = match reads.reader.capture() {
+            Ok(t) => t,
+            Err(e) => return self.read_failure(e),
+        };
+        if let Err(e) =
+            self.api
+                .authenticate_read(ticket.configuration(), channel, request, initial)
+        {
+            return e.encode_private().map(Some).map_err(|_| Error);
+        }
+        let verified = match reads.reader.verify(ticket, reads.witness.as_ref()) {
+            Ok(v) => v,
+            Err(e) => return self.read_failure(e),
+        };
+        let current = self.active_time()?;
+        if current < initial {
+            self.fence();
+            return Err(Error);
+        }
+        let response = self.api.handle_read(&verified, channel, request, current);
+        let encoded = match response {
+            Ok(r) => r.encode(),
+            Err(e) => e.encode_private(),
+        }
+        .map_err(|_| Error)?;
+        let until = std::time::Instant::now() + READ_RELEASE;
+        let final_time = self.active_time()?;
+        if final_time < current {
+            self.fence();
+            return Err(Error);
+        }
+        // Bound the maximum authorization time before release by a signed sample
+        // plus the ENTIRE budget (including sample/NSM and revalidation work).
+        let upper = final_time
+            .checked_add(READ_RELEASE.as_millis() as u64)
+            .ok_or(Error)?;
+        if upper >= self.deadline {
+            self.fence();
+            return Err(Error);
+        }
+        let revalidated = self.api.revalidate_read(&verified, channel, request, upper);
+        let encoded = match revalidated {
+            Ok(()) => encoded,
+            Err(e) => e.encode_private().map_err(|_| Error)?,
+        };
+        match verified.release_if_running(until, &self.stop) {
+            Ok(()) => Ok(Some(encoded)),
+            Err(e) => self.read_failure(e),
+        }
     }
 }
 impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {

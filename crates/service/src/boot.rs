@@ -502,7 +502,7 @@ pub fn release(
             token: boot.parent.token.clone(),
             expires: boot.parent.expires,
         };
-        let mut client = Client::new(slot.endpoint.clone(), credentials, nsm.clone())?;
+        let client = Client::new(slot.endpoint.clone(), credentials, nsm.clone())?;
         let response=client.json("TrentService.Decrypt",json!({"KeyId":slot.endpoint.resource,"EncryptionAlgorithm":"SYMMETRIC_DEFAULT","CiphertextBlob":STANDARD.encode(capsule.ciphertext),"EncryptionContext":context,"Recipient":{"KeyEncryptionAlgorithm":"RSAES_OAEP_SHA_256","AttestationDocument":STANDARD.encode(document)}}))?;
         let plain = recipient.decrypt(&response, &slot.endpoint.resource)?;
         keys.insert(capsule.role, manifest.unwrap(capsule.role, plain)?);

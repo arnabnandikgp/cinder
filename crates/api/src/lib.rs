@@ -3,6 +3,7 @@
 //! The confidential-channel and admission ports are trusted runtime interfaces,
 //! not proof of attestation. P19/P20 qualify their actual implementations.
 mod authorization;
+mod publication;
 pub mod reads;
 mod records;
 pub mod wire;
@@ -386,46 +387,8 @@ impl<A: Admission> Service<A> {
         if !is_owner {
             authorization::agent(&req, &records, now)?;
         }
-        match &req.command {
-            Command::Read(query) => {
-                return self
-                    .read(journal, &req, &records, *query, is_owner, now)
-                    .map(Response::Read);
-            }
-            Command::View => {
-                let book = state
-                    .ledger()
-                    .book(Owner::Customer(req.account))
-                    .map_err(|_| Error::Unavailable)?;
-                return Ok(Response::View(View {
-                    epoch: req.epoch,
-                    cash: book.cash().atoms(),
-                    funding: book.funding().atoms(),
-                    held: state
-                        .reserved(Resource::Customer(req.account))
-                        .map_err(|_| Error::Unavailable)?
-                        .atoms(),
-                    positions: book
-                        .positions()
-                        .iter()
-                        .map(|p| PositionView {
-                            market: p.quantity().unit(),
-                            lots: p.quantity().lots(),
-                            basis: p.basis().atoms(),
-                        })
-                        .collect(),
-                    operations: records
-                        .iter()
-                        .filter(|r| r.request.account == req.account)
-                        .map(|r| r.request.id)
-                        .collect(),
-                }));
-            }
-            Command::Operation(id) => {
-                let record = records.find(req.account, *id).ok_or(Error::NotFound)?;
-                return self.receipt(state, record).map(Response::Receipt);
-            }
-            _ => {}
+        if publication::is_read(&req.command) {
+            return self.project_read(journal, &req, &records, is_owner, now);
         }
         // No private ID comparison or saved outcome is performed before authorization.
         if let Some(old) = records.find(req.account, req.id) {

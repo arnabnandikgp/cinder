@@ -10,7 +10,7 @@ permission for another deployment, or a claim that P23 is complete.
 | Slice | Progress | Deliverable / completion condition |
 | --- | --- | --- |
 | C1 — Shared interpretation | in progress | Implemented locally; final checks/publication receipt below. Replay-derived indexes and pure authorization preserve canonical responses, error ordering, epochs and grants. Warm indexes never replace a fresh check; review/merge remain open. |
-| C2 — Accepted read publication | open | Central journal publication and independently witnessed immutable reads pass acceptance/revocation/uncertainty races. No remote I/O or NSM attestation under a publication latch; exact known-writer metadata distinguishes races from faults. |
+| C2 — Accepted read publication | in progress | Implemented locally; verification/handoff below. Central journal publication and independently witnessed immutable reads pass acceptance/revocation/uncertainty races. No remote I/O or NSM attestation under a publication latch; exact known-writer metadata distinguishes races from faults. Review/merge and joined C4/hardware qualification remain open. |
 | C3 — Scheduling and external I/O | open | One mutation owner remains authoritative; bounded prepare/I/O/completion work and connection-owned cipher/reply delivery avoid read and same-socket head-of-line blocking without weakening final release checks. |
 | C4 — Joined local qualification | open | Fixed real-runtime and actual Node/Chrome workloads pass with measured dependency, latency and memory bounds, including retained generations and continuous unrelated writes. |
 | C5 — Changed-source qualification | open | Exact-source ARM/EIF/client receipts and a separately authorized fresh hardware manifest qualify the changed application. Native, chain and financial capabilities remain independent gates. |
@@ -67,13 +67,72 @@ ten canonical read families (including continuation pages), View and Operation
 bytes with a cold interpreter and after replay. These are offline tests, not
 independent witness/hardware evidence.
 
-The next slice is C2. Start by abstracting the existing pure read projection over
+The original C1 handoff was C2: abstract the existing pure read projection over
 the accepted source, then join central journal publication/invalidations to it;
 do not add a second copy of auth or read schemas. Preserve shared accepted-history
 references and qualify old-generation memory before Runtime read jobs use them.
 Build exact writer-phase metadata and race tests before enabling independent
 fresh reads. C3 owns the later same-connection polling/cipher delivery integration.
 The exact commands/results and published/local distinction live in TRACKER.
+
+## C2: accepted publication implementation — 2026-10-07
+
+`journal::read` is a sealed accepted-source interface and bounded publication, not
+a second ledger or persisted snapshot. The journal shares accepted State and each
+retained transaction/receipt/book-change record through immutable Arcs. Each view
+owns a configuration copy and a vector of shared record references. Four global
+read tickets bound retained generations; slot admission is not a per-user margin
+or account policy. Index/candidate/buffer peak-memory qualification still belongs
+to the joined C4 matrix, rather than being inferred from this slot count.
+
+The actual boot attaches one reader only after replay, API/controller validation
+and a fresh writer check. Each view binds exact stream/domain, writer epoch, head,
+local generation and governed API fingerprint. Every central journal commit,
+including rejected-control records, publishes after durable acceptance/postchecks
+and before returning its receipt/capabilities. Exact retries do not advance the
+generation. An armed writer guard fences on panic/uncertainty; failed freshness,
+replay, latch poison, boot fence and journal drop invalidate publication. Reload
+does not revive an attached reader; reopen a new qualified boot.
+
+Independent Read/View/Operation requests never acquire Runtime.active. The shared
+API signature/envelope rules precede remote I/O. Each ticket issues its own strong
+witness read, then uses the same pure authorization and projection as commands.
+An exact newer in-flight/accepted head is a normal refused race, not a healthy
+writer failure. Unknown heads, backward heads, wrong epochs and witness failure
+fence; there is no shared last-good witness, TTL, reload or automatic read retry.
+Commands and mutation retries retain the single writer path.
+
+The actual Dynamo read port shares only immutable TLS/SigV4 configuration and
+finite credentials through Arc<Client>; each call has its own vsock/TLS exchange.
+It exposes no CAS method and adds no IAM authority or new freshness provider.
+Cloud completion checks the finite credential again, as well as both existing
+10-second time bounds. Request/session/grant/boot expiry uses qualified signed
+time, never host wall time. A final 250-ms processing budget starts BEFORE the
+last clock/NSM sample; expiry is checked at the signed sample plus that entire
+budget. Time/auth/encoding work is outside the publication latch. Release consumes
+the ticket only if the same head/generation, healthy publication, actual boot stop
+flag and monotonic processing deadline still qualify. Slow final qualification
+refuses/skips; this is not a longer application-reply deadline or cloud SLO.
+
+Local tests cover pre-CAS availability, post-CAS/pre-publication refusal, rejected
+records/duplicates, uncertain append, write/freshness/witness/clock panics, backward
+and unknown heads, missing/wrong-epoch witness, sticky latch poison, boot invalidation,
+deadline/expiry during preparation, revocation races and bounded/shared retention.
+All ten read families, continuation pages, View and Operation match writer/cold
+bytes before and after AEAD replay. Direct Runtime tests show independent witness
+calls, no backend reads for the independent path, read service during a slow writer,
+parallel read I/O and an owner revoke while an agent read is in flight. These are
+real journal/API/runtime code with synthetic local dependencies, not AWS evidence.
+Exact complete-run results and source/publication receipt live in TRACKER.
+
+**Next is C3, not hardware:** separate the synchronous connection's subscription
+poll from command delivery, retaining one cipher owner and unreleased candidates
+until the connection's final authorization/generation/time gate. Bound queued jobs,
+external prepare/I/O/completion and slow consumers; do not queue a response that
+already used this synchronous C2 release permit. C4 then qualifies actual clients,
+dependency delays, sustained unrelated writes and peak live memory. C5 requires a
+fresh exact-source manifest. Storage durability, wire format and financial policy
+remain unchanged; the full-history append cost remains a documented limitation.
 
 ## C2/C3 implementation constraints
 

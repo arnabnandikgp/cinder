@@ -3,6 +3,7 @@
 #[path = "../../journal/tests/support/mod.rs"]
 mod support;
 use super::*;
+use cinder_journal::read::Source;
 use cinder_journal::{Frame, Head, encrypted::RecordCipher, sqlite::SqliteBackend};
 use ed25519_dalek::{Signer, SigningKey};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -210,6 +211,61 @@ fn warm_grant_rechecks_expiry_epoch_and_authorization_before_id_lookup() {
     let reconnect = request(34, 1, 2, Command::View, &wallet(1));
     call(&api, &mut s, &reconnect, 10).unwrap();
     assert!(!Arc::ptr_eq(&cached, &api.records(&s).unwrap()));
+}
+
+#[test]
+fn independent_projection_keeps_grant_expiry_mutation_exclusion_and_contract_binding() {
+    let t = Temp::new();
+    let checks = Arc::new(Checks::default());
+    let mut s = store(&t, &checks);
+    let mut api = service();
+    let agent = wallet(3);
+    call(&api, &mut s, &owner(30, grant(&agent)), 10).unwrap();
+    let binding = cinder_journal::read::Binding {
+        stream: cinder_journal::replicated::Stream {
+            domain: s.configuration().domain,
+            id: [42; 32],
+        },
+        epoch: 1,
+        api: api.release_commitment(s.configuration()).unwrap(),
+    };
+    let reader = s.attach_reader(binding).unwrap();
+    struct Witness(cinder_journal::Head);
+    impl cinder_journal::read::Witness for Witness {
+        fn read(
+            &self,
+            _: cinder_journal::replicated::Stream,
+        ) -> Result<cinder_journal::replicated::Anchor, cinder_journal::Error> {
+            Ok(cinder_journal::replicated::Anchor {
+                epoch: 1,
+                head: Some(self.0),
+            })
+        }
+    }
+    let v = reader
+        .verify(reader.capture().unwrap(), &Witness(s.head()))
+        .unwrap();
+    let read = request(31, 1, 1, Command::View, &agent).encode().unwrap();
+    assert!(api.handle_read(&v, &Channel, &read, 10).is_ok());
+    assert!(api.revalidate_read(&v, &Channel, &read, 89).is_ok());
+    assert_eq!(
+        api.revalidate_read(&v, &Channel, &read, 90),
+        Err(Error::Unauthorized)
+    );
+    let mutation = owner(32, Command::Revoke).encode().unwrap();
+    assert_eq!(
+        api.authenticate_read(v.configuration(), &Channel, &mutation, 10),
+        Err(Error::Invalid)
+    );
+    assert_eq!(
+        api.handle_read(&v, &Channel, &mutation, 10),
+        Err(Error::Invalid)
+    );
+    api.contract.maximum_auth_lifetime += 1;
+    assert_eq!(
+        api.handle_read(&v, &Channel, &read, 10),
+        Err(Error::Unavailable)
+    );
 }
 
 #[test]

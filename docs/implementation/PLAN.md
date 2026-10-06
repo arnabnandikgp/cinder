@@ -1,6 +1,6 @@
 # Implementation plan
 
-Updated 2026-10-03. Canonical scope and acceptance criteria; actual progress lives in
+Updated 2026-10-07. Canonical scope and acceptance criteria; actual progress lives in
 [TRACKER](TRACKER.md). Read [BASELINE](BASELINE.md) for approved policy and
 [EVIDENCE](EVIDENCE.md) for research/prototype provenance and regression obligations.
 P00 establishes this foundation; it does not implement or deploy the broker.

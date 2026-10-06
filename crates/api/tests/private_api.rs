@@ -302,7 +302,26 @@ fn warm_and_cold_indexes_preserve_all_private_read_families_views_receipts_and_r
         10,
     )
     .unwrap();
-    let compare = |s: &mut Store, req: &Request| {
+    let binding = cinder_journal::read::Binding {
+        stream: cinder_journal::replicated::Stream {
+            domain: config().domain,
+            id: [42; 32],
+        },
+        epoch: 1,
+        api: api.release_commitment(s.configuration()).unwrap(),
+    };
+    let attach = |s: &mut Store| s.attach_reader(binding).unwrap();
+    let reader = attach(&mut s);
+    struct Witness(cinder_journal::replicated::Anchor);
+    impl cinder_journal::read::Witness for Witness {
+        fn read(
+            &self,
+            _: cinder_journal::replicated::Stream,
+        ) -> Result<cinder_journal::replicated::Anchor, cinder_journal::Error> {
+            Ok(self.0)
+        }
+    }
+    let compare = |s: &mut Store, reader: &cinder_journal::read::Reader, req: &Request| {
         let warm = api
             .handle(s, &Channel(req.session), &req.encode().unwrap(), 10)
             .unwrap();
@@ -311,28 +330,64 @@ fn warm_and_cold_indexes_preserve_all_private_read_families_views_receipts_and_r
             .unwrap();
         assert_eq!(warm, cold);
         assert_eq!(warm.encode().unwrap(), cold.encode().unwrap());
+        let verified = reader
+            .verify(
+                reader.capture().unwrap(),
+                &Witness(cinder_journal::replicated::Anchor {
+                    epoch: 1,
+                    head: Some(s.head()),
+                }),
+            )
+            .unwrap();
+        let independent = api
+            .handle_read(&verified, &Channel(req.session), &req.encode().unwrap(), 10)
+            .unwrap();
+        assert_eq!(warm, independent);
+        assert_eq!(warm.encode().unwrap(), independent.encode().unwrap());
+        api.revalidate_read(&verified, &Channel(req.session), &req.encode().unwrap(), 10)
+            .unwrap();
+        verified
+            .release(std::time::Instant::now() + std::time::Duration::from_secs(1))
+            .unwrap();
         warm
     };
     for kind in 0..reads::KINDS {
         let mut cursor = [0; 40];
         loop {
-            let p = page(compare(&mut s, &owner_request(90, query(kind, 1, cursor))));
+            let p = page(compare(
+                &mut s,
+                &reader,
+                &owner_request(90, query(kind, 1, cursor)),
+            ));
             cursor = p.next;
             if cursor == [0; 40] {
                 break;
             }
         }
     }
-    compare(&mut s, &owner_request(91, Command::View));
-    compare(&mut s, &owner_request(92, Command::Operation(operation.id)));
+    compare(&mut s, &reader, &owner_request(91, Command::View));
+    compare(
+        &mut s,
+        &reader,
+        &owner_request(92, Command::Operation(operation.id)),
+    );
     let head = s.head();
     drop(s);
     let mut s = open(&t);
+    let reader = attach(&mut s);
     for kind in 0..reads::KINDS {
-        compare(&mut s, &owner_request(90, query(kind, 64, [0; 40])));
+        compare(
+            &mut s,
+            &reader,
+            &owner_request(90, query(kind, 64, [0; 40])),
+        );
     }
-    compare(&mut s, &owner_request(91, Command::View));
-    compare(&mut s, &owner_request(92, Command::Operation(operation.id)));
+    compare(&mut s, &reader, &owner_request(91, Command::View));
+    compare(
+        &mut s,
+        &reader,
+        &owner_request(92, Command::Operation(operation.id)),
+    );
     assert_eq!(s.head(), head);
 }
 
