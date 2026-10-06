@@ -343,7 +343,15 @@ impl Native {
                         },
                     }),
                 });
-                j.commit(tx).map_err(|_| Error)?;
+                let result = j.commit(tx).map_err(|_| Error)?;
+                if result.receipt.inputs.iter().any(|r| {
+                    !matches!(
+                        r,
+                        InputResult::Normalized(Disposition::Applied | Disposition::Duplicate)
+                    )
+                }) {
+                    return Err(Error);
+                }
             }
             Command::Prepare {
                 id,
@@ -615,7 +623,27 @@ impl Native {
                         }),
                     }),
                 });
-                j.commit(tx).map_err(|_| Error)?;
+                let result = j.commit(tx).map_err(|_| Error)?;
+                let subject = RecordKey::Economic(key(event)?);
+                if result.receipt.inputs.iter().any(|r| {
+                    !matches!(
+                        r,
+                        InputResult::Normalized(Disposition::Applied | Disposition::Duplicate)
+                    )
+                }) || j
+                    .state()
+                    .map_err(|_| Error)?
+                    .ledger()
+                    .issues()
+                    .iter()
+                    .any(|issue| {
+                        issue.open
+                            && issue.subject == subject
+                            && issue.kind == IssueKind::NativeSnapshot
+                    })
+                {
+                    return Err(Error);
+                }
             }
             Command::Oracle => {}
         }

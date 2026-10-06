@@ -565,7 +565,8 @@ export async function runAcceptance(
         amount,
         [],
         setupConfirm,
-      ); // fake native custody debit
+      );
+    // fake native custody debit
     else {
       const signature = await connection.sendRawTransaction(checked.wire, {
         skipPreflight: true,
@@ -1062,6 +1063,73 @@ export async function runAcceptance(
     );
     process.stdout.write(
       `P22 ${carrier} budgets: ${budgets.readCount} reads ${Math.ceil(elapsed)} ms; journal ${journalBytes} bytes; Node RSS ${rss} bytes\n`,
+    );
+    // A durable commit can retain a rejected input or an applied-but-mismatched
+    // native snapshot. Neither is a successful fixture control. Keep these at
+    // the end: adverse evidence must remain in the authoritative journal.
+    const outcomes = [];
+    for (const command of [
+      credit,
+      { ...credit, amount: 0, signature: Array(64).fill(91) },
+      { ...credit, amount: 1001 },
+      {
+        op: "reconcile",
+        event: 161,
+        cash: v.cash,
+        quantity: 0,
+        basis: "0",
+        funding: "0",
+      },
+      {
+        op: "reconcile",
+        event: 162,
+        cash: "999",
+        quantity: 0,
+        basis: "0",
+        funding: "0",
+      },
+      {
+        op: "reconcile",
+        event: 162,
+        cash: "999",
+        quantity: 0,
+        basis: "0",
+        funding: "0",
+      },
+      {
+        op: "reconcile",
+        event: 163,
+        cash: v.cash,
+        quantity: 0,
+        basis: "0",
+        funding: "0",
+      },
+    ])
+      outcomes.push((await ask(command)).error ?? "accepted");
+    assert.deepEqual(outcomes, [
+      "accepted",
+      "fixture-control-rejected",
+      "fixture-control-rejected",
+      "accepted",
+      "fixture-control-rejected",
+      "fixture-control-rejected",
+      "accepted",
+    ]);
+    const retained = await ask({ op: "oracle" });
+    assert(
+      retained.ledger_version > final.ledger_version,
+      "adverse inputs were not retained",
+    );
+    assert.deepEqual(
+      { ...retained, ledger_version: 0 },
+      { ...final, ledger_version: 0 },
+      "rejected inputs changed financial balances",
+    );
+    await restart();
+    assert.deepEqual(
+      await ask({ op: "oracle" }),
+      retained,
+      "restart lost adverse evidence",
     );
   } finally {
     streamChannel?.close();

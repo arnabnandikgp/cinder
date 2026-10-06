@@ -18,6 +18,28 @@ const required = [
   ...Array.from({ length: 9 }, (_, i) => `W${String(i + 1).padStart(2, "0")}`),
   ...Array.from({ length: 10 }, (_, i) => `V${String(i + 1).padStart(2, "0")}`),
 ];
+// Trace the declaration forms used by this bounded manifest, not arbitrary text.
+// This is a source-presence guard; execution remains the runner's responsibility.
+function declaresTest(file, name, text) {
+  const source = text.replace(/\/\*[\s\S]*?\*\/|^[ \t]*\/\/[^\n]*/gm, "");
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (file.endsWith(".rs"))
+    return new RegExp(`^\\s*#\\[test\\]\\s*fn\\s+${escaped}\\s*\\(`, "m").test(
+      source,
+    );
+  if (/^[A-Za-z_]\w*$/.test(name))
+    return new RegExp(
+      `^[ \\t]*(?:export\\s+)?(?:async\\s+)?function\\s+${escaped}\\s*\\(`,
+      "m",
+    ).test(source);
+  // Node test names here are suffixes of a carrier-specific template literal.
+  return new RegExp(
+    "^[ \\t]*(?:for\\s*\\([^\\n]*\\)\\s*)?test\\(\\s*`[^`\\n]* " +
+      escaped +
+      "`\\s*,",
+    "m",
+  ).test(source);
+}
 export function validate(
   m,
   read = (path) => readFileSync(resolve(root, path)),
@@ -81,7 +103,7 @@ export function validate(
       errors.push(`Unsafe/missing test ${c.id}`);
     else
       try {
-        if (!read(c.file).toString().includes(c.test))
+        if (!declaresTest(c.file, c.test, read(c.file).toString()))
           errors.push(`Missing test ${c.id}`);
       } catch {
         errors.push(`Missing source ${c.id}`);
