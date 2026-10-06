@@ -52,8 +52,13 @@ guard and actual Node/Chrome carrier checks. No new economic
 policy, program, dependency pin, AWS session, live venue, RPC, wallet or customer
 funds are in scope. Branch protection, artifacts/coverage, advisory scans/caching
 and live gates remain deferred. P23 is not started.
-Next: open the CI follow-up against `product/tee-v1`, and
-await review/merge authorization. Preserve untracked `docs/user-journey.md`,
+Ready/open [PR #54](https://github.com/arnabnandikgp/cinder/pull/54) targets
+`product/tee-v1`, published via native `gh stack init/submit` at
+`d655f39776ac777ec9617a4c5b743b187381dd55`. Its committed source-only export
+passes all 41 guards and the workspace graph with no git/research/user files.
+This bookkeeping-only successor records the PR receipt; hosted results for the
+current head remain pending and are not inherited from P22 or local checks.
+Next: await hosted checks and review/merge authorization. Preserve untracked `docs/user-journey.md`,
 `stays/`, ignored `work/` and docs content.
 
 ### Historical P22 review handoff (superseded)
@@ -2182,7 +2187,13 @@ the runner rejected the failure AND missing required execution. Its unchanged
 full rerun without those builds passes all 57 tests. The root cause
 of that isolated closure is not established; no timeout/oracle was relaxed and
 automatic reruns are not added to CI.
-Next: complete local checks and publish the bounded follow-up PR; P23 remains open.
+Publication: ready/open [#54](https://github.com/arnabnandikgp/cinder/pull/54),
+`tee/ci-offline-gates` → `product/tee-v1`, initially published at
+`d655f39776ac777ec9617a4c5b743b187381dd55` using native `gh stack`. The exact
+committed source-only export passes all 41 guards and workspace graph; earlier
+full-suite receipts and the final focused guard/carrier checks are detailed above.
+This docs-only successor records the actual publication, not fresh hosted success.
+Next: await hosted checks and review/merge authorization; P23 remains open.
 
 ## P23 — Live integration qualification
 
