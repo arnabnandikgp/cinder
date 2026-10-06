@@ -74,6 +74,7 @@ test("Node skip, todo, cancellation/failure cannot be counted as success", () =>
 });
 test("browser acceptance requires both actually completed shared entrypoints", () => {
   assert.throws(() => qualifyEntries(["runHttp"]), /runWebsocket/);
+  assert.throws(() => qualifyEntries("runHttp runWebsocket"), /Invalid/);
   assert.doesNotThrow(() => qualifyEntries(["runHttp", "runWebsocket"]));
 });
 test("process execution rejects nonzero exits, absent required tests and skipped tests", async () => {

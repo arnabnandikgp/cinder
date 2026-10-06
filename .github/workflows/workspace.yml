@@ -2,7 +2,7 @@ name: TEE workspace
 
 on:
   pull_request:
-    branches: [product/tee-v1, 'tee/**']
+    branches: [product/tee-v1, "tee/**"]
   push:
     branches: [product/tee-v1]
 

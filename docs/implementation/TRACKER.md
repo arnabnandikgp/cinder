@@ -26,7 +26,7 @@
 | [P21A — HTTP and WebSocket API](PLAN.md#p21a) | closed | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | #47, #48, #50 and [#51](https://github.com/arnabnandikgp/cinder/pull/51), merged `0530374` |
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
-| [P22 — Offline adversarial acceptance](PLAN.md#p22) | in progress | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), ready/open; local acceptance passed |
+| [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -36,6 +36,27 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+Current work: the authorized CI follow-up on `tee/ci-offline-gates`, based on
+merged `product/tee-v1` at `8247d24fa6d77b1e0b478ef7b8513ace80f34d4b`.
+P22 #53 merged on 2026-10-06 after all four hosted checks passed at exact reviewed
+head `24fe0796fbcfb2151de779922ae1932defc745f6`; both relevant CodeRabbit threads
+were resolved. Local product trunk was fast-forwarded before branching.
+
+Only CI audit recommendations 2/3/4 are authorized: automatic test inventory and
+executed-case/intentional-skip guards; shipping-default tests and offline ARM64
+release packaging; independent contracts/lint/Rust/SDK-relay reporting.
+Implementation checkpoint `297327faca999977581ed407e7acc9db3e1ad828` passes the
+full local checks below; final reporting/receipt-shape edits also pass focused
+guard and actual Node/Chrome carrier checks. No new economic
+policy, program, dependency pin, AWS session, live venue, RPC, wallet or customer
+funds are in scope. Branch protection, artifacts/coverage, advisory scans/caching
+and live gates remain deferred. P23 is not started.
+Next: open the CI follow-up against `product/tee-v1`, and
+await review/merge authorization. Preserve untracked `docs/user-journey.md`,
+`stays/`, ignored `work/` and docs content.
+
+### Historical P22 review handoff (superseded)
 
 Current work: P22 review follow-up on `tee/p22-offline-acceptance` in `cinder-tee`,
 based on merged trunk `1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7`.
@@ -2115,9 +2136,53 @@ Unexpected: ordinary native history parsing has no certified causal cut; introdu
 Publication: ready/open #53, `tee/p22-offline-acceptance` → `product/tee-v1`, using native `gh stack init/submit`. Initial published head `ed32d9f6624b5b6ec705d95227d5e72ecdf6947e` contains only evidence documentation after the fully tested `f14a4400f9bf3664193f51fb5c055dc10bccac65` source. This final bookkeeping-only successor records the actual PR and passes focused foundation/plan/manifest/diff checks. Hosted Linux CI and CodeRabbit review remain pending for its own head; no automatic merge.
 Review follow-up — 2026-10-06, tested source `b7ba0c9bb28bec6b58b2a8d8c4a5c87e9514dda2`: all four hosted Linux jobs passed at `9a4174527757e120ee81bfaf8d073480b153a37e`, but the two minor CodeRabbit findings were valid. Deposit/reconciliation controls now inspect normalization receipts; reconciliation also rejects an open NativeSnapshot issue for its own event. Zero deposits, changed same-signature amounts, mismatched native cash and repeat mismatches return errors without erasing committed evidence. Valid duplicate deposits and separate matching snapshots remain accepted. Both joined carriers reproduce the original false-success failure before the fix, then pass with unchanged financial books and retained restart state. Local `node scripts/check.mjs` passes complete debug/release, Clippy, boundaries and all 24 SDK/TLS tests. `node scripts/check-vault.mjs --acceptance-only` passes strict build/IDL/TypeScript checks and both joined normal lifecycles (71.216s HTTP / 68.169s WebSocket); its four reported passes include the two empty filtered file wrappers, not a new 57-case full-suite receipt. The manifest now checks bounded declaration/registration forms, rather than arbitrary substrings; nine stale-comment/string/renamed-entry substitutions are rejected, and all 34 metadata regressions pass after the final edit. Declaration presence is not proof of runner reachability or execution. No shipping protocol, Solana program or economic policy changes. New-head hosted checks and thread disposition are pending publication; earlier source receipts are not reused as new-head success.
 Review publication receipt: source/evidence pushed at `baf340f239223067d95b856e17bf28d14b67c47e`. Both CodeRabbit threads were answered and resolved; hosted checks were queued when inspected. The ensuing documentation-only successor records this receipt and still requires its own current-head hosted results. No merge was requested or performed.
-Next: obtain #53's current tip hosted results before merge authorization. Preserve fake-port versus SBF evidence limits; P23 and all live gates remain unopened. The next phase requires a current bounded G05 environment/account/funding/cleanup manifest, not reuse of P20 permission or historical experiment receipts. The requested CI audit is read-only; targeted coverage/reporting/enforcement improvements need separate authorization.
+Merge closure — 2026-10-06: all four hosted checks passed at reviewed head `24fe0796fbcfb2151de779922ae1932defc745f6` and both relevant review threads were resolved. The user authorized merge. Native `gh stack merge 53` reported that the PR was not a remote stack; exact-head-guarded `gh pr merge --squash` succeeded and the merge receipt was independently verified. Local product trunk was fast-forwarded to the resulting merge.
+Next: the user authorized a separate CI follow-up for audit recommendations 2/3/4 only. Preserve fake-port versus SBF evidence limits; P23 and all live gates remain unopened. The next live phase requires a current bounded G05 environment/account/funding/cleanup manifest, not reuse of P20 permission or historical experiment receipts.
 PR: https://github.com/arnabnandikgp/cinder/pull/53.
-Merge: none.
+Merge: 8247d24fa6d77b1e0b478ef7b8513ace80f34d4b.
+
+### CI hardening follow-up — 2026-10-06
+
+Work: source checkpoint `297327faca999977581ed407e7acc9db3e1ad828` implements only audit recommendations 2/3/4.
+Maintained Node test files are discovered and assigned, actual required acceptance
+execution is observed, and ignored/skip statuses require the documented policy.
+Shipping-default Rust execution joins the debug/release all-feature profiles.
+Contracts, lint, Rust and SDK/relay run independently; a separate network-disabled
+ARM64 package job checks the default release, application-crate reproducibility
+and ordinary-host boot refusal. No live/hardware tests become routine CI.
+Verification: complete pinned local workspace checks pass: 41 script guards,
+12 relay and 24 private SDK/TLS tests, both strict Clippy configurations and
+all-target build; Rust all-feature debug/release each pass 400 tests (10 intentional
+ignores per profile), with 380 passing shipping-default tests (9 intentional
+ignores). The shipping-default profile also passes without any feature-disabling
+flag. Final guard-only checks pass after the small reporting/receipt-shape edits.
+Full browser runner passes 11 tool/fixture guards, 12 relay and both isolated Rust
+profiles; actual Node/Chrome each complete 14 core/attestation and 24 joined
+HTTP/WebSocket groups. ARM64 packaging passes on exact committed source `297327f`
+with no network, source/vendor read-only and no git/research/host credentials.
+Pinned base digest is `2775a09d208ff0d7c1f50490c45b62db929e87ba1dcbc3f2132ac71a704bcdd3`;
+local tool-image index is `33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`,
+ARM64 manifest `d3d2f4db64dfa8e64503cc08102b68c70d9af963cc9508d0bc7927934dd814e2`.
+Linux 6.18.35 / Rust 1.97.1, OpenSSL 3.0.22-1~deb12u1 and pkg-config 1.8.1-1:
+all seven default-feature release tools build, the recompiled application ELF is
+byte-identical, and ordinary-host boot refuses with exactly `cinder runtime fenced`.
+The unchanged complete SBF/vault rerun passes all 57 tests, none skipped, in
+456.083s of test execution, including both normal and recovery carriers, locked
+SBF/IDL/source equality and strict Rust/TypeScript checks. Final reporting and
+browser-receipt-shape edits pass all 41 guards; actual Node/Chrome carrier
+qualification each passes 24 process groups again after that final receipt edit.
+These are offline tests, not EIF/PCR, actual-hardware or live financial receipts.
+Unexpected: local guard qualification caught module-qualified Rust output names;
+exact terminal-name matching now has regression coverage. The first browser
+receipt edit performed an unused extra fixture setup, correctly rejected by the
+parent-observation oracle; that extra setup is removed. Neither required weakening
+an acceptance oracle or changing financial logic. The first full SBF run failed
+one normal WebSocket stream with a channel-closed error during concurrent builds;
+the runner rejected the failure AND missing required execution. Its unchanged
+full rerun without those builds passes all 57 tests. The root cause
+of that isolated closure is not established; no timeout/oracle was relaxed and
+automatic reruns are not added to CI.
+Next: complete local checks and publish the bounded follow-up PR; P23 remains open.
 
 ## P23 — Live integration qualification
 

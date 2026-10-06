@@ -75,6 +75,9 @@ export async function checked(
 export async function nodeSuite(suite, { pattern, cwd, env } = {}) {
   const files = inventory()[suite];
   if (!files) throw Error(`Unknown Node suite: ${suite}`);
+  console.log(
+    `Node regression suite: ${suite}, ${files.length} discovered files${pattern ? `, focus ${pattern}` : ""}`,
+  );
   const required =
     suite === "vault"
       ? manifest.cases
@@ -113,6 +116,9 @@ export async function nodeSuite(suite, { pattern, cwd, env } = {}) {
   );
 }
 export async function rustSuite({ release = false, defaults = false } = {}) {
+  console.log(
+    `Rust regression profile: ${defaults ? "shipping-default" : "all-feature"} ${release ? "release" : "debug"}`,
+  );
   await checked(
     "cargo",
     [
@@ -137,6 +143,11 @@ export async function rustSuite({ release = false, defaults = false } = {}) {
 }
 // Exported suite entrypoints produce this receipt only after their assertions pass.
 export function qualifyEntries(completed) {
+  if (
+    !Array.isArray(completed) ||
+    !completed.every((name) => typeof name === "string")
+  )
+    throw Error("Invalid browser execution receipt");
   const required = manifest.cases
     .filter((c) => c.runner === "browser")
     .map((c) => c.test);
