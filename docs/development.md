@@ -217,6 +217,10 @@ Seven offline checks cover the maintained product sources:
 The workspace matrix has `fail-fast: false`; lint, Rust and SDK/relay results do
 not depend on another group's success. Each Rust profile uses `--no-fail-fast`,
 and later profiles still run when an earlier profile fails.
+The independent SDK group explicitly builds its service, opaque relay, fixture
+verifier and production verifier. Its entrypoint checks that all four are
+executable before starting any fixture; it never relies on the lint job or a
+cached application binary to supply prerequisites.
 
 `scripts/test-inventory.mjs` discovers `.test.*` files under the maintained source
 roots and assigns every file to exactly one Node suite. An unassigned test or

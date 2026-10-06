@@ -84,8 +84,16 @@ The user authorizes this fix: share the exact four-binary prerequisite list
 between the explicit build and a fail-fast executable check before SDK startup.
 A guard regression rejects missing/non-executable prerequisites, including the
 production verifier, without starting the process suite. Fresh committed-source
-client-group verification is in progress; no timeout, cache or financial oracle
-is relaxed. GitHub cache hooks/timing remain separate from local evidence.
+`9c0e5c1cdd955f61afe7e94bade2ba6793eac7a4` client-group verification passes:
+offline npm install, a new empty Cargo target, explicit builds of all four
+prerequisites, all 12 relay tests, strict TypeScript and all 24 SDK/TLS tests.
+The same source-only export passes 42 contracts/inventory guards and workspace
+boundaries. No git, research, user files or prebuilt workspace outputs are present.
+No timeout, cache or financial oracle is relaxed. This second evidence-based CI
+fix addresses an identified platform-independent missing-build cause; another
+persisting failure requires local Linux reproduction per the contributor guide.
+GitHub checks for the successor remain pending after push; prior-head green
+checks and local results are not presented as new-head hosted success.
 Next: await hosted checks and review/merge authorization. Preserve untracked `docs/user-journey.md`,
 `stays/`, ignored `work/` and docs content.
 
@@ -2246,6 +2254,21 @@ native debug/release, WASM/strict checks, and 14 core/24 carrier groups each in
 actual Node/Chrome. Local Linux reproduction is unnecessary for this platform-
 independent missing-build cause. This evidence is separate from warm-target
 results and does not claim the new hosted jobs already passed.
+Hosted independent SDK prerequisite correction: at source `97c7fdc`, six hosted
+checks pass, but SDK/relay job `112097236435` encounters `cinder-relay ENOENT` in
+seven process tests and reaches the 15-minute bound with partial fixtures alive.
+Splitting CI groups removed the previous all-target build that supplied that
+binary and the production verifier. Corrected source `9c0e5c1` explicitly builds
+the shared four-binary list and checks executable prerequisites before any SDK
+fixture starts. The production-root negative test cannot pass solely because
+its verifier is absent. The new regression checks early entrypoint failure,
+each missing prerequisite and non-executable files. The exact committed-source
+export has no existing Cargo target, git/research/user files or built binaries;
+offline locked preparation and the complete independent client group pass
+12 relay and 24 SDK/TLS tests, strict TypeScript, plus 42 contract/inventory guards
+and workspace boundaries. No protocol code, feature pin, timeout or financial
+assertion changes. This is the second evidence-based CI fix push; do not reuse
+these Mac receipts as new hosted Linux results or guess at a persisting failure.
 Publication: ready/open [#54](https://github.com/arnabnandikgp/cinder/pull/54),
 `tee/ci-offline-gates` → `product/tee-v1`, initially published at
 `d655f39776ac777ec9617a4c5b743b187381dd55` using native `gh stack`. The exact
