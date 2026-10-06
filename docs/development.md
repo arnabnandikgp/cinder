@@ -48,6 +48,15 @@ The original 233 research groups remain separate evidence, not production covera
 
 ## Files and packages
 
+### Consolidated offline acceptance (P22)
+
+After the root, browser and SBF prerequisites below are hydrated, run
+`node scripts/check-acceptance.mjs`. It runs the three existing offline CI runners,
+checks the fixed-seed/source manifest and reports measured suite budgets. Use
+`--manifest-only` to validate the tracked traceability without starting them.
+See the [joined acceptance contract](architecture/0022-offline-acceptance.md)
+for exact lifecycle oracles, fake-versus-SBF boundaries and verification limits.
+
 ### Confidential browser/Node HTTP/WebSocket (P21A)
 
 `crates/web-channel` owns the pinned Snow core; the isolated WASM tool compiles

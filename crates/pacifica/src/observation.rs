@@ -62,6 +62,22 @@ impl std::fmt::Debug for Message {
 struct Archive {
     profile: [u8; 32],
     message: Message,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    coverage: Option<Coverage>,
+}
+/// Trusted complete-history port input, not inferred from REST exhaustion, LI or
+/// a cancel acknowledgement. Caller authenticates and retains the certificate.
+/// Construction alone does not qualify a live provider (G01/P23).
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Coverage {
+    /// Immutable profile commitment, including source and native account.
+    pub profile: [u8; 32],
+    /// SHA-256 of this exact response body; a certificate cannot be transplanted.
+    pub body: [u8; 32],
+    /// Independently qualified source-local causal frontier; not a chain slot.
+    pub through: u64,
+    /// Nonzero retained certificate commitment, not itself a proof verifier.
+    pub evidence: [u8; 32],
 }
 /// Named qualification/continuity conditions. None of these is silently written off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -510,9 +526,20 @@ impl View {
         Ok(events)
     }
 }
-fn archive(profile: [u8; 32], message: Message) -> Result<PrivateBytes, Error> {
+fn archive(
+    profile: [u8; 32],
+    message: Message,
+    coverage: Option<Coverage>,
+) -> Result<PrivateBytes, Error> {
     let mut bytes = MAGIC.to_vec();
-    bytes.extend(serde_json::to_vec(&Archive { profile, message }).map_err(|_| Error::Codec)?);
+    bytes.extend(
+        serde_json::to_vec(&Archive {
+            profile,
+            message,
+            coverage,
+        })
+        .map_err(|_| Error::Codec)?,
+    );
     Ok(PrivateBytes::new(bytes)?)
 }
 /// Replay diagnostic views from accepted encrypted-journal evidence only.
@@ -552,6 +579,37 @@ pub fn ingest<B: Backend, P: Protection>(
     id: CommitId,
     at: u64,
 ) -> Result<Committed, Error> {
+    ingest_inner(journal, profile, message, id, at, None)
+}
+/// Ingest fills with a separately qualified causal certificate. Supply it before
+/// first attribution: replay cannot upgrade an earlier unqualified fill's cut.
+/// Ordinary ingestion never calls this port automatically.
+pub fn ingest_covered<B: Backend, P: Protection>(
+    journal: &mut Journal<B, P>,
+    profile: &Profile,
+    message: Message,
+    id: CommitId,
+    at: u64,
+    coverage: Coverage,
+) -> Result<Committed, Error> {
+    if coverage.profile != profile.commitment()?
+        || coverage.body != <[u8; 32]>::from(Sha256::digest(message.body.as_bytes()))
+        || coverage.through == 0
+        || coverage.evidence == [0; 32]
+        || !matches!(message.kind, Kind::Trades | Kind::TradeStream)
+    {
+        return Err(Error::Qualification);
+    }
+    ingest_inner(journal, profile, message, id, at, Some(coverage))
+}
+fn ingest_inner<B: Backend, P: Protection>(
+    journal: &mut Journal<B, P>,
+    profile: &Profile,
+    message: Message,
+    id: CommitId,
+    at: u64,
+    coverage: Option<Coverage>,
+) -> Result<Committed, Error> {
     if message.body.len() > MAX_BODY
         || message.account.len() > 256
         || message.cursor.as_ref().is_some_and(|c| c.len() > 256)
@@ -561,7 +619,8 @@ pub fn ingest<B: Backend, P: Protection>(
     if message.received_at > at {
         return Err(Error::Qualification);
     }
-    let evidence = archive(profile.commitment()?, message.clone())?;
+    let cut = coverage.as_ref().map(|c| c.through);
+    let evidence = archive(profile.commitment()?, message.clone(), coverage)?;
     if let Some(old) = journal.transaction(id) {
         if old.evidence != [evidence.clone()] || old.at != at {
             return Err(Error::Journal(cinder_journal::Error::Conflict));
@@ -587,7 +646,7 @@ pub fn ingest<B: Backend, P: Protection>(
             for (ordinal, event) in events.into_iter().enumerate() {
                 inputs.push(Input {
                     source: profile.source,
-                    source_cut: None,
+                    source_cut: cut,
                     authority_epoch: profile.revision,
                     observed_at: message.received_at,
                     raw: reference(u32::try_from(ordinal).map_err(|_| Error::Limit)?)?,

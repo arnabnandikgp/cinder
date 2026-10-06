@@ -23,7 +23,7 @@ if (args[0] === '--properties') {
   run('cargo', ['test', '--workspace', '--locked', '--offline', 'property_']);
 } else {
   run(process.execPath, ['scripts/check-implementation-plan.mjs']);
-  run(process.execPath, ['--test', 'scripts/check-implementation-plan.test.mjs', 'scripts/check-workspace.test.mjs', 'scripts/check-financial-fixtures.test.mjs']);
+  run(process.execPath, ['--test', 'scripts/check-implementation-plan.test.mjs', 'scripts/check-workspace.test.mjs', 'scripts/check-financial-fixtures.test.mjs', 'scripts/check-acceptance.test.mjs']);
   run(process.execPath, ['scripts/check-workspace.mjs']);
   run(process.execPath, ['--test', 'services/web-relay/server.test.mjs', 'services/web-relay/websocket.test.mjs']);
   run('cargo', ['fmt', '--all', '--', '--check']);

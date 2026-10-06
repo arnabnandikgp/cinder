@@ -1,0 +1,234 @@
+{
+  "schema": 1,
+  "scope": "offline",
+  "seedFile": "crates/kernel/tests/fixtures/acceptance-seeds-v1.txt",
+  "seedSha256": "5d2804e926b46a5a6d2278cb16eed1b785c57d47b789a087a8cd0f32f2fae3c1",
+  "seedCount": 8,
+  "bounds": {
+    "positionCases": 4632,
+    "stepsPerSeed": 64,
+    "ledgerCuts": 576,
+    "identityMutations": 10000,
+    "journalMutations": 2048,
+    "rf2Vectors": 3905
+  },
+  "budgets": {
+    "workspaceSeconds": 600,
+    "browserSeconds": 600,
+    "vaultSeconds": 1500,
+    "readCount": 64,
+    "readMilliseconds": 30000,
+    "nodeRssBytes": 536870912,
+    "journalBytes": 8388608
+  },
+  "cases": [
+    {
+      "id": "normal",
+      "runner": "vault",
+      "file": "clients/vault/tests/vault.test.ts",
+      "test": "complete controller lifecycle and process faults",
+      "requirements": ["W01", "W03", "W04", "V01", "V05", "V09"],
+      "evidence": "local-sbf"
+    },
+    {
+      "id": "recovery",
+      "runner": "vault",
+      "file": "clients/vault/tests/vault.test.ts",
+      "test": "accepted tail → outage → recipient package → actual independent SBF claim",
+      "requirements": ["W05", "W07", "V08"],
+      "evidence": "local-sbf"
+    },
+    {
+      "id": "differential",
+      "runner": "workspace",
+      "file": "crates/kernel/tests/acceptance.rs",
+      "test": "property_seeded_joined_ledger_matches_independent_reference_at_every_cut",
+      "requirements": ["W01", "W02", "V03", "V04", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "position-reference",
+      "runner": "workspace",
+      "file": "crates/kernel/tests/acceptance.rs",
+      "test": "property_exhaustive_position_reference_and_marked_equity",
+      "requirements": ["W01", "V02"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "basis-vector",
+      "runner": "workspace",
+      "file": "crates/kernel/tests/primitives.rs",
+      "test": "v02_signed_basis_vectors_use_production_fill_without_importing_research_runtime",
+      "requirements": ["V02"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "reverse-stress",
+      "runner": "workspace",
+      "file": "crates/kernel/tests/acceptance.rs",
+      "test": "reverse_stress_finds_first_net_flat_positive_claim_shortfall_without_erasing_debt",
+      "requirements": ["W02", "V03"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "gross-funding",
+      "runner": "workspace",
+      "file": "crates/kernel/tests/economics.rs",
+      "test": "v04_gross_funding_on_net_flat_pool_and_settlement_once",
+      "requirements": ["W01", "V04"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "funding-cut",
+      "runner": "workspace",
+      "file": "crates/kernel/tests/economics.rs",
+      "test": "delayed_rate_uses_boundary_inventory_across_partial_close_entry_and_reversal",
+      "requirements": ["W01", "W03", "V04"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "pending-margin",
+      "runner": "workspace",
+      "file": "crates/journal/tests/risk.rs",
+      "test": "payout_and_pending_order_share_margin_without_spending_it_twice",
+      "requirements": ["W01", "V05"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "locations",
+      "runner": "workspace",
+      "file": "crates/journal/tests/risk.rs",
+      "test": "location_deadline_liquidity_and_capital_are_independent_failures",
+      "requirements": ["W01", "V05"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "capital-path",
+      "runner": "workspace",
+      "file": "crates/journal/tests/risk.rs",
+      "test": "repeated_actual_transition_costs_deplete_capital_without_capping_simulated_loss",
+      "requirements": ["W01", "V10"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "protection",
+      "runner": "workspace",
+      "file": "crates/journal/tests/protection.rs",
+      "test": "v06_recognition_absorption_payment_and_recovery_do_not_charge_twice",
+      "requirements": ["W01", "V06", "V10"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "unpaid-claims",
+      "runner": "workspace",
+      "file": "crates/journal/tests/protection.rs",
+      "test": "owed_remediation_survives_refused_controls_and_depleted_reserve",
+      "requirements": ["W01", "V06", "V10"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "adl-restoration",
+      "runner": "workspace",
+      "file": "crates/journal/tests/restoration.rs",
+      "test": "rf1_both_sides_refund_basis_cash_chunking_and_every_prefix",
+      "requirements": ["W09", "V07"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "adl-funding-gap",
+      "runner": "workspace",
+      "file": "crates/journal/tests/restoration.rs",
+      "test": "funding_uses_actual_missing_and_restored_quantities_without_gap_compensation",
+      "requirements": ["W09", "V07"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "rf2",
+      "runner": "workspace",
+      "file": "crates/kernel/tests/quota.rs",
+      "test": "all_3905_small_vectors_match_exact_edf_every_prefix",
+      "requirements": ["W09", "V07"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "fuzz-identity",
+      "runner": "workspace",
+      "file": "crates/kernel/tests/identities.rs",
+      "test": "property_deterministic_byte_mutations_either_reject_or_reencode_identically",
+      "requirements": ["W01", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "fuzz-journal",
+      "runner": "workspace",
+      "file": "crates/journal/tests/codec.rs",
+      "test": "property_decoder_never_panics_on_bounded_mutated_frames",
+      "requirements": ["W05", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "kill-exposure",
+      "runner": "workspace",
+      "file": "crates/journal/tests/process_crash.rs",
+      "test": "process_kill_after_exposure_commit_never_reissues_the_action",
+      "requirements": ["W05", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "kill-encrypted",
+      "runner": "workspace",
+      "file": "crates/journal/tests/encrypted_crash.rs",
+      "test": "killed_replication_and_witness_boundaries_restore_only_the_accepted_tail",
+      "requirements": ["W05", "W06", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "source-cut",
+      "runner": "workspace",
+      "file": "crates/pacifica/tests/observations.rs",
+      "test": "certified_source_cut_is_explicit_exact_body_bound_and_releases_only_complete_fills",
+      "requirements": ["W03", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "native-roundtrip",
+      "runner": "workspace",
+      "file": "crates/pacifica/tests/funding.rs",
+      "test": "complete_round_trip_uses_one_ledger_and_actual_fees_with_no_second_credit",
+      "requirements": ["W04", "V01", "V05"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "private-commands",
+      "runner": "browser",
+      "file": "clients/private/tests/web-suite.ts",
+      "test": "runHttp",
+      "requirements": ["W06", "W08", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "private-streams",
+      "runner": "browser",
+      "file": "clients/private/tests/web-suite.ts",
+      "test": "runWebsocket",
+      "requirements": ["W06", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "claim-package",
+      "runner": "workspace",
+      "file": "crates/service/src/recovery.rs",
+      "test": "standard_recipient_envelope_roundtrip_binds_locator_root_context_and_refuses_rng_failure",
+      "requirements": ["W05", "W07", "V08"],
+      "evidence": "synthetic"
+    }
+  ],
+  "notQualified": [
+    "live-native-causal-completeness",
+    "current-nitro-image",
+    "independent-freshness-and-object-stores",
+    "production-risk-and-coverage-calibration",
+    "complete-liabilities-and-solvency-proof",
+    "power-loss-and-unbounded-schedule-proof"
+  ]
+}

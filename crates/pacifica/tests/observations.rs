@@ -1,10 +1,13 @@
 //! Joined synthetic wire/journal tests; no venue or network qualification.
 #[path = "../../journal/tests/support/mod.rs"]
 mod support;
+use cinder_journal::orders::Observation;
 use cinder_journal::{model::*, orders::*, *};
+use cinder_kernel::identity::{EconomicEventId, EventKey};
 use cinder_kernel::ledger::{evidence::*, *};
 use cinder_pacifica::{client_id, observation::*, profile::*};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use support::*;
 
 fn profile() -> Profile {
@@ -50,6 +53,135 @@ fn ws(id: u64) -> Message {
 }
 fn put(s: &mut Store, n: u8, m: Message) -> Committed {
     ingest(s, &profile(), m, CommitId::new([n; 32]).unwrap(), 100).unwrap()
+}
+
+#[test]
+fn certified_source_cut_is_explicit_exact_body_bound_and_releases_only_complete_fills() {
+    let t = Temp::new();
+    let mut s = setup(&t);
+    let message = msg(Kind::Trades, rest(json!([row(1, "open_long")])));
+    let coverage = Coverage {
+        profile: profile().commitment().unwrap(),
+        body: Sha256::digest(message.body.as_bytes()).into(),
+        through: 7,
+        evidence: [92; 32],
+    };
+    for bad in [
+        Coverage {
+            profile: [99; 32],
+            ..coverage.clone()
+        },
+        Coverage {
+            body: [99; 32],
+            ..coverage.clone()
+        },
+        Coverage {
+            through: 0,
+            ..coverage.clone()
+        },
+        Coverage {
+            evidence: [0; 32],
+            ..coverage.clone()
+        },
+    ] {
+        let before = s.head();
+        assert!(
+            ingest_covered(
+                &mut s,
+                &profile(),
+                message.clone(),
+                CommitId::new([3; 32]).unwrap(),
+                100,
+                bad
+            )
+            .is_err()
+        );
+        assert_eq!(s.head(), before);
+    }
+    let result = ingest_covered(
+        &mut s,
+        &profile(),
+        message.clone(),
+        CommitId::new([3; 32]).unwrap(),
+        100,
+        coverage.clone(),
+    )
+    .unwrap();
+    assert_eq!(
+        result.receipt.inputs,
+        [InputResult::Normalized(Disposition::Applied)]
+    );
+    assert_eq!(s.state().unwrap().orders()[0].executions[0].1, Some(7));
+    let again = ingest_covered(
+        &mut s,
+        &profile(),
+        message,
+        CommitId::new([4; 32]).unwrap(),
+        100,
+        coverage,
+    )
+    .unwrap();
+    assert_eq!(
+        again.receipt.inputs,
+        [InputResult::Normalized(Disposition::Duplicate)]
+    );
+    let fill = EventKey {
+        scope: profile().source,
+        event: EconomicEventId::new(b"trade:1").unwrap(),
+        leg: 0,
+    };
+    let mut tx = transaction(
+        s.head(),
+        5,
+        vec![],
+        vec![Control::Order(Action::Release {
+            request: request(2),
+        })],
+    );
+    tx.at = 100;
+    tx.order_observations.push(Observation {
+        key: key(990),
+        attempt: attempt(2),
+        status: Status::Terminal(Terminal {
+            filled: q(2),
+            executions: vec![fill],
+            through: 7,
+        }),
+        authority_epoch: 1,
+        observed_at: 100,
+        raw: raw(b"explicit synthetic qualified coverage"),
+    });
+    assert_eq!(s.commit(tx).unwrap().receipt.controls, None);
+    assert!(!s.state().unwrap().holds()[0].active);
+    let l = s.state().unwrap().ledger().clone();
+    drop(s);
+    assert_eq!(t.open().state().unwrap().ledger(), &l);
+}
+
+#[test]
+fn ordinary_parser_cannot_upgrade_causal_coverage_by_a_later_duplicate() {
+    let t = Temp::new();
+    let mut s = setup(&t);
+    let message = msg(Kind::Trades, rest(json!([row(1, "open_long")])));
+    put(&mut s, 3, message.clone());
+    let coverage = Coverage {
+        profile: profile().commitment().unwrap(),
+        body: Sha256::digest(message.body.as_bytes()).into(),
+        through: 7,
+        evidence: [92; 32],
+    };
+    ingest_covered(
+        &mut s,
+        &profile(),
+        message,
+        CommitId::new([4; 32]).unwrap(),
+        100,
+        coverage,
+    )
+    .unwrap();
+    assert_eq!(s.state().unwrap().orders()[0].executions[0].1, None);
+    assert!(!s.state().unwrap().orders()[0].complete());
+    assert!(!replay(&mut s, &profile()).unwrap().complete_history());
 }
 fn setup(t: &Temp) -> Store {
     let mut s = t.create();
