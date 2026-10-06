@@ -637,7 +637,7 @@ impl Controller {
             return Err(Error::Qualification);
         }
         let mut result = History::default();
-        for tx in j.transactions() {
+        for (tx, receipt) in j.transactions_with_receipts() {
             if tx.at > at {
                 return Err(Error::Qualification);
             }
@@ -650,18 +650,17 @@ impl Controller {
                     }
                     // Retained evidence from a rejected financial proposal is
                     // still evidence, but cannot authorize a later dispatch.
-                    if j.transaction_receipt(tx.id).is_none_or(|r| {
-                        r.controls.is_some()
-                            || r.inputs.iter().any(|i| {
-                                !matches!(
-                                    i,
-                                    InputResult::Normalized(
-                                        Disposition::Applied | Disposition::Duplicate
-                                    )
+                    if receipt.controls.is_some()
+                        || receipt.inputs.iter().any(|i| {
+                            !matches!(
+                                i,
+                                InputResult::Normalized(
+                                    Disposition::Applied | Disposition::Duplicate
                                 )
-                            })
-                            || r.funds_observations.iter().any(|ok| !ok)
-                    }) {
+                            )
+                        })
+                        || receipt.funds_observations.iter().any(|ok| !ok)
+                    {
                         continue;
                     }
                     match archive.record {

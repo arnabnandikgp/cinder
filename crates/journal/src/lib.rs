@@ -294,6 +294,13 @@ impl<B: Backend, P: Protection> Journal<B, P> {
     pub fn transactions(&self) -> impl Iterator<Item = &Transaction> {
         self.history.iter().map(|r| &r.tx)
     }
+    /// Accepted history paired with its exact replayed outcome in one traversal.
+    /// This is retained private provenance, not a present freshness check.
+    pub fn transactions_with_receipts(
+        &self,
+    ) -> impl Iterator<Item = (&Transaction, &model::Receipt)> {
+        self.history.iter().map(|r| (&r.tx, &r.receipt))
+    }
     /// Bounded explicit reload/reconciliation after contention or an unknown reply.
     /// P06 must add independent freshness; this detects no full valid-history rollback.
     pub fn reload(&mut self) -> Result<(), Error> {

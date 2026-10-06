@@ -727,6 +727,10 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
 #[path = "../../journal/tests/support/mod.rs"]
 pub(crate) mod initialization_support;
 
+#[cfg(all(test, feature = "local-fixture"))]
+#[path = "runtime_contention_tests.rs"]
+mod contention_tests;
+
 #[cfg(test)]
 mod initialization_tests {
     use super::*;

@@ -282,6 +282,61 @@ fn page(r: Response) -> reads::Page {
 }
 
 #[test]
+fn warm_and_cold_indexes_preserve_all_private_read_families_views_receipts_and_replay() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    let api = service();
+    let operation = owner_request(40, grant(&wallet(3)));
+    api.handle(
+        &mut s,
+        &Channel(operation.session),
+        &operation.encode().unwrap(),
+        10,
+    )
+    .unwrap();
+    let another = owner_request(41, grant(&wallet(4)));
+    api.handle(
+        &mut s,
+        &Channel(another.session),
+        &another.encode().unwrap(),
+        10,
+    )
+    .unwrap();
+    let compare = |s: &mut Store, req: &Request| {
+        let warm = api
+            .handle(s, &Channel(req.session), &req.encode().unwrap(), 10)
+            .unwrap();
+        let cold = service()
+            .handle(s, &Channel(req.session), &req.encode().unwrap(), 10)
+            .unwrap();
+        assert_eq!(warm, cold);
+        assert_eq!(warm.encode().unwrap(), cold.encode().unwrap());
+        warm
+    };
+    for kind in 0..reads::KINDS {
+        let mut cursor = [0; 40];
+        loop {
+            let p = page(compare(&mut s, &owner_request(90, query(kind, 1, cursor))));
+            cursor = p.next;
+            if cursor == [0; 40] {
+                break;
+            }
+        }
+    }
+    compare(&mut s, &owner_request(91, Command::View));
+    compare(&mut s, &owner_request(92, Command::Operation(operation.id)));
+    let head = s.head();
+    drop(s);
+    let mut s = open(&t);
+    for kind in 0..reads::KINDS {
+        compare(&mut s, &owner_request(90, query(kind, 64, [0; 40])));
+    }
+    compare(&mut s, &owner_request(91, Command::View));
+    compare(&mut s, &owner_request(92, Command::Operation(operation.id)));
+    assert_eq!(s.head(), head);
+}
+
+#[test]
 fn read_families_are_signed_scoped_bounded_and_do_not_commit() {
     let t = Temp::new();
     let mut s = seed(&t);

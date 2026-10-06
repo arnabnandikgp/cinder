@@ -44,6 +44,104 @@ merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 local checklist and remaining capability gates. The historical pre-review
 application checkpoints and receipts remain in the P23 log below.
 
+### Latest remediation implementation — 2026-10-06
+
+The user approved the broad remediation recommendations. Work now follows the
+[C1–C5 plan](P23-REMEDIATION.md): shared interpretation/pure authorization first,
+then accepted publication and bounded scheduling, a fixed joined local matrix,
+and separately authorized changed-source hardware qualification. C1 is implemented
+and locally verified; review/merge remain open, so its progress stays in progress.
+Current durability/repair checks are retained for bounded dev/test;
+a production segment/checkpoint/retention contract is not implicitly approved.
+
+Published head/base remain `6dff3731f365463ad24c1b5fcd2cb82f19d76c86` /
+`833955f8a4ead02a71eb5ae69a6aebd92bb85091`, ready/open PR #55. Implementation
+and documentation here are local, not that head's hosted-check evidence. No AWS,
+financial activity or merge was performed. Local changes are not pushed yet.
+Preserve unrelated `docs/user-journey.md` and `stays/`; the local qualification
+preparation example is intentionally not part of this remediation checkpoint.
+
+C1 implementation: one paired accepted-transaction/receipt traversal replaces
+nested receipt searches in API, funds-controller and recovery interpretation.
+The API reuses an immutable exact-head/contract index with account-scoped operation
+and epoch-scoped grant maps. Shared pure authorization preserves signature,
+freshness, time/epoch and grant-before-ID ordering. Index building/deallocation
+stays outside its short pointer latch. No balances, freshness result, permission,
+new wire, persistence format or dependency is cached/introduced. Runtime locks,
+NSM/witness checks, controller I/O, replica repair and WS polling are unchanged.
+
+Six new real-AEAD/SQLite regressions plus one all-family/paging/replay comparison
+cover warm reuse, a fresh check per request, poison/unknown acceptance, contract/
+head changes, expiry/revoke, authorization before lookup, account-scoped IDs and
+malformed history. Final local source passes locked/offline API tests (35),
+Pacifica tests (81, with the named killed-child worker remaining parent-invoked),
+and service tests (83 unit + eight integration; seven named Nitro cases remain
+gated). The full all-feature workspace also passed before the final paired funds/
+recovery and paging refinement; those final affected crates were then rerun.
+Strict all-target/all-feature workspace Clippy, formatting and diff checks pass.
+Pinned Node 24.21.0 contracts/inventory (42), workspace boundaries, relay (14) and
+private SDK (24) pass. Actual Node/Chrome HTTP/WebSocket suites each pass all 26
+groups against synthetic loopback fixtures. These fixture results do not join
+slow real Runtime/witness I/O or qualify the unresolved live WS gap.
+
+Next: C2's central accepted read publication and independent per-reply witness
+qualification, reusing C1 authorization/projection rather than adding another
+handler. Resolve/test exact writer metadata, post-CAS/publication, poison/replay,
+revoke/expiry and old-generation memory before Runtime read jobs use it. C3 then
+joins bounded external I/O and connection-owned cipher/delivery scheduling. Keep
+the fixed C4 matrix and current application deadline; no new AWS or financial
+run until a separately reviewed manifest. No C2–C5 completion is claimed.
+
+### Earlier architecture review — 2026-10-06
+
+Published checkpoint remains `6dff3731f365463ad24c1b5fcd2cb82f19d76c86`,
+ready/open PR #55 against `product/tee-v1` at
+`833955f8a4ead02a71eb5ae69a6aebd92bb85091`. The last independent readback
+confirmed all seven hosted checks and CodeRabbit success for that published head;
+local diagnostic/proposal edits are not that checked source. No merge occurred.
+
+After the local contention diagnosis, the user authorized a bounded design review,
+then asked to pause the narrow fix and take a fresh whole-architecture view with
+one explicitly authorized Astra review agent. That agent performed one independent
+read-only review and formed findings before reading the candidate. No production
+changes, interleaving model, new benchmark/test, AWS run or financial activity were
+performed in this review. Unrelated local files remain untouched.
+
+Source review confirms several composed synchronous costs: active mutex across
+remote I/O; tick freshness even in read-only mode; duplicate runtime/API freshness
+checks; API record reconstruction with quadratic receipt searches; complete-history
+replica GET/repair per append; per-call cloud TLS; NSM time attestation/verification
+under its shared mutex; and a separate same-socket poll/command head-of-line path.
+Fixed clock/cheap process fixtures did not qualify the production dependency budget.
+The local real-runtime measurements establish contention mechanisms, not the exact
+cause of every AWS close. Current 4,096-record/64-MiB history is a finite lifetime;
+the archive snapshot format is not compaction. Do not quietly remove its checks.
+
+At this earlier review checkpoint,
+[ADR 0025](../architecture/0025-concurrent-private-reads.md) was **proposed**,
+not selected or implemented; the later approval and C1 work are above. It recorded
+the independent review's conditions:
+fresh NSM time outside a short publication latch; exact known-writer head metadata;
+bounded State/index generations; unrelated-commit starvation; and the current
+TLS-or-web ingress selection without unnecessary multi-listener work. No abstract
+model was run. Detailed broad findings and alternatives are preserved in ignored
+`work/experiments/p23-concurrency/ARCHITECTURE-REVIEW.md` for local handoff; the
+sanitized candidate is tracked so a fresh checkout has the decision conditions.
+Verification for these documentation edits: pinned Node 24.21.0
+`scripts/check.mjs --group=contracts` passes all 42 contracts/inventory regressions
+and workspace boundaries; `git diff --check` passes. No runtime regression or
+hardware qualification was rerun for this read-only review.
+
+Next: agree a cohesive runtime/storage scope, rather than continue timeout patches.
+Keep one mutation owner/journal, central replay-derived indexes and immutable
+publication, independent per-reply freshness/authorization, bounded external I/O
+completion and one connection-owned cipher writer. Explicitly choose a bounded
+dev/test retained-history envelope under today's durability versus a reviewed
+segment/checkpoint/retention contract. Do not label read isolation complete broker
+qualification, weaken trusted time/freshness/revocation, or start new hardware
+before that choice and the fixed joined local matrix. Financial/custody decisions
+and all independent native/chain/customer-funds gates remain unchanged.
+
 ### Latest hardware checkpoint — 2026-10-06
 
 The approved read-only AWS session has ended; resource cleanup is verified.
@@ -66,9 +164,10 @@ explanation of every individual close. Six accepted grants reconcile with zero
 exposure and no resend; no further grant, boot, timeout widening, stale-view
 workaround or durability redesign was performed.
 
-Next substantive step: reproduce and measure journal/write/read/subscription
+At hardware close, the next substantive step was to measure journal/write/read/subscription
 contention locally before proposing a reviewed scheduling/storage correction or
-another hardware run. The expired original stream's post-replica-fault restore,
+another hardware run; the latest local diagnosis and broad review are above.
+The expired original stream's post-replica-fault restore,
 complete native read qualification and actual devnet diagnostic request remain
 named gaps. Financial setup/credit/payment/cut/funding and devnet deployment are
 separate gates. Application corrections are checkpointed at
@@ -86,6 +185,34 @@ local test relay/tunnel listeners are closed. Billing is delayed; the $5 cap is
 not a claim about a finalized invoice.
 
 ### Earlier publication and hardware checkpoints
+
+Publication/local diagnosis follow-up: the user-requested checkpoint is pushed
+via the one-layer native stack to ready/open PR #55 at
+`6dff3731f365463ad24c1b5fcd2cb82f19d76c86`, base `product/tee-v1` at
+`833955f8a4ead02a71eb5ae69a6aebd92bb85091`. Its PR description records exact
+source, tests, hardware limitations and verified teardown. Fresh CI/review are
+separate; no merge is authorized. The following new diagnostic is local only,
+not part of that published source or a production change.
+
+Test-only `runtime_contention_tests.rs` joins real Runtime/API/AEAD/Replicated
+with counted synthetic storage. Healthy append at accepted history N=1/9/25
+performs 5/29/77 replica GETs (`3N+2`), two PUTs, five witness reads and one CAS.
+With 400-ms synthetic witness-read latency, a read alone takes 808 ms/two witness
+reads and a grant takes 2,828 ms/seven witness reads. Both cause another initial
+read to hit the unchanged bounded lock refusal while periodic polls skip without
+cached output. The healthy runtime resumes afterward; original grant lookup,
+revocation and zero-attempt/no-money checks pass. Two focused diagnostics and all
+83 service unit tests pass; seven named hardware tests stay gated. Strict offline
+Clippy passes. This is handler-level causal evidence, not every AWS close or a
+full SDK/watch benchmark. The measured finding is that read-on-read contention
+also matters, not only write/history cost. The local experiment note records
+the full method, limits and proposed alternatives; it is not a CI prerequisite.
+
+Next: review a bounded fresh-head/epoch/authenticated read-serving design against
+a fair serialized queue, then join the chosen candidate to actual SDK/watch race
+tests. Keep append scaling as a separately reviewed durability problem; do not
+remove full-history repair checks, relax freshness, add another ledger or expand
+timeouts silently. No new AWS/financial activity or scheduling redesign occurred.
 
 [PR #55](https://github.com/arnabnandikgp/cinder/pull/55) is ready/open against
 `product/tee-v1`, following the user's readiness and review-fix requests. Reviewed

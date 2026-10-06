@@ -738,6 +738,18 @@ manifest. Trading/funding admission, authentic native setup/credit/payment/cut
 and precise funding remain independently gated; diagnostics do not qualify them.
 First hardware step is changed-image transport/key/read qualification, not a
 claim of a complete financial live workflow.
+After the first read-only hardware run exposed concurrent initial-read/stream
+refusals, local diagnosis and one user-authorized independent architecture review
+identified composed runtime, NSM, cloud, API-history, storage and per-connection
+serialization. The user approved the bounded remediation direction in
+[ADR 0025](../architecture/0025-concurrent-private-reads.md); the
+[C1–C5 remediation plan](P23-REMEDIATION.md) records implementation gates, not
+completed qualification. Keep today's durability/repair checks for the bounded
+dev/test workload. Production segment/checkpoint/retention remains a separate
+security decision. Before another measured run, satisfy the fresh-authority,
+publication, time, resource and joined-client gates. Preserve finance, custody,
+wire and durable
+acceptance guarantees; increasing timeouts is not this architectural qualification.
 Review corrections also belong to this fixed checklist: release exactly the
 measured role set, continue after ineligible original deposits without hiding
 port/storage failures, close expired unsent physical plans only on verified

@@ -2,7 +2,9 @@
 //! No listener, HTTP client, wallet loader, native signing or plaintext fallback.
 //! The confidential-channel and admission ports are trusted runtime interfaces,
 //! not proof of attestation. P19/P20 qualify their actual implementations.
+mod authorization;
 pub mod reads;
+mod records;
 pub mod wire;
 use cinder_journal::{Backend, Journal, Protection, funds, model::*, orders, risk};
 use cinder_kernel::{
@@ -10,9 +12,13 @@ use cinder_kernel::{
     identity::*,
     ledger::{funds::Destination, *},
 };
-use ed25519_dalek::{Signature, VerifyingKey};
+use ed25519_dalek::VerifyingKey;
+use records::Records;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, fmt};
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 use wire::{Command, Request, Writer};
 
 const INIT: &[u8] = b"CINDER-API-CONTRACT-1\0";
@@ -235,6 +241,9 @@ private_debug!(
     Response
 );
 
+#[cfg(test)]
+mod read_index_tests;
+
 struct Record {
     request: Request,
     accepted: bool,
@@ -244,6 +253,8 @@ struct Record {
 pub struct Service<A> {
     contract: Contract,
     admission: A,
+    // Derived interpretation only: no balances, cached freshness or authority.
+    records: Mutex<Option<Arc<Records>>>,
 }
 impl<A: Admission> Service<A> {
     /// Construct with explicit governed owner bindings and server-side admission port.
@@ -269,6 +280,7 @@ impl<A: Admission> Service<A> {
         Ok(Self {
             contract,
             admission,
+            records: Mutex::new(None),
         })
     }
     fn fingerprint(&self, domain: Domain, policy: PolicyVersion) -> [u8; 32] {
@@ -316,14 +328,10 @@ impl<A: Admission> Service<A> {
         let config = journal.configuration();
         let fingerprint = self.release_commitment(config)?;
         let marker = [INIT, &fingerprint].concat();
-        for tx in journal.transactions() {
+        for (tx, receipt) in journal.transactions_with_receipts() {
             for e in &tx.evidence {
                 if e.as_bytes().starts_with(INIT) {
-                    if e.as_bytes() != marker
-                        || journal
-                            .transaction_receipt(tx.id)
-                            .is_none_or(|r| r.controls.is_some())
-                    {
+                    if e.as_bytes() != marker || receipt.controls.is_some() {
                         return Err(Error::Unavailable);
                     }
                     return Ok(());
@@ -358,51 +366,6 @@ impl<A: Admission> Service<A> {
         }
         Ok(())
     }
-    fn records<B: Backend, P: Protection>(
-        &self,
-        journal: &Journal<B, P>,
-    ) -> Result<Vec<Record>, Error> {
-        let fingerprint = self.fingerprint(
-            journal.configuration().domain,
-            journal.configuration().policy,
-        );
-        let mut installed = false;
-        let mut records = Vec::new();
-        let mut seen = BTreeSet::new();
-        for tx in journal.transactions() {
-            let accepted = journal
-                .transaction_receipt(tx.id)
-                .ok_or(Error::Unavailable)?
-                .controls
-                .is_none();
-            for e in &tx.evidence {
-                if e.as_bytes().starts_with(INIT) {
-                    if installed || e.as_bytes() != [INIT, &fingerprint].concat() || !accepted {
-                        return Err(Error::Unavailable);
-                    }
-                    installed = true;
-                } else if let Some(tail) = e.as_bytes().strip_prefix(RECORD) {
-                    if !installed || tail.get(..32) != Some(fingerprint.as_slice()) {
-                        return Err(Error::Unavailable);
-                    }
-                    let request = Request::decode(tail.get(32..).ok_or(Error::Unavailable)?)
-                        .map_err(|_| Error::Unavailable)?;
-                    if !seen.insert((request.account.bytes(), request.id.bytes())) {
-                        return Err(Error::Unavailable);
-                    }
-                    records.push(Record {
-                        request,
-                        accepted,
-                        at: tx.at,
-                    });
-                }
-            }
-        }
-        if !installed {
-            return Err(Error::Unavailable);
-        }
-        Ok(records)
-    }
     /// Verify identity, current epoch and grant before any operation dedupe/lookup.
     /// Receive decrypted bytes only from the established trusted channel port.
     pub fn handle<B: Backend, P: Protection>(
@@ -413,39 +376,15 @@ impl<A: Admission> Service<A> {
         now: u64,
     ) -> Result<Response, Error> {
         let req = Request::decode(bytes.as_bytes())?;
-        let owner = self
-            .contract
-            .owners
-            .iter()
-            .find(|b| b.account == req.account)
-            .ok_or(Error::Unauthorized)?;
-        if channel.domain() != req.domain
-            || req.domain != journal.configuration().domain
-            || req.policy != journal.configuration().policy
-            || channel.binding() == [0; 32]
-            || req.session != channel.binding()
-            || now >= channel.expires_at()
-            || now >= req.expires_at
-            || req.expires_at > channel.expires_at()
-            || req.expires_at.saturating_sub(now) > self.contract.maximum_auth_lifetime
-        {
-            return Err(Error::Unauthorized);
-        }
-        let key = VerifyingKey::from_bytes(&req.signer).map_err(|_| Error::Unauthorized)?;
-        key.verify_strict(&req.message(), &Signature::from_bytes(&req.signature))
-            .map_err(|_| Error::Unauthorized)?;
+        let owner =
+            authorization::envelope(&self.contract, journal.configuration(), channel, &req, now)?;
         journal.verified_state().map_err(|_| Error::Unavailable)?;
         let state = journal.state().map_err(|_| Error::Unavailable)?;
-        if now < state.logical_time() {
-            return Err(Error::Unavailable);
-        }
-        if req.epoch == 0 || state.authority_epoch(req.account) != Some(req.epoch) {
-            return Err(Error::Unauthorized);
-        }
+        authorization::authority(state, &req, now)?;
         let records = self.records(journal)?;
         let is_owner = req.signer == owner.wallet;
         if !is_owner {
-            self.authorize_agent(&req, &records, now)?;
+            authorization::agent(&req, &records, now)?;
         }
         match &req.command {
             Command::Read(query) => {
@@ -483,19 +422,13 @@ impl<A: Admission> Service<A> {
                 }));
             }
             Command::Operation(id) => {
-                let record = records
-                    .iter()
-                    .find(|r| r.request.account == req.account && r.request.id == *id)
-                    .ok_or(Error::NotFound)?;
+                let record = records.find(req.account, *id).ok_or(Error::NotFound)?;
                 return self.receipt(state, record).map(Response::Receipt);
             }
             _ => {}
         }
         // No private ID comparison or saved outcome is performed before authorization.
-        if let Some(old) = records
-            .iter()
-            .find(|r| r.request.account == req.account && r.request.id == req.id)
-        {
+        if let Some(old) = records.find(req.account, req.id) {
             if !is_owner && old.request.signer != req.signer {
                 return Err(Error::Unauthorized);
             }
@@ -520,53 +453,6 @@ impl<A: Admission> Service<A> {
         };
         self.receipt(journal.state().map_err(|_| Error::Unavailable)?, &record)
             .map(Response::Receipt)
-    }
-    fn authorize_agent(&self, req: &Request, records: &[Record], now: u64) -> Result<(), Error> {
-        let grant = records
-            .iter()
-            .find_map(|r| match &r.request.command {
-                Command::Grant(g)
-                    if r.accepted
-                        && r.request.account == req.account
-                        && r.request.epoch == req.epoch
-                        && g.key == req.signer =>
-                {
-                    Some(g)
-                }
-                _ => None,
-            })
-            .ok_or(Error::Unauthorized)?;
-        if now >= grant.expires_at {
-            return Err(Error::Unauthorized);
-        }
-        match &req.command {
-            Command::View | Command::Operation(_) | Command::Read(_)
-                if grant.methods & wire::READ != 0 =>
-            {
-                Ok(())
-            }
-            Command::Order {
-                market,
-                lots,
-                fee,
-                good_until,
-                ..
-            } if grant.methods & wire::TRADE != 0
-                && *market == grant.market
-                && lots.unsigned_abs() <= grant.maximum_lots
-                && *fee >= 0
-                && *fee <= grant.maximum_fee
-                && *good_until <= grant.expires_at =>
-            {
-                Ok(())
-            }
-            Command::Cancel { good_until, .. }
-                if grant.methods & wire::CANCEL != 0 && *good_until <= grant.expires_at =>
-            {
-                Ok(())
-            }
-            _ => Err(Error::Unauthorized),
-        }
     }
     fn controls<B: Backend, P: Protection>(
         &self,
