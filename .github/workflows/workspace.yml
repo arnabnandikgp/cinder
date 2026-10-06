@@ -15,9 +15,19 @@ concurrency:
 
 jobs:
   offline-workspace:
-    name: Offline Rust workspace
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: lint
+            name: Offline Rust lint and build
+          - group: rust
+            name: Offline Rust regressions
+          - group: client
+            name: Offline SDK and relay regressions
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -32,9 +42,10 @@ jobs:
       - name: Fetch locked storage dependencies
         run: cargo fetch --locked
       - name: Install locked private-client check tools
+        if: matrix.group == 'client'
         run: npm ci --ignore-scripts --prefix clients/private
-      - name: Offline build, lint and tests
-        run: node scripts/check.mjs
+      - name: Run the shared offline check group
+        run: node scripts/check.mjs --group=${{ matrix.group }}
 
   web-channel-qualification:
     name: Offline browser channel qualification

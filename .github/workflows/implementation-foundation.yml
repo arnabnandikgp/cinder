@@ -11,8 +11,8 @@ permissions:
 
 jobs:
   documentation-contract:
-    name: Plan and handoff consistency
-    runs-on: ubuntu-latest
+    name: Offline contracts and test inventory
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -21,5 +21,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .node-version
-      - run: node scripts/check-implementation-plan.mjs
-      - run: node --test scripts/check-implementation-plan.test.mjs
+      - name: Prepare pinned metadata tools
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          cargo fetch --locked
+      - name: Contracts, inventory and boundary regressions
+        run: node scripts/check.mjs --group=contracts

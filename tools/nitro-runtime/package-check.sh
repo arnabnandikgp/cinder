@@ -1,9 +1,17 @@
 #!/bin/sh
-# Run inside the isolated Linux check container after the Rust suite. No AWS.
+# Run standalone in the isolated ARM64 Linux check container. No AWS.
 set -eu
+test "$(uname -s)" = Linux
+test "$(uname -m)" = aarch64
+test -z "$(find /sys/class/net -mindepth 1 -maxdepth 1 ! -name lo -print -quit)"
 test ! -e /dev/nsm
 test ! -e /source/work
 test ! -e /source/.git
+test ! -e /tmp/cinder-package
+test ! -e /tmp/cinder-bundle
+mkdir -p /tmp/cargo
+cp tools/nitro-linux/cargo-config.toml /tmp/cargo/config.toml
+export CARGO_HOME=/tmp/cargo
 export CARGO_INCREMENTAL=0
 # A separate deterministic artifact target: never ship an all-feature test build.
 export CARGO_TARGET_DIR=/tmp/cinder-package

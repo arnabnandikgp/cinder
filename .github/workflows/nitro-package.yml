@@ -1,0 +1,41 @@
+name: Offline ARM64 runtime package
+
+on:
+  pull_request:
+    branches: [product/tee-v1, "tee/**"]
+  push:
+    branches: [product/tee-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  default-package:
+    name: Offline ARM64 default-feature package
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Prepare the locked public dependencies and source export
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.97.1 --profile minimal
+          cargo +1.97.1 fetch --locked
+          cargo +1.97.1 vendor --locked --offline --versioned-dirs "$RUNNER_TEMP/cinder-vendor" > "$RUNNER_TEMP/cinder-vendor-config.toml"
+          mkdir "$RUNNER_TEMP/cinder-source"
+          git archive --format=tar HEAD | tar -xf - -C "$RUNNER_TEMP/cinder-source"
+      - name: Prepare the pinned ARM64 Linux toolchain (no application source)
+        run: docker build --platform linux/arm64 -f tools/nitro-linux/Containerfile -t cinder-ci-arm64:check tools/nitro-linux
+      - name: Default-feature release, reproducibility and non-Nitro refusal
+        run: |
+          docker run --rm --network none --platform linux/arm64 \
+            --mount "type=bind,source=$RUNNER_TEMP/cinder-source,target=/source,readonly" \
+            --mount "type=bind,source=$RUNNER_TEMP/cinder-vendor,target=/vendor,readonly" \
+            --workdir /source -e CARGO_HOME=/tmp/cargo -e CARGO_BUILD_JOBS=4 \
+            cinder-ci-arm64:check sh tools/nitro-runtime/package-check.sh

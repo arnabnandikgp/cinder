@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { nodeSuite } from './test-runner.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const focused=process.argv.slice(2);
@@ -97,10 +98,7 @@ try {
   }
   assert(ready, `Surfpool startup timeout: ${serverLog}`);
   // Asynchronous child keeps the parent available to supervise/clean up the sandbox.
-  const tests = spawn(process.execPath, ['--test', '--test-concurrency=1',...(focused.length?[`--test-name-pattern=^${focused[0]==='--acceptance-only'?'P22':'P21'} `]:[]), 'tests/funding.test.ts', 'tests/recovery.test.ts', 'tests/vault.test.ts'], { cwd: client, env, stdio: 'inherit' });
-  await new Promise((accept, reject) => {
-    tests.on('error', reject); tests.on('exit', (code, signal) => code === 0 ? accept() : reject(new Error(`Vault tests failed: ${code ?? signal}`)));
-  });
+  await nodeSuite('vault', { cwd: client, env, pattern: focused.length ? `^${focused[0]==='--acceptance-only'?'P22':'P21'} ` : undefined });
 } finally {
   surfpool.kill('SIGTERM');
   for (let i = 0; i < 50 && surfpool.exitCode === null && surfpool.signalCode === null; i++) await delay(100);
