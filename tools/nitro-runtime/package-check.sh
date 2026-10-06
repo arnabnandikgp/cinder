@@ -15,6 +15,12 @@ export CARGO_HOME=/tmp/cargo
 export CARGO_INCREMENTAL=0
 # A separate deterministic artifact target: never ship an all-feature test build.
 export CARGO_TARGET_DIR=/tmp/cinder-package
+if test -d /build-cache; then
+  # Only dependency intermediates are retained by CI. Always rebuild the
+  # application, even if an old application output reaches this mount.
+  export CARGO_TARGET_DIR=/build-cache
+  cargo clean -p cinder-service --release
+fi
 export RUSTFLAGS='--remap-path-prefix=/source=/cinder --remap-path-prefix=/vendor=/vendor -C debuginfo=0'
 cargo build --locked --offline --release -p cinder-service --bin cinder-enclave \
   --bin cinder-bootstrap --bin cinder-cloud-relay --bin cinder-nitro-relay \

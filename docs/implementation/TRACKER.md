@@ -43,14 +43,16 @@ P22 #53 merged on 2026-10-06 after all four hosted checks passed at exact review
 head `24fe0796fbcfb2151de779922ae1932defc745f6`; both relevant CodeRabbit threads
 were resolved. Local product trunk was fast-forwarded before branching.
 
-Only CI audit recommendations 2/3/4 are authorized: automatic test inventory and
+CI audit recommendations 2/3/4 are authorized: automatic test inventory and
 executed-case/intentional-skip guards; shipping-default tests and offline ARM64
 release packaging; independent contracts/lint/Rust/SDK-relay reporting.
+The user's subsequent request also authorizes build/dependency/tool caching in
+this same PR. Cache qualification is in progress; all builds/tests remain required.
 Implementation checkpoint `297327faca999977581ed407e7acc9db3e1ad828` passes the
 full local checks below; final reporting/receipt-shape edits also pass focused
 guard and actual Node/Chrome carrier checks. No new economic
 policy, program, dependency pin, AWS session, live venue, RPC, wallet or customer
-funds are in scope. Branch protection, artifacts/coverage, advisory scans/caching
+funds are in scope. Branch protection, artifacts/coverage and advisory scans
 and live gates remain deferred. P23 is not started.
 Ready/open [PR #54](https://github.com/arnabnandikgp/cinder/pull/54) targets
 `product/tee-v1`, published via native `gh stack init/submit` at
@@ -2157,13 +2159,21 @@ Merge: 8247d24fa6d77b1e0b478ef7b8513ace80f34d4b.
 
 ### CI hardening follow-up — 2026-10-06
 
-Work: source checkpoint `297327faca999977581ed407e7acc9db3e1ad828` implements only audit recommendations 2/3/4.
+Work: source checkpoint `297327faca999977581ed407e7acc9db3e1ad828` implements audit recommendations 2/3/4.
 Maintained Node test files are discovered and assigned, actual required acceptance
 execution is observed, and ignored/skip statuses require the documented policy.
 Shipping-default Rust execution joins the debug/release all-feature profiles.
 Contracts, lint, Rust and SDK/relay run independently; a separate network-disabled
 ARM64 package job checks the default release, application-crate reproducibility
 and ordinary-host boot refusal. No live/hardware tests become routine CI.
+Caching follow-up: the user additionally authorizes caching in #54. Pinned
+dependency-only Rust caches cover the root, WASM, Solana/SBF and isolated ARM64
+build targets; npm caches use lockfiles without saving `node_modules`. Public
+tool downloads remain checksum-verified on restore; SBF platform tools have an
+exact version key, and the public ARM64 tool-only image uses BuildKit caching.
+Both application builds in the ARM64 reproducibility gate remain mandatory.
+No test result, IDL, fixture state, wallet, provisioning or credential is cached.
+Workflow lint and cold/warm isolated ARM64 checks are pending for this edit.
 Verification: complete pinned local workspace checks pass: 41 script guards,
 12 relay and 24 private SDK/TLS tests, both strict Clippy configurations and
 all-target build; Rust all-feature debug/release each pass 400 tests (10 intentional

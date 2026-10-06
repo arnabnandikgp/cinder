@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+
 concurrency:
   group: vault-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -25,32 +30,71 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            clients/vault/package-lock.json
+            tools/web-channel/package-lock.json
       - name: Install pinned Rust
         run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
+      - name: Cache native, WASM and SBF dependency builds
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: anchor-1.2.0-agave-3.1.10-sbf-1.52-v0
+          cache-bin: false
+          cache-workspace-crates: false
+          workspaces: |
+            . -> target
+            tools/web-channel -> target
+            programs -> target
+      - name: Cache pinned public vault tool downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/cinder-vault-downloads
+          key: vault-tools-${{ runner.os }}-${{ runner.arch }}-anchor-1.2.0-surfpool-1.5.0-agave-3.1.10-${{ hashFiles('.github/workflows/vault.yml') }}
+      - name: Cache the pinned SBF platform toolchain
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/solana/v1.52/platform-tools
+          key: sbf-tools-${{ runner.os }}-${{ runner.arch }}-agave-3.1.10-v1.52
       - name: Install checksum-verified local test tools
         env:
           NO_DNA: '1'
         run: |
           set -euo pipefail
           vault_tools="$RUNNER_TEMP/cinder-vault-tools"
-          mkdir -p "$vault_tools"
-          curl --fail --location --retry 3 https://github.com/otter-sec/anchor/releases/download/v1.2.0/anchor-1.2.0-x86_64-unknown-linux-gnu -o "$vault_tools/anchor"
-          printf '%s  %s\n' 0c9c41a3292c281cc6eadb78d6e1c8224d8324a34b0736a89d640fd314db05b7 "$vault_tools/anchor" | sha256sum --check -
+          vault_downloads="$RUNNER_TEMP/cinder-vault-downloads"
+          mkdir -p "$vault_tools" "$vault_downloads"
+          if [ ! -f "$vault_downloads/anchor" ]; then
+            curl --fail --location --retry 3 https://github.com/otter-sec/anchor/releases/download/v1.2.0/anchor-1.2.0-x86_64-unknown-linux-gnu -o "$vault_downloads/anchor"
+          fi
+          printf '%s  %s\n' 0c9c41a3292c281cc6eadb78d6e1c8224d8324a34b0736a89d640fd314db05b7 "$vault_downloads/anchor" | sha256sum --check -
+          cp "$vault_downloads/anchor" "$vault_tools/anchor"
           chmod +x "$vault_tools/anchor"
-          curl --fail --location --retry 3 https://github.com/solana-foundation/surfpool/releases/download/v1.5.0/surfpool-linux-x64.tar.gz -o "$vault_tools/surfpool.tar.gz"
-          printf '%s  %s\n' 5b20a3b46e60c4f819af7b4da5c3ea211f76041710617841cc23247d15887ddc "$vault_tools/surfpool.tar.gz" | sha256sum --check -
-          tar -xzf "$vault_tools/surfpool.tar.gz" -C "$vault_tools"
-          curl --fail --location --retry 3 https://github.com/anza-xyz/agave/releases/download/v3.1.10/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -o "$vault_tools/agave.tar.bz2"
-          printf '%s  %s\n' a7205ff29bcf0f7199740225ecae2b85a28ea9668892d5ec21bd9749882984a1 "$vault_tools/agave.tar.bz2" | sha256sum --check -
-          tar -xjf "$vault_tools/agave.tar.bz2" -C "$vault_tools"
+          if [ ! -f "$vault_downloads/surfpool.tar.gz" ]; then
+            curl --fail --location --retry 3 https://github.com/solana-foundation/surfpool/releases/download/v1.5.0/surfpool-linux-x64.tar.gz -o "$vault_downloads/surfpool.tar.gz"
+          fi
+          printf '%s  %s\n' 5b20a3b46e60c4f819af7b4da5c3ea211f76041710617841cc23247d15887ddc "$vault_downloads/surfpool.tar.gz" | sha256sum --check -
+          tar -xzf "$vault_downloads/surfpool.tar.gz" -C "$vault_tools"
+          if [ ! -f "$vault_downloads/agave.tar.bz2" ]; then
+            curl --fail --location --retry 3 https://github.com/anza-xyz/agave/releases/download/v3.1.10/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -o "$vault_downloads/agave.tar.bz2"
+          fi
+          printf '%s  %s\n' a7205ff29bcf0f7199740225ecae2b85a28ea9668892d5ec21bd9749882984a1 "$vault_downloads/agave.tar.bz2" | sha256sum --check -
+          tar -xjf "$vault_downloads/agave.tar.bz2" -C "$vault_tools"
           printf '%s\n' "$vault_tools" "$vault_tools/solana-release/bin" >> "$GITHUB_PATH"
+      - name: Cache the pinned public wasm-bindgen archive
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/wasm-bindgen.tar.gz
+          key: wasm-bindgen-${{ runner.os }}-${{ runner.arch }}-0.2.129-82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e
       - name: Prepare pinned private service and browser recovery fixture dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libssl-dev
           cargo fetch --locked
           cargo fetch --manifest-path tools/web-channel/Cargo.toml --locked
           npm ci --ignore-scripts --prefix tools/web-channel
-          curl -fsSL --retry 2 --max-time 90 https://github.com/wasm-bindgen/wasm-bindgen/releases/download/0.2.129/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl.tar.gz -o "$RUNNER_TEMP/wasm-bindgen.tar.gz"
+          if [ ! -f "$RUNNER_TEMP/wasm-bindgen.tar.gz" ]; then
+            curl -fsSL --retry 2 --max-time 90 https://github.com/wasm-bindgen/wasm-bindgen/releases/download/0.2.129/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl.tar.gz -o "$RUNNER_TEMP/wasm-bindgen.tar.gz"
+          fi
           printf '%s  %s\n' 82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e "$RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/wasm-bindgen.tar.gz" -C "$RUNNER_TEMP"
       - name: Hydrate exact build dependencies

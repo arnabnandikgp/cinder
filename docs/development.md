@@ -235,9 +235,35 @@ committed source export with read-only vendor/source mounts and no network.
 It does not run AWS, generate an EIF, deploy anything or qualify Nitro hardware.
 Setup downloads toolchains and locked public dependencies before offline checks.
 
+### CI caching
+
+Every build job caches dependency intermediates; the metadata-only job caches
+Cargo downloads without a target directory. Pinned `rust-cache` keys separate
+runner OS/architecture, Rust compiler, Cargo manifests/locks, compiler settings
+and job/profile purpose. Root, isolated WASM and Solana workspaces have explicit
+targets. Workspace crates and executable outputs are excluded from saved Rust
+caches. Incremental compilation and dev/test debug symbols are disabled to keep
+builds and caches smaller; release settings are unchanged.
+
+Node jobs cache npm's downloaded packages, keyed by their exact lockfiles; they
+still run `npm ci`, never restore `node_modules`. Pinned Anchor/Surfpool/Agave and
+wasm-bindgen downloads are cached separately and checksum-verified on **every**
+restore. The SBF 1.52 toolchain has its own exact OS/architecture/version key.
+The ARM64 tool-only image uses BuildKit's GitHub cache. Its isolated Cargo target
+is separately keyed by the pinned image recipe, vendor configuration and package
+check script; the application crate is cleaned before the first package build
+and again before the ELF reproducibility comparison, even on a cache hit.
+
+Cache misses are normal: hydration and every build/check/test command still run.
+Only downloads or dependency compilation may be reused, not test receipts, IDLs,
+fixture journals, provisioning, wallets, credentials or research. GitHub's cache
+scope limits reuse to eligible base/branch/PR caches; caches are an optimization,
+not a source of qualification evidence. Hosted cold/warm timings must be measured
+before claiming a speedup. All cache actions are pinned to immutable revisions.
+
 Hosting these workflows does not enforce branch protection; inspect repository
 rules before asserting a merge gate is configured. Branch rules, uploaded reports,
-coverage percentages, dependency-advisory gates and caching are separate work,
+coverage percentages and dependency-advisory gates are separate work,
 not part of this CI follow-up. Vercel's legacy website preview is not a financial-
 runtime check. Keep its result visible without fabricating a website on this branch.
 
