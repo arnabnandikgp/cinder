@@ -64,6 +64,11 @@ Subsequent PR #55 corrections qualify exact role coverage, rejected-deposit
 progress, verified expired no-wire closure, absence of unsupported source cuts
 and bounded lock backpressure. They require new host/ARM application evidence;
 the old ELF is not the current image. TRACKER records their exact gate receipt.
+Correction source `5acf79bd2f931e85325841a06bd87b038cb1cf28` passes the full
+pinned host runner and isolated exact-source ARM package/rebuild/refusal checks.
+Its new enclave ELF hash is
+`0f5da0b061380ad16d1e139765b505ee3d6e3cdf94fc9195b5dc50975d8a1ff1`;
+this is not an EIF/PCR or changed-image hardware qualification.
 
 P22's [tracked acceptance manifest](acceptance-manifest.json) maps W01–W09 and
 V01–V10 to named executable owning-layer/joined tests. Its

@@ -58,8 +58,14 @@ No merge is authorized. Changed source invalidates the older shipping ELF and
 any hardware measurement; only unchanged program/browser source retains its
 own separately identified prior test receipts.
 
-Next: finish review-fix verification/publication, then obtain a fresh bounded
-read-only G05 run manifest. Review/CI and live acceptance remain separate gates.
+Correction application checkpoint `5acf79bd2f931e85325841a06bd87b038cb1cf28`
+passes the full pinned offline host suite and exact-source ARM64 package check.
+The detailed receipt is in the P23 log below; this documentation-only successor
+does not change the tested application. Verify the published head/base and new
+hosted CI independently; the PR description carries that publication receipt.
+
+Next: review the correction's hosted checks and review disposition, then obtain
+a fresh bounded read-only G05 run manifest. Live acceptance remains separate.
 Authentic native setup/credit/payment/cut/funding remain independently gated;
 shipping validation still refuses trading/funding and API risk admission is
 disabled. Local preparation is not P23 live acceptance or phase closure. No AWS,
@@ -2453,8 +2459,37 @@ and recheck lease/time afterward. Poll cadence starts after I/O, leaving a full
 service interval instead of continuous slow polling. Continued contention returns
 an error; this is bounded backpressure, not async I/O or concurrent journal writes.
 No on-chain/client/dependency changes or financial activation are introduced.
-Verification/publication: pending the final correction-source gate receipt below;
-prior application/ELF results above do not qualify these source changes.
+Verification: exact application checkpoint
+`5acf79bd2f931e85325841a06bd87b038cb1cf28` passes pinned
+`node scripts/check.mjs` with Node 24.21.0/Rust 1.97.1,
+`CARGO_INCREMENTAL=0`, `CARGO_PROFILE_DEV_DEBUG=0` and
+`CARGO_PROFILE_TEST_DEBUG=0`: 42 contracts/inventory guards, workspace/dependency
+boundaries, formatting, both strict Clippy modes/all-target build, all-feature
+debug/release and shipping-default regressions, 12 relay and 24 SDK process cases.
+The all-feature service suite has 86 cases, including the new joined/controller
+and lock-wait regressions. Log: `/private/tmp/cinder-p23-review-final-offline.log`.
+An initial new restart test reused time 100 after committing the closure at 10000;
+the monotonic-history check correctly refused. The fixture was corrected without
+weakening the production guard. Final checked suites all pass.
+
+Exact-source `git archive` packaging passes with Apple container's cached
+tool-only image `cinder-ci-arm64:check` (index SHA-256
+`33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`),
+source/vendor read-only, network disabled and no NSM/git/work/credential mounts.
+`tools/nitro-runtime/package-check.sh` builds all seven default-feature tools,
+independently recompiles the enclave to an identical ELF, and verifies ordinary
+host boot refuses without public stdout. New enclave SHA-256:
+`0f5da0b061380ad16d1e139765b505ee3d6e3cdf94fc9195b5dc50975d8a1ff1`.
+Bundle: `/private/tmp/cinder-p23-review-arm64.jvrOvc/artifacts/bundle`;
+log: `/private/tmp/cinder-p23-review-arm64.log`. The disposable container was
+removed; the pre-existing stopped builder was preserved. This is not a Nitro
+EIF/PCR/hardware receipt. Program/client/browser owning sources are unchanged;
+their prior separately identified receipts are not relabeled as new runs.
+
+Publication: same ready/open #55 via native stack submission. Exact published
+head/base and current hosted/review status belong in the PR description and must
+be verified after push. New-head CI is pending, not inherited from `d26945f`.
+No merge, AWS, RPC/venue request, wallet, funding or deployment occurred.
 
 Work: started on `tee/p23-live-qualification` from merged trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091`. Audited shipping production connections and current primary venue docs; added bounded native GET composition over the existing Gateway budget, encrypted TLS egress and observation journal, plus regression tests and the G05 runbook. No live capability is enabled; no new dependency, custody policy or economic promise is selected.
 Verification: full pinned `node scripts/check.mjs` passes on 2026-10-06 for source checkpoint `33e13646cee84be8874d01bd676bd95a518a7bb7`: 42 contracts/inventory guards, dependency boundaries, default/all-feature Clippy, all-target build, all-feature debug/release and shipping-default suites, 12 relay and 24 SDK tests. All 10 new read cases pass in each Rust profile; GET framing and authenticated GET/POST root/hostname/time negatives pass. Logs retained at `/private/tmp/cinder-p23-offline.H7uWbj/check.log`. No new SBF/browser/ARM-container/hardware/devnet/live venue run is claimed; hosted checks/reviews for the new PR remain pending. This documentation-only publication receipt is not a new application/hardware result. No program/client wire/dependency/feature changes occurred.
