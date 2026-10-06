@@ -2336,6 +2336,7 @@ User-authorized, exact-head-guarded squash merge is independently verified at
 This local documentation receipt is reserved for the next authorized PR. No
 unreviewed trunk push, deployment or P23 work occurs.
 
+<a id="p23--live-integration-qualification"></a>
 ## P23 — Live integration qualification
 
 Local continuation: added purpose-separated confidential chain ports and original
@@ -2422,6 +2423,15 @@ documentation-only successor records these checked sources and the same draft's
 PR description records its independently verified publication head/base. Final
 documentation contracts/inventory/workspace and whitespace guards pass. No new
 head's hosted checks or CodeRabbit review are inferred from the earlier green head.
+
+Publication receipt: native `gh stack submit --auto` updated only draft #55,
+`tee/p23-live-qualification` → `product/tee-v1`; the independently verified
+published evidence head was `ed5c8abefb357a08832413c52f986595664e6ca5`.
+New-head hosted checks were queued, not passed. Final documentation validation
+caught a missing explicit anchor in the new receipt link. This successor adds
+that anchor and reruns the full documentation/contract guard group before push;
+the earlier failed log is `/private/tmp/cinder-p23-local-docs-anchor-failure.log`.
+Application/program/client sources and all their test receipts are unchanged.
 
 Prior hosted PR #55 head `11c864626e2e1840f1475f1f5a8d721b166f70c9` had all seven
 checks plus CodeRabbit green and no review threads; those results do not qualify
