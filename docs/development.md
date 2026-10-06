@@ -30,9 +30,11 @@ node scripts/check.mjs
 ```
 
 The runner fails on a wrong Node/Rust version. It validates docs and package edges,
-runs script regressions, formatting, Clippy, build, debug/release Rust tests and
-strict TypeScript/private SDK tests. The client has no runtime npm dependencies.
-The same command runs in CI. For focused property-harness work:
+runs script regressions, formatting, Clippy, build, all-feature debug/release Rust
+tests, shipping-default Rust tests and strict TypeScript/private SDK tests.
+The client has no runtime npm dependencies. CI uses independent groups of this
+same entrypoint; all groups still run with the no-argument local command.
+For focused property-harness work:
 
 ```sh
 node scripts/check.mjs --properties
@@ -200,11 +202,74 @@ the container. This is native ARM64 harness evidence, not an enclave image recip
 
 ## Checks and review
 
-`Plan and handoff consistency` and `Offline Rust workspace` are the intended TEE
-checks. Hosting a workflow does not enforce branch protection; inspect repository
-rules before asserting a merge gate is configured. Vercel's legacy website preview
-is not a financial-runtime check. Keep its result visible and request scoped
-integration settings instead of fabricating a website on this branch.
+Seven offline checks cover the maintained product sources:
+
+| Check | Coverage / local entrypoint |
+| --- | --- |
+| Offline contracts and test inventory | Plan, manifest, dependency and boundary regressions; `node scripts/check.mjs --group=contracts` |
+| Offline Rust lint and build | rustfmt, default/all-feature Clippy and all-target build; `--group=lint` |
+| Offline Rust regressions | All-feature debug/release and shipping-default tests; `--group=rust` |
+| Offline SDK and relay regressions | Strict TypeScript, private SDK/TLS and relay tests; `--group=client` |
+| Offline browser channel qualification | Shared native/WASM core and actual Node/Chrome SDK workflows; `node tools/web-channel/check.mjs` |
+| Offline Anchor vault (SBF + Surfpool) | Locked SBF/IDL and signed localhost transaction workflows; `node scripts/check-vault.mjs` |
+| Offline ARM64 default-feature package | Release executables, application-crate ELF reproducibility and non-Nitro boot refusal; `tools/nitro-runtime/package-check.sh` in isolated ARM64 Linux |
+
+The workspace matrix has `fail-fast: false`; lint, Rust and SDK/relay results do
+not depend on another group's success. Each Rust profile uses `--no-fail-fast`,
+and later profiles still run when an earlier profile fails.
+The independent SDK group explicitly builds its service, opaque relay, fixture
+verifier and production verifier. Its entrypoint checks that all four are
+executable before starting any fixture; it never relies on the lint job or a
+cached application binary to supply prerequisites.
+
+`scripts/test-inventory.mjs` discovers `.test.*` files under the maintained source
+roots and assigns every file to exactly one Node suite. An unassigned test or
+empty suite fails instead of silently disappearing from a hard-coded file list.
+Research, generated output and dependency caches are not product test sources.
+Rust Cargo workspaces discover their own tests, including integration binaries.
+The shared runner requires successful execution of the named acceptance cases,
+not merely their declaration. Node skip/todo and unexpected Rust ignores fail.
+The exact Rust exception list contains seven actual-hardware probes and three
+crash workers that their parent tests invoke; it does not claim those probes ran.
+Node and Chrome must both complete the shared HTTP/WebSocket entrypoints.
+Focused vault flags still qualify only the selected lifecycle, not the full suite.
+
+The ARM64 package check uses the pinned public-toolchain image and an exact
+committed source export with read-only vendor/source mounts and no network.
+It does not run AWS, generate an EIF, deploy anything or qualify Nitro hardware.
+Setup downloads toolchains and locked public dependencies before offline checks.
+
+### CI caching
+
+Every build job caches dependency intermediates; the metadata-only job caches
+Cargo downloads without a target directory. Pinned `rust-cache` keys separate
+runner OS/architecture, Rust compiler, Cargo manifests/locks, compiler settings
+and job/profile purpose. Root, isolated WASM and Solana workspaces have explicit
+targets. Workspace crates and executable outputs are excluded from saved Rust
+caches. Incremental compilation and dev/test debug symbols are disabled to keep
+builds and caches smaller; release settings are unchanged.
+
+Node jobs cache npm's downloaded packages, keyed by their exact lockfiles; they
+still run `npm ci`, never restore `node_modules`. Pinned Anchor/Surfpool/Agave and
+wasm-bindgen downloads are cached separately and checksum-verified on **every**
+restore. The SBF 1.52 toolchain has its own exact OS/architecture/version key.
+The ARM64 tool-only image uses BuildKit's GitHub cache. Its isolated Cargo target
+is separately keyed by the pinned image recipe, vendor configuration and package
+check script; the application crate is cleaned before the first package build
+and again before the ELF reproducibility comparison, even on a cache hit.
+
+Cache misses are normal: hydration and every build/check/test command still run.
+Only downloads or dependency compilation may be reused, not test receipts, IDLs,
+fixture journals, provisioning, wallets, credentials or research. GitHub's cache
+scope limits reuse to eligible base/branch/PR caches; caches are an optimization,
+not a source of qualification evidence. Hosted cold/warm timings must be measured
+before claiming a speedup. All cache actions are pinned to immutable revisions.
+
+Hosting these workflows does not enforce branch protection; inspect repository
+rules before asserting a merge gate is configured. Branch rules, uploaded reports,
+coverage percentages and dependency-advisory gates are separate work,
+not part of this CI follow-up. Vercel's legacy website preview is not a financial-
+runtime check. Keep its result visible without fabricating a website on this branch.
 
 Before push: run the pinned checks, inspect the explicit staged diff for private
 material, update the phase handoff and verify a clean export without `work/`.

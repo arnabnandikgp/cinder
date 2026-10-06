@@ -13,6 +13,7 @@ import { build } from 'esbuild';
 import { fixture } from './http-fixture.mjs';
 import { runHttp,runWebsocket } from '../../clients/private/tests/web-suite.ts';
 import { stopChild } from './stop-child.mjs';
+import { qualifyEntries } from '../../scripts/test-runner.mjs';
 
 const dir=fileURLToPath(new URL('.',import.meta.url));
 const chrome=process.env.CINDER_TEST_CHROME??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/google-chrome');
@@ -22,13 +23,12 @@ const core=await import('./pkg/channel.js');
 await core.default({module_or_path:await readFile(join(dir,'pkg/channel_bg.wasm'))});
 const keys=generateKeyPairSync('ed25519');
 const publicKey=new Uint8Array(keys.publicKey.export({format:'der',type:'spki'}).subarray(-32));
-const nodeChecks=[];
-for(const run of [h=>runHttp(core,{publicKey,signMessage:async b=>sign(null,b,keys.privateKey)},h),
-  h=>runHttp(core,{publicKey,signMessage:async b=>sign(null,b,keys.privateKey)},h,'websocket'),
-  h=>runWebsocket(core,{publicKey,signMessage:async b=>sign(null,b,keys.privateKey)},h)]){
+const nodeChecks=[], completed=[];
+for(const [entry,carrier] of [[runHttp,'http'],[runHttp,'websocket'],[runWebsocket,'websocket']]){
   const node=await fixture(publicKey);
-  try{nodeChecks.push(...await run(node));await node.assertPrivate();}finally{await node.close();}
+  try{nodeChecks.push(...await entry(core,{publicKey,signMessage:async b=>sign(null,b,keys.privateKey)},node,carrier));await node.assertPrivate();completed.push(entry.name);}finally{await node.close();}
 }
+qualifyEntries(completed);
 const profile=await mkdtemp(join(tmpdir(),'cinder-http-chrome-'));
 let browserHarness,browser,resultResolve,timer;
 const result=new Promise(resolve=>{resultResolve=resolve;});
@@ -60,6 +60,7 @@ try{
   browser.on('exit',()=>resultResolve({ok:false,error:'Chrome exited before result'}));
   const r=await Promise.race([result,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('HTTP browser test timeout')),60000);})]);
   if(!r.ok||r.checks?.length!==nodeChecks.length)throw Error(r.error??'Incomplete browser HTTP acceptance');
+  qualifyEntries(r.entries??[]);
   await browserHarness.assertPrivate();
   console.log(`Node ${process.version}: ${nodeChecks.length} HTTP/WebSocket/private SDK process groups passed`);
   console.log(`${execFileSync(chrome,['--version'],{encoding:'utf8'}).trim()}: ${r.checks.length} HTTP/WebSocket/private SDK process groups passed`);

@@ -13,15 +13,16 @@ try{
   let current;
   const setup=async()=>{const response=await fetch('/test/setup',{method:'POST',body:publicKey});
     if(!response.ok)throw Error('Browser fixture setup');current=await response.json();};
-  await setup();
   const signer={publicKey,signMessage:async bytes=>new Uint8Array(await crypto.subtle.sign('Ed25519',wallet.privateKey,bytes))};
   const harness={current:()=>current,control:async action=>{
     const response=await fetch('/test/control',{method:'POST',body:action});
     if(!response.ok)throw Error('Browser fixture control');current=await response.json();
   }};
-  const checks=await runHttp(core,signer,harness);await setup();
-  checks.push(...await runHttp(core,signer,harness,'websocket'));await setup();
-  checks.push(...await runWebsocket(core,signer,harness));result={ok:true,checks};
+  const checks=[],entries=[];
+  for(const [entry,carrier] of [[runHttp,'http'],[runHttp,'websocket'],[runWebsocket,'websocket']]){
+    await setup();checks.push(...await entry(core,signer,harness,carrier));entries.push(entry.name);
+  }
+  result={ok:true,checks,entries};
 }catch(error){result={ok:false,error:String(error).slice(0,512)};}
 document.querySelector('#result').textContent=JSON.stringify(result);
 await fetch('/test/result',{method:'POST',body:JSON.stringify(result)});

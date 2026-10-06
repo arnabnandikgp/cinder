@@ -24,9 +24,21 @@ real measured-kernel observation; adding NSM entropy does not qualify other RNGs
 
 `package-check.sh` builds all required parent/operator tools **separately** from
 the enclave rootfs, records ELF/library hashes, rebuilds the application crate
-and compares the two ELF files. It runs in the offline source-only Linux test
-container after `tools/nitro-linux/check.sh`. Copy `/tmp/cinder-bundle` out before
-removing that container. Parent binaries are not included in the measured enclave.
+and compares the two ELF files. It runs standalone in the offline source-only
+ARM64 Linux test container; running the whole Linux Rust suite first is not
+required. `.github/workflows/nitro-package.yml` runs this check on every product
+PR, using a committed source export and locked read-only vendor tree. The check
+rejects a network interface, NSM device, research/git directories or stale bundle
+outputs. An optional `/build-cache` mount reuses dependency compilation only;
+CI's pinned Rust-cache action excludes workspace artifacts before saving. The
+application crate is cleaned before the initial build and again for the
+reproducibility comparison, so a cached application cannot replace either build.
+The cache is keyed separately from host builds by the pinned tool image/vendor
+configuration/package script and Cargo/Rust inputs. CI runs as the runner UID
+so the cache stays writable without a privileged ownership-repair step.
+Copy `/tmp/cinder-bundle` out before removing that container only when
+you need the qualification artifacts; routine CI discards them. Parent binaries
+are not included in the measured enclave.
 The script's ordinary-host boot refusal is not a successful NSM test.
 
 For an OCI build, create a new explicit temporary build context. Populate it only
