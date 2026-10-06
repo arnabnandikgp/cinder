@@ -223,6 +223,8 @@ pub enum Outcome {
     Unknown,
     /// Missing/uncertain final effect or native credit; holds remain.
     Pending,
+    /// Finalized original owner transaction is ineligible; never customer credit.
+    Rejected,
     /// Final physical effects applied to the existing funds lifecycle.
     Settled,
 }
@@ -271,14 +273,26 @@ impl<T: Transport> Port<T> {
         else {
             return Ok(Outcome::Pending);
         };
-        let deposit = chain::inspect_customer_deposit(
+        if tx.meta.get("err") != Some(&serde_json::Value::Null) {
+            return Ok(Outcome::Rejected);
+        }
+        let Ok(deposit) = chain::inspect_customer_deposit(
             funding.route(),
             self.loaded.endpoint.network,
             locator.account,
             locator.operation,
             tx.wire.as_bytes(),
-        )
-        .map_err(|_| Error)?;
+        ) else {
+            return Ok(Outcome::Rejected);
+        };
+        if !crate::customer_deposit::valid_transaction(
+            locator,
+            &deposit,
+            &tx,
+            self.loaded.configuration.limits.maximum_fee_lamports,
+        )? {
+            return Ok(Outcome::Rejected);
+        }
         let d = &self.loaded.configuration.custody;
         let proof = chain_code::verify(
             &mut self.client,
@@ -408,7 +422,16 @@ impl<T: Transport> Port<T> {
     ) -> Result<Outcome, Error> {
         let now = self.clock.now()?;
         let Some(wire) = funding.retained_wire(j, attempt, now).map_err(|_| Error)? else {
-            return Ok(Outcome::Pending);
+            return Ok(
+                if funding
+                    .close_unsent_chain(j, id()?, now, attempt)
+                    .map_err(|_| Error)?
+                {
+                    Outcome::Settled
+                } else {
+                    Outcome::Pending
+                },
+            );
         };
         let contract = funding
             .original_chain_contract(j, attempt, now)

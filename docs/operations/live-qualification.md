@@ -82,8 +82,8 @@ open until actual evidence is recorded.
 | --- | --- |
 | Controller and owner codecs | Four physical rails plus owner deposit, optional CU limit, exact large-u64/signature/ABI vectors independently checked in Rust and Anchor/web3.js |
 | Enclave RPC and receipts | TLS/root/hostname/time/framing negatives; original finalized status/wire, classic SPL/mint/recipient/counter checks; bounded full-code/tail/header stream |
-| Joined durable funds | One authoritative journal; lost ACK/restart preserves original wire without retry; missing history/simulation/fee failure cannot credit; release/return/payout and owner credit exactly once; native debit stays pending |
-| Release and scheduler | Version-1 compatibility, version-2 six-role private preparation, distinct seeds, actual component binding, finite lease/stop, durable read budget/cooldown/revocation |
+| Joined durable funds | One authoritative journal; lost ACK/restart preserves original wire without retry; only verified expired no-wire/no-effect physical plans can release holds; missing history cannot credit; release/return/payout and owner credit exactly once; native debit stays pending; signature lookup is not a complete source cut |
+| Release and scheduler | Version-1 compatibility, exact version-2 six-role capsule coverage, distinct seeds, actual component binding, finite lease/stop, durable read budget/cooldown/revocation, rejection advances deposit polling without hiding other errors, bounded request waiting and post-I/O idle interval |
 | Full host regression | Pinned `node scripts/check.mjs`: contracts, dependencies, strict default/all-feature lint/build, debug/release/default Rust, relay and private SDK |
 | Program and browser | Full `node scripts/check-vault.mjs` with offline Surfpool; actual Node/Chrome/WASM `node tools/web-channel/check.mjs`, no skipped required workflows |
 | Shipping package | Source-only, network-disabled ARM64 default-feature package; independent application rebuild has identical ELF; ordinary non-Nitro boot refuses |

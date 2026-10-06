@@ -15,12 +15,30 @@ use cinder_pacifica::{
     profile::*,
 };
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, sync::Mutex};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
+};
 
 struct Fixed;
 impl Clock for Fixed {
     fn now(&self) -> Result<u64, Error> {
         Ok(100)
+    }
+}
+struct Advancing(AtomicU64);
+impl Clock for Advancing {
+    fn now(&self) -> Result<u64, Error> {
+        Ok(self.0.load(Ordering::SeqCst))
+    }
+}
+struct BrokenClock;
+impl Clock for BrokenClock {
+    fn now(&self) -> Result<u64, Error> {
+        Err(Error)
     }
 }
 fn vector(i: usize) -> Value {
@@ -115,8 +133,8 @@ fn id(n: u8) -> CommitId {
 fn atoms(n: i128) -> QuoteAtoms {
     QuoteAtoms::new(config().quote, n)
 }
-fn tx(
-    j: &support::Store,
+fn tx<B: Backend, P: Protection>(
+    j: &Journal<B, P>,
     n: u8,
     events: Vec<(Location, Change)>,
     controls: Vec<Control>,
@@ -160,12 +178,16 @@ fn tx(
     }
 }
 fn setup(temp: &support::Temp) -> (support::Store, Controller) {
-    let mut j = Journal::create(
-        SqliteBackend::create(&temp.db).unwrap(),
-        support::FixtureProtection,
-        config(),
+    seed(
+        Journal::create(
+            SqliteBackend::create(&temp.db).unwrap(),
+            support::FixtureProtection,
+            config(),
+        )
+        .unwrap(),
     )
-    .unwrap();
+}
+fn seed<B: Backend, P: Protection>(mut j: Journal<B, P>) -> (Journal<B, P>, Controller) {
     let c = controller();
     let t = tx(
         &j,
@@ -257,7 +279,7 @@ fn setup(temp: &support::Temp) -> (support::Store, Controller) {
     );
     (j, c)
 }
-fn prepare(j: &mut support::Store, n: u8, rail: Rail) {
+fn prepare<B: Backend, P: Protection>(j: &mut Journal<B, P>, n: u8, rail: Rail) {
     let (source, destination) = match rail {
         Rail::Release => (Location::Vault, Destination::Location(Location::Broker)),
         Rail::Deposit => (Location::Broker, Destination::Location(Location::Venue)),
@@ -314,6 +336,9 @@ struct Rpc {
     missing: bool,
     bad_deposit: bool,
     frozen: bool,
+    failed_deposit: bool,
+    fail_rpc: bool,
+    bad_deltas: bool,
 }
 #[derive(Clone)]
 struct Fake(Arc<Mutex<Rpc>>);
@@ -383,6 +408,9 @@ fn fake(n: u8) -> Fake {
         missing: false,
         bad_deposit: false,
         frozen: false,
+        failed_deposit: false,
+        fail_rpc: false,
+        bad_deltas: false,
     })))
 }
 impl Transport for Fake {
@@ -390,6 +418,9 @@ impl Transport for Fake {
         let r: Value = serde_json::from_slice(body.as_bytes()).unwrap();
         let mut s = self.0.lock().unwrap();
         s.requests.push(r.clone());
+        if s.fail_rpc {
+            return Err(Error);
+        }
         let result = match r["method"].as_str().unwrap() {
             "getGenesisHash" => json!(chain::address([1; 32])),
             "getSlot" => json!(200),
@@ -415,10 +446,24 @@ impl Transport for Fake {
                 json!(chain::signature(sig))
             }
             "getSignatureStatuses" => {
-                json!({"context":{"slot":201},"value":[if s.missing{Value::Null}else{json!({"slot":200,"confirmations":null,"err":null,"confirmationStatus":"finalized"})}]})
+                json!({"context":{"slot":201},"value":[if s.missing{Value::Null}else{json!({"slot":200,"confirmations":null,"err":if s.failed_deposit {json!({"InstructionError":[0,{"Custom":1}]})} else {Value::Null},"confirmationStatus":"finalized"})}]})
             }
             "getTransaction" => {
                 let w = s.wire.clone().unwrap();
+                if s.failed_deposit {
+                    let result = json!({"slot":200,"version":"legacy","transaction":[STANDARD.encode(w),"base64"],"meta":{"err":{"InstructionError":[0,{"Custom":1}]},"fee":5000}});
+                    return Ok(Response {
+                        status: 200,
+                        at: 100,
+                        body: PrivateBytes::new(
+                            serde_json::to_vec(
+                                &json!({"jsonrpc":"2.0","id":r["id"],"result":result}),
+                            )
+                            .unwrap(),
+                        )
+                        .unwrap(),
+                    });
+                }
                 let c = if let Some(contract) = &s.contract {
                     chain_receipt::tests::fixture_from(contract.clone(), s.attempt, w.clone())
                 } else {
@@ -451,7 +496,7 @@ impl Transport for Fake {
                     }
                     s.accounts.insert(a.key, account_json(&a));
                 }
-                json!({"slot":200,"version":"legacy","transaction":[STANDARD.encode(w),"base64"],"meta":{"err":null,"fee":5000,"preTokenBalances":c.tx.meta["preTokenBalances"],"postTokenBalances":c.tx.meta["postTokenBalances"]}})
+                json!({"slot":200,"version":"legacy","transaction":[STANDARD.encode(w),"base64"],"meta":{"err":null,"fee":s.fee,"preTokenBalances":c.tx.meta["preTokenBalances"],"postTokenBalances":if s.bad_deltas {json!([])} else {c.tx.meta["postTokenBalances"].clone()}}})
             }
             "getMultipleAccounts" => {
                 let values = r["params"][0]
@@ -615,6 +660,7 @@ fn customer_deposit_original_receipt_credits_once_without_seeded_customer_funds(
         .event
         .as_ref()
         .unwrap();
+    assert_eq!(j.transactions().next().unwrap().inputs[0].source_cut, None);
     assert!(
         matches!(event.change, Change::Receipt { owner:Owner::Customer(a), amount,.. } if a==support::user(1) && amount.atoms()==9007199254740993)
     );
@@ -668,6 +714,238 @@ fn customer_deposit_missing_history_and_bad_receipt_never_credit() {
         assert_eq!(j.state().unwrap(), &before);
         assert_eq!(j.transactions().count(), 0);
     }
+}
+#[test]
+fn rejected_deposit_poll_advances_to_valid_locator_without_crediting_failure() {
+    let temp = support::Temp::new();
+    let mut j = Journal::create(
+        SqliteBackend::create(&temp.db).unwrap(),
+        support::FixtureProtection,
+        config(),
+    )
+    .unwrap();
+    let c = controller();
+    let f = fake(10);
+    let original = deposit(&f, &c);
+    let valid = original.loaded.configuration.deposits[0].clone();
+    let wire = f.0.lock().unwrap().wire.clone().unwrap();
+    let mut failed = wire.clone();
+    failed[1..65].fill(5);
+    let rejected = crate::customer_deposit::Locator {
+        account: [1; 32],
+        operation: [42; 32],
+        signature: failed[1..65].to_vec(),
+    };
+    let mut p = loaded(&c, vec![rejected, valid])
+        .with_transport(f.clone(), Arc::new(Fixed))
+        .unwrap();
+    {
+        let mut r = f.0.lock().unwrap();
+        r.wire = Some(failed);
+        r.failed_deposit = true;
+    }
+    let before = j.state().unwrap().clone();
+    let mut index = 0;
+    crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).unwrap();
+    assert_eq!(index, 1);
+    assert_eq!(j.state().unwrap(), &before);
+    assert_eq!(j.transactions().count(), 0);
+    assert!(
+        f.0.lock()
+            .unwrap()
+            .requests
+            .iter()
+            .all(|r| r["method"] != "getMultipleAccounts")
+    );
+    {
+        let mut r = f.0.lock().unwrap();
+        r.wire = Some(wire);
+        r.failed_deposit = false;
+    }
+    crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).unwrap();
+    assert_eq!(index, 0);
+    assert_eq!(j.transactions().count(), 1);
+    assert!(!j.state().unwrap().native_funding_ready());
+}
+#[test]
+fn immutable_deposit_ineligibility_is_rejected_but_port_and_current_receipt_errors_propagate() {
+    for case in 0..5 {
+        let temp = support::Temp::new();
+        let mut j = Journal::create(
+            SqliteBackend::create(&temp.db).unwrap(),
+            support::FixtureProtection,
+            config(),
+        )
+        .unwrap();
+        let c = controller();
+        let f = fake(10);
+        let mut p = deposit(&f, &c);
+        {
+            let mut r = f.0.lock().unwrap();
+            match case {
+                0 => r.fee = 6001,
+                1 => r.bad_deltas = true,
+                2 => r.fail_rpc = true,
+                3 => r.bad_deposit = true,
+                _ => p.clock = Arc::new(BrokenClock),
+            }
+        }
+        let state = j.state().unwrap().clone();
+        let mut index = 0;
+        if case < 2 {
+            assert!(p.observe_deposit(&mut j, &c, 0).unwrap() == Outcome::Rejected);
+            crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).unwrap();
+        } else {
+            assert!(crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).is_err());
+        }
+        assert_eq!(index, 0);
+        assert_eq!(j.state().unwrap(), &state);
+        assert_eq!(j.transactions().count(), 0);
+    }
+}
+#[derive(Default)]
+struct StorageFault {
+    countdown: AtomicU64,
+    durable: AtomicBool,
+    fenced: AtomicBool,
+}
+struct Guarded {
+    inner: SqliteBackend,
+    fault: Arc<StorageFault>,
+}
+impl Backend for Guarded {
+    fn load(&mut self) -> Result<Vec<cinder_journal::Frame>, cinder_journal::Error> {
+        self.inner.load()
+    }
+    fn append(
+        &mut self,
+        expected: Option<cinder_journal::Head>,
+        frame: &cinder_journal::Frame,
+    ) -> Result<(), cinder_journal::Error> {
+        let remaining = self.fault.countdown.load(Ordering::SeqCst);
+        if remaining > 0 {
+            self.fault.countdown.fetch_sub(1, Ordering::SeqCst);
+        }
+        if remaining == 1 {
+            if self.fault.durable.load(Ordering::SeqCst) {
+                self.inner.append(expected, frame)?;
+            }
+            return Err(cinder_journal::Error::Storage);
+        }
+        self.inner.append(expected, frame)
+    }
+    fn check_current(
+        &mut self,
+        expected: cinder_journal::Head,
+    ) -> Result<(), cinder_journal::Error> {
+        if self.fault.fenced.load(Ordering::SeqCst) {
+            return Err(cinder_journal::Error::Stale);
+        }
+        self.inner.check_current(expected)
+    }
+}
+#[test]
+fn wire_persistence_failure_requires_verified_restart_and_retained_wire_never_closes_unsent() {
+    for durable in [false, true] {
+        let temp = support::Temp::new();
+        let fault = Arc::new(StorageFault::default());
+        let (mut j, c) = seed(
+            Journal::create(
+                Guarded {
+                    inner: SqliteBackend::create(&temp.db).unwrap(),
+                    fault: fault.clone(),
+                },
+                support::FixtureProtection,
+                config(),
+            )
+            .unwrap(),
+        );
+        prepare(&mut j, 10, Rail::Release);
+        let ledger = j.state().unwrap().ledger().clone();
+        let f = fake(10);
+        let mut p = port(&c, &f);
+        fault.durable.store(durable, Ordering::SeqCst);
+        // First append exposes the plan; second retains the signed wire.
+        fault.countdown.store(2, Ordering::SeqCst);
+        assert!(p.issue(&mut j, &c, support::attempt(10)).is_err());
+        assert!(j.state().is_err());
+        assert!(
+            c.close_unsent_chain(&mut j, id(50), 10_000, support::attempt(10))
+                .is_err()
+        );
+        assert!(
+            f.0.lock()
+                .unwrap()
+                .requests
+                .iter()
+                .all(|r| r["method"] != "sendTransaction")
+        );
+        drop(j);
+        let mut j = Journal::open(
+            Guarded {
+                inner: SqliteBackend::open(&temp.db, Migration::None).unwrap(),
+                fault: fault.clone(),
+            },
+            support::FixtureProtection,
+            config(),
+        )
+        .unwrap();
+        assert_eq!(
+            c.retained_wire(&mut j, support::attempt(10), 10_000)
+                .unwrap()
+                .is_some(),
+            durable
+        );
+        assert_eq!(
+            c.close_unsent_chain(&mut j, id(50), 10_000, support::attempt(10))
+                .unwrap(),
+            !durable
+        );
+        assert_eq!(j.state().unwrap().ledger(), &ledger);
+        assert_eq!(
+            j.state()
+                .unwrap()
+                .holds()
+                .iter()
+                .find(|h| h.request == support::attempt(10).request)
+                .unwrap()
+                .active,
+            durable
+        );
+        assert!(p.issue(&mut j, &c, support::attempt(10)).is_err());
+    }
+}
+#[test]
+fn verified_head_failure_fences_deposit_poll_and_unsent_closure() {
+    let temp = support::Temp::new();
+    let fault = Arc::new(StorageFault::default());
+    let (mut j, c) = seed(
+        Journal::create(
+            Guarded {
+                inner: SqliteBackend::create(&temp.db).unwrap(),
+                fault: fault.clone(),
+            },
+            support::FixtureProtection,
+            config(),
+        )
+        .unwrap(),
+    );
+    prepare(&mut j, 10, Rail::Release);
+    let f = fake(10);
+    f.0.lock().unwrap().fail_sim = true;
+    let mut p = port(&c, &f);
+    assert!(p.issue(&mut j, &c, support::attempt(10)).is_err());
+    fault.fenced.store(true, Ordering::SeqCst);
+    assert!(
+        c.close_unsent_chain(&mut j, id(50), 10_000, support::attempt(10))
+            .is_err()
+    );
+    let mut p = deposit(&f, &c);
+    let mut index = 0;
+    let calls = f.0.lock().unwrap().requests.len();
+    assert!(crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).is_err());
+    assert_eq!(index, 0);
+    assert_eq!(f.0.lock().unwrap().requests.len(), calls);
 }
 fn retain(f: &Fake, j: &mut support::Store, c: &Controller, n: u8) {
     f.0.lock().unwrap().contract = Some(
@@ -747,7 +1025,11 @@ fn failed_simulation_or_excess_fee_exposes_no_signed_wire_and_no_delivery() {
                 s.fee = 6001;
             }
         }
-        let mut p = port(&c, &f);
+        let clock = Arc::new(Advancing(AtomicU64::new(100)));
+        let mut p = loaded(&c, vec![])
+            .with_transport(f.clone(), clock.clone())
+            .unwrap();
+        let ledger = j.state().unwrap().ledger().clone();
         assert!(p.issue(&mut j, &c, support::attempt(10)).is_err());
         assert!(
             c.retained_wire(&mut j, support::attempt(10), 100)
@@ -755,6 +1037,63 @@ fn failed_simulation_or_excess_fee_exposes_no_signed_wire_and_no_delivery() {
                 .is_none()
         );
         assert!(p.reconcile(&mut j, &c, support::attempt(10)).unwrap() == Outcome::Pending);
+        assert!(
+            j.state()
+                .unwrap()
+                .holds()
+                .iter()
+                .find(|h| h.request == support::attempt(10).request)
+                .unwrap()
+                .active
+        );
+        let calls = f.0.lock().unwrap().requests.len();
+        clock.0.store(10_000, Ordering::SeqCst);
+        assert!(p.reconcile(&mut j, &c, support::attempt(10)).unwrap() == Outcome::Settled);
+        let state = j.state().unwrap().clone();
+        assert_eq!(state.ledger(), &ledger);
+        assert!(
+            state
+                .funds()
+                .iter()
+                .find(|o| o.attempt == Some(support::attempt(10)))
+                .unwrap()
+                .terminal
+        );
+        assert!(
+            !state
+                .holds()
+                .iter()
+                .find(|h| h.request == support::attempt(10).request)
+                .unwrap()
+                .active
+        );
+        assert!(
+            state
+                .attempts()
+                .iter()
+                .find(|a| a.key == support::attempt(10))
+                .unwrap()
+                .possibly_exposed
+        );
+        assert_eq!(f.0.lock().unwrap().requests.len(), calls);
+        drop(j);
+        let mut j = Journal::open(
+            SqliteBackend::open(&temp.db, Migration::None).unwrap(),
+            support::FixtureProtection,
+            config(),
+        )
+        .unwrap();
+        assert_eq!(j.state().unwrap(), &state);
+        assert!(p.reconcile(&mut j, &c, support::attempt(10)).unwrap() == Outcome::Settled);
+        assert_eq!(j.state().unwrap(), &state);
+        assert!(p.issue(&mut j, &c, support::attempt(10)).is_err());
+        assert_eq!(f.0.lock().unwrap().requests.len(), calls);
+        assert!(
+            c.retained_wire(&mut j, support::attempt(10), 10_000)
+                .unwrap()
+                .is_none()
+        );
+        assert!(p.reconcile(&mut j, &c, support::attempt(10)).unwrap() == Outcome::Settled);
         assert!(
             f.0.lock()
                 .unwrap()
@@ -779,6 +1118,11 @@ fn finalized_missing_history_keeps_original_reservation_and_cannot_retry() {
     assert!(p.reconcile(&mut j, &c, support::attempt(10)).unwrap() == Outcome::Pending);
     assert_eq!(j.state().unwrap(), &state);
     assert!(p.issue(&mut j, &c, support::attempt(10)).is_err());
+    assert!(
+        !c.close_unsent_chain(&mut j, id(50), 10_000, support::attempt(10))
+            .unwrap()
+    );
+    assert_eq!(j.state().unwrap(), &state);
 }
 #[test]
 fn release_return_and_registered_payout_join_one_ledger_but_native_deposit_is_only_a_debit() {

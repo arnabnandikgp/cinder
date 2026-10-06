@@ -24,6 +24,16 @@ exposes a signed replacement. After possible exposure, reconciliation uses the
 retained original contract/signature/wire; it never obtains another blockhash,
 signs a replacement or resubmits. Missing/pruned/nonfinal history remains pending.
 
+An expired exposed **physical** plan with no retained wire can close as no-effect
+only from freshly verified journal history, with no recorded movement/effect and
+no contradictory terminal evidence. Closure atomically retains its reason and
+zero-effect proof, finalizes the operation and releases its hold; identity and
+exposure history remain. No wire means no submission capability was released.
+A retained wire, uncertain commit/freshness, or native HTTP withdrawal cannot
+use this rule. Reopening verifies the accepted head before deciding whether a
+failed wire append was absent or actually durable. No effect does not enable
+native credit or fabricate assets.
+
 | Rail | Signing purpose | Settlement evidence |
 | --- | --- | --- |
 | Vault release | Separate `Funds` seed | Original finalized transaction, exact debit/credit and permanent P15 movement receipt |
@@ -84,6 +94,12 @@ receipt and customer counter. Only then is one customer receipt normalized into
 the same Vault source/journal. Domain-bound identity and retained applied outcome
 make repeated polls/restarts credit once without another request.
 
+A finalized failed/ineligible original transaction returns `Rejected`, so the
+round-robin observer advances without credit and later locators still run.
+RPC, clock, current code/account, and journal failures remain errors and fence
+the worker. An individual signature lookup supplies no complete Vault source cut;
+its receipt has `source_cut = None`, even when the transaction is finalized.
+
 Customer deposits are public Solana transfers. Confidentiality protects private
 accounting and enclave signing, not transfer addresses or amounts. Neither the
 deposit locator nor a successful vault receipt qualifies native venue credit.
@@ -98,6 +114,9 @@ release and runtime construction. The funds public key must match the configured
 vault authority. Actually consumed chain policy/key identity contributes to the
 application commitment; a caller's hash or `approved` boolean cannot substitute.
 Recipient-KMS's 4-KiB plaintext limit remains enforced.
+Before any recipient release, capsules must cover exactly the measured manifest's
+distinct role set: five for version 1, six for version 2; missing, duplicate,
+foreign, empty or oversized capsules refuse.
 
 Version 2 may enable **read-only** native/chain qualification. Each scheduler cut
 uses the finite NSM-clock lease and independent witness-backed journal; it resumes
@@ -105,6 +124,11 @@ durable read credits without resetting/reviving a revoked trading epoch. Account
 reads and diagnostics share the existing credit/cooldown/cleanup budget. It may
 observe one configured owner deposit per cadence. Every egress/signing step
 rechecks the finite lease and sticky stop flag.
+SDK requests wait at most 250 ms for the authoritative runtime lock, then return
+an error on continued contention; they recheck lease and authentication time
+after acquisition. Slow polls retain a full configured idle interval afterward,
+avoiding continuous polling that starves requests. This is bounded backpressure,
+not concurrent journal mutation or an asynchronous network scheduler.
 
 The shipping manifest still rejects trading/funding activation, and API risk
 admission remains disabled. Scheduler branches for existing admitted mandates

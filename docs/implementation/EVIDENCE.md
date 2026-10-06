@@ -53,13 +53,17 @@ sources and remaining causal/funding/cut gates live in the
 [runbook](../operations/live-qualification.md). Exact final local/hardware results
 are recorded in TRACKER, not inferred from this promotion register.
 
-Final local application checkpoint `33dae28b2c3846d9956a7e906f5663d78d93cd76`
+Pre-review local application checkpoint `33dae28b2c3846d9956a7e906f5663d78d93cd76`
 passes the fixed host and exact-source ARM64 shipping gates; the unchanged
 program/browser owning sources retain the 59/59 SBF and actual Node/Chrome/WASM
 receipts. Completed original receipts survive a later one-way freeze, while new
 old-epoch actions stay fenced. See [the P23 receipt](TRACKER.md#p23--live-integration-qualification)
 for commands, logs, exact artifacts, counterexamples and current live blockers.
 No historical experiment authority or injected native completion was promoted.
+Subsequent PR #55 corrections qualify exact role coverage, rejected-deposit
+progress, verified expired no-wire closure, absence of unsupported source cuts
+and bounded lock backpressure. They require new host/ARM application evidence;
+the old ELF is not the current image. TRACKER records their exact gate receipt.
 
 P22's [tracked acceptance manifest](acceptance-manifest.json) maps W01–W09 and
 V01–V10 to named executable owning-layer/joined tests. Its

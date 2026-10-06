@@ -97,6 +97,47 @@ pub(crate) fn recorded<B: Backend, P: Protection>(
     }
     Ok(true)
 }
+/// Immutable original-transaction eligibility, separate from current account/code
+/// reads and persistence. Ineligibility cannot be repaired by polling this signature.
+pub(crate) fn valid_transaction(
+    locator: &Locator,
+    deposit: &CustomerDeposit,
+    tx: &Finalized,
+    maximum_fee: u64,
+) -> Result<bool, Error> {
+    let signature = locator.validate()?;
+    if maximum_fee == 0 {
+        return Err(Error);
+    }
+    let t = deposit.target();
+    if deposit.account() != locator.account
+        || tx.network != t.network
+        || tx.slot == 0
+        || tx.wire.as_bytes() != t.verified.wire.as_bytes()
+        || signature != t.verified.signature
+        || tx.meta.get("err") != Some(&serde_json::Value::Null)
+        || tx.fee_lamports > maximum_fee
+        || t.operation != locator.operation
+    {
+        return Ok(false);
+    }
+    let deltas = || -> Result<bool, Error> {
+        let pre = &tx.meta["preTokenBalances"];
+        let post = &tx.meta["postTokenBalances"];
+        Ok(
+            receipt::balance(pre, t, t.source, t.source_owner)?.checked_sub(receipt::balance(
+                post,
+                t,
+                t.source,
+                t.source_owner,
+            )?) == Some(t.amount)
+                && receipt::balance(post, t, t.destination, t.destination_owner)?.checked_sub(
+                    receipt::balance(pre, t, t.destination, t.destination_owner)?,
+                ) == Some(t.amount),
+        )
+    };
+    Ok(deltas().unwrap_or(false))
+}
 /// Post one authenticated P15 deposit through the existing normalization rules.
 /// No native credit, API permission or wallet signing is created. Aggregate token
 /// balances cannot substitute for original transaction deltas and immutable receipt.
@@ -111,6 +152,9 @@ pub fn recognize<B: Backend, P: Protection>(
     code: chain_code::Verified,
     maximum_fee: u64,
 ) -> Result<(), Error> {
+    if !valid_transaction(locator, &deposit, &tx, maximum_fee)? {
+        return Err(Error);
+    }
     let account = deposit.account();
     let t = deposit.into_target();
     let domain = journal.configuration().domain;
@@ -141,20 +185,6 @@ pub fn recognize<B: Backend, P: Protection>(
         t.destination_owner,
     )?;
     receipt::config(receipt::get(&accounts, t.config)?, &t)?;
-    let pre = &tx.meta["preTokenBalances"];
-    let post = &tx.meta["postTokenBalances"];
-    if receipt::balance(pre, &t, t.source, t.source_owner)?.checked_sub(receipt::balance(
-        post,
-        &t,
-        t.source,
-        t.source_owner,
-    )?) != Some(t.amount)
-        || receipt::balance(post, &t, t.destination, t.destination_owner)?.checked_sub(
-            receipt::balance(pre, &t, t.destination, t.destination_owner)?,
-        ) != Some(t.amount)
-    {
-        return Err(Error);
-    }
     let movement = receipt::discriminated(
         receipt::get(&accounts, t.receipt.ok_or(Error)?)?,
         t.program,
@@ -204,7 +234,8 @@ pub fn recognize<B: Backend, P: Protection>(
     let raw=PrivateBytes::new(serde_json::to_vec(&serde_json::json!({"schema":"cinder-customer-vault-deposit-v1","locator":locator,"transaction":serde_json::from_slice::<serde_json::Value>(tx.raw.as_bytes()).map_err(|_|Error)?,"accounts":serde_json::from_slice::<serde_json::Value>(accounts.raw.as_bytes()).map_err(|_|Error)?,"code":code.evidence(),"actual_fee_lamports":tx.fee_lamports})).map_err(|_|Error)?).map_err(|_|Error)?;
     let input = Input {
         source,
-        source_cut: Some(tx.slot),
+        // A signature lookup proves this receipt, not complete Vault history.
+        source_cut: None,
         authority_epoch: t.epoch,
         observed_at: accounts.at,
         raw,

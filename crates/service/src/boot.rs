@@ -446,8 +446,22 @@ fn cms_frame(bytes: &[u8]) -> Result<(), Error> {
     }
     Ok(())
 }
-/// Release each role once to its own fresh recipient inside this measured boot.
-/// Any error discards accumulated material; no cached key or plaintext fallback.
+/// Check exact measured role coverage before any recipient-KMS release.
+fn validate_capsules(manifest: &Manifest, capsules: &[Capsule]) -> Result<(), Error> {
+    if capsules.len() != manifest.slots.len()
+        || capsules.iter().enumerate().any(|(i, c)| {
+            c.ciphertext.is_empty()
+                || c.ciphertext.len() > 6144
+                || capsules[..i].iter().any(|o| o.role == c.role)
+                || !manifest.slots.iter().any(|s| s.role == c.role)
+        })
+    {
+        return Err(Error);
+    }
+    Ok(())
+}
+/// Release each measured role once to its own fresh recipient. Any error discards
+/// accumulated material; no cached key or plaintext fallback.
 pub fn release(
     manifest: &Manifest,
     nsm: Arc<Nsm>,
@@ -459,15 +473,7 @@ pub fn release(
     {
         return Err(Error);
     }
-    if boot.capsules.len() != 5
-        || boot.capsules.iter().enumerate().any(|(i, c)| {
-            c.ciphertext.is_empty()
-                || c.ciphertext.len() > 6144
-                || boot.capsules[..i].iter().any(|o| o.role == c.role)
-        })
-    {
-        return Err(Error);
-    }
+    validate_capsules(manifest, &boot.capsules)?;
     let mut keys = BTreeMap::new();
     for capsule in boot.capsules {
         let slot = manifest
@@ -645,6 +651,42 @@ mod tests {
         });
         m.gates.native_reads = true;
         m.validate().unwrap();
+        // This is the exact pre-KMS guard used by release, not only manifest validation.
+        for manifest in [&old, &m] {
+            let capsules = || {
+                manifest
+                    .slots
+                    .iter()
+                    .map(|s| Capsule {
+                        role: s.role,
+                        ciphertext: vec![1],
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let mut valid = capsules();
+            valid.reverse();
+            validate_capsules(manifest, &valid).unwrap();
+            valid.pop();
+            assert!(validate_capsules(manifest, &valid).is_err());
+            let mut duplicate = capsules();
+            duplicate[1].role = duplicate[0].role;
+            assert!(validate_capsules(manifest, &duplicate).is_err());
+            for bytes in [vec![], vec![1; 6145]] {
+                let mut invalid = capsules();
+                invalid[0].ciphertext = bytes;
+                assert!(validate_capsules(manifest, &invalid).is_err());
+            }
+        }
+        let mut foreign = old
+            .slots
+            .iter()
+            .map(|s| Capsule {
+                role: s.role,
+                ciphertext: vec![1],
+            })
+            .collect::<Vec<_>>();
+        foreign[0].role = Role::Funds;
+        assert!(validate_capsules(&old, &foreign).is_err());
         assert_ne!(m.digest().unwrap(), old.digest().unwrap());
         assert!(m.wrap(Role::Funds, &[6; 32]).unwrap().starts_with(b"CKR2"));
         assert!(old.wrap(Role::Funds, &[6; 32]).is_err());

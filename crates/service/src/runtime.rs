@@ -34,6 +34,50 @@ use std::{
 };
 use zeroize::Zeroizing;
 
+const REQUEST_WAIT: std::time::Duration = std::time::Duration::from_millis(250);
+fn lock_bounded<T>(
+    mutex: &Mutex<T>,
+    timeout: std::time::Duration,
+) -> Result<std::sync::MutexGuard<'_, T>, Error> {
+    let start = std::time::Instant::now();
+    loop {
+        match mutex.try_lock() {
+            Ok(guard) => return Ok(guard),
+            Err(std::sync::TryLockError::Poisoned(_)) => return Err(Error),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                let remaining = timeout.checked_sub(start.elapsed()).ok_or(Error)?;
+                if remaining.is_zero() {
+                    return Err(Error);
+                }
+                std::thread::sleep(remaining.min(std::time::Duration::from_millis(1)));
+                if start.elapsed() >= timeout {
+                    return Err(Error);
+                }
+            }
+        }
+    }
+}
+
+/// A rejected original deposit must not starve subsequent configured locators.
+/// Transport, freshness, current-account and journal failures still fence the worker.
+pub(crate) fn poll_deposit<B: Backend, P: Protection, T: crate::chain_rpc::Transport>(
+    chain: &mut chain_funding::Port<T>,
+    store: &mut Journal<B, P>,
+    funding: &Controller,
+    index: &mut usize,
+) -> Result<(), Error> {
+    let count = chain.deposit_count();
+    if count != 0 {
+        match chain.observe_deposit(store, funding, *index)? {
+            chain_funding::Outcome::Pending
+            | chain_funding::Outcome::Rejected
+            | chain_funding::Outcome::Settled => *index = (*index + 1) % count,
+            _ => return Err(Error),
+        }
+    }
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 /// Confidential account-to-payout/auth owner binding, not a public directory.
@@ -469,13 +513,8 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
             if self.gates.native_reads && now >= *next_poll {
                 let cleanup = state.frozen();
                 let interval = poll_ms.ok_or(Error)?;
-                *next_poll = now.checked_add(interval).ok_or(Error)?;
                 if let Some(chain) = chain.as_mut() {
-                    let count = chain.deposit_count();
-                    if count != 0 {
-                        chain.observe_deposit(store, funding, *deposit_index)?;
-                        *deposit_index = (*deposit_index + 1) % count;
-                    }
+                    poll_deposit(chain, store, funding, deposit_index)?;
                 }
                 if gateway
                     .read_available(store, now, cleanup)
@@ -533,6 +572,9 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                     }
                     *read_kind = (*read_kind + 1) % (kinds.len() + diagnostics.len());
                 }
+                // Keep a request-service interval after slow I/O, rather than
+                // starting the next poll immediately because its start-time cut expired.
+                *next_poll = self.active_time()?.checked_add(interval).ok_or(Error)?;
             }
             if self.gates.funding {
                 let next = store
@@ -627,11 +669,13 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
         now: u64,
     ) -> Result<PrivateBytes, Error> {
         let result = (|| {
+            self.active_time()?;
+            let mut active = lock_bounded(&self.active, REQUEST_WAIT)?;
+            // Waiting cannot reuse an expired lease or pre-wait authentication time.
             let current = self.active_time()?;
             if current < now {
                 return Err(Error);
             }
-            let mut active = self.active.try_lock().map_err(|_| Error)?;
             if active.store.verified_state().is_err() {
                 self.fence();
                 return Err(Error);
@@ -667,6 +711,44 @@ mod initialization_tests {
         fn now(&self) -> Result<u64, Error> {
             self.0
         }
+    }
+    #[test]
+    fn request_wait_is_bounded_and_short_poll_contention_does_not_fail_immediately() {
+        use std::{sync::mpsc, time::Duration};
+        let mutex = Mutex::new(0);
+        std::thread::scope(|scope| {
+            let (ready_tx, ready_rx) = mpsc::channel();
+            let (release_tx, release_rx) = mpsc::channel();
+            let shared = &mutex;
+            scope.spawn(move || {
+                let mut guard = shared.lock().unwrap();
+                ready_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                *guard = 1;
+            });
+            ready_rx.recv().unwrap();
+            assert!(lock_bounded(&mutex, Duration::ZERO).is_err());
+            scope.spawn(move || {
+                std::thread::sleep(Duration::from_millis(20));
+                release_tx.send(()).unwrap();
+            });
+            assert_eq!(*lock_bounded(&mutex, Duration::from_secs(2)).unwrap(), 1);
+        });
+        let held = mutex.lock().unwrap();
+        assert!(lock_bounded(&mutex, Duration::from_millis(5)).is_err());
+        drop(held);
+        std::thread::scope(|scope| {
+            assert!(
+                scope
+                    .spawn(|| {
+                        let _held = mutex.lock().unwrap();
+                        panic!("synthetic poisoned controller");
+                    })
+                    .join()
+                    .is_err()
+            );
+        });
+        assert!(lock_bounded(&mutex, REQUEST_WAIT).is_err());
     }
     #[test]
     fn every_egress_step_rechecks_the_finite_boot_lease_and_stop_flag() {

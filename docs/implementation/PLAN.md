@@ -738,6 +738,12 @@ manifest. Trading/funding admission, authentic native setup/credit/payment/cut
 and precise funding remain independently gated; diagnostics do not qualify them.
 First hardware step is changed-image transport/key/read qualification, not a
 claim of a complete financial live workflow.
+Review corrections also belong to this fixed checklist: release exactly the
+measured role set, continue after ineligible original deposits without hiding
+port/storage failures, close expired unsent physical plans only on verified
+no-wire/no-effect history, and never infer complete source coverage from a
+single transaction lookup. Runtime request waiting and post-I/O poll cadence
+remain bounded. Retained/uncertain sends still require original reconciliation.
 
 - [ ] Deposit, trade lifecycle, funding observations, ordinary return/payout and recovery execute or expose a named blocking capability.
 - [ ] Real process/network faults and credit exhaustion reconcile safely; replay is not reported as a newly observed venue event.

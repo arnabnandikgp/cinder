@@ -374,6 +374,9 @@ enum Record {
         signature: Vec<u8>,
         hash: [u8; 32],
     },
+    Unsent {
+        attempt: Vec<u8>,
+    },
 }
 #[derive(Serialize, Deserialize)]
 struct Archive {
@@ -388,6 +391,7 @@ struct History {
     chains: Vec<(Vec<u8>, Vec<u8>, bool)>,
     final_credits: Vec<Vec<u8>>,
     wires: Vec<(Vec<u8>, Vec<u8>, [u8; 32])>,
+    unsent: Vec<Vec<u8>>,
 }
 /// Derived residual report. Amounts come only from the common ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -661,6 +665,7 @@ impl Controller {
                         continue;
                     }
                     match archive.record {
+                        Record::Unsent { attempt } => result.unsent.push(attempt),
                         Record::Wire {
                             attempt,
                             signature,
@@ -1135,6 +1140,95 @@ impl Controller {
             expires_at: p.expires_at,
             expires_at_slot: p.counters.expires_at_slot,
         })
+    }
+    /// Close an expired physical plan only when verified journal history proves
+    /// no send capability was ever retained. Expiry alone cannot close a retained
+    /// wire, and this rule never applies to native HTTP withdrawals.
+    pub fn close_unsent_chain<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        id: CommitId,
+        at: u64,
+        attempt: AttemptKey,
+    ) -> Result<bool, Error> {
+        let history = self.history(j, at)?;
+        let plans = history
+            .plans
+            .iter()
+            .filter(|p| p.attempt == attempt.encode())
+            .collect::<Vec<_>>();
+        if !history.bound || plans.len() != 1 || plans[0].rail == Rail::Withdraw {
+            return Err(Error::Qualification);
+        }
+        let plan = plans[0];
+        if at < plan.expires_at || history.wires.iter().any(|(a, _, _)| *a == plan.attempt) {
+            return Ok(false);
+        }
+        let state = j.verified_state()?;
+        let operation = state
+            .funds()
+            .iter()
+            .find(|o| o.attempt == Some(attempt))
+            .ok_or(Error::Qualification)?;
+        let movement = state
+            .ledger()
+            .movements()
+            .iter()
+            .find(|m| m.mandate.attempt == attempt)
+            .ok_or(Error::Qualification)?;
+        if operation.faulted
+            || movement.faulted
+            || movement.debit.atoms() != 0
+            || movement.settled.atoms() != 0
+            || !movement.receipts.is_empty()
+            || history.chains.iter().any(|(a, _, _)| *a == plan.attempt)
+            || history.final_credits.contains(&plan.attempt)
+            || operation.proof.as_ref().is_some_and(|p| {
+                p.debit.atoms() != 0
+                    || p.settled.atoms() != 0
+                    || !p.receipts.is_empty()
+                    || !p.coverage.is_empty()
+            })
+        {
+            return Err(Error::Qualification);
+        }
+        if operation.terminal {
+            return if history.unsent.contains(&plan.attempt) {
+                Ok(true)
+            } else {
+                Err(Error::Qualification)
+            };
+        }
+        if !state
+            .attempts()
+            .iter()
+            .any(|a| a.key == attempt && a.kind == AttemptKind::Funds && a.possibly_exposed)
+            || j.transaction(id).is_some()
+        {
+            return Err(Error::Qualification);
+        }
+        let mut tx = self.tx(
+            j,
+            id,
+            at,
+            Record::Unsent {
+                attempt: plan.attempt.clone(),
+            },
+        )?;
+        self.terminal(&mut tx, plan, 0, vec![], vec![])?;
+        tx.funds_observations[0].raw = self.evidence(Record::Unsent {
+            attempt: plan.attempt.clone(),
+        })?;
+        checked(j.commit(tx)?)?;
+        if !j
+            .verified_state()?
+            .funds()
+            .iter()
+            .any(|o| o.attempt == Some(attempt) && o.terminal && !o.faulted)
+        {
+            return Err(Error::Qualification);
+        }
+        Ok(true)
     }
     fn scope(&self, location: Location) -> Result<EventScope, Error> {
         self.profile

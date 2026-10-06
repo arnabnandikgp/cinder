@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55), draft |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-06. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -41,30 +41,25 @@ P23 is authorized and in progress on `tee/p23-live-qualification`, based on
 merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 [Live qualification](../operations/live-qualification.md) and
 [ADR 0024](../architecture/0024-confidential-chain-ports.md) define the fixed
-local checklist and remaining capability gates. Initial application checkpoint
-`1c423c9c6bfaf40d591b2655db7c41881d14639e` connects confidential chain
-codec/signing/RPC, streamed code verification, finalized receipts/counters,
-original owner deposits, six-role private release and finite read-only scheduling.
-Final application checkpoint `33dae28b2c3846d9956a7e906f5663d78d93cd76`
-preserves completed original receipts across the one-way vault freeze without
-allowing new old-epoch actions. All fixed local gates pass: full pinned host,
-actual Node/Chrome/WASM, full serial SBF (59/59), joined chain/freeze regressions
-and exact-source ARM64 shipping/reproducibility/non-Nitro refusal. The unchanged
-program/browser owning sources retain their initial-checkpoint receipts; the
-final host/package checks cover the correction. The P23 entry below records
-commands, bounds, hashes, failure dispositions and test-only trust.
+local checklist and remaining capability gates. The historical pre-review
+application checkpoints and receipts remain in the P23 log below.
 
-Draft [PR #55](https://github.com/arnabnandikgp/cinder/pull/55) remains against
-`product/tee-v1`; no further split, merge or deployment is requested. Its older
-published head `11c864626e2e1840f1475f1f5a8d721b166f70c9` passed all seven hosted
-checks and CodeRabbit with no review threads; old green checks do not cover the
-final source. Its documentation-only successor records completed local evidence
-and passes the documentation guards. The updated draft's publication/head receipt
-belongs in its PR description; verify the remote head equals the local tip before
-live work. No new-head hosted result or independent review is inferred.
+[PR #55](https://github.com/arnabnandikgp/cinder/pull/55) is ready/open against
+`product/tee-v1`, following the user's readiness and review-fix requests. Reviewed
+head `d26945fc7c749dc3f464f720db047ff64a8ee0a2` passed all seven hosted checks;
+CodeRabbit reported three valid issues, and the connector posted two further
+valid issues. Current corrections: exact manifest capsule coverage; rejected
+original deposits advance polling without credit; expired unsent physical plans
+close only from verified no-wire/no-effect history; individual deposit lookups
+claim no complete source cut; requests have bounded lock waiting and polls leave
+a full idle interval. Final correction verification and publication receipts are
+recorded in the P23 log and PR description, not inferred from the older green head.
+No merge is authorized. Changed source invalidates the older shipping ELF and
+any hardware measurement; only unchanged program/browser source retains its
+own separately identified prior test receipts.
 
-Next: obtain the fresh bounded read-only G05 run manifest after this same draft's
-native-stack publication. Review/CI and live acceptance remain separate gates.
+Next: finish review-fix verification/publication, then obtain a fresh bounded
+read-only G05 run manifest. Review/CI and live acceptance remain separate gates.
 Authentic native setup/credit/payment/cut/funding remain independently gated;
 shipping validation still refuses trading/funding and API risk admission is
 disabled. Local preparation is not P23 live acceptance or phase closure. No AWS,
@@ -2435,14 +2430,38 @@ Application/program/client sources and all their test receipts are unchanged.
 
 Prior hosted PR #55 head `11c864626e2e1840f1475f1f5a8d721b166f70c9` had all seven
 checks plus CodeRabbit green and no review threads; those results do not qualify
-this later source. Preserve the draft; no merge is authorized.
+this later source. Historical draft status was superseded by the user's readiness
+request; no merge is authorized.
+
+### Review correction — 2026-10-06
+
+Three CodeRabbit findings at `d26945fc7c749dc3f464f720db047ff64a8ee0a2`
+were independently confirmed: fixed-five capsule release blocked version 2;
+an ineligible finalized owner deposit stopped the polling worker; and failed
+pre-send preparation could strand an exposed no-wire reservation indefinitely.
+The fixes preserve exact role purpose and error propagation; no-effect closure
+requires an expired physical plan, a freshly verified head, no retained wire,
+no recorded effect and no conflicting terminal history. It atomically finalizes
+zero effect without erasing the identity or allowing another dispatch. Native
+HTTP withdrawal, retained/uncertain sends and unverified storage cannot use it.
+Joined tests cover rejection followed by valid credit, expiry/replay, failed or
+durable-but-unacknowledged wire appends, fencing and retained-wire negatives.
+
+Two later connector findings are also addressed: signature-located receipts use
+`source_cut = None`; SDK requests wait at most 250 ms for the single runtime lock
+and recheck lease/time afterward. Poll cadence starts after I/O, leaving a full
+service interval instead of continuous slow polling. Continued contention returns
+an error; this is bounded backpressure, not async I/O or concurrent journal writes.
+No on-chain/client/dependency changes or financial activation are introduced.
+Verification/publication: pending the final correction-source gate receipt below;
+prior application/ELF results above do not qualify these source changes.
 
 Work: started on `tee/p23-live-qualification` from merged trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091`. Audited shipping production connections and current primary venue docs; added bounded native GET composition over the existing Gateway budget, encrypted TLS egress and observation journal, plus regression tests and the G05 runbook. No live capability is enabled; no new dependency, custody policy or economic promise is selected.
 Verification: full pinned `node scripts/check.mjs` passes on 2026-10-06 for source checkpoint `33e13646cee84be8874d01bd676bd95a518a7bb7`: 42 contracts/inventory guards, dependency boundaries, default/all-feature Clippy, all-target build, all-feature debug/release and shipping-default suites, 12 relay and 24 SDK tests. All 10 new read cases pass in each Rust profile; GET framing and authenticated GET/POST root/hostname/time negatives pass. Logs retained at `/private/tmp/cinder-p23-offline.H7uWbj/check.log`. No new SBF/browser/ARM-container/hardware/devnet/live venue run is claimed; hosted checks/reviews for the new PR remain pending. This documentation-only publication receipt is not a new application/hardware result. No program/client wire/dependency/feature changes occurred.
 Unexpected: production runtime has no chain signer/RPC recognizer or observation scheduler; the five-role release lacks a Solana funds seed. Current venue docs still do not establish complete causal/funding/payment semantics. Historical research and P22 fake ports are not shipping connections or live qualification. Initial new-test failures exposed missing synthetic gateway activation and the existing conservative one-minute cooldown floor; fixtures were corrected without weakening production gates.
 Next: finish offline validation and connected confidential ports, qualify source cuts/precision/setup/finality, then obtain a fresh bounded G05 manifest before actual SDK/relay/Nitro/program/venue tests. Use the [live runbook](../operations/live-qualification.md); no mock or historical replay counts as live qualification.
 PR: https://github.com/arnabnandikgp/cinder/pull/55
-Merge: none; draft/in progress, live acceptance and review still required.
+Merge: none; ready/open and in progress, live acceptance and review still required.
 
 ## P24 — Release safety case
 
