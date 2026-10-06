@@ -37,23 +37,23 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-Current work: authorized P22 on `tee/p22-offline-acceptance` in `cinder-tee`, based
-on merged trunk `1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7`. Full consolidated
-offline acceptance passed at source `f14a4400f9bf3664193f51fb5c055dc10bccac65`:
-Rust debug/release and SDK checks, real Node/Chrome browser qualification, and all
-57 default SBF cases. Both joined normal lifecycles and recovery claims pass;
-the 25-case manifest traces all W/V requirements. This documentation-only successor
-records results and checked technical criteria; no new executable source is added.
+Current work: P22 review follow-up on `tee/p22-offline-acceptance` in `cinder-tee`,
+based on merged trunk `1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7`.
+Ready/open [PR #53](https://github.com/arnabnandikgp/cinder/pull/53) targets
+`product/tee-v1` through native `gh stack`. All four hosted Linux jobs passed at
+`9a4174527757e120ee81bfaf8d073480b153a37e`; CodeRabbit then identified two relevant
+minor acceptance-harness findings. Both are corrected at source checkpoint
+`b7ba0c9bb28bec6b58b2a8d8c4a5c87e9514dda2` and documented in P22 below.
+Full local workspace debug/release, Clippy, boundary and SDK checks pass; focused
+HTTP/WebSocket SBF normal lifecycles pass after first reproducing both failures.
+The final manifest/metadata regression rerun passes all 34 tests. This successor
+only records that evidence and awaits its own hosted checks; it does not inherit
+the prior head's CI success. Earlier full browser/57-case receipts stay historical.
 No AWS, live venue, remote RPC, configured wallet or customer funds are in scope.
-Publication: ready/open [PR #53](https://github.com/arnabnandikgp/cinder/pull/53),
-`tee/p22-offline-acceptance` → `product/tee-v1`, through native `gh stack`.
-Initial published head: `ed32d9f6624b5b6ec705d95227d5e72ecdf6947e`; it adds only
-the checked criteria/results to the fully tested source. This bookkeeping-only
-successor records the PR and is checked with foundation/plan/manifest regressions
-and diff validation; it is not a new runtime or inherited hosted-success receipt.
-Next: obtain this PR tip's hosted CI and focused review, resolve relevant findings,
-then await merge authorization. P22 remains `in progress` until review and merge;
-P23 is not started.
+Next: push the reviewed source/evidence, answer and resolve the two review threads,
+then check the new tip's hosted results and await merge authorization. P22 remains
+`in progress` until review and merge; P23 is not started. The CI audit recommends
+targeted improvements but does not authorize workflow or branch-rule changes.
 Preserve untracked `docs/user-journey.md`, `stays/`, ignored `work/` and docs content.
 
 ### Historical P21 merge handoff (superseded)
@@ -2111,7 +2111,8 @@ Work: full HTTP/WebSocket normal lifecycle with actual SDK/relay/private service
 Verification: `node scripts/check-acceptance.mjs` passes at source `f14a4400f9bf3664193f51fb5c055dc10bccac65`, using Rust 1.97.1, Node 24.21.0, Anchor 1.2.0, Surfpool 1.5.0, Agave/SBF 3.1.10/platform tools 1.52 and wasm-bindgen 0.2.129 on local Apple silicon. Default workspace debug/release, Clippy and SDK checks: 91.402s (600s budget). Real Node and Chrome 154.0.8037.98 each pass 14 core/attestation and 24 HTTP/WebSocket/private-SDK process groups: browser runner 59.101s (600s budget). Default vault runner passes all 57 tests, none skipped: 456.807s (1,500s budget), including both normal and recovery carriers. HTTP/WebSocket normal cases take 67.768s/66.557s; each checks 64 signed reads in 64ms/47ms. Encrypted journals are 249,130/249,124 bytes and Node-harness RSS 155,566,080/158,187,520 bytes, below the declared 8MiB/512MiB bounds. These are test-workload measurements, not production service/Nitro benchmarks. All 16 observation regressions and three new reference tests pass, including 576 differential cuts and 289 shortfall cuts. Tracked-only source export independently passes manifest/foundation checks (27 phases/37 tracked documents) and all 33 metadata regressions with no `work/` or user docs. Earlier failed/focused runs are diagnostic history, not the final success receipt. Actual hardware/live qualification is intentionally not run; crash-helper tests marked ignored are invoked explicitly by their parent matrices. Hosted CI/review for the published head remain pending.
 Unexpected: ordinary native history parsing has no certified causal cut; introduced an explicit trusted covered-input port, not inferred completeness or an enabled live provider. The fixture control codec required canonical decimal strings for lossless i128 values. Initial SPL mint setup expired under implicit helper defaults; explicit execution/confirmation settings match the existing sandbox sender. Duplicate native observations correctly advance audit version while economics stay unchanged; the regression now asserts both facts. The first reverse-stress range included downward shocks; its named upward-shock search now starts at 100. Regenerated Rust caches were removed after disk exhaustion and the pinned WASM target installed; no source/research or global toolchain versions were changed.
 Publication: ready/open #53, `tee/p22-offline-acceptance` → `product/tee-v1`, using native `gh stack init/submit`. Initial published head `ed32d9f6624b5b6ec705d95227d5e72ecdf6947e` contains only evidence documentation after the fully tested `f14a4400f9bf3664193f51fb5c055dc10bccac65` source. This final bookkeeping-only successor records the actual PR and passes focused foundation/plan/manifest/diff checks. Hosted Linux CI and CodeRabbit review remain pending for its own head; no automatic merge.
-Next: obtain #53's hosted CI/review and resolve relevant findings before merge authorization. Preserve fake-port versus SBF evidence limits; P23 and all live gates remain unopened. The next phase requires a current bounded G05 environment/account/funding/cleanup manifest, not reuse of P20 permission or historical experiment receipts.
+Review follow-up — 2026-10-06, tested source `b7ba0c9bb28bec6b58b2a8d8c4a5c87e9514dda2`: all four hosted Linux jobs passed at `9a4174527757e120ee81bfaf8d073480b153a37e`, but the two minor CodeRabbit findings were valid. Deposit/reconciliation controls now inspect normalization receipts; reconciliation also rejects an open NativeSnapshot issue for its own event. Zero deposits, changed same-signature amounts, mismatched native cash and repeat mismatches return errors without erasing committed evidence. Valid duplicate deposits and separate matching snapshots remain accepted. Both joined carriers reproduce the original false-success failure before the fix, then pass with unchanged financial books and retained restart state. Local `node scripts/check.mjs` passes complete debug/release, Clippy, boundaries and all 24 SDK/TLS tests. `node scripts/check-vault.mjs --acceptance-only` passes strict build/IDL/TypeScript checks and both joined normal lifecycles (71.216s HTTP / 68.169s WebSocket); its four reported passes include the two empty filtered file wrappers, not a new 57-case full-suite receipt. The manifest now checks bounded declaration/registration forms, rather than arbitrary substrings; nine stale-comment/string/renamed-entry substitutions are rejected, and all 34 metadata regressions pass after the final edit. Declaration presence is not proof of runner reachability or execution. No shipping protocol, Solana program or economic policy changes. New-head hosted checks and thread disposition are pending publication; earlier source receipts are not reused as new-head success.
+Next: publish the review fixes/evidence and resolve #53's two threads, then obtain the new tip's hosted results before merge authorization. Preserve fake-port versus SBF evidence limits; P23 and all live gates remain unopened. The next phase requires a current bounded G05 environment/account/funding/cleanup manifest, not reuse of P20 permission or historical experiment receipts. The requested CI audit is read-only; targeted coverage/reporting/enforcement improvements need separate authorization.
 PR: https://github.com/arnabnandikgp/cinder/pull/53.
 Merge: none.
 
