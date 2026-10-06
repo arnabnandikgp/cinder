@@ -61,9 +61,12 @@ current head remain pending and are not inherited from P22 or local checks.
 Hosted follow-up: the initial browser job failed because automatic discovery
 ran the certificate serial tests before building their native verifier. Local
 warm targets had masked that ordering error. The existing fixture build is now
-moved before discovery execution; verification uses a fresh committed source
-export with no native/WASM build outputs, not the existing host target. No test
-is disabled and no dependency pin or protocol behavior changes.
+moved before discovery execution. Full qualification passes from the fresh
+committed `ad136c6` source export with no native/WASM build outputs: 11 tool and
+12 relay tests, both isolated Rust profiles, and actual Node/Chrome each passing
+14 core/attestation and 24 carrier groups. No test is disabled and no dependency
+pin or protocol behavior changes. The ensuing docs-only successor records that
+first justified CI fix; fresh hosted results remain pending after its push.
 Next: await hosted checks and review/merge authorization. Preserve untracked `docs/user-journey.md`,
 `stays/`, ignored `work/` and docs content.
 
@@ -2197,9 +2200,13 @@ Hosted browser prerequisite correction: job `112092854155` at initial published
 head `d655f39` fails with `cinder-verify-fixture ENOENT`. Automatic discovery moved
 the previously late serial tests ahead of their native prerequisite. The fix
 moves the existing locked/offline fixture build before the discovered web suite.
-Fresh-export complete browser qualification is in progress before the first
-evidence-based CI fix push; local Linux reproduction is unnecessary for this
-platform-independent missing-build cause.
+Fresh-export complete browser qualification passes at source `ad136c6` before
+the first evidence-based CI fix push: no preexisting native/WASM outputs,
+locked/offline Cargo and npm preparation, all 11 tool and 12 relay checks,
+native debug/release, WASM/strict checks, and 14 core/24 carrier groups each in
+actual Node/Chrome. Local Linux reproduction is unnecessary for this platform-
+independent missing-build cause. This evidence is separate from warm-target
+results and does not claim the new hosted jobs already passed.
 Publication: ready/open [#54](https://github.com/arnabnandikgp/cinder/pull/54),
 `tee/ci-offline-gates` → `product/tee-v1`, initially published at
 `d655f39776ac777ec9617a4c5b743b187381dd55` using native `gh stack`. The exact
