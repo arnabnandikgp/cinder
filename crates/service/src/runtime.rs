@@ -3,6 +3,7 @@
 use crate::{
     Error,
     boot::{Gates, Manifest, Role},
+    chain_funding,
     cloud::{Client, Credential, DynamoWitness, S3Replica},
     egress::{Egress, Trust},
     release::ApplicationContract,
@@ -78,14 +79,35 @@ pub struct Configuration {
     pub perp_tag: u64,
     /// Loaded execution/credit contract; construction does not activate it.
     pub execution: Policy,
-    /// Loaded funds route; no chain signer is loaded in P20.
+    /// Loaded funds route; chain signing requires version 2's separate role.
     pub route: Route,
     /// Trading-agent epoch, distinct from witness/storage generation.
     pub trading_epoch: u64,
+    /// Version 2 private chain limits/path. Omitted in old five-role profiles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain: Option<chain_funding::Configuration>,
 }
 impl Configuration {
     /// Consume separated secrets into actual validated controllers and API policy.
     pub fn construct(self, mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>) -> Result<Loaded, Error> {
+        self.construct_using(&mut keys, None)
+    }
+    /// Load versioned public trust from the ACTUAL measured manifest. Secret
+    /// path/limits and separate funds identity contribute to the application hash.
+    pub fn construct_for(
+        self,
+        manifest: &Manifest,
+        mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
+    ) -> Result<Loaded, Error> {
+        manifest.validate()?;
+        self.construct_using(&mut keys, manifest.chain.as_ref())
+    }
+    fn construct_using(
+        self,
+        keys: &mut BTreeMap<Role, Zeroizing<Vec<u8>>>,
+        peer: Option<&chain_funding::Peer>,
+    ) -> Result<Loaded, Error> {
+        crate::boot::validate_keys(keys)?;
         let config = cinder_journal::wire::decode_config(&self.ledger).map_err(|_| Error)?;
         let source = config.sources.get(self.source).ok_or(Error)?.scope;
         let profile = Profile {
@@ -109,16 +131,16 @@ impl Configuration {
                 bytes.as_slice().try_into().map_err(|_| Error)?,
             ))
         };
-        let storage = take(&mut keys, Role::Storage)?;
+        let storage = take(keys, Role::Storage)?;
         let gateway = Gateway::new(
             profile.clone(),
             self.execution.clone(),
-            take(&mut keys, Role::Trading)?,
+            take(keys, Role::Trading)?,
             self.trading_epoch,
         )
         .map_err(|_| Error)?;
-        let funding = Controller::new(profile, self.route, take(&mut keys, Role::Broker)?)
-            .map_err(|_| Error)?;
+        let funding =
+            Controller::new(profile, self.route, take(keys, Role::Broker)?).map_err(|_| Error)?;
         let owners = self
             .owners
             .into_iter()
@@ -139,7 +161,28 @@ impl Configuration {
             RiskAdmission { enabled: false },
         )
         .map_err(|_| Error)?;
+        let chain = match (self.chain, peer) {
+            (None, None) => None,
+            (Some(policy), Some(peer)) => {
+                if self.execution.read_cost < cinder_pacifica::reads::MIN_READ_COST {
+                    return Err(Error);
+                }
+                Some(chain_funding::Loaded::new(
+                    policy,
+                    peer,
+                    take(keys, Role::Funds)?,
+                    &funding,
+                    config.domain.network.bytes(),
+                )?)
+            }
+            _ => return Err(Error),
+        };
         let application = ApplicationContract::derive(&config, &api, &gateway, &funding)?;
+        let application = if let Some(chain) = &chain {
+            application.with_chain(chain)
+        } else {
+            application
+        };
         let bytes = keys.remove(&Role::Witness).ok_or(Error)?;
         let witness = serde_cbor::from_slice(&bytes).map_err(|_| Error)?;
         if !keys.is_empty() {
@@ -154,6 +197,7 @@ impl Configuration {
             witness,
             application,
             origin: self.execution.origin,
+            chain,
         })
     }
 }
@@ -184,6 +228,7 @@ pub struct Loaded {
     witness: Credential,
     application: ApplicationContract,
     origin: cinder_pacifica::execution::Origin,
+    chain: Option<chain_funding::Loaded>,
 }
 /// Public health is deliberately coarse; no balances, customer counts or keys.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -198,6 +243,11 @@ struct Active<B: Backend, P: Protection> {
     gateway: Gateway,
     funding: Controller,
     egress: Egress,
+    chain: Option<chain_funding::Port<crate::chain_rpc::Https>>,
+    poll_ms: Option<u64>,
+    next_poll: u64,
+    read_kind: usize,
+    deposit_index: usize,
 }
 /// Bounded private API/scheduler composition over one journal and one writer.
 pub struct Runtime<B: Backend + Send, P: Protection + Send> {
@@ -280,11 +330,35 @@ impl Loaded {
         }
         self.api.initialize(&mut store, now).map_err(|_| Error)?;
         initialize_funding(&self.funding, &mut store, clock.as_ref())?;
+        let deadline = now
+            .checked_add(manifest.gates.maximum_boot_ms)
+            .ok_or(Error)?;
+        let private_clock: Arc<dyn Clock> = Arc::new(LeaseClock {
+            clock: clock.clone(),
+            deadline,
+            stop: stop.clone(),
+        });
+        let poll_ms = self.chain.as_ref().map(chain_funding::Loaded::poll_ms);
+        if let Some(chain) = &self.chain {
+            let peer = manifest.chain.as_ref().ok_or(Error)?;
+            if chain.peer() != (peer.host.as_str(), peer.port) {
+                return Err(Error);
+            }
+        }
+        if manifest.gates.native_reads {
+            self.gateway
+                .initialize_reads(&mut store, commit_id()?, private_clock.now()?)
+                .map_err(|_| Error)?;
+        }
+        let chain = self
+            .chain
+            .map(|chain| chain.open(private_clock.clone()))
+            .transpose()?;
         let egress = Egress::new(
             self.origin,
             Target::new(3, manifest.venue_port)?,
             Trust::from_der(&manifest.venue_root, manifest.venue_root_hash)?,
-            clock.clone(),
+            private_clock,
         )?;
         Ok(Runtime {
             active: Mutex::new(Active {
@@ -292,15 +366,32 @@ impl Loaded {
                 gateway: self.gateway,
                 funding: self.funding,
                 egress,
+                chain,
+                poll_ms,
+                next_poll: now,
+                read_kind: 0,
+                deposit_index: 0,
             }),
             api: self.api,
             clock,
             stop,
-            deadline: now
-                .checked_add(manifest.gates.maximum_boot_ms)
-                .ok_or(Error)?,
+            deadline,
             gates: manifest.gates.clone(),
         })
+    }
+}
+struct LeaseClock {
+    clock: Arc<dyn Clock>,
+    deadline: u64,
+    stop: Arc<AtomicBool>,
+}
+impl Clock for LeaseClock {
+    fn now(&self) -> Result<u64, Error> {
+        let now = self.clock.now()?;
+        if self.stop.load(Ordering::SeqCst) || now >= self.deadline {
+            return Err(Error);
+        }
+        Ok(now)
     }
 }
 fn initialize_funding<B: Backend, P: Protection>(
@@ -362,6 +453,11 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                 gateway,
                 funding,
                 egress,
+                chain,
+                poll_ms,
+                next_poll,
+                read_kind,
+                deposit_index,
             } = &mut *active;
             funding
                 .release_commitment(store.configuration())
@@ -370,10 +466,130 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
             if state.logical_time() > now {
                 return Err(Error);
             }
-            // Loaded fund/execution contracts stay bound during every cut; their
-            // existence is not activation. No chain signer is loaded in P20.
+            if self.gates.native_reads && now >= *next_poll {
+                let cleanup = state.frozen();
+                let interval = poll_ms.ok_or(Error)?;
+                *next_poll = now.checked_add(interval).ok_or(Error)?;
+                if let Some(chain) = chain.as_mut() {
+                    let count = chain.deposit_count();
+                    if count != 0 {
+                        chain.observe_deposit(store, funding, *deposit_index)?;
+                        *deposit_index = (*deposit_index + 1) % count;
+                    }
+                }
+                if gateway
+                    .read_available(store, now, cleanup)
+                    .map_err(|_| Error)?
+                {
+                    use cinder_pacifica::{
+                        observation::Kind,
+                        reads::{self, Diagnostic, DiagnosticPoll, Poll},
+                    };
+                    let kinds = [
+                        Kind::Trades,
+                        Kind::Orders,
+                        Kind::Positions,
+                        Kind::Account,
+                        Kind::Funding,
+                    ];
+                    let diagnostics = [
+                        Diagnostic::Settings,
+                        Diagnostic::Loan,
+                        Diagnostic::BalanceHistory,
+                        Diagnostic::WithdrawalPending,
+                        Diagnostic::WithdrawalHistory,
+                    ];
+                    if *read_kind < kinds.len() {
+                        let kind = kinds[*read_kind];
+                        let cursor = gateway.read_cursor(store, kind).map_err(|_| Error)?;
+                        reads::poll(
+                            store,
+                            gateway,
+                            Poll {
+                                kind,
+                                cursor,
+                                reservation: commit_id()?,
+                                evidence: commit_id()?,
+                                at: self.active_time()?,
+                                cleanup,
+                            },
+                            egress,
+                        )
+                        .map_err(|_| Error)?;
+                    } else {
+                        reads::diagnostic(
+                            store,
+                            gateway,
+                            DiagnosticPoll {
+                                kind: diagnostics[*read_kind - kinds.len()],
+                                reservation: commit_id()?,
+                                evidence: commit_id()?,
+                                at: self.active_time()?,
+                                cleanup,
+                            },
+                            egress,
+                        )
+                        .map_err(|_| Error)?;
+                    }
+                    *read_kind = (*read_kind + 1) % (kinds.len() + diagnostics.len());
+                }
+            }
+            if self.gates.funding {
+                let next = store
+                    .verified_state()
+                    .map_err(|_| Error)?
+                    .funds()
+                    .iter()
+                    .find(|o| !o.terminal && o.attempt.is_some())
+                    .and_then(|o| o.attempt);
+                if let Some(attempt) = next {
+                    let exposed = store
+                        .state()
+                        .map_err(|_| Error)?
+                        .attempts()
+                        .iter()
+                        .find(|a| a.key == attempt)
+                        .ok_or(Error)?
+                        .possibly_exposed;
+                    let native = store
+                        .state()
+                        .map_err(|_| Error)?
+                        .funds()
+                        .iter()
+                        .find(|o| o.attempt == Some(attempt))
+                        .is_some_and(|o| o.intent.source == cinder_kernel::ledger::Location::Venue);
+                    if native {
+                        if !exposed {
+                            funding
+                                .withdraw(
+                                    store,
+                                    gateway,
+                                    cinder_pacifica::execution::Dispatch {
+                                        attempt,
+                                        commit: commit_id()?,
+                                        at: self.active_time()?,
+                                    },
+                                    egress,
+                                )
+                                .map_err(|_| Error)?;
+                        }
+                        // Native finality/causal provider remains explicitly gated.
+                    } else {
+                        let chain = chain.as_mut().ok_or(Error)?;
+                        if exposed {
+                            chain.reconcile(store, funding, attempt)?;
+                        } else {
+                            chain.issue(store, funding, attempt)?;
+                        }
+                    }
+                }
+            }
+            // Loaded contracts stay bound during every cut; their existence is
+            // not financial activation. The manifest still refuses live trading.
             if self.gates.trading {
-                let pending = state
+                let pending = store
+                    .verified_state()
+                    .map_err(|_| Error)?
                     .attempts()
                     .iter()
                     .find(|a| {
@@ -388,7 +604,7 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                             cinder_pacifica::execution::Dispatch {
                                 attempt,
                                 commit: commit_id()?,
-                                at: now,
+                                at: self.active_time()?,
                             },
                             egress,
                         )
@@ -437,7 +653,7 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
 
 #[cfg(test)]
 #[path = "../../journal/tests/support/mod.rs"]
-mod initialization_support;
+pub(crate) mod initialization_support;
 
 #[cfg(test)]
 mod initialization_tests {
@@ -450,6 +666,26 @@ mod initialization_tests {
     impl Clock for Fixed {
         fn now(&self) -> Result<u64, Error> {
             self.0
+        }
+    }
+    #[test]
+    fn every_egress_step_rechecks_the_finite_boot_lease_and_stop_flag() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let clock = LeaseClock {
+            clock: Arc::new(Fixed(Ok(100))),
+            deadline: 101,
+            stop: stop.clone(),
+        };
+        assert_eq!(clock.now().unwrap(), 100);
+        stop.store(true, Ordering::SeqCst);
+        assert!(clock.now().is_err());
+        for inner in [Ok(101), Ok(102), Err(Error)] {
+            let clock = LeaseClock {
+                clock: Arc::new(Fixed(inner)),
+                deadline: 101,
+                stop: Arc::new(AtomicBool::new(false)),
+            };
+            assert!(clock.now().is_err());
         }
     }
     #[test]

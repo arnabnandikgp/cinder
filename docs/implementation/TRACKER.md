@@ -54,9 +54,16 @@ Draft [PR #55](https://github.com/arnabnandikgp/cinder/pull/55) targets
 source head `33e13646cee84be8874d01bd676bd95a518a7bb7`. This documentation-only
 successor records publication; hosted checks/reviews remain pending, not
 inherited green results. No merge or deployment is requested. Continue remaining
-P23 work in this PR; no further split is currently planned. Next:
-connect remaining confidential chain/receipt/setup/scheduler ports, then
-prepare a fresh bounded G05 manifest for approval before any live run. Preserve
+P23 work remains in this PR; no further split is currently planned. The local
+continuation now connects confidential chain codec/signing/RPC, streamed executable
+verification, finalized receipt/counter checks, original owner deposits, six-role
+private release and finite read-only scheduling. The full host and actual
+Node/Chrome/WASM checks pass on the working source; final serial SBF and ARM64
+shipping-package checks are being completed. No result for a later commit or
+hardware session is inferred. Next: close the fixed local checklist in the
+runbook, record the exact checked source, then prepare a fresh bounded read-only
+G05 manifest. Authentic native setup/credit/payment/cut/funding remain gated;
+the manifest still refuses trading/funding and API risk admission is disabled. Preserve
 untracked `docs/user-journey.md`, `stays/`, ignored research and docs content.
 
 ### CI follow-up merge receipt
@@ -2325,6 +2332,20 @@ This local documentation receipt is reserved for the next authorized PR. No
 unreviewed trunk push, deployment or P23 work occurs.
 
 ## P23 — Live integration qualification
+
+Local continuation: added purpose-separated confidential chain ports and original
+owner-deposit recognition in [ADR 0024](../architecture/0024-confidential-chain-ports.md).
+The actual Controller signs only persisted/simulated mandates; unknown sends
+reconcile the original wire. Authenticated fixed-origin RPC, finalized exact
+transaction/SPL/receipt/counter checks and bounded full-code streaming share the
+runtime's one journal. Version 2 adds a distinct Funds role and read-only finite
+polling; version 1 remains compatible. Native diagnostics consume durable credits
+and archive missing/unsupported schemas without manufacturing setup/credit/payment
+or coverage. Funds-signing and trading activation remain rejected. Local joined
+tests use synthetic RPC/clock, not real deployments or a native finality provider.
+Current full host/browser checks pass; final SBF/package checks and exact-source
+publication receipt follow. No AWS/RPC/venue/wallet/deployment action has occurred.
+The original initial-slice receipt below remains historical, not these results.
 
 Work: started on `tee/p23-live-qualification` from merged trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091`. Audited shipping production connections and current primary venue docs; added bounded native GET composition over the existing Gateway budget, encrypted TLS egress and observation journal, plus regression tests and the G05 runbook. No live capability is enabled; no new dependency, custody policy or economic promise is selected.
 Verification: full pinned `node scripts/check.mjs` passes on 2026-10-06 for source checkpoint `33e13646cee84be8874d01bd676bd95a518a7bb7`: 42 contracts/inventory guards, dependency boundaries, default/all-feature Clippy, all-target build, all-feature debug/release and shipping-default suites, 12 relay and 24 SDK tests. All 10 new read cases pass in each Rust profile; GET framing and authenticated GET/POST root/hostname/time negatives pass. Logs retained at `/private/tmp/cinder-p23-offline.H7uWbj/check.log`. No new SBF/browser/ARM-container/hardware/devnet/live venue run is claimed; hosted checks/reviews for the new PR remain pending. This documentation-only publication receipt is not a new application/hardware result. No program/client wire/dependency/feature changes occurred.

@@ -6,7 +6,8 @@ authorized by this document. Historical M1/M2/P20 receipts are provenance, not
 current release qualification or reusable permission. See
 [PLAN](../implementation/PLAN.md#p23), [TRACKER](../implementation/TRACKER.md),
 [P22 composition](../architecture/0022-offline-acceptance.md) and
-[new observation port](../architecture/0023-live-observation-ports.md).
+[observation port](../architecture/0023-live-observation-ports.md) and
+[confidential chain ports](../architecture/0024-confidential-chain-ports.md).
 
 ## Audited shipping connections
 
@@ -15,20 +16,26 @@ current release qualification or reusable permission. See
 | Private HTTP/WS and wallet/agent signatures | SDK/WASM Noise, opaque relay and enclave `--web` ingress invoke the same API | Qualify this changed measured image and actual SDK on non-debug Nitro; P20's TLS-only receipts are not interchangeable |
 | Private journal and freshness | Two S3 ciphertext replicas, separate DynamoDB witness, recipient-bound KMS and finite lease | New exact release/root/role policies and writer epoch; fresh interruption/restore receipts |
 | Native signing | Durable Gateway dispatch and one-shot TLS POST | Fresh native account/agent authority, real precision profile, explicit activation and live observations |
-| Native observations | Budgeted account-scoped GET port, ordinary ingestion and diagnostic replay | Wire bounded polling into the runtime under an approved release; qualify actual transport framing/schema and cadence |
+| Native observations | Finite read-only scheduler, budgeted account-scoped GETs and diagnostic archives | Qualify actual transport framing/schema/cadence and current account setup; diagnostic bodies cannot supply missing causal certificates |
 | Complete order history | Explicit trusted `Coverage` seam and exact terminal execution-set checks | A qualified live provider; a hash, page ending, cancel ACK or successful TLS cannot stand in for completeness |
 | Funding | Exact kernel accrual/settlement; native history retained with a named gap | Actual hourly boundary, both-sign convention, valuation/precision and gross customer allocation when the native position is net-flat |
-| Solana custody | Actual Anchor/SPL program, TypeScript instruction and signed-wire verifiers; offline SBF tests | Confidential runtime transaction builder/signer, authenticated devnet RPC, finalized account/receipt recognizers and deployment bytecode checks |
+| Solana custody | Controller-bound enclave codec/signing/RPC, streamed approved code, finalized receipts/counters and owner-deposit observer; independent Anchor vectors/SBF tests | Qualify changed-image six-role release, actual devnet deployment/governance/CA/genesis/framing and original transaction effects |
 | Native deposit/withdrawal | Funding Controller's durable plans and separate broker-owner signer | Authentic deposit-linked credit and original-UUID withdrawal history plus finalized recipient payment; no mock credit or balance-delta shortcut |
 | Recovery | Fence/reconcile/settle/return/final-claim controller, recipient-encrypted kits and actual local SBF claims | Actual authority fencing, complete final cut, returned vault backing, authorized activation and independent kit delivery/claim on devnet |
 
-The audited entrypoint currently refuses all live financial gates. API risk
-admission is also disabled; `tick` does not provide a native observation or chain
-controller. `clients/vault` is a codec/verifier, not an enclave RPC/signing service.
-Its signer must not be moved onto the parent as a quick substitute. The current
-five-role release has **no Solana funds seed**: extending the measured role
-manifest is part of connecting the chain signer, not permission to reuse the
-broker/trading key as the funds authority.
+The entrypoint still refuses live **financial** activation and API risk admission
+is disabled. Version 2 now permits bounded read-only qualification, including
+one configured original owner deposit per cadence; it does not create funds/order
+intents. The six-role release adds a distinct Solana funds seed and binds actual
+loaded RPC/policy/key identity into the application commitment. Version 1 remains
+the old inactive five-role encoding. Neither broker/trading nor storage seeds may
+substitute for funds. Parent relays forward opaque HTTPS bytes only; `clients/vault`
+remains an independent owner-side codec/oracle, not a plaintext parent signer.
+
+The chain controller locally issues/reconciles existing durable mandates, but
+shipping manifest validation **still rejects** `funding` and `trading`. Do not
+flip them before a bounded policy and authentic evidence providers are qualified.
+Current prepared recovery interfaces likewise do not invent a final native cut.
 
 ## Venue qualification findings
 
@@ -55,6 +62,53 @@ assigning the displayed rate directly to customer cash.
 [Funding policy](https://docs.pacifica.fi/trading-on-pacifica/funding-rates),
 [account funding history](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-funding-history).
 
+Settings and loan diagnostics preserve the distinction between default-enabled
+lending, missing cache and proven zero debt. The documented balance-history
+schema does not provide original deposit signature or withdrawal UUID linkage.
+Historically observed withdrawal-history/pending routes are diagnostic candidates,
+not a documented current payment certificate. A response or amount/time match
+does not enable native credit, payment, complete coverage or recovery readiness.
+[Settings](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-settings),
+[loan](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-loan-info),
+[balance history](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-balance-history).
+
+## Fixed local gate checklist
+
+These are preparation gates for the existing phase, not new implementation phases.
+The completed-run receipt belongs in TRACKER/EVIDENCE; live acceptance below stays
+open until actual evidence is recorded.
+
+| Gate | Exact required evidence |
+| --- | --- |
+| Controller and owner codecs | Four physical rails plus owner deposit, optional CU limit, exact large-u64/signature/ABI vectors independently checked in Rust and Anchor/web3.js |
+| Enclave RPC and receipts | TLS/root/hostname/time/framing negatives; original finalized status/wire, classic SPL/mint/recipient/counter checks; bounded full-code/tail/header stream |
+| Joined durable funds | One authoritative journal; lost ACK/restart preserves original wire without retry; missing history/simulation/fee failure cannot credit; release/return/payout and owner credit exactly once; native debit stays pending |
+| Release and scheduler | Version-1 compatibility, version-2 six-role private preparation, distinct seeds, actual component binding, finite lease/stop, durable read budget/cooldown/revocation |
+| Full host regression | Pinned `node scripts/check.mjs`: contracts, dependencies, strict default/all-feature lint/build, debug/release/default Rust, relay and private SDK |
+| Program and browser | Full `node scripts/check-vault.mjs` with offline Surfpool; actual Node/Chrome/WASM `node tools/web-channel/check.mjs`, no skipped required workflows |
+| Shipping package | Source-only, network-disabled ARM64 default-feature package; independent application rebuild has identical ELF; ordinary non-Nitro boot refuses |
+
+No native semantics are silently marked passed by these local fixtures. Native
+setup/credit/payment/cut/funding and actual cloud/entropy/attestation evidence
+remain the named live qualification targets.
+
+## First AWS step after local gates
+
+Start with the changed-image **read-only** qualification: actual Noise HTTP/WS
+SDK → opaque relay → non-debug Nitro; six-purpose KMS release and expected
+application commitment; devnet RPC/TLS/genesis/deployed-code observation;
+account-bound native settings/loan/history schema reads, finite budgets and
+interruption/restore/fencing. Observe one fresh owner-signed P15 deposit only
+after its separate devnet funding permission is in the current manifest.
+
+If a capability is unavailable, preserve exact private evidence and report the
+named blocker. Financial activation is a follow-on qualification inside P23,
+not an assertion that this read-only build executes every trading/recovery
+workflow. Define the authentic setup/credit/payment/cut providers and finite
+financial policy from observed evidence before issuing any native mandate.
+No existing wallet, deployment account, quote balance, AWS resource, price or
+authority approval is assumed current.
+
 Historical M1's actual faucet-only round trip is valuable input: customer 20
 USDP returned as 19 after a 1-USDP venue withdrawal fee, including a dropped
 withdrawal acknowledgement/restart and no second POST. That run needed an
@@ -67,11 +121,9 @@ signed wires or account histories.
 
 ## Bounded continuation, without new acceptance milestones
 
-1. Complete production ports locally: native observation scheduling, exact
-   Solana instruction/wire/signing boundary and finalized receipt recognition,
-   setup/deposit/payment recognizers and recovery orchestration. Promote useful
-   experimental assertions/ABI vectors, not the experiments' wallet loaders,
-   plaintext journal, injected settlement or historical live driver.
+1. Complete the fixed local preparation gates above, using the shipping controller
+   and promoted ABI/failure assertions rather than prototype wallet loaders,
+   plaintext journals, injected native settlement or historical live drivers.
 2. Qualify complete order/funding/payment semantics explicitly. Where public
    evidence is insufficient, prepare a bounded test/venue question. Keep the
    corresponding capability off; a named blocker is an acceptable *finding*,

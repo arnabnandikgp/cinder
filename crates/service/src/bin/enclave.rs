@@ -48,7 +48,7 @@ fn run() -> Result<(), cinder_service::Error> {
     let config: Configuration = serde_cbor::from_slice(&bytes).map_err(|_| Error)?;
     drop(bytes);
     let stop = Arc::new(AtomicBool::new(false));
-    let runtime = Arc::new(config.construct(keys)?.open(
+    let runtime = Arc::new(config.construct_for(&manifest, keys)?.open(
         &manifest,
         parent,
         nsm.clone(),

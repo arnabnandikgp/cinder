@@ -81,6 +81,110 @@ struct Fake {
     reply: Option<Reply>,
     targets: Vec<String>,
 }
+
+#[test]
+fn diagnostic_settings_debt_and_funding_history_are_private_evidence_not_financial_effects() {
+    use reads::{Diagnostic, DiagnosticPoll};
+    for (kind, path, status) in [
+        (Diagnostic::Settings, "/api/v1/account/settings", 200),
+        (Diagnostic::Loan, "/api/v1/account/loan", 404),
+        (
+            Diagnostic::BalanceHistory,
+            "/api/v1/account/balance/history",
+            200,
+        ),
+        (
+            Diagnostic::WithdrawalPending,
+            "/api/v1/account/withdraw/pending",
+            404,
+        ),
+        (
+            Diagnostic::WithdrawalHistory,
+            "/api/v1/account/withdraw/history",
+            200,
+        ),
+    ] {
+        let temp = Temp::new();
+        let mut j = activated(&temp);
+        let before = j.state().unwrap().ledger().clone();
+        let readiness = j.state().unwrap().native_funding_ready();
+        let body = json!({"success":true,"data":{"amount":"99999999","borrowed":"0","pending_interest":"0","auto_lend_disabled":true}});
+        let mut f = Fake::new(response(status, body.clone()));
+        let poll = || DiagnosticPoll {
+            kind,
+            reservation: id(1),
+            evidence: id(101),
+            at: 100,
+            cleanup: false,
+        };
+        assert!(matches!(
+            reads::diagnostic(&mut j, &gateway(), poll(), &mut f).unwrap(),
+            Outcome::Ingested(_)
+        ));
+        assert_eq!(j.state().unwrap().ledger(), &before);
+        assert_eq!(j.state().unwrap().native_funding_ready(), readiness);
+        assert!(f.targets[0].starts_with(&format!("{path}?account={}", profile().account)));
+        let archived = j.transaction(id(101)).unwrap();
+        assert!(archived.inputs[0].event.is_none());
+        assert!(archived.inputs[0].source_cut.is_none());
+        let v: Value = serde_json::from_slice(archived.inputs[0].raw.as_bytes()).unwrap();
+        let exact: Vec<u8> = serde_json::from_value(v["body"].clone()).unwrap();
+        assert_eq!(exact, body.to_string().into_bytes());
+        assert_eq!(v["status"], status);
+        assert!(reads::diagnostic(&mut j, &gateway(), poll(), &mut f).is_err());
+        assert_eq!(f.targets.len(), 1);
+    }
+}
+
+#[test]
+fn read_initialization_resumes_budget_and_never_revives_a_revoked_epoch() {
+    let temp = Temp::new();
+    let mut j = temp.create();
+    let g = gateway();
+    g.initialize_reads(&mut j, id(249), 100).unwrap();
+    for n in 1..=4 {
+        assert!(g.read_available(&mut j, 100, false).unwrap());
+        g.reserve_read(&mut j, id(n), 100, false).unwrap();
+    }
+    assert!(!g.read_available(&mut j, 100, false).unwrap());
+    assert!(g.read_available(&mut j, 100, true).unwrap());
+    let head = j.head();
+    drop(j);
+    let mut j = temp.open();
+    g.initialize_reads(&mut j, id(248), 100).unwrap();
+    assert_eq!(j.head(), head);
+    assert!(!g.read_available(&mut j, 100, false).unwrap());
+    g.deactivate(&mut j, id(247), 100).unwrap();
+    drop(j);
+    let mut j = temp.open();
+    assert!(g.initialize_reads(&mut j, id(246), 100).is_err());
+    assert!(g.read_available(&mut j, 100, true).is_err());
+}
+
+#[test]
+fn diagnostic_rate_limit_shares_execution_cooldown_and_cannot_reset_it_on_restart() {
+    let temp = Temp::new();
+    let mut j = activated(&temp);
+    let g = gateway();
+    let mut f = Fake::new(response(429, json!({"error":"rate limit"})));
+    let input = reads::DiagnosticPoll {
+        kind: reads::Diagnostic::Loan,
+        reservation: id(1),
+        evidence: id(101),
+        at: 100,
+        cleanup: false,
+    };
+    assert!(matches!(
+        reads::diagnostic(&mut j, &g, input, &mut f).unwrap(),
+        Outcome::Limited
+    ));
+    assert!(!g.read_available(&mut j, 100, true).unwrap());
+    drop(j);
+    let mut j = temp.open();
+    g.initialize_reads(&mut j, id(248), 100).unwrap();
+    assert!(!g.read_available(&mut j, 100, true).unwrap());
+    assert!(g.read_available(&mut j, 60_100, false).unwrap());
+}
 impl Fake {
     fn new(reply: Reply) -> Self {
         Self {

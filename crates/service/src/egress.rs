@@ -191,6 +191,11 @@ fn encode_read(host: &str, target: &str) -> Result<Zeroizing<Vec<u8>>, Error> {
                 | "/api/v1/orders/history"
                 | "/api/v1/positions"
                 | "/api/v1/account"
+                | "/api/v1/account/settings"
+                | "/api/v1/account/loan"
+                | "/api/v1/account/balance/history"
+                | "/api/v1/account/withdraw/pending"
+                | "/api/v1/account/withdraw/history"
         )
         || !query.starts_with("account=")
         || query.len() > 1024
@@ -209,6 +214,20 @@ fn exchange<S: Socket>(
     wire: &[u8],
     start: Instant,
 ) -> Result<Response, Error> {
+    exchange_bounded(socket, trust, hostname, now, wire, start, MAX_BODY)
+}
+pub(crate) fn exchange_bounded<S: Socket>(
+    socket: S,
+    trust: &Trust,
+    hostname: &str,
+    now: u64,
+    wire: &[u8],
+    start: Instant,
+    maximum_body: usize,
+) -> Result<Response, Error> {
+    if maximum_body == 0 || maximum_body > cinder_journal::wire::MAX_RECORD {
+        return Err(Error);
+    }
     if now == 0 || start.elapsed() > DEADLINE {
         return Err(Error);
     }
@@ -233,18 +252,26 @@ fn exchange<S: Socket>(
     }
     tls.write_all(wire)?;
     tls.flush()?;
-    let result = response(&mut tls, start)?;
+    let result = response_bounded(&mut tls, start, maximum_body)?;
     if start.elapsed() > DEADLINE {
         return Err(Error);
     }
     Ok(result)
 }
-struct Response {
-    status: u16,
-    body: PrivateBytes,
-    retry_after_ms: Option<u64>,
+pub(crate) struct Response {
+    pub(crate) status: u16,
+    pub(crate) body: PrivateBytes,
+    pub(crate) retry_after_ms: Option<u64>,
 }
+#[cfg(test)]
 fn response(reader: &mut impl Read, start: Instant) -> Result<Response, Error> {
+    response_bounded(reader, start, MAX_BODY)
+}
+fn response_bounded(
+    reader: &mut impl Read,
+    start: Instant,
+    maximum_body: usize,
+) -> Result<Response, Error> {
     let mut header = Zeroizing::new(Vec::new());
     while !header.ends_with(b"\r\n\r\n") {
         if header.len() >= MAX_HEADERS || start.elapsed() > DEADLINE {
@@ -307,7 +334,7 @@ fn response(reader: &mut impl Read, start: Instant) -> Result<Response, Error> {
                     return Err(Error);
                 }
                 let n: usize = value.parse().map_err(|_| Error)?;
-                if n == 0 || n > MAX_BODY {
+                if n == 0 || n > maximum_body {
                     return Err(Error);
                 }
                 length = Some(n);

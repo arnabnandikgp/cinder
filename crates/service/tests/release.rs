@@ -168,6 +168,7 @@ fn runtime_configuration() -> cinder_service::runtime::Configuration {
         execution: policy(),
         route: route(),
         trading_epoch: 1,
+        chain: None,
     }
 }
 fn runtime_keys() -> std::collections::BTreeMap<cinder_service::boot::Role, Zeroizing<Vec<u8>>> {
@@ -232,7 +233,8 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
         root: root.clone(),
         root_hash: hash,
     };
-    let manifest = Manifest {
+    for version in [1, 2] {
+        let mut manifest = Manifest {
         version: 1,
         domain: [[1; 32], [2; 32]].concat(),
         application: [1; 32],
@@ -275,61 +277,115 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
             native_reads: false,
             maximum_boot_ms: 60000,
         },
+        chain: None,
     };
-    let keys = runtime_keys();
-    let witness: serde_cbor::Value =
-        serde_cbor::from_slice(keys[&Role::Witness].as_slice()).unwrap();
-    let input=serde_cbor::to_vec(&serde_json::json!({"manifest":manifest,"configuration":runtime_configuration(),"storage":vec![55;32],"trading":vec![7;32],"broker":vec![9;32],"witness":witness})).unwrap();
-    let t = support::Temp::new();
-    let out = t.root.join("prepared");
-    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_cinder-prepare-release"))
-        .arg(&out)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    child.stdin.take().unwrap().write_all(&input).unwrap();
-    let receipt = child.wait_with_output().unwrap();
-    assert!(receipt.status.success(), "preparation refused");
-    assert!(receipt.stderr.is_empty());
-    assert!(receipt.stdout.len() < 128);
-    let m: Manifest =
-        serde_cbor::from_slice(&std::fs::read(out.join("manifest.cbor")).unwrap()).unwrap();
-    assert_eq!(
-        m.application,
-        loaded(&config(), contract(), policy(), route(), 7, 1)
-            .unwrap()
-            .digest()
-    );
-    m.validate().unwrap();
-    for role in [
-        Role::Configuration,
-        Role::Storage,
-        Role::Trading,
-        Role::Broker,
-        Role::Witness,
-    ] {
-        let path = out.join(format!("{}.plain", role.name()));
-        let bytes = std::fs::read(&path).unwrap();
-        assert!(bytes.starts_with(b"CKR1"));
-        assert!(bytes.len() <= 4096);
+        let mut configuration = runtime_configuration();
+        let mut input = serde_json::json!({"manifest":null,"configuration":null,"storage":vec![55;32],"trading":vec![7;32],"broker":vec![9;32],"witness":null});
+        let expected = if version == 2 {
+            manifest.version = 2;
+            let mut slot = manifest.slots[0].clone();
+            slot.role = Role::Funds;
+            slot.endpoint.resource =
+                "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000006"
+                    .into();
+            manifest.slots.push(slot);
+            manifest.chain = Some(cinder_service::chain_funding::Peer {
+                host: "api.devnet.solana.com".into(),
+                port: 9007,
+                root: root.clone(),
+                root_hash: hash,
+                network: [1; 32],
+            });
+            configuration.route.funds = public(11);
+            configuration.execution.read_cost = 120;
+            configuration.execution.credits = 6000;
+            configuration.execution.cleanup_reserve = 1000;
+            configuration.chain = Some(cinder_service::chain_funding::Configuration {
+                path: "/".into(),
+                custody: cinder_service::chain_receipt::Deployment {
+                    program: configuration.route.program,
+                    data: [60; 32],
+                    length: 64,
+                    hash: [1; 32],
+                    authority: Some([61; 32]),
+                },
+                native: cinder_service::chain_receipt::Deployment {
+                    program: configuration.route.venue_program,
+                    data: [62; 32],
+                    length: 64,
+                    hash: [2; 32],
+                    authority: Some([63; 32]),
+                },
+                limits: cinder_pacifica::funding::chain::Limits {
+                    maximum_age_ms: 1000,
+                    maximum_fee_lamports: 6000,
+                    compute_units: 0,
+                },
+                maximum_calls: 1000,
+                expiry_slots: 100,
+                poll_ms: 1000,
+                deposits: vec![],
+            });
+            input["funds"] = serde_json::json!(vec![11; 32]);
+            let mut keys = runtime_keys();
+            keys.insert(Role::Funds, Zeroizing::new(vec![11; 32]));
+            let clone = serde_cbor::from_slice::<cinder_service::runtime::Configuration>(
+                &serde_cbor::to_vec(&configuration).unwrap(),
+            )
+            .unwrap();
+            clone.construct_for(&manifest, keys).unwrap().commitment()
+        } else {
+            loaded(&config(), contract(), policy(), route(), 7, 1)
+                .unwrap()
+                .digest()
+        };
+        let keys = runtime_keys();
+        let witness: serde_cbor::Value =
+            serde_cbor::from_slice(keys[&Role::Witness].as_slice()).unwrap();
+        input["manifest"] = serde_json::to_value(&manifest).unwrap();
+        input["configuration"] = serde_json::to_value(configuration).unwrap();
+        input["witness"] = serde_json::to_value(witness).unwrap();
+        let input = serde_cbor::to_vec(&input).unwrap();
+        let t = support::Temp::new();
+        let out = t.root.join("prepared");
+        let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_cinder-prepare-release"))
+            .arg(&out)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(&input).unwrap();
+        let receipt = child.wait_with_output().unwrap();
+        assert!(receipt.status.success(), "preparation refused");
+        assert!(receipt.stderr.is_empty());
+        assert!(receipt.stdout.len() < 128);
+        let m: Manifest =
+            serde_cbor::from_slice(&std::fs::read(out.join("manifest.cbor")).unwrap()).unwrap();
+        assert_eq!(m.application, expected);
+        m.validate().unwrap();
+        for role in m.slots.iter().map(|s| s.role) {
+            let path = out.join(format!("{}.plain", role.name()));
+            let bytes = std::fs::read(&path).unwrap();
+            assert!(bytes.starts_with(if version == 1 { b"CKR1" } else { b"CKR2" }));
+            assert!(bytes.len() <= 4096);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                assert_eq!(
+                    std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                    0o600
+                );
+            }
+        }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             assert_eq!(
-                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
-                0o600
+                std::fs::metadata(&out).unwrap().permissions().mode() & 0o777,
+                0o700
             );
         }
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            std::fs::metadata(&out).unwrap().permissions().mode() & 0o777,
-            0o700
-        );
     }
 }
 

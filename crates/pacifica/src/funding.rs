@@ -19,6 +19,8 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 const MAGIC: &[u8] = b"CINDER-PACIFICA-FUNDING-1\0";
+/// Narrow legacy Solana instruction/message codec; no RPC or ambient wallet.
+pub mod chain;
 pub mod recovery;
 /// Governed binding between an opaque private account and its public payout owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -169,6 +171,14 @@ impl Plan {
     pub fn epoch(&self) -> u64 {
         self.epoch
     }
+    /// Original local signing deadline in milliseconds, not a chain slot.
+    pub fn expires_at(&self) -> u64 {
+        self.expires_at
+    }
+    /// Durable plan time; a backwards clock cannot authorize signing.
+    pub fn prepared_at(&self) -> u64 {
+        self.at
+    }
 }
 /// Non-clone custody capability. The enclave chain boundary builds/signs only
 /// this instruction and persists its exact signed wire before sending once.
@@ -196,7 +206,12 @@ impl std::fmt::Debug for VerifiedWire {
     }
 }
 /// Non-clone signed delivery returned ONLY after durable exact-wire persistence.
-pub struct ChainDelivery(PrivateBytes);
+pub struct ChainDelivery {
+    wire: PrivateBytes,
+    network: [u8; 32],
+    expires_at: u64,
+    expires_at_slot: u64,
+}
 impl std::fmt::Debug for ChainDelivery {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ChainDelivery([PRIVATE])")
@@ -205,7 +220,19 @@ impl std::fmt::Debug for ChainDelivery {
 impl ChainDelivery {
     /// Consume once in the qualified cluster egress port; no redirects or retries.
     pub fn into_wire(self) -> PrivateBytes {
-        self.0
+        self.wire
+    }
+    /// Original configured genesis; a generic chain wire does not encode it.
+    pub fn network(&self) -> [u8; 32] {
+        self.network
+    }
+    /// Original local delivery deadline, not reset by persistence or restart.
+    pub fn expires_at(&self) -> u64 {
+        self.expires_at
+    }
+    /// Original chain instruction deadline, distinct from millisecond time.
+    pub fn expires_at_slot(&self) -> u64 {
+        self.expires_at_slot
     }
 }
 impl std::fmt::Debug for ChainAction {
@@ -553,6 +580,19 @@ impl Controller {
     /// No seed is returned and this must not become a customer API response.
     pub fn route(&self) -> &Route {
         &self.route
+    }
+    /// Sign only this broker's exact prepared deposit/return message. No seed
+    /// export, arbitrary message signing or HTTP master-key fallback is offered.
+    pub fn sign_chain(
+        &self,
+        prepared: chain::Prepared<'_>,
+        simulation: chain::Simulation,
+        at: u64,
+    ) -> Result<VerifiedWire, Error> {
+        if prepared.signer() != self.route.broker {
+            return Err(Error::Qualification);
+        }
+        prepared.sign(Zeroizing::new(self.key.to_bytes()), simulation, at)
     }
     fn evidence(&self, record: Record) -> Result<PrivateBytes, Error> {
         let mut bytes = MAGIC.to_vec();
@@ -998,6 +1038,42 @@ impl Controller {
         }
         .encode()
     }
+    /// Locate and re-verify the one originally persisted wire. After restart
+    /// this is evidence only, never a ChainDelivery or authority to sign again.
+    pub fn retained_wire<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        attempt: AttemptKey,
+        at: u64,
+    ) -> Result<Option<VerifiedWire>, Error> {
+        let history = self.history(j, at)?;
+        let matches: Vec<_> = history
+            .wires
+            .iter()
+            .filter(|(a, _, _)| *a == attempt.encode())
+            .collect();
+        if matches.len() > 1 {
+            return Err(Error::Qualification);
+        }
+        let Some((_, signature, hash)) = matches.first().copied() else {
+            return Ok(None);
+        };
+        let contract = self.original_chain_contract(j, attempt, at)?;
+        let mut found = None;
+        for tx in j.transactions() {
+            for bytes in &tx.evidence {
+                if <[u8; 32]>::from(Sha256::digest(bytes.as_bytes())) == *hash {
+                    let verified =
+                        chain::inspect(contract.as_bytes(), attempt, bytes.as_bytes())?.verified;
+                    if verified.signature.as_slice() != signature || found.is_some() {
+                        return Err(Error::Qualification);
+                    }
+                    found = Some(verified);
+                }
+            }
+        }
+        found.map(Some).ok_or(Error::Qualification)
+    }
     /// Persist the verified ORIGINAL signed chain wire before any submission.
     /// Lost/uncertain commits return no delivery. Restart may only reconcile the
     /// retained wire/signature/operation, not create a different blockhash/signature.
@@ -1053,7 +1129,12 @@ impl Controller {
         j.verified_state()?
             .qualified_funds_delivery(wire.attempt)
             .map_err(|_| Error::Qualification)?;
-        Ok(ChainDelivery(wire.wire))
+        Ok(ChainDelivery {
+            wire: wire.wire,
+            network: action.network,
+            expires_at: p.expires_at,
+            expires_at_slot: p.counters.expires_at_slot,
+        })
     }
     fn scope(&self, location: Location) -> Result<EventScope, Error> {
         self.profile

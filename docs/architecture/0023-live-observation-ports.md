@@ -59,11 +59,22 @@ certificates. Qualifying a live terminal/funding/payment provider remains P23.
 
 ## Activation and validation
 
-The shipping `boot::Manifest` still rejects trading, funding and native-read
-activation. No scheduler, CLI or public endpoint enables the new port. This is
-prepared composition, not a runnable live integration. The remaining wiring and
-fresh authority requirements are listed in the
+Version 1's shipping manifest still rejects all native activation. Version 2
+adds bounded read-only scheduling and the separate chain policy/key purpose in
+[ADR 0024](0024-confidential-chain-ports.md); trading/funding activation remains
+refused. Polling resumes durable credits without reviving revoked epochs and
+rechecks the finite boot lease. No public endpoint activates a capability.
+Fresh authority requirements and live qualification remain in the
 [live qualification runbook](../operations/live-qualification.md).
+
+Settings, loan, balance history and historically observed pending/withdrawal
+history routes are additionally bounded diagnostic GETs. They archive exact
+route/account/status/body, including 404/429, but produce no economic event,
+setup certificate, native credit, withdrawal certificate or complete cut. The
+last two paths are historical experimental observations, not a current documented
+API promise. A loan-cache 404 is not zero debt; `auto_lend_disabled: null` is not
+proof of disabled lending. Balance-history amount/time matches do not establish
+original-deposit or withdrawal-UUID causality.
 
 Offline regressions cover exact account routing, escaped/committed pagination,
 invalid requests before exposure, missing/revoked authority, duplicate IDs,

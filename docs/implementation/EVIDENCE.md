@@ -39,6 +39,20 @@ open; passing this candidate must not close them.
 
 ## How to reuse the research
 
+P23 additionally promotes [confidential chain ports](../architecture/0024-confidential-chain-ports.md):
+controller-bound signing/finality, purpose-separated release, original owner
+deposits and bounded diagnostic scheduling. Deterministic **unfunded** public
+codec fixtures are in `crates/pacifica/tests/fixtures/funding-codec-public.json`
+and `customer-deposit-public.json`; `scripts/generate-funding-codec-fixtures.mjs`
+reproduces them using the locked Anchor/web3.js client. Independent Rust/Anchor
+checks cover large u64s and exact signatures/ABI. These are not the historical
+M1 wallets, live wire artifacts or a native-credit provider. The existing journal,
+funds controller and P22 lifecycle assertions are reused, not the experiments'
+plaintext state or injected completion certificates. Current primary diagnostic
+sources and remaining causal/funding/cut gates live in the
+[runbook](../operations/live-qualification.md). Exact final local/hardware results
+are recorded in TRACKER, not inferred from this promotion register.
+
 P22's [tracked acceptance manifest](acceptance-manifest.json) maps W01–W09 and
 V01–V10 to named executable owning-layer/joined tests. Its
 [acceptance contract](../architecture/0022-offline-acceptance.md) distinguishes

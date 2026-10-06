@@ -729,10 +729,15 @@ Evidence: W03–W08; sanitized receipts and failure/cleanup reports linked to co
 
 Execution handoff: [live qualification runbook](../operations/live-qualification.md)
 tracks the audited production connections and G05 checklist. The first offline
-slice adds account-bound, durably budgeted native observation transport; it does
-not enable live gates or satisfy these acceptance criteria. Complete missing
-confidential chain/recognition/scheduler ports before requesting the fresh live
-manifest, and keep independently unqualified semantics explicitly gated.
+slice added account-bound, durably budgeted native observation transport. The
+continuation connects confidential chain signing/RPC, streamed executable checks,
+finalized receipts, owner-deposit recognition and finite read-only scheduling;
+[ADR 0024](../architecture/0024-confidential-chain-ports.md) defines the six-role
+release and trust boundaries. Run the fixed local checklist before the fresh live
+manifest. Trading/funding admission, authentic native setup/credit/payment/cut
+and precise funding remain independently gated; diagnostics do not qualify them.
+First hardware step is changed-image transport/key/read qualification, not a
+claim of a complete financial live workflow.
 
 - [ ] Deposit, trade lifecycle, funding observations, ordinary return/payout and recovery execute or expose a named blocking capability.
 - [ ] Real process/network faults and credit exhaustion reconcile safely; replay is not reported as a newly observed venue event.

@@ -6,6 +6,7 @@ use crate::{
     observation::{self, Kind, MAX_BODY, MAX_ROWS, Message},
 };
 use cinder_journal::{Backend, Committed, Journal, Protection, model::CommitId};
+use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 /// Conservative unidentified-IP heavy-read cost, in tenths of a credit.
@@ -103,6 +104,14 @@ fn target(kind: Kind, account: &str, cursor: Option<&str>) -> Result<Zeroizing<S
         Kind::Account => ("/api/v1/account", false),
         _ => return Err(Error::Qualification),
     };
+    account_target(path, paged, account, cursor)
+}
+fn account_target(
+    path: &str,
+    paged: bool,
+    account: &str,
+    cursor: Option<&str>,
+) -> Result<Zeroizing<String>, Error> {
     let decoded = bs58::decode(account)
         .into_vec()
         .map_err(|_| Error::Qualification)?;
@@ -132,6 +141,107 @@ fn target(kind: Kind, account: &str, cursor: Option<&str>) -> Result<Zeroizing<S
         }
     }
     Ok(result)
+}
+
+/// Bounded account diagnostics for native funding qualification. These never
+/// normalize cash, grant readiness, certify coverage or settle a funds operation.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub enum Diagnostic {
+    /// Documented account lending/margin settings.
+    Settings,
+    /// Documented borrowed balance and pending interest; missing is not zero.
+    Loan,
+    /// Documented balance effects; amounts/times alone do not identify a deposit.
+    BalanceHistory,
+    /// Historical experimental route; current live schema remains unqualified.
+    WithdrawalPending,
+    /// Historical experimental route; no UUID/completeness assumption.
+    WithdrawalHistory,
+}
+impl Diagnostic {
+    fn route(self) -> (&'static str, bool) {
+        match self {
+            Self::Settings => ("/api/v1/account/settings", false),
+            Self::Loan => ("/api/v1/account/loan", false),
+            Self::BalanceHistory => ("/api/v1/account/balance/history", true),
+            Self::WithdrawalPending => ("/api/v1/account/withdraw/pending", false),
+            Self::WithdrawalHistory => ("/api/v1/account/withdraw/history", true),
+        }
+    }
+}
+/// Trusted fixed-account diagnostic request, with separate durable identities.
+pub struct DiagnosticPoll {
+    /// Fixed endpoint selection, not caller-provided URLs.
+    pub kind: Diagnostic,
+    /// Spent credits persist before I/O.
+    pub reservation: CommitId,
+    /// Raw private evidence archive identity.
+    pub evidence: CommitId,
+    /// Trusted current clock time.
+    pub at: u64,
+    /// Reserved cleanup capacity, only for a trusted frozen-pool scheduler.
+    pub cleanup: bool,
+}
+/// Archive one bounded response through the existing private journal. All HTTP
+/// responses, including missing accounts, remain observations without economic
+/// effects. This is not a provider of Setup/Credit/Withdrawal/Coverage.
+pub fn diagnostic<B: Backend, P: Protection, T: Transport>(
+    journal: &mut Journal<B, P>,
+    gateway: &Gateway,
+    input: DiagnosticPoll,
+    transport: &mut T,
+) -> Result<Outcome, Error> {
+    use cinder_journal::model::{Input, PrivateBytes, Transaction};
+    let (profile, policy) = gateway.read_binding();
+    if input.reservation == input.evidence
+        || journal.transaction(input.evidence).is_some()
+        || policy.read_cost < MIN_READ_COST
+    {
+        return Err(Error::Qualification);
+    }
+    let (path, paged) = input.kind.route();
+    let query = Query {
+        origin: policy.origin,
+        target: account_target(path, paged, &profile.account, None)?,
+    };
+    let permit = gateway.reserve_read(journal, input.reservation, input.at, input.cleanup)?;
+    let Reply::Response {
+        status,
+        body,
+        received_at,
+        retry_after_ms,
+    } = transport.get(Request { query, permit })
+    else {
+        return Ok(Outcome::Unavailable);
+    };
+    if received_at < input.at || body.as_bytes().len() > MAX_BODY {
+        return Err(Error::Qualification);
+    }
+    if status == 429 {
+        gateway.record_read_limit(journal, input.reservation, received_at, retry_after_ms)?;
+        return Ok(Outcome::Limited);
+    }
+    // Keep the exact body, not a lossy parsed balance or caller-invented cutoff.
+    let raw=PrivateBytes::new(serde_json::to_vec(&serde_json::json!({"schema":"cinder-native-diagnostic-v1","kind":input.kind,"account":profile.account,
+        "status":status,"received_at":received_at,"body":body.as_bytes()})).map_err(|_|Error::Codec)?)?;
+    let tx = Transaction {
+        id: input.evidence,
+        expected: journal.head(),
+        at: received_at,
+        evidence: vec![],
+        inputs: vec![Input {
+            source: profile.source,
+            source_cut: None,
+            authority_epoch: 0,
+            observed_at: received_at,
+            raw,
+            event: None,
+        }],
+        order_observations: vec![],
+        funds_observations: vec![],
+        controls: vec![],
+    };
+    Ok(Outcome::Ingested(journal.commit(tx)?))
 }
 
 /// Poll one page through the same pool journal and credit policy as execution.

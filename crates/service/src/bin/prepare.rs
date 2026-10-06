@@ -22,6 +22,8 @@ struct Prepare {
     trading: Vec<u8>,
     broker: Vec<u8>,
     witness: Credential,
+    #[serde(default)]
+    funds: Option<Vec<u8>>,
 }
 fn write(root: &Path, name: &str, bytes: &[u8]) -> Result<(), Error> {
     #[cfg(unix)]
@@ -65,18 +67,28 @@ fn run() -> Result<(), Error> {
             Zeroizing::new(serde_cbor::to_vec(&input.witness).map_err(|_| Error)?),
         ),
     ]);
+    if let Some(funds) = input.funds {
+        keys.insert(Role::Funds, Zeroizing::new(funds));
+    }
     // Explicitly reject aliased/all-zero seed material in trusted preparation too.
-    for role in [Role::Storage, Role::Trading, Role::Broker] {
-        let key = keys.get(&role).ok_or(Error)?;
+    let secret_roles: Vec<_> = keys
+        .keys()
+        .copied()
+        .filter(|r| {
+            matches!(
+                r,
+                Role::Storage | Role::Trading | Role::Broker | Role::Funds
+            )
+        })
+        .collect();
+    for role in &secret_roles {
+        let key = keys.get(role).ok_or(Error)?;
         if key.len() != 32 || key.as_slice() == [0; 32] {
             return Err(Error);
         }
     }
-    for (i, role) in [Role::Storage, Role::Trading, Role::Broker]
-        .iter()
-        .enumerate()
-    {
-        for other in &[Role::Storage, Role::Trading, Role::Broker][..i] {
+    for (i, role) in secret_roles.iter().enumerate() {
+        for other in &secret_roles[..i] {
             if keys[role].as_slice() == keys[other].as_slice() {
                 return Err(Error);
             }
@@ -85,7 +97,10 @@ fn run() -> Result<(), Error> {
     let c: Configuration = serde_cbor::from_slice(&keys.remove(&Role::Configuration).ok_or(Error)?)
         .map_err(|_| Error)?;
     manifest.application = c
-        .construct(keys.iter().map(|(r, k)| (*r, k.clone())).collect())?
+        .construct_for(
+            &manifest,
+            keys.iter().map(|(r, k)| (*r, k.clone())).collect(),
+        )?
         .commitment();
     keys.insert(
         Role::Configuration,

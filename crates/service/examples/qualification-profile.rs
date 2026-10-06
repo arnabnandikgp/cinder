@@ -52,15 +52,16 @@ fn run() -> Result<(), Error> {
             return Err(Error);
         }
         let witness: Credential = serde_json::from_slice(&incoming).map_err(|_| Error)?;
-        let output = zeroize::Zeroizing::new(
-            serde_cbor::to_vec(&json!({
-                "manifest":manifest,"configuration":configuration,
-                "storage":body(Role::Storage)?.as_slice(),
-                "trading":body(Role::Trading)?.as_slice(),
-                "broker":body(Role::Broker)?.as_slice(),"witness":witness
-            }))
-            .map_err(|_| Error)?,
-        );
+        let mut input = json!({
+            "manifest":manifest,"configuration":configuration,
+            "storage":body(Role::Storage)?.as_slice(),
+            "trading":body(Role::Trading)?.as_slice(),
+            "broker":body(Role::Broker)?.as_slice(),"witness":witness
+        });
+        if manifest.version == 2 {
+            input["funds"] = json!(body(Role::Funds)?.as_slice());
+        }
+        let output = zeroize::Zeroizing::new(serde_cbor::to_vec(&input).map_err(|_| Error)?);
         if output.len() > 65536 {
             return Err(Error);
         }
@@ -74,7 +75,7 @@ fn run() -> Result<(), Error> {
             return Err(Error);
         }
         let boot: Bootstrap = serde_json::from_slice(&bytes).map_err(|_| Error)?;
-        if boot.capsules.len() != 5
+        if !matches!(boot.capsules.len(), 5 | 6)
             || boot
                 .capsules
                 .iter()
@@ -228,6 +229,7 @@ fn run() -> Result<(), Error> {
         },
         route,
         trading_epoch: 1,
+        chain: None,
     };
     let aws_root: Vec<u8> = serde_json::from_value(v["awsRoot"].clone()).map_err(|_| Error)?;
     let venue_root: Vec<u8> = serde_json::from_value(v["venueRoot"].clone()).map_err(|_| Error)?;
@@ -246,6 +248,7 @@ fn run() -> Result<(), Error> {
     }
     let manifest = Manifest {
         version: 1,
+        chain: None,
         domain: [domain.network.bytes(), domain.deployment.bytes()].concat(),
         application: [1; 32],
         stream: id(19)?,

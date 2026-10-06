@@ -508,6 +508,19 @@ pub fn relay_egress(
     first_ipv4((host, 443).to_socket_addrs()?)?;
     relay_socket(listener, || connect_https(host), stop)
 }
+/// Fixed devnet RPC relay. Only opaque TLS is copied; RPC credentials, methods,
+/// signed transactions and responses remain inside the enclave TLS channel.
+pub fn relay_chain(
+    listener: crate::vsock::VsockListener,
+    host: &str,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    if !matches!(host, "devnet.helius-rpc.com" | "api.devnet.solana.com") {
+        return Err(Error);
+    }
+    first_ipv4((host, 443).to_socket_addrs()?)?;
+    relay_socket(listener, || connect_https(host), stop)
+}
 /// Measured cloud endpoint only. TLS/SigV4 terminate in the enclave, never here.
 pub fn relay_cloud(
     listener: crate::vsock::VsockListener,
