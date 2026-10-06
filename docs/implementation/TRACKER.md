@@ -47,19 +47,20 @@ CI audit recommendations 2/3/4 are authorized: automatic test inventory and
 executed-case/intentional-skip guards; shipping-default tests and offline ARM64
 release packaging; independent contracts/lint/Rust/SDK-relay reporting.
 The user's subsequent request also authorizes build/dependency/tool caching in
-this same PR. Cache qualification is in progress; all builds/tests remain required.
+this same PR. Focused local cache qualification passes; all builds/tests remain required.
 Implementation checkpoint `297327faca999977581ed407e7acc9db3e1ad828` passes the
 full local checks below; final reporting/receipt-shape edits also pass focused
 guard and actual Node/Chrome carrier checks. No new economic
-policy, program, dependency pin, AWS session, live venue, RPC, wallet or customer
+policy, program, product dependency pin, AWS session, live venue, RPC, wallet or customer
 funds are in scope. Branch protection, artifacts/coverage and advisory scans
 and live gates remain deferred. P23 is not started.
 Ready/open [PR #54](https://github.com/arnabnandikgp/cinder/pull/54) targets
 `product/tee-v1`, published via native `gh stack init/submit` at
 `d655f39776ac777ec9617a4c5b743b187381dd55`. Its committed source-only export
 passes all 41 guards and the workspace graph with no git/research/user files.
-This bookkeeping-only successor records the PR receipt; hosted results for the
-current head remain pending and are not inherited from P22 or local checks.
+Later commits record the browser prerequisite fix and the newly authorized
+caching. Hosted results for the current head remain pending and are not inherited
+from P22 or local checks.
 Hosted follow-up: the initial browser job failed because automatic discovery
 ran the certificate serial tests before building their native verifier. Local
 warm targets had masked that ordering error. The existing fixture build is now
@@ -68,7 +69,12 @@ committed `ad136c6` source export with no native/WASM build outputs: 11 tool and
 12 relay tests, both isolated Rust profiles, and actual Node/Chrome each passing
 14 core/attestation and 24 carrier groups. No test is disabled and no dependency
 pin or protocol behavior changes. The ensuing docs-only successor records that
-first justified CI fix; fresh hosted results remain pending after its push.
+first justified CI fix. Caching source `28a78924254581d6b3aaed09f7be4e19bcaf9e6c`
+passes all 41 contracts/inventory guards, workspace boundaries, workflow lint and
+cold/warm network-disabled ARM64 package checks, using the runner UID with
+read-only committed source/vendor mounts. Both runs explicitly rebuild the
+application twice, compare identical ELF files and reject non-Nitro boot.
+GitHub cache restore/save hooks and hosted timing still require current-head CI.
 Next: await hosted checks and review/merge authorization. Preserve untracked `docs/user-journey.md`,
 `stays/`, ignored `work/` and docs content.
 
@@ -2173,7 +2179,19 @@ tool downloads remain checksum-verified on restore; SBF platform tools have an
 exact version key, and the public ARM64 tool-only image uses BuildKit caching.
 Both application builds in the ARM64 reproducibility gate remain mandatory.
 No test result, IDL, fixture state, wallet, provisioning or credential is cached.
-Workflow lint and cold/warm isolated ARM64 checks are pending for this edit.
+Verification of caching source `28a78924254581d6b3aaed09f7be4e19bcaf9e6c`:
+the pinned Node contracts entrypoint passes 41 guards and workspace boundaries;
+official actionlint 1.7.12 validates all four workflows, and shell syntax passes.
+The exact source export is qualified with the existing pinned ARM64 image,
+read-only public source/vendor and no network, NSM, git/research or credentials.
+Cold and populated-cache runs both pass as the host UID/GID, build all seven
+shipping-default tools, explicitly rebuild the application a second time,
+compare identical ELF files and refuse ordinary-host boot. The warm run also
+cleans/rebuilds the application before its initial build. These local runs verify
+the cache mount and mandatory application checks; they do not execute GitHub's
+cache service or establish hosted speedup/retention behavior. Public build outputs
+and logs stay in the task's explicit temporary cache directory for reuse; both
+test containers are removed automatically, and no builder is running.
 Verification: complete pinned local workspace checks pass: 41 script guards,
 12 relay and 24 private SDK/TLS tests, both strict Clippy configurations and
 all-target build; Rust all-feature debug/release each pass 400 tests (10 intentional
