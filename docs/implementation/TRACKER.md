@@ -41,26 +41,30 @@ P23 is authorized and in progress on `tee/p23-live-qualification`, based on
 merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 [Live qualification](../operations/live-qualification.md) and
 [ADR 0024](../architecture/0024-confidential-chain-ports.md) define the fixed
-local checklist and remaining capability gates. Application checkpoint
+local checklist and remaining capability gates. Initial application checkpoint
 `1c423c9c6bfaf40d591b2655db7c41881d14639e` connects confidential chain
 codec/signing/RPC, streamed code verification, finalized receipts/counters,
 original owner deposits, six-role private release and finite read-only scheduling.
-Full pinned host, actual Node/Chrome/WASM and source-only ARM64 package checks
-pass at that checkpoint. The final serial full SBF gate passes 59/59; the previously
-timing-failed HTTP lifecycle passes without relaxing its session limit. A final
-completed-payment/freeze regression passes its 25 focused chain tests; the full
-host and exact-source shipping package are being rechecked for that correction.
-The P23 entry
-below records commands, bounds, hashes, failure dispositions and test-only trust.
+Final application checkpoint `33dae28b2c3846d9956a7e906f5663d78d93cd76`
+preserves completed original receipts across the one-way vault freeze without
+allowing new old-epoch actions. All fixed local gates pass: full pinned host,
+actual Node/Chrome/WASM, full serial SBF (59/59), joined chain/freeze regressions
+and exact-source ARM64 shipping/reproducibility/non-Nitro refusal. The unchanged
+program/browser owning sources retain their initial-checkpoint receipts; the
+final host/package checks cover the correction. The P23 entry below records
+commands, bounds, hashes, failure dispositions and test-only trust.
 
 Draft [PR #55](https://github.com/arnabnandikgp/cinder/pull/55) remains against
 `product/tee-v1`; no further split, merge or deployment is requested. Its older
 published head `11c864626e2e1840f1475f1f5a8d721b166f70c9` passed all seven hosted
-checks and CodeRabbit with no review threads. The new checkpoint is local until
-the last gate and handoff finish; old green checks do not cover it.
+checks and CodeRabbit with no review threads; old green checks do not cover the
+final source. Its documentation-only successor records completed local evidence
+and passes the documentation guards. The updated draft's publication/head receipt
+belongs in its PR description; verify the remote head equals the local tip before
+live work. No new-head hosted result or independent review is inferred.
 
-Next: finish/record the final host/package checks, publish the same draft through the
-native stack workflow, then obtain the fresh bounded read-only G05 run manifest.
+Next: obtain the fresh bounded read-only G05 run manifest after this same draft's
+native-stack publication. Review/CI and live acceptance remain separate gates.
 Authentic native setup/credit/payment/cut/funding remain independently gated;
 shipping validation still refuses trading/funding and API risk admission is
 disabled. Local preparation is not P23 live acceptance or phase closure. No AWS,
@@ -2344,9 +2348,9 @@ polling; version 1 remains compatible. Native diagnostics consume durable credit
 and archive missing/unsupported schemas without manufacturing setup/credit/payment
 or coverage. Funds-signing and trading activation remain rejected. Local joined
 tests use synthetic RPC/clock, not real deployments or a native finality provider.
-Current full host/browser/package checks pass at the checkpoint below; final
-serial SBF passes 59/59. The final receipt/freeze correction is being rechecked
-before publication. No AWS/RPC/venue/wallet/deployment action has occurred.
+All fixed local gates pass, including final serial SBF 59/59 and the final
+receipt/freeze correction's full host and exact-source shipping package checks.
+No AWS/RPC/venue/wallet/deployment action has occurred.
 The original initial-slice receipt below remains historical, not these results.
 
 Checked application checkpoint: `1c423c9c6bfaf40d591b2655db7c41881d14639e`.
@@ -2394,7 +2398,30 @@ Logs: `/private/tmp/cinder-p23-local-freeze-repro.log` (expected failure before 
 and `/private/tmp/cinder-p23-local-freeze-fixed.log` (pass after fix). Current token
 state, original transaction deltas, exact receipt and approved-code checks remain;
 this is not a historical consensus proof or relaxation of native settlement gates.
-The full host/package reruns and final publication receipt follow this correction.
+Final checked application source: `33dae28b2c3846d9956a7e906f5663d78d93cd76`.
+The full pinned `node scripts/check.mjs` rerun passes all three Rust profiles,
+both strict Clippy modes/build, 42 contracts/inventory guards, dependency boundaries,
+12 relay and 24 SDK process tests. Log:
+`/private/tmp/cinder-p23-local-root-freeze-final.log`. The 25 focused chain tests
+also pass. No required workflow is skipped; intentionally ignored subprocess
+helpers remain covered by their registered parent matrices.
+
+The exact committed-source ARM64 package rerun passes on the same locked tool
+image above, with no network, NSM, git, research or host credential mounts.
+All seven shipping-default tools build; the independently rebuilt enclave is
+byte-identical and ordinary-host boot is fenced with no public stdout. Final
+enclave SHA-256:
+`f1a725d6a023cb52528d253c6bedccc8edcb4bdd4c2d03e7f2de90998964a521`.
+Artifacts: `/private/tmp/cinder-p23-arm64-final.VAUBqX/artifacts/bundle`;
+log: `/private/tmp/cinder-p23-local-arm64-final.log`. The disposable package
+container was removed; the pre-existing stopped builder was preserved.
+Browser and SBF owning program/client/test sources are unchanged from the
+`1c423c9` run above. This is completed local preparation, not an EIF/PCR receipt,
+live settlement qualification or closure of any P23 live criterion. The final
+documentation-only successor records these checked sources and the same draft's
+PR description records its independently verified publication head/base. Final
+documentation contracts/inventory/workspace and whitespace guards pass. No new
+head's hosted checks or CodeRabbit review are inferred from the earlier green head.
 
 Prior hosted PR #55 head `11c864626e2e1840f1475f1f5a8d721b166f70c9` had all seven
 checks plus CodeRabbit green and no review threads; those results do not qualify
