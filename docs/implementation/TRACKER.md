@@ -26,7 +26,7 @@
 | [P21A — HTTP and WebSocket API](PLAN.md#p21a) | closed | Browser/Node HTTP and WebSocket commands and private updates preserve attested confidentiality, owner permissions and one authoritative financial journal. | #47, #48, #50 and [#51](https://github.com/arnabnandikgp/cinder/pull/51), merged `0530374` |
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
-| [P22 — Offline adversarial acceptance](PLAN.md#p22) | in progress | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | Local implementation |
+| [P22 — Offline adversarial acceptance](PLAN.md#p22) | in progress | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | Local acceptance passed; publication pending |
 | [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -38,15 +38,15 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 Current work: authorized P22 on `tee/p22-offline-acceptance` in `cinder-tee`, based
-on merged trunk `1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7`. Both joined normal
-HTTP/WebSocket lifecycles pass locally through SDK/relay/service/controllers and
-compiled SBF vault effects, including actual private position streams and restart.
-The explicit covered-observation regressions and independent bounded accounting
-oracle pass. The 25-case manifest traces all W/V requirements; final full-suite
-acceptance is pending after the focused fixture corrections below.
+on merged trunk `1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7`. Full consolidated
+offline acceptance passed at source `f14a4400f9bf3664193f51fb5c055dc10bccac65`:
+Rust debug/release and SDK checks, real Node/Chrome browser qualification, and all
+57 default SBF cases. Both joined normal lifecycles and recovery claims pass;
+the 25-case manifest traces all W/V requirements. This documentation-only successor
+records results and checked technical criteria; no new executable source is added.
 No AWS, live venue, remote RPC, configured wallet or customer funds are in scope.
-Next: run all offline runners against the completed source, record
-fresh results and publish one P22 PR. P22 is not complete/merged; P23 is not started.
+Next: publish one P22 PR, then obtain its own hosted CI/review. P22 remains
+`in progress` until review and merge; P23 is not started.
 Preserve untracked `docs/user-journey.md`, `stays/`, ignored `work/` and docs content.
 
 ### Historical P21 merge handoff (superseded)
@@ -2101,9 +2101,9 @@ Merge: 1c2c3eb836003e9aeb252e85e3aacdf5eb32ecf7.
 ## P22 — Offline adversarial acceptance
 
 Work: full HTTP/WebSocket normal lifecycle with actual SDK/relay/private service, Gateway/funding Controller, risk-derived holds, replicated AEAD journal and SBF vault movements. Checks each independent customer/house/native book, physical cash, positive claims, holds, source cuts, late fills, funding settlement, streams and final recipient payment. A separate widened-integer reference covers 4,632 position transitions and eight fixed seeds/576 financial cuts; reverse stress retains net-flat shortfall counterexamples. The 25-case manifest links all W01–W09/V01–V10 to existing and new executable tests; default CI includes the manifest and joined tests without another duplicate job.
-Verification: corrected focused normal SBF workflows pass for both carriers (HTTP 67.865s, WebSocket 66.561s). Each checks 64 signed reads: 62ms/44ms, encrypted journals 249,658/249,312 bytes, Node-harness RSS 155,320,320/158,318,592 bytes. These are workload measurements, not production service/Nitro benchmarks. All 16 observation regressions and three new reference tests pass. The earlier consolidated run passed full debug/release Rust/client checks and real Node/Chrome qualification, plus all 55 existing vault cases, but failed two new fixture assertions; that is not full P22 success. Final consolidated rerun pending.
+Verification: `node scripts/check-acceptance.mjs` passes at source `f14a4400f9bf3664193f51fb5c055dc10bccac65`, using Rust 1.97.1, Node 24.21.0, Anchor 1.2.0, Surfpool 1.5.0, Agave/SBF 3.1.10/platform tools 1.52 and wasm-bindgen 0.2.129 on local Apple silicon. Default workspace debug/release, Clippy and SDK checks: 91.402s (600s budget). Real Node and Chrome 154.0.8037.98 each pass 14 core/attestation and 24 HTTP/WebSocket/private-SDK process groups: browser runner 59.101s (600s budget). Default vault runner passes all 57 tests, none skipped: 456.807s (1,500s budget), including both normal and recovery carriers. HTTP/WebSocket normal cases take 67.768s/66.557s; each checks 64 signed reads in 64ms/47ms. Encrypted journals are 249,130/249,124 bytes and Node-harness RSS 155,566,080/158,187,520 bytes, below the declared 8MiB/512MiB bounds. These are test-workload measurements, not production service/Nitro benchmarks. All 16 observation regressions and three new reference tests pass, including 576 differential cuts and 289 shortfall cuts. Tracked-only source export independently passes manifest/foundation checks (27 phases/37 tracked documents) and all 33 metadata regressions with no `work/` or user docs. Earlier failed/focused runs are diagnostic history, not the final success receipt. Actual hardware/live qualification is intentionally not run; crash-helper tests marked ignored are invoked explicitly by their parent matrices. Hosted CI/review for the published head remain pending.
 Unexpected: ordinary native history parsing has no certified causal cut; introduced an explicit trusted covered-input port, not inferred completeness or an enabled live provider. The fixture control codec required canonical decimal strings for lossless i128 values. Initial SPL mint setup expired under implicit helper defaults; explicit execution/confirmation settings match the existing sandbox sender. Duplicate native observations correctly advance audit version while economics stay unchanged; the regression now asserts both facts. The first reverse-stress range included downward shocks; its named upward-shock search now starts at 100. Regenerated Rust caches were removed after disk exhaustion and the pinned WASM target installed; no source/research or global toolchain versions were changed.
-Next: rerun the default Rust/client, browser and full SBF suites offline, record exact source/results, then publish one P22 PR against product/tee-v1. Preserve fake-port versus SBF evidence limits; P23 and all live gates remain unopened.
+Next: publish one P22 PR against product/tee-v1 and obtain hosted CI/review before merge authorization. Preserve fake-port versus SBF evidence limits; P23 and all live gates remain unopened. The next phase requires a current bounded G05 environment/account/funding/cleanup manifest, not reuse of P20 permission or historical experiment receipts.
 PR: none.
 Merge: none.
 

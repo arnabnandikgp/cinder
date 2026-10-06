@@ -701,10 +701,14 @@ reference conformance, bounded state exploration, fuzz, reverse stress and real
 service-process crash tests. Bring failures back to owning phases.
 Evidence: all W IDs and V01–V10; fresh-checkout repeatable seed manifest.
 
-- [ ] Opposing winners/defaults, ADL gaps, funding boundaries, house exhaustion, inaccessible cash and payout races preserve attribution/claims.
-- [ ] Duplicate/conflicting/late events, restart, rollback and malicious ordering cannot double-spend or silently omit loss.
-- [ ] Test bounds, counterexamples and unresolved proofs are explicit; measurements meet declared load/resource budgets without weakening economics.
-- [ ] Normal, partial/cancel and recovery workflows start through actual HTTP/WebSocket SDK/service paths, not only direct Rust method calls; private streams recover after gaps/reconnect without duplicate financial actions. Fresh-checkout offline CI reruns the recorded manifest with no live API/RPC/AWS dependency.
+- [x] Opposing winners/defaults, ADL gaps, funding boundaries, house exhaustion, inaccessible cash and payout races preserve attribution/claims.
+- [x] Duplicate/conflicting/late events, restart, rollback and malicious ordering cannot double-spend or silently omit loss.
+- [x] Test bounds, counterexamples and unresolved proofs are explicit; measurements meet declared load/resource budgets without weakening economics.
+- [x] Normal, partial/cancel and recovery workflows start through actual HTTP/WebSocket SDK/service paths, not only direct Rust method calls; private streams recover after gaps/reconnect without duplicate financial actions. Fresh-checkout offline CI reruns the recorded manifest with no live API/RPC/AWS dependency.
+
+Technical acceptance is recorded in the [tracked manifest](acceptance-manifest.json)
+and [bounded acceptance contract](../architecture/0022-offline-acceptance.md).
+Local success does not close the phase before PR review/merge or enable live ports.
 
 <a id="p23"></a>
 ## P23 — Bounded devnet/testnet integration qualification
