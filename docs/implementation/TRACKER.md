@@ -74,7 +74,18 @@ passes all 41 contracts/inventory guards, workspace boundaries, workflow lint an
 cold/warm network-disabled ARM64 package checks, using the runner UID with
 read-only committed source/vendor mounts. Both runs explicitly rebuild the
 application twice, compare identical ELF files and reject non-Nitro boot.
-GitHub cache restore/save hooks and hosted timing still require current-head CI.
+Hosted checks at `97c7fdcd163f1c130b06bade8f017b597196edbe` pass six jobs,
+including ARM64 packaging, browser, SBF and both Rust checks. SDK/relay job
+`112097236435` fails seven transport tests with `cinder-relay ENOENT`, then hits
+its 15-minute timeout because partial harness startup leaves fixtures alive.
+The independent client group had built only the service/fixture verifier, relying
+on the old preceding all-target build for the relay and production verifier.
+The user authorizes this fix: share the exact four-binary prerequisite list
+between the explicit build and a fail-fast executable check before SDK startup.
+A guard regression rejects missing/non-executable prerequisites, including the
+production verifier, without starting the process suite. Fresh committed-source
+client-group verification is in progress; no timeout, cache or financial oracle
+is relaxed. GitHub cache hooks/timing remain separate from local evidence.
 Next: await hosted checks and review/merge authorization. Preserve untracked `docs/user-journey.md`,
 `stays/`, ignored `work/` and docs content.
 

@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { nodeSuite, rustSuite } from "./test-runner.mjs";
+import { nodeSuite, privateClientBinaries, rustSuite } from "./test-runner.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -103,10 +103,7 @@ if (args[0] === "--properties") {
         "cinder-service",
         "--features",
         "local-fixture",
-        "--bin",
-        "cinder-service-fixture",
-        "--bin",
-        "cinder-verify-fixture",
+        ...privateClientBinaries.flatMap((name) => ["--bin", name]),
         "--locked",
         "--offline",
       ]);

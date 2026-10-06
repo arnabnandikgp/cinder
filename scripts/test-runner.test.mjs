@@ -1,7 +1,67 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { classify, inventory, ignoredRust } from "./test-inventory.mjs";
-import { checked, observer, qualifyEntries } from "./test-runner.mjs";
+import {
+  checked,
+  observer,
+  privateClientBinaries,
+  qualifyEntries,
+  requirePrivateClientBinaries,
+} from "./test-runner.mjs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+test("private SDK prerequisites fail before fixture startup, including the production verifier", () => {
+  const target = mkdtempSync(join(tmpdir(), "cinder-sdk-prerequisites-"));
+  const debug = join(target, "debug");
+  mkdirSync(debug);
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("check-private-client.mjs", import.meta.url))],
+      {
+        env: { ...process.env, CARGO_TARGET_DIR: target },
+        encoding: "utf8",
+        timeout: 5000,
+      },
+    );
+    assert.equal(result.error, undefined);
+    assert.equal(result.signal, null);
+    assert.equal(result.status, 1);
+    assert.match(
+      result.stderr,
+      /Missing\/unusable private-client prerequisite/,
+    );
+    assert(!result.stdout.includes("Node regression suite:"));
+    for (const name of privateClientBinaries) {
+      assert.throws(
+        () => requirePrivateClientBinaries(target),
+        new RegExp(name),
+      );
+      writeFileSync(join(debug, name), "fixture", { mode: 0o700 });
+    }
+    assert.doesNotThrow(() => requirePrivateClientBinaries(target));
+    for (const name of privateClientBinaries) {
+      chmodSync(join(debug, name), 0o600);
+      assert.throws(
+        () => requirePrivateClientBinaries(target),
+        new RegExp(name),
+      );
+      chmodSync(join(debug, name), 0o700);
+    }
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
 const files = [
   "scripts/a.test.mjs",
   "services/web-relay/a.test.mjs",

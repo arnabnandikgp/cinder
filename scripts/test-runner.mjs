@@ -1,9 +1,35 @@
 // Stream ordinary logs, but require successful execution rather than declarations.
 import { spawn } from "node:child_process";
+import { accessSync, constants, statSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { resolve } from "node:path";
 import { manifest } from "./check-acceptance.mjs";
 import { root, inventory, ignoredRust } from "./test-inventory.mjs";
+
+// All four are used by the independent private SDK process suite. In particular,
+// a missing production verifier must not masquerade as a rejected fixture quote.
+export const privateClientBinaries = Object.freeze([
+  "cinder-service-fixture",
+  "cinder-verify-fixture",
+  "cinder-relay",
+  "cinder-verify-quote",
+]);
+export function requirePrivateClientBinaries(
+  target = process.env.CARGO_TARGET_DIR ?? "target",
+) {
+  for (const name of privateClientBinaries) {
+    const path = resolve(root, target, "debug", name);
+    try {
+      if (!statSync(path).isFile()) throw Error("Not a file");
+      accessSync(path, constants.X_OK);
+    } catch (cause) {
+      throw Error(
+        `Missing/unusable private-client prerequisite: ${name}. Run node scripts/check.mjs --group=client.`,
+        { cause },
+      );
+    }
+  }
+}
 
 export function observer(format, required = [], allowedIgnored = new Set()) {
   const passed = new Set(),
