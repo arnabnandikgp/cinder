@@ -70,6 +70,21 @@ Its new enclave ELF hash is
 `0f5da0b061380ad16d1e139765b505ee3d6e3cdf94fc9195b5dc50975d8a1ff1`;
 this is not an EIF/PCR or changed-image hardware qualification.
 
+The 2026-10-06 read-only hardware session additionally promotes a **public
+certificate-only** AWS path capture in
+`tools/web-channel/attestation/aws-serial-padding-capture.json`. It exercises the
+observed positive 20-byte serial magnitude plus minimal sign padding without
+changing fixed-root, certificate-signature/path, PCR/context or freshness checks.
+Negative/nonminimal/oversized serials, expiry and signature corruption reject.
+No quote context, customer data, signed command, credential or private key is in
+the capture. The same session's transport regressions cover bounded opaque idle
+ingress, skipped busy Read polls and post-I/O cadence, plus a separately bounded
+15-second application reply with five-second handshake/frame limits unchanged.
+Actual grant delivery/update progressed, but full live concurrent stream handling
+is **not qualified**: cloud history verification under the shared journal lock
+causes long commits and bounded read refusals. Detailed artifact/fault/cleanup
+receipts and this limitation belong in TRACKER, not a fabricated live pass.
+
 P22's [tracked acceptance manifest](acceptance-manifest.json) maps W01–W09 and
 V01–V10 to named executable owning-layer/joined tests. Its
 [acceptance contract](../architecture/0022-offline-acceptance.md) distinguishes

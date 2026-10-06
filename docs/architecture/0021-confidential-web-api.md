@@ -195,7 +195,8 @@ authenticate. Before sealing, the server reserves the entire directional record
 budget; it does not emit an incomplete reply because later chunks exhaust it.
 
 Bounds: eight upstream sessions, 32 parent HTTP sockets, 8 KiB HTTP headers,
-five-second absolute delivery/handshake budgets, 120-second attested lifetime,
+five-second handshake/body/frame budgets, fifteen-second application-reply
+budget after a complete validated body, 120-second attested lifetime,
 1,024-byte signed command and 128 records per direction including confirmation.
 Delivery timeout is not rollback of an escaped application operation. The SDK
 never queues concurrent requests, retries ciphertext or resumes counters.
@@ -257,7 +258,8 @@ One bounded stream queue per connection; overflow terminates it with resync
 required, never silent drops. Reconnect obtains a fresh snapshot/current query;
 it does not replay a trade. Read capabilities stay read-only.
 
-Initial budgets: eight active sessions, five-second handshake/exchange budget,
+Initial budgets: eight active sessions, five-second handshake/frame budget,
+fifteen-second command-reply budget,
 at most 128 client records and a 120-second attested session lifetime. Reattest
 long-lived integrations; revalidate shorter request/grant expiry on every use.
 Keep private commands at 1 KiB and complete replies at 1 MiB. Noise records have

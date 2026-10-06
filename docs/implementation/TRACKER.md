@@ -44,6 +44,49 @@ merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 local checklist and remaining capability gates. The historical pre-review
 application checkpoints and receipts remain in the P23 log below.
 
+### Latest hardware checkpoint — 2026-10-06
+
+The approved read-only AWS session has ended; resource cleanup is verified.
+Eight of eight boots were used on the one approved host, with zero financial
+activity. Actual six-purpose release, independently checked AWS/Noise HTTP
+own-only reads, accepted-operation restore, witness loss/epoch fencing and both
+finite lease and natural witness-STS expiry have passing bounded receipts.
+The final positive STS baseline completed at 13:13:28.876 UTC; fresh reads refused
+at 13:14:19.001 UTC after actual 13:14:04 UTC credential expiry, without changing
+the intervening clock, head, policy or routes.
+
+The approved fifteen-second application-reply correction passes local slow-reply,
+silent-timeout and unchanged five-second handshake regressions. All eight relay
+tests and 26 shared SDK groups per actual Node/Chrome runtime pass; the final
+pinned full offline runner also passes. Actual Chrome grant delivery completes
+at 12,933 ms. Full live agent/subscription/revocation handling is **not qualified**:
+initial subscription/read refusals remain. Serial accepted-history verification
+under the shared runtime lock is a confirmed contention mechanism, not a measured
+explanation of every individual close. Six accepted grants reconcile with zero
+exposure and no resend; no further grant, boot, timeout widening, stale-view
+workaround or durability redesign was performed.
+
+Next substantive step: reproduce and measure journal/write/read/subscription
+contention locally before proposing a reviewed scheduling/storage correction or
+another hardware run. The expired original stream's post-replica-fault restore,
+complete native read qualification and actual devnet diagnostic request remain
+named gaps. Financial setup/credit/payment/cut/funding and devnet deployment are
+separate gates. Application corrections are checkpointed at
+`dc8844bda90ab78b672967b96b0efaf282abd711`, on the same PR #55 branch; the user
+authorized commit/push followed by focused local concurrency diagnosis. This
+documentation successor records the tested source and bounded hardware outcome;
+the exact published head/base and fresh CI/review state belong in the PR receipt.
+No new hosted pass, merge or P23 closure is claimed. Detailed receipt below;
+protected source/image/client logs and
+106 archived ciphertext objects remain in ignored local experiment storage.
+Independent cleanup confirms the instance terminated, test EBS/storage/witness/
+roles/network resources absent, and all six KMS keys disabled in PendingDeletion
+with a seven-day deletion window. Pre-existing setup policies were preserved;
+local test relay/tunnel listeners are closed. Billing is delayed; the $5 cap is
+not a claim about a finalized invoice.
+
+### Earlier publication and hardware checkpoints
+
 [PR #55](https://github.com/arnabnandikgp/cinder/pull/55) is ready/open against
 `product/tee-v1`, following the user's readiness and review-fix requests. Reviewed
 head `d26945fc7c749dc3f464f720db047ff64a8ee0a2` passed all seven hosted checks;
@@ -64,12 +107,87 @@ The detailed receipt is in the P23 log below; this documentation-only successor
 does not change the tested application. Verify the published head/base and new
 hosted CI independently; the PR description carries that publication receipt.
 
-Next: review the correction's hosted checks and review disposition, then obtain
-a fresh bounded read-only G05 run manifest. Live acceptance remains separate.
+Access preflight on 2026-10-06 verifies all seven hosted checks plus CodeRabbit
+success at published head `b6a7d30f0a5ba30113a08cb8fa82bea33f78a66f`.
+Renewed `cinder_new` STS is the expected non-root IAM user in account
+`588966314654`. Regional metadata and EC2 launch DryRun pass; the old P20
+operator/boundary policies cannot manage the fresh P23 witness, roles and keys.
+The user completed P23 console setup. Independent live readbacks of
+`CinderP23Operator` v1 and `CinderP23RuntimeBoundary` v1 exactly match the supplied
+scoped JSON; operator is attached and boundary is not attached to the user.
+Fresh `p23-20261006-ro1` roles/table are verified absent, and exact bucket names
+are absent from the owned inventory (global name availability is not inferred).
+The user approved the ignored run proposal on 2026-10-06: one four-hour/$5
+read-only hardware session with zero financial activity. Fresh six-role local
+preparation passes the real loaded-contract and 4-KiB KMS capsule checks; exact
+public ARM64 artifacts are revalidated before upload. The operator ledger records
+six keys, two private buckets, one witness table, two boundary-restricted roles
+and one enclave-enabled `c6g.large` instance `i-07e2c3fb878e056c0`. Its setup
+completed with Nitro CLI 1.5.0; authenticated SSH uses the AWS-console host key.
+No role plaintext or signing key is uploaded. The original clean measured image
+passes actual non-debug NSM/six-purpose KMS, Node/Chrome Noise HTTP own-only
+reads, independent wrong-pin/replayed-quote refusal, and exact accepted-operation
+restore. A replica-loss mutation refused and the independent accepted witness
+head did not advance; its post-fault restore check remains incomplete because
+the original witness credential expired at 12:00:45 UTC, without a head reset.
+Actual WebSocket testing exposed two issues: opaque ingress closed after five
+seconds of silence, and periodic subscription polls treated journal contention
+as fatal. The user approved both bounded corrections. Corrected parent-only idle
+reproduction passes against the original enclave. The enclave correction skips
+busy signed Read polls without cached replies; witness/auth/lease/storage failures
+remain fatal and ordinary commands are not retried. All 81 service unit tests,
+strict Clippy and the full pinned offline workspace runner pass; seven hardware
+tests remain explicitly gated. Default-feature ARM64 rebuilt enclave ELF is
+`816dc8d7eddf0cb13ba9986e14a3f86cc1b81ea0732d05b4e87fa02b03b7d884`.
+The source patch and independently reviewed EIF/PCR receipts are preserved in
+ignored `work/experiments/p23-live/LIVE-RESULTS.md`; changed-image transport
+qualification is still pending. Four boots used at that checkpoint; no extra
+instance or financial activity is approved. Next: qualify the approved correction
+with the planned fresh read-only profiles, finish bounded fencing/expiry checks,
+then reconcile and verify teardown. No new hosted checks are inferred from the
+previous published head, and this is not full P23 closure.
+Continuation checkpoint: boot 5 used a fresh independent READ stream. A lost
+READ-grant reply was reconciled by own authenticated lookup (one accepted grant,
+epoch 1, zero exposure, no resend). Actual AWS attestation exposed a minimally
+encoded 20-byte serial magnitude plus sign padding; the user approved a narrow
+SDK verifier correction, preserving fixed-root/path/signature/PCR/freshness
+checks. Public certificate-only regression and full Node/WASM/Chrome offline
+suites pass, and the actual quote verifies. Witness-loss refusal passes on boot 5.
+Slow cloud polling also reproduced a cadence failure; the approved contention
+fix now leaves the full 500-ms request interval after I/O. All 81 service tests,
+strict Clippy and full pinned offline checks pass for this refined source patch
+`3093512a3bc77a4232f0001c03752bff50d53b60377f01267eb5e84f21fc3898`.
+Shipping ARM64 ELF is
+`54bfa130a2f108443651dd05d383fef7fdb933670211eacac7f33c5c38b3923a`;
+READ replacement EIF is
+`61e8e05d66db51ba331ca9272488f8412fc145b6e9dce75aec6f59f2c03efcc0`.
+Five of eight boots used; full live streams, conditional epoch fencing, finite
+lease/STS checks and teardown still pending at this checkpoint. Historical
+failed images/receipts and accepted heads are preserved. No new hosted result
+or full P23 closure is claimed. Local generated `target/debug` was removed under
+the user's standing authorization after disk exhaustion; release artifacts,
+receipts and unrelated work were retained.
+Next live checkpoint: boot 6 restores the same accepted READ grant; a conditional
+witness epoch 1→2 preserves sequence/hash and fences the old worker. Full Node and
+Chrome streams are **not passing**, although the approved fifteen-second SDK/
+opaque HTTP reply change now delivers the accepted grant and pushed revision.
+Local reply regression fails before/passes after; all eight relay tests, 26 joined
+SDK groups per Node/Chrome, TypeScript and dependency/boundary checks pass.
+Actual grant latency reaches 12,933 ms; read/subscription refusal remains.
+`Replicated::append` rereads and verifies accepted history under the shared active
+mutex, so this is not a qualified low-latency/concurrent broker. No additional
+deadline widening, stale-cache workaround, grant attempt or storage-design change
+is authorized by this finding. Six accepted distinct grants reconcile with zero
+financial exposure/no resend. Original lease/STS/teardown checks continue on the
+remaining two boots; next substantive work is a separate local durability and
+read/write scheduling analysis. P23 remains in progress.
+Solana deployment/funding and native financial qualification remain separate.
+Live acceptance remains separate.
 Authentic native setup/credit/payment/cut/funding remain independently gated;
 shipping validation still refuses trading/funding and API risk admission is
-disabled. Local preparation is not P23 live acceptance or phase closure. No AWS,
-remote RPC, native account/funding/deployment/wallet action occurred. Preserve
+disabled. Local preparation is not P23 live acceptance or phase closure. Access
+preflight used AWS read-only metadata/DryRun and public devnet genesis/balance
+reads; no resources, account setup, deployment, signatures or funds moved. Preserve
 untracked `docs/user-journey.md`, `stays/`, ignored research and docs content.
 
 ### CI follow-up merge receipt
@@ -2497,6 +2615,85 @@ Unexpected: production runtime has no chain signer/RPC recognizer or observation
 Next: finish offline validation and connected confidential ports, qualify source cuts/precision/setup/finality, then obtain a fresh bounded G05 manifest before actual SDK/relay/Nitro/program/venue tests. Use the [live runbook](../operations/live-qualification.md); no mock or historical replay counts as live qualification.
 PR: https://github.com/arnabnandikgp/cinder/pull/55
 Merge: none; ready/open and in progress, live acceptance and review still required.
+
+### Bounded read-only hardware receipt — 2026-10-06
+
+Authority: user-approved `p23-20261006-ro1`, one `c6g.large`, $5/four hours/eight
+boots, no financial/native signing activity. The user separately approved bounded
+opaque-ingress idle handling, skipped busy Read polls/post-I/O cadence, minimally
+encoded AWS certificate sign padding and a fifteen-second application-reply
+deadline. Authentication, fixed-root/path/PCR/context verification, freshness,
+short handshake/frame bounds, capacity, finite lifetime and no-retry semantics
+are retained. Only the owned host and fresh disposable identities were used.
+
+| Check | Actual evidence | Remaining limit |
+| --- | --- | --- |
+| Non-debug application and six-purpose key release | Actual NSM/recipient KMS; independently reviewed EIF/PCRs and parent denial checks | No production governance sign-off |
+| Private HTTP and attestation negatives | Node/Chrome own-only zero account and ten read families; wrong release and replayed quote reject | Not financial activity or a full stream pass |
+| Accepted-operation restore | Original image restores accepted grant; refined image restores the same READ grant without resending | Original post-replica-fault restart was not completed before its STS expiry |
+| Replica/witness/old-writer faults | Replica loss refuses acceptance with unchanged strong head; witness loss refuses reads; epoch 1→2 preserves head and fences old worker | Not an independent audit or arbitrary-failure guarantee |
+| Finite lease | Boot 7 fresh positive reads, then refusal after its natural 90-second lease | Separate from credential expiry |
+| Witness STS expiry | Boot 8 positive reads finish at 13:13:28.876 UTC; actual expiry 13:14:04 UTC; refusal at 13:14:19.001 UTC | Longer boot lease/parent credentials and unchanged routes bracket the check |
+| Application reply | Before-fix slow regression fails; approved reply fix passes locally and actual grant delivery reaches 12,933 ms | Full live agent/subscription/revocation remains incomplete |
+| Native/chain diagnostics | Two native TLS connections; zero actual enclave RPC requests | Neither a complete native schema/read pass nor a devnet genesis request |
+| Exposure and resources | Six accepted READ grants, no resend, zero funds/positions/financial exposure; owned host/backing cleanup independently verified | Six disabled KMS keys remain PendingDeletion for the seven-day window; billing is delayed |
+
+Refined default-feature enclave ELF SHA-256:
+`54bfa130a2f108443651dd05d383fef7fdb933670211eacac7f33c5c38b3923a`.
+READ EIF SHA-256:
+`61e8e05d66db51ba331ca9272488f8412fc145b6e9dce75aec6f59f2c03efcc0`.
+Boot 7/8 use separately reviewed/pinned lease/expiry manifests over that same ELF;
+their exact EIF/PCR/manifest records are retained privately, not substituted for
+the READ image. Subsequent SDK serial/reply corrections do not change the enclave.
+Rust correction patch SHA-256:
+`3093512a3bc77a4232f0001c03752bff50d53b60377f01267eb5e84f21fc3898`;
+reply-only patch SHA-256:
+`f79232547c3b2334201134655f4cef31b9e509d6f237fed3f3e15f094add38e6`.
+
+Verification: Node 24.21.0/Rust 1.97.1 full `node scripts/check.mjs` passes after
+all tracked application corrections, now checkpointed as
+`dc8844bda90ab78b672967b96b0efaf282abd711`
+(`/private/tmp/cinder-p23-final-offline.log`).
+Independent actual Node/Chrome web checks pass 26 groups per runtime; the opaque
+web relay has eight passing regressions. The source-only network-disabled ARM64
+default-feature correction build and ordinary-host refusal are recorded above;
+program/SBF owning sources are unchanged and are not relabeled as a new live
+deployment. The public certificate-only regression capture is promoted without
+quote context, keys or customer data. Local runtime failures stay recorded.
+
+Final application counters: S3 1,889/988, witness 4,785, KMS 42, native TLS
+connections 2, devnet RPC 0. Operator archive/cleanup calls are separate. Before
+cloud deletion, 106 ciphertext objects (69,394 bytes) and all four streams' strong
+witness heads were saved in protected ignored local storage. Temporary source
+exports, image/ELF/patch receipts and reusable test helpers are retained; they are
+not shipping wallet loaders or untracked prerequisites for normal CI.
+
+Cleanup: exact owned instance `i-07e2c3fb878e056c0` is terminated; tagged test
+EBS, both buckets, witness table, runtime roles, SSH key and security group are
+independently verified absent. All six test KMS keys are PendingDeletion with
+seven-day deletion scheduled; administrator-owned setup policies are preserved.
+The first termination acknowledgement did not yet prove the writer stopped:
+cleanup correctly kept backing until a later actual terminated observation.
+Only then were the archived replicas deleted. Final cleanup helper returned no
+errors, followed by a separate successful verification. Local 18080/19001 test
+listeners are absent. No resource beyond the owned run was deleted. Operator
+counts at verification: STS 42, IAM 68, DynamoDB 23, S3 234, KMS 186, EC2 26;
+these are separate from application counters, not a final billing statement.
+All 42 offline contracts/inventory guards, workspace boundaries and whitespace
+checks pass again after the evidence update; application source is unchanged.
+
+Remaining blocker: `Replicated::append` reloads accepted history and verifies its
+replicas under Runtime's shared lock. Some live views/initial subscriptions refuse
+despite corrected reply delivery and poll cadence. Confirm exact refusal stages
+with deterministic local cloud delays before selecting a change; preserve one
+journal, accepted-head freshness, revocation, restart/repair and unknown-commit
+semantics. A larger deadline or skipped durability check is not the next fix.
+P23 stays in progress; original full native/chain/financial/recovery qualification
+and G01–G04 approvals remain separate. No new hosted checks or merge are claimed.
+Publication is authorized for the completed corrections and this evidence only,
+via the existing one-layer stack/ready PR #55 against `product/tee-v1`; normal
+offline checks pass, but a new head needs its own hosted CI/review. The next local
+diagnosis is not part of this checkpoint and is not a durability redesign.
 
 ## P24 — Release safety case
 

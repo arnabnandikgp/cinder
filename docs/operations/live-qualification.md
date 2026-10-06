@@ -1,8 +1,11 @@
 # P23 live qualification
 
-Updated 2026-10-06. **Offline preparation only.** The phase remains in progress;
-no AWS session, deployment, funding, account setup or native transaction is
-authorized by this document. Historical M1/M2/P20 receipts are provenance, not
+Updated 2026-10-06. **Offline preparation and bounded read-only hardware work.**
+The phase remains in progress; this document is not authorization for an AWS
+session, deployment, funding, account setup or native transaction. The separately
+approved hardware receipt and its remaining stream/concurrency limitation are
+recorded in [TRACKER](../implementation/TRACKER.md#p23--live-integration-qualification).
+Historical M1/M2/P20 receipts are provenance, not
 current release qualification or reusable permission. See
 [PLAN](../implementation/PLAN.md#p23), [TRACKER](../implementation/TRACKER.md),
 [P22 composition](../architecture/0022-offline-acceptance.md) and
