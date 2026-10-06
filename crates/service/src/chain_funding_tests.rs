@@ -313,6 +313,7 @@ struct Rpc {
     fee: u64,
     missing: bool,
     bad_deposit: bool,
+    frozen: bool,
 }
 #[derive(Clone)]
 struct Fake(Arc<Mutex<Rpc>>);
@@ -381,6 +382,7 @@ fn fake(n: u8) -> Fake {
         fee: 5000,
         missing: false,
         bad_deposit: false,
+        frozen: false,
     })))
 }
 impl Transport for Fake {
@@ -431,6 +433,12 @@ impl Transport for Fake {
                     )
                 };
                 for mut a in c.accounts.values.into_iter().flatten() {
+                    if s.frozen && a.data.as_bytes().len() == 333 {
+                        let mut b = a.data.as_bytes().to_vec();
+                        b[268..276].copy_from_slice(&2u64.to_le_bytes());
+                        b[276] = 1;
+                        a.data = PrivateBytes::new(b).unwrap();
+                    }
                     if s.bad_deposit && a.data.as_bytes().len() == 161 {
                         let mut b = a.data.as_bytes().to_vec();
                         b[145] ^= 1;
@@ -597,6 +605,8 @@ fn customer_deposit_original_receipt_credits_once_without_seeded_customer_funds(
     .unwrap();
     let c = controller();
     let f = fake(10);
+    // The owner deposit completed before the later public vault freeze.
+    f.0.lock().unwrap().frozen = true;
     let mut p = deposit(&f, &c);
     assert!(p.observe_deposit(&mut j, &c, 0).unwrap() == Outcome::Settled);
     let state = j.state().unwrap().clone();

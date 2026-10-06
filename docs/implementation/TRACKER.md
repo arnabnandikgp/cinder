@@ -39,31 +39,32 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 P23 is authorized and in progress on `tee/p23-live-qualification`, based on
 merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
-Initial production-port audit and primary-document recheck are recorded in
-[live qualification](../operations/live-qualification.md). The first offline
-slice connects account-scoped GET requests to the existing durable shared-credit
-policy, private TLS egress and ordinary observation journal. Native financial
-gates remain disabled; no AWS, deployment, remote RPC, account funding, wallet
-or native transaction has occurred. This is not phase completion or live evidence.
-The full pinned local offline runner passes: 42 contracts/inventory guards,
-dependency boundaries, default/all-feature Clippy, all-target build, all-feature
-debug/release and shipping-default tests, 12 relay and 24 private SDK tests. The
-new reader's 10 cases are automatically discovered in each Rust profile.
-Draft [PR #55](https://github.com/arnabnandikgp/cinder/pull/55) targets
-`product/tee-v1`, published through native `gh stack init/submit` at checked
-source head `33e13646cee84be8874d01bd676bd95a518a7bb7`. This documentation-only
-successor records publication; hosted checks/reviews remain pending, not
-inherited green results. No merge or deployment is requested. Continue remaining
-P23 work remains in this PR; no further split is currently planned. The local
-continuation now connects confidential chain codec/signing/RPC, streamed executable
-verification, finalized receipt/counter checks, original owner deposits, six-role
-private release and finite read-only scheduling. The full host and actual
-Node/Chrome/WASM checks pass on the working source; final serial SBF and ARM64
-shipping-package checks are being completed. No result for a later commit or
-hardware session is inferred. Next: close the fixed local checklist in the
-runbook, record the exact checked source, then prepare a fresh bounded read-only
-G05 manifest. Authentic native setup/credit/payment/cut/funding remain gated;
-the manifest still refuses trading/funding and API risk admission is disabled. Preserve
+[Live qualification](../operations/live-qualification.md) and
+[ADR 0024](../architecture/0024-confidential-chain-ports.md) define the fixed
+local checklist and remaining capability gates. Application checkpoint
+`1c423c9c6bfaf40d591b2655db7c41881d14639e` connects confidential chain
+codec/signing/RPC, streamed code verification, finalized receipts/counters,
+original owner deposits, six-role private release and finite read-only scheduling.
+Full pinned host, actual Node/Chrome/WASM and source-only ARM64 package checks
+pass at that checkpoint. The final serial full SBF gate passes 59/59; the previously
+timing-failed HTTP lifecycle passes without relaxing its session limit. A final
+completed-payment/freeze regression passes its 25 focused chain tests; the full
+host and exact-source shipping package are being rechecked for that correction.
+The P23 entry
+below records commands, bounds, hashes, failure dispositions and test-only trust.
+
+Draft [PR #55](https://github.com/arnabnandikgp/cinder/pull/55) remains against
+`product/tee-v1`; no further split, merge or deployment is requested. Its older
+published head `11c864626e2e1840f1475f1f5a8d721b166f70c9` passed all seven hosted
+checks and CodeRabbit with no review threads. The new checkpoint is local until
+the last gate and handoff finish; old green checks do not cover it.
+
+Next: finish/record the final host/package checks, publish the same draft through the
+native stack workflow, then obtain the fresh bounded read-only G05 run manifest.
+Authentic native setup/credit/payment/cut/funding remain independently gated;
+shipping validation still refuses trading/funding and API risk admission is
+disabled. Local preparation is not P23 live acceptance or phase closure. No AWS,
+remote RPC, native account/funding/deployment/wallet action occurred. Preserve
 untracked `docs/user-journey.md`, `stays/`, ignored research and docs content.
 
 ### CI follow-up merge receipt
@@ -2343,9 +2344,61 @@ polling; version 1 remains compatible. Native diagnostics consume durable credit
 and archive missing/unsupported schemas without manufacturing setup/credit/payment
 or coverage. Funds-signing and trading activation remain rejected. Local joined
 tests use synthetic RPC/clock, not real deployments or a native finality provider.
-Current full host/browser checks pass; final SBF/package checks and exact-source
-publication receipt follow. No AWS/RPC/venue/wallet/deployment action has occurred.
+Current full host/browser/package checks pass at the checkpoint below; final
+serial SBF passes 59/59. The final receipt/freeze correction is being rechecked
+before publication. No AWS/RPC/venue/wallet/deployment action has occurred.
 The original initial-slice receipt below remains historical, not these results.
+
+Checked application checkpoint: `1c423c9c6bfaf40d591b2655db7c41881d14639e`.
+All pinned host gates pass in `/private/tmp/cinder-p23-local-root-final.log`:
+42 contracts/inventory guards, dependency boundaries, default/all-feature strict
+Clippy, all-target build, all-feature debug/release and shipping-default Rust,
+12 relay and 24 SDK process tests. Actual Node and Chrome/WASM checks pass in
+`/private/tmp/cinder-p23-local-browser.log`: 14 attestation groups and 24 joined
+carrier/SDK groups in each runtime, with synthetic fixture trust explicitly
+retained. The five release tests also exercise actual local private provisioning
+in both five-/six-role versions; 0700/0600 files and purpose-specific capsules.
+The seven joined chain cases include original owner deposit recognition without
+seeded customer cash, duplicate/restart, bad receipt/missing history, actual
+component binding, lost ACK, simulation/fee refusal and pending native debit.
+
+Network-disabled Apple container ARM64 package passes from exact committed
+source export, reusing only locked public dependencies and dependency cache.
+Tool image `sha256:33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`;
+default enclave ELF `4a707a56f1e41adf93a29e1fe36b70a0b213f6d8a709dafbd57940e210c442ab`.
+Independent application rebuild is byte-identical; ordinary non-Nitro boot
+refuses. Local public artifacts are retained in
+`/private/tmp/cinder-p23-arm64.EdZ5gW/artifacts/bundle`, package log in
+`/private/tmp/cinder-p23-local-arm64.log`; the temporary container was removed.
+This is an ELF/rootfs preparation result, not an EIF/PCR/NSM receipt. Exact
+fixture regeneration also matches both tracked JSON files without RPC.
+
+Local failure disposition: first SBF launch required explicit pinned wasm-bindgen;
+then strict TypeScript found extra closing parentheses in the new fixture tests,
+fixed before the suite ran. Full concurrent SBF run passed 58/59, with the HTTP
+financial stream closing at its existing 30-second session deadline during parallel
+release builds. No timeout/security boundary was relaxed. The full serial gate
+passes all 59 cases with no skips in 455.498 seconds, including HTTP/WebSocket
+normal and recovery workflows. Log: `/private/tmp/cinder-p23-local-vault-serial.log`.
+The compiled program is 522,200 bytes, SHA-256
+`90ac6651c922822e3f156357fc7f1e2a35e14f92bc8964ba362dffc9920b7310`.
+The program, client and SBF test sources are unchanged by the final receipt fix.
+
+Final receipt review reproduced rejection of an already completed payment after
+the later one-way vault freeze. Recognition now accepts its immutable original
+receipt through the known recovery modes and single freeze epoch increment;
+pre-sign counters still reject any new action under the old epoch. Unknown modes,
+regressed epochs and unexplained larger increments reject. The focused 25 chain
+tests pass, including a real-journal owner deposit recognized once after freeze.
+Logs: `/private/tmp/cinder-p23-local-freeze-repro.log` (expected failure before fix)
+and `/private/tmp/cinder-p23-local-freeze-fixed.log` (pass after fix). Current token
+state, original transaction deltas, exact receipt and approved-code checks remain;
+this is not a historical consensus proof or relaxation of native settlement gates.
+The full host/package reruns and final publication receipt follow this correction.
+
+Prior hosted PR #55 head `11c864626e2e1840f1475f1f5a8d721b166f70c9` had all seven
+checks plus CodeRabbit green and no review threads; those results do not qualify
+this later source. Preserve the draft; no merge is authorized.
 
 Work: started on `tee/p23-live-qualification` from merged trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091`. Audited shipping production connections and current primary venue docs; added bounded native GET composition over the existing Gateway budget, encrypted TLS egress and observation journal, plus regression tests and the G05 runbook. No live capability is enabled; no new dependency, custody policy or economic promise is selected.
 Verification: full pinned `node scripts/check.mjs` passes on 2026-10-06 for source checkpoint `33e13646cee84be8874d01bd676bd95a518a7bb7`: 42 contracts/inventory guards, dependency boundaries, default/all-feature Clippy, all-target build, all-feature debug/release and shipping-default suites, 12 relay and 24 SDK tests. All 10 new read cases pass in each Rust profile; GET framing and authenticated GET/POST root/hostname/time negatives pass. Logs retained at `/private/tmp/cinder-p23-offline.H7uWbj/check.log`. No new SBF/browser/ARM-container/hardware/devnet/live venue run is claimed; hosted checks/reviews for the new PR remain pending. This documentation-only publication receipt is not a new application/hardware result. No program/client wire/dependency/feature changes occurred.

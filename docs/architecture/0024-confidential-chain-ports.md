@@ -36,6 +36,16 @@ balance change nor program-counter growth alone settles a transfer or claim.
 Lamport fees are retained as execution costs, not silently converted to quote
 fees. The existing quote-asset funding lifecycle remains unchanged.
 
+Recognizing a completed payment is separate from permission to send another one.
+The one-way vault freeze advances the epoch once; original finalized receipts
+remain recognizable through the later recovery modes with their original epoch.
+Pre-sign counters still require the current permitted epoch/mode. Regressed or
+unexplained future epochs and unknown modes reject. A freeze cannot erase a past
+payment or authorize a replacement payment.
+Authority rotation or a code/token-account change is not qualified by this
+freeze rule. Those cases remain fail-closed and need reconciliation/explicit
+migration evidence before a governed cutover.
+
 ## Enclave-owned RPC and deployment trust
 
 `chain_rpc` owns authenticated TLS 1.3 inside the enclave. Public measured policy

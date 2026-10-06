@@ -182,9 +182,9 @@ pub struct DiagnosticPoll {
     /// Reserved cleanup capacity, only for a trusted frozen-pool scheduler.
     pub cleanup: bool,
 }
-/// Archive one bounded response through the existing private journal. All HTTP
-/// responses, including missing accounts, remain observations without economic
-/// effects. This is not a provider of Setup/Credit/Withdrawal/Coverage.
+/// Archive bounded non-429 responses, including missing accounts, without
+/// economic effects. A 429 instead persists the existing shared cooldown record.
+/// This is not a provider of Setup/Credit/Withdrawal/Coverage.
 pub fn diagnostic<B: Backend, P: Protection, T: Transport>(
     journal: &mut Journal<B, P>,
     gateway: &Gateway,

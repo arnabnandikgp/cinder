@@ -208,6 +208,10 @@ pub(crate) fn mint(account: &Account, t: &Target) -> Result<(), Error> {
 }
 pub(crate) fn config(account: &Account, t: &Target) -> Result<(), Error> {
     let b = discriminated(account, t.program, "VaultConfig", 333)?;
+    // Receipt recognition records a past effect, not permission for a new call.
+    // P15's one-way freeze increments the epoch once; later recovery modes must
+    // not erase an original finalized receipt. `counters` retains strict current
+    // epoch/mode checks before exposing a new action.
     if b[8] != 1
         || b[11] != t.decimals
         || word(b, 12)? != t.domain
@@ -216,9 +220,8 @@ pub(crate) fn config(account: &Account, t: &Target) -> Result<(), Error> {
         || word(b, 140)? != t.funds
         || word(b, 204)? != t.broker
         || word(b, 236)? != t.broker_tokens
-        || number(b, 268)? != t.epoch
-        || (t.rail == Rail::Return && !matches!(b[276], 0 | 1))
-        || (t.rail != Rail::Return && b[276] != 0)
+        || number(b, 268)?.checked_sub(t.epoch).is_none_or(|d| d > 1)
+        || b[276] > 4
     {
         return Err(Error);
     }
@@ -897,6 +900,82 @@ pub(crate) mod tests {
                     field(&mut b, at, &0u64.to_le_bytes());
                 } else {
                     b[at] ^= 1;
+                }
+                a.data = PrivateBytes::new(b).unwrap();
+            });
+            assert!(recognized(c).is_err());
+        }
+    }
+    #[test]
+    fn completed_original_effects_survive_later_freeze_but_new_actions_stay_fenced() {
+        for i in [0, 4, 6] {
+            for mode in 1..=4 {
+                let mut c = fixture(i);
+                let t = chain::inspect(&c.contract, c.attempt, &c.wire).unwrap();
+                change_account(&mut c, t.config, |a| {
+                    let mut b = a.data.as_bytes().to_vec();
+                    field(&mut b, 268, &(t.epoch + 1).to_le_bytes());
+                    b[276] = mode;
+                    a.data = PrivateBytes::new(b).unwrap();
+                });
+                let route = Route {
+                    domain: t.domain,
+                    pool: t.pool,
+                    funds: t.funds,
+                    beneficiaries: vec![],
+                    program: t.program,
+                    config: t.config,
+                    vault: t.vault,
+                    mint: t.mint,
+                    broker: t.broker,
+                    broker_tokens: t.broker_tokens,
+                    venue_program: [25; 32],
+                    venue_vault: [26; 32],
+                    epoch: t.epoch,
+                    decimals: t.decimals,
+                    withdrawal: cinder_pacifica::profile::Level::Qualified,
+                    chain: cinder_pacifica::profile::Level::Qualified,
+                    settings: cinder_pacifica::profile::Level::Qualified,
+                    withdrawal_cost: 120,
+                    maximum_movement: u64::MAX,
+                    maximum_fee: 0,
+                    setup_max_age: 1000,
+                };
+                assert!(
+                    counters(
+                        &c.accounts,
+                        &route,
+                        t.rail,
+                        t.customer,
+                        t.destination,
+                        t.epoch,
+                        1000
+                    )
+                    .is_err()
+                );
+                assert!(config(get(&c.accounts, t.config).unwrap(), &t).is_ok());
+                let r = recognized(c).unwrap();
+                assert!(r.succeeded);
+                assert_eq!(r.epoch, Some(t.epoch));
+            }
+        }
+        let mut c = fixture(0);
+        let t = chain::inspect(&c.contract, c.attempt, &c.wire).unwrap();
+        change_account(&mut c, t.config, |a| {
+            let mut b = a.data.as_bytes().to_vec();
+            field(&mut b, 268, &0u64.to_le_bytes());
+            a.data = PrivateBytes::new(b).unwrap();
+        });
+        assert!(recognized(c).is_err());
+        for fault in [0, 1] {
+            let mut c = fixture(0);
+            let t = chain::inspect(&c.contract, c.attempt, &c.wire).unwrap();
+            change_account(&mut c, t.config, |a| {
+                let mut b = a.data.as_bytes().to_vec();
+                if fault == 0 {
+                    field(&mut b, 268, &(t.epoch + 2).to_le_bytes());
+                } else {
+                    b[276] = 5;
                 }
                 a.data = PrivateBytes::new(b).unwrap();
             });

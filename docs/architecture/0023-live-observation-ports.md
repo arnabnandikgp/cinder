@@ -69,7 +69,9 @@ Fresh authority requirements and live qualification remain in the
 
 Settings, loan, balance history and historically observed pending/withdrawal
 history routes are additionally bounded diagnostic GETs. They archive exact
-route/account/status/body, including 404/429, but produce no economic event,
+account/status/body and bound route kind, including 404. A 429 instead persists
+the shared cooldown record; its body is not archived as a diagnostic. Neither
+response path produces an economic event,
 setup certificate, native credit, withdrawal certificate or complete cut. The
 last two paths are historical experimental observations, not a current documented
 API promise. A loan-cache 404 is not zero debt; `auto_lend_disabled: null` is not
