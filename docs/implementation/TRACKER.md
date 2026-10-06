@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | open | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-06. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -36,6 +36,42 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+P23 is authorized and in progress on `tee/p23-live-qualification`, based on
+merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
+Initial production-port audit and primary-document recheck are recorded in
+[live qualification](../operations/live-qualification.md). The first offline
+slice connects account-scoped GET requests to the existing durable shared-credit
+policy, private TLS egress and ordinary observation journal. Native financial
+gates remain disabled; no AWS, deployment, remote RPC, account funding, wallet
+or native transaction has occurred. This is not phase completion or live evidence.
+The full pinned local offline runner passes: 42 contracts/inventory guards,
+dependency boundaries, default/all-feature Clippy, all-target build, all-feature
+debug/release and shipping-default tests, 12 relay and 24 private SDK tests. The
+new reader's 10 cases are automatically discovered in each Rust profile. No PR
+is published yet. Next: publish this in-progress P23 checkpoint for early review,
+connect remaining confidential chain/receipt/setup/scheduler ports, then
+prepare a fresh bounded G05 manifest for approval before any live run. Preserve
+untracked `docs/user-journey.md`, `stays/`, ignored research and docs content.
+
+### CI follow-up merge receipt
+
+CI follow-up [#54](https://github.com/arnabnandikgp/cinder/pull/54) is merged into
+`product/tee-v1` on 2026-10-06 at
+`833955f8a4ead02a71eb5ae69a6aebd92bb85091`. All seven hosted checks and CodeRabbit
+status passed at exact reviewed head `9d9dd760eae57cf920ac9956d6eb903c954ad43a`;
+no unresolved review threads remained. The user authorized merge. Native
+`gh stack merge 54` reported no remote stack; the exact-head-guarded standard
+squash merge succeeded, and the GitHub receipt was verified. Local product trunk
+was fast-forwarded to the same upstream commit; legacy `main` is untouched.
+Recommendations 2/3/4, caching and both prerequisite fixes are now landed.
+This docs-only merge closeout remains local for the next authorized PR, not an
+unreviewed direct push to trunk. At this merge receipt P23/P24 remained open;
+the newly authorized P23 continuation is recorded above. P23 needs its own current bounded G05
+environment/account/funding/cleanup manifest. Preserve untracked
+`docs/user-journey.md`, `stays/`, ignored `work/` and docs content.
+
+### Historical CI follow-up handoff (superseded)
 
 Current work: the authorized CI follow-up on `tee/ci-offline-gates`, based on
 merged `product/tee-v1` at `8247d24fa6d77b1e0b478ef7b8513ace80f34d4b`.
@@ -2276,13 +2312,19 @@ committed source-only export passes all 41 guards and workspace graph; earlier
 full-suite receipts and the final focused guard/carrier checks are detailed above.
 This docs-only successor records the actual publication, not fresh hosted success.
 Next: await hosted checks and review/merge authorization; P23 remains open.
+Merge closure — 2026-10-06: all seven checks and CodeRabbit status pass at exact
+head `9d9dd760eae57cf920ac9956d6eb903c954ad43a`, with no unresolved review threads.
+User-authorized, exact-head-guarded squash merge is independently verified at
+`833955f8a4ead02a71eb5ae69a6aebd92bb85091`; local `product/tee-v1` matches upstream.
+This local documentation receipt is reserved for the next authorized PR. No
+unreviewed trunk push, deployment or P23 work occurs.
 
 ## P23 — Live integration qualification
 
-Work: not started.
-Verification: not run; acceptance in PLAN P23.
-Unexpected: none yet.
-Next: prepare the bounded G05 manifest after P20/P22; run the same workflow assertions through actual SDK/relay/Nitro/program/venue rails, verify current capabilities and receipts, and reconcile all cleanup. No mock or historical replay counts as live qualification.
+Work: started on `tee/p23-live-qualification` from merged trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091`. Audited shipping production connections and current primary venue docs; added bounded native GET composition over the existing Gateway budget, encrypted TLS egress and observation journal, plus regression tests and the G05 runbook. No live capability is enabled; no new dependency, custody policy or economic promise is selected.
+Verification: full pinned `node scripts/check.mjs` passes on 2026-10-06: 42 contracts/inventory guards, dependency boundaries, default/all-feature Clippy, all-target build, all-feature debug/release and shipping-default suites, 12 relay and 24 SDK tests. All 10 new read cases pass in each Rust profile; GET framing and authenticated GET/POST root/hostname/time negatives pass. Logs retained at `/private/tmp/cinder-p23-offline.H7uWbj/check.log`. No new SBF/browser/ARM-container/hardware/devnet/live venue run is claimed; hosted checks are not yet queued. No program/client wire/dependency/feature changes occurred.
+Unexpected: production runtime has no chain signer/RPC recognizer or observation scheduler; the five-role release lacks a Solana funds seed. Current venue docs still do not establish complete causal/funding/payment semantics. Historical research and P22 fake ports are not shipping connections or live qualification. Initial new-test failures exposed missing synthetic gateway activation and the existing conservative one-minute cooldown floor; fixtures were corrected without weakening production gates.
+Next: finish offline validation and connected confidential ports, qualify source cuts/precision/setup/finality, then obtain a fresh bounded G05 manifest before actual SDK/relay/Nitro/program/venue tests. Use the [live runbook](../operations/live-qualification.md); no mock or historical replay counts as live qualification.
 PR: none.
 Merge: none.
 

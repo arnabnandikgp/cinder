@@ -727,6 +727,13 @@ not a replay labeled as live integration. Use bounded scenarios and preconfigure
 test accounts; an unavailable capability is a named blocker, not a simulated pass.
 Evidence: W03–W08; sanitized receipts and failure/cleanup reports linked to commit.
 
+Execution handoff: [live qualification runbook](../operations/live-qualification.md)
+tracks the audited production connections and G05 checklist. The first offline
+slice adds account-bound, durably budgeted native observation transport; it does
+not enable live gates or satisfy these acceptance criteria. Complete missing
+confidential chain/recognition/scheduler ports before requesting the fresh live
+manifest, and keep independently unqualified semantics explicitly gated.
+
 - [ ] Deposit, trade lifecycle, funding observations, ordinary return/payout and recovery execute or expose a named blocking capability.
 - [ ] Real process/network faults and credit exhaustion reconcile safely; replay is not reported as a newly observed venue event.
 - [ ] All positions/orders/funds and test costs reconcile; no real customer/mainnet assets; private evidence stays out of Git.

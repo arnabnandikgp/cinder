@@ -453,6 +453,17 @@ and fake-observation tests do not upgrade them into live G01/P23 evidence.
 
 ## Requirement-to-phase traceability
 
+P23 initial promotion (2026-10-06):
+[ADR 0023](../architecture/0023-live-observation-ports.md) connects current primary
+account/position/history GET schemas to the existing private observation journal
+and pooled request budget. Tracked tests use fake delivery and authenticated
+loopback TLS, not live venue accounts or old experimental signers. W03/W04's
+precision, broader-agent-power, original-withdrawal and actual-fee findings remain
+qualification inputs, not shipping permission. The
+[live runbook](../operations/live-qualification.md) separates prepared components,
+missing ports, current documented limits and fresh G05 authority. No raw research,
+key, RPC secret, signed wire, complete-cut assertion or hardware receipt is promoted.
+
 | Contract | Owning implementation | Mandatory evidence |
 | --- | --- | --- |
 | B02–B03, F01–F04 | P02–P04 | V01–V04; per-user attribution, signed-basis and default counterexamples |

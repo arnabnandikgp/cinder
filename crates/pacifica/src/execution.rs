@@ -223,6 +223,10 @@ impl std::fmt::Debug for Gateway {
     }
 }
 impl Gateway {
+    pub(crate) fn read_binding(&self) -> (&Profile, &Policy) {
+        (&self.profile, &self.policy)
+    }
+
     /// Load caller-supplied enclave key material, not a wallet/file/environment.
     /// The seed must be independently generated and never registered for another
     /// native account or network; the native signature cannot enforce that rule.
