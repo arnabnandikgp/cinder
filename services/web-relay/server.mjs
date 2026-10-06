@@ -6,6 +6,7 @@ import { upgrade } from './websocket.mjs';
 
 export const MAX_BATCH = 1048576 + 65 * 34;
 const MAX_RECORD = 16400, MAX_ENVELOPE = 16520, DEADLINE = 5000;
+const REPLY_DEADLINE = 15000;
 const unavailable = () => Error('Web delivery unavailable; reconcile on a fresh session');
 
 class Peer {
@@ -109,6 +110,11 @@ export function createWebRelay({ target, origin }) {
           reply = await peer.exchange(body.subarray(32), MAX_RECORD); peer.phase++;
         } else {
           if (peer.phase !== 2) throw unavailable();
+          // The bounded body and established session were already checked.
+          // Durable cloud acceptance can outlast a handshake/frame deadline;
+          // keep the application reply separately finite, without resends.
+          clearTimeout(timer);
+          timer = setTimeout(() => { abort(); req.destroy(); res.destroy(); }, REPLY_DEADLINE);
           reply = await peer.exchange(body.subarray(32), MAX_BATCH);
         }
       }

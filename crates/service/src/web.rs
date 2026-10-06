@@ -241,10 +241,16 @@ impl Server {
                 if let Some((correlation, request, revision, ordinal)) = &mut watch {
                     let reply = self
                         .handler
-                        .handle(session, request.clone(), self.clock.now()?)?;
+                        .poll(session, request.clone(), self.clock.now()?)?;
+                    // Preserve a request-service interval after slow witness
+                    // I/O, including busy skips; never immediately catch up.
+                    next_poll = Instant::now() + Duration::from_millis(500);
                     if self.clock.now()? >= expires {
                         return Err(Error);
                     }
+                    let Some(reply) = reply else {
+                        continue;
+                    };
                     let fresh = revision_of(reply.as_bytes());
                     if fresh.is_none() || fresh != *revision {
                         *ordinal = ordinal.checked_add(1).ok_or(Error)?;
@@ -426,6 +432,134 @@ mod tests {
     fn send(socket: &mut TcpStream, endpoint: &mut Endpoint, sequence: u32) {
         let clear = records::request(sequence, b"PRIVATE-APPLICATION").unwrap();
         write_frame(socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+    }
+    #[test]
+    fn subscription_skips_busy_polls_delivers_next_revision_and_closes_on_failure() {
+        struct Busy {
+            calls: AtomicUsize,
+            failed: AtomicBool,
+            finished: Mutex<Option<Instant>>,
+        }
+        impl Busy {
+            fn page(revision: u8, now: u64) -> Result<PrivateBytes, Error> {
+                cinder_api::Response::Read(cinder_api::reads::Page {
+                    kind: 2,
+                    revision: [revision; 32],
+                    next: [0; 40],
+                    evaluated_at: now,
+                    rows: Vec::new(),
+                })
+                .encode()
+                .map_err(|_| Error)
+            }
+        }
+        impl Handler for Busy {
+            fn handle(
+                &self,
+                _: &Session,
+                _: PrivateBytes,
+                now: u64,
+            ) -> Result<PrivateBytes, Error> {
+                Self::page(1, now)
+            }
+            fn poll(
+                &self,
+                _: &Session,
+                _: PrivateBytes,
+                now: u64,
+            ) -> Result<Option<PrivateBytes>, Error> {
+                if self.failed.load(Ordering::SeqCst) {
+                    return Err(Error);
+                }
+                if let Some(previous) = *self.finished.lock().unwrap() {
+                    assert!(previous.elapsed() >= Duration::from_millis(500));
+                }
+                // Real cloud checks can take longer than the poll interval.
+                // The next interval must start after I/O, not before it.
+                thread::sleep(Duration::from_millis(600));
+                let result = if self.calls.fetch_add(1, Ordering::SeqCst) < 3 {
+                    Ok(None)
+                } else {
+                    Self::page(2, now).map(Some)
+                };
+                *self.finished.lock().unwrap() = Some(Instant::now());
+                result
+            }
+        }
+        let application = Arc::new(Busy {
+            calls: AtomicUsize::new(0),
+            failed: AtomicBool::new(false),
+            finished: Mutex::new(None),
+        });
+        let clock = Arc::new(Time(AtomicU64::new(FixtureClock.now().unwrap())));
+        let server = Server::new(
+            policy(),
+            Arc::new(FixtureClock),
+            Arc::new(FixtureAttester::new().unwrap()),
+            clock,
+            application.clone(),
+        )
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = stop.clone();
+        let worker = thread::spawn(move || server.run(listener, flag));
+        let (mut socket, mut endpoint, expires, binding) = client(port);
+        use cinder_kernel::identity::{AccountId, PolicyVersion, RequestId};
+        let mut request = cinder_api::wire::Request {
+            domain: Domain {
+                network: NetworkId::new([1; 32]).unwrap(),
+                deployment: DeploymentId::new([2; 32]).unwrap(),
+            },
+            account: AccountId::new([3; 32]).unwrap(),
+            id: RequestId::new([4; 32]).unwrap(),
+            policy: PolicyVersion::new(1).unwrap(),
+            epoch: 1,
+            signer: [5; 32],
+            session: binding,
+            expires_at: expires,
+            command: cinder_api::wire::Command::Read(cinder_api::reads::Query {
+                kind: 2,
+                cursor: [0; 40],
+                limit: 1,
+            }),
+            signature: [7; 64],
+        };
+        let clear = records::socket_request(1, request.encode().unwrap().as_bytes(), true).unwrap();
+        write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+        for ordinal in [1u64, 2] {
+            let batch = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+            assert_eq!(&batch[..4], &1u32.to_be_bytes());
+            let clear = records::read_response(&mut endpoint, 1, &batch[4..]).unwrap();
+            assert!(clear.as_slice().starts_with(UPDATE));
+            assert_eq!(
+                &clear[UPDATE.len()..UPDATE.len() + 8],
+                &ordinal.to_be_bytes()
+            );
+            assert_eq!(
+                revision_of(&clear[UPDATE.len() + 8..]),
+                Some([ordinal as u8; 32])
+            );
+        }
+        assert!(application.calls.load(Ordering::SeqCst) >= 4);
+        application.failed.store(true, Ordering::SeqCst);
+        assert!(read_frame(&mut socket, records::MAX_BATCH + 4).is_err());
+        // Default polling rejects mutations before invoking even a fixture handler.
+        let handler = Application::default();
+        request.command = cinder_api::wire::Command::Revoke;
+        assert!(
+            handler
+                .poll(
+                    &Session::established(request.domain, binding, expires),
+                    request.encode().unwrap(),
+                    FixtureClock.now().unwrap()
+                )
+                .is_err()
+        );
+        assert!(handler.0.lock().unwrap().is_empty());
+        stop.store(true, Ordering::SeqCst);
+        worker.join().unwrap().unwrap();
     }
     #[test]
     fn confirmed_binding_reaches_same_session_and_expiry_blocks_handler() {

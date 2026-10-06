@@ -38,20 +38,22 @@ const REQUEST_WAIT: std::time::Duration = std::time::Duration::from_millis(250);
 fn lock_bounded<T>(
     mutex: &Mutex<T>,
     timeout: std::time::Duration,
-) -> Result<std::sync::MutexGuard<'_, T>, Error> {
+) -> Result<Option<std::sync::MutexGuard<'_, T>>, Error> {
     let start = std::time::Instant::now();
     loop {
         match mutex.try_lock() {
-            Ok(guard) => return Ok(guard),
+            Ok(guard) => return Ok(Some(guard)),
             Err(std::sync::TryLockError::Poisoned(_)) => return Err(Error),
             Err(std::sync::TryLockError::WouldBlock) => {
-                let remaining = timeout.checked_sub(start.elapsed()).ok_or(Error)?;
+                let Some(remaining) = timeout.checked_sub(start.elapsed()) else {
+                    return Ok(None);
+                };
                 if remaining.is_zero() {
-                    return Err(Error);
+                    return Ok(None);
                 }
                 std::thread::sleep(remaining.min(std::time::Duration::from_millis(1)));
                 if start.elapsed() >= timeout {
-                    return Err(Error);
+                    return Ok(None);
                 }
             }
         }
@@ -661,16 +663,18 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
         result
     }
 }
-impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
-    fn handle(
+impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
+    fn handle_available(
         &self,
         channel: &Session,
         request: PrivateBytes,
         now: u64,
-    ) -> Result<PrivateBytes, Error> {
+    ) -> Result<Option<PrivateBytes>, Error> {
         let result = (|| {
             self.active_time()?;
-            let mut active = lock_bounded(&self.active, REQUEST_WAIT)?;
+            let Some(mut active) = lock_bounded(&self.active, REQUEST_WAIT)? else {
+                return Ok(None);
+            };
             // Waiting cannot reuse an expired lease or pre-wait authentication time.
             let current = self.active_time()?;
             if current < now {
@@ -687,11 +691,35 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
                 Ok(r) => r.encode(),
                 Err(e) => e.encode_private(),
             }
+            .map(Some)
             .map_err(|_| Error)
         })();
         // Contention is not a permanent key revocation. Journal/clock failures
         // are caught by tick and private API already refuses stale state.
         result
+    }
+}
+impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
+    fn handle(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<PrivateBytes, Error> {
+        self.handle_available(channel, request, now)?.ok_or(Error)
+    }
+    fn poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        if !cinder_api::wire::Request::decode(request.as_bytes())
+            .is_ok_and(|r| matches!(r.command, cinder_api::wire::Command::Read(_)))
+        {
+            return Err(Error);
+        }
+        self.handle_available(channel, request, now)
     }
 }
 
@@ -727,15 +755,24 @@ mod initialization_tests {
                 *guard = 1;
             });
             ready_rx.recv().unwrap();
-            assert!(lock_bounded(&mutex, Duration::ZERO).is_err());
+            assert!(lock_bounded(&mutex, Duration::ZERO).unwrap().is_none());
             scope.spawn(move || {
                 std::thread::sleep(Duration::from_millis(20));
                 release_tx.send(()).unwrap();
             });
-            assert_eq!(*lock_bounded(&mutex, Duration::from_secs(2)).unwrap(), 1);
+            assert_eq!(
+                *lock_bounded(&mutex, Duration::from_secs(2))
+                    .unwrap()
+                    .unwrap(),
+                1
+            );
         });
         let held = mutex.lock().unwrap();
-        assert!(lock_bounded(&mutex, Duration::from_millis(5)).is_err());
+        assert!(
+            lock_bounded(&mutex, Duration::from_millis(5))
+                .unwrap()
+                .is_none()
+        );
         drop(held);
         std::thread::scope(|scope| {
             assert!(

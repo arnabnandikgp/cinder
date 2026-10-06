@@ -4,6 +4,32 @@ import { fileURLToPath } from 'node:url';
 import { serialFromEntropy } from './serial.mjs';
 import { fixtures } from './fixtures.mjs';
 import { verifyWithRoot } from './verifier.mjs';
+import { certificateSerial, verifiedLeaf } from './certificates.mjs';
+import { root as awsRoot } from './aws-root.mjs';
+import capture from './aws-serial-padding-capture.json' with { type: 'json' };
+
+test('certificate serial accepts only positive minimal magnitudes up to 20 bytes', () => {
+  for (let n = 1; n <= 20; n++) {
+    assert.equal(certificateSerial(new Uint8Array(n).fill(127)), true);
+    assert.equal(certificateSerial(Uint8Array.of(0, ...new Uint8Array(n).fill(128))), true);
+    assert.equal(certificateSerial(new Uint8Array(n).fill(128)), false);
+    assert.equal(certificateSerial(Uint8Array.of(0, ...new Uint8Array(n).fill(127))), false);
+  }
+  for (const bad of [undefined, [], new Uint8Array(), Uint8Array.of(0),
+    Uint8Array.of(0,0,128), new Uint8Array(21).fill(1),
+    Uint8Array.of(0,...new Uint8Array(21).fill(128))]) {
+    assert.equal(certificateSerial(bad), false);
+  }
+});
+
+test('observed AWS sign-padded serial retains fixed-root path and expiry checks', async () => {
+  const decode = b => Uint8Array.from(Buffer.from(b,'base64'));
+  const path = { chain: capture.chain.map(decode), certificate: decode(capture.certificate) };
+  await verifiedLeaf(path,awsRoot(),capture.capturedAt);
+  await assert.rejects(() => verifiedLeaf(path,awsRoot(),capture.capturedAt + 86400000));
+  const corrupted = path.certificate.slice(); corrupted[corrupted.length-1] ^= 1;
+  await assert.rejects(() => verifiedLeaf({...path,certificate:corrupted},awsRoot(),capture.capturedAt));
+});
 
 test('fixture serials are positive, minimal and do not mutate entropy', () => {
   for (let leading = 0; leading < 16; leading++) {

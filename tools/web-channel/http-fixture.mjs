@@ -17,7 +17,7 @@ export async function fixture(publicKey, origin) {
   const storageKey = randomBytes(32), captured = [], sockets = new Set();
   const binary = resolve(fileURLToPath(new URL('../..',import.meta.url)),process.env.CARGO_TARGET_DIR ?? 'target','debug/cinder-service-fixture');
   let child, proxy, relay, info, requestCorrupt=false, replyCorrupt=false, dropNotification=false, dropped,
-    expectNotification=false,notified,logs='';
+    expectNotification=false,notified,logs='',delayReply=false;
   async function start() {
     let out='', error='';
     child=spawn(binary,['127.0.0.1:0',store,Buffer.from(publicKey).toString('hex'),'--web'],{stdio:['pipe','pipe','pipe']});
@@ -48,7 +48,8 @@ export async function fixture(publicKey, origin) {
         // Public stream correlation only. Require one complete fixture frame;
         // never inspect/decrypt a customer payload or drop a partial record.
           if(dropNotification&&framed.length>8&&framed.readUInt32BE(4)===1){dropNotification=false;dropped?.();continue;}
-          client.write(framed);
+          if(delayReply){delayReply=false;const timer=setTimeout(()=>{if(!client.destroyed)client.write(framed);},6200);client.once('close',()=>clearTimeout(timer));}
+          else client.write(framed);
           if(expectNotification&&framed.length>8&&framed.readUInt32BE(4)===1){expectNotification=false;notified?.();}
         }
       });
@@ -70,6 +71,7 @@ export async function fixture(publicKey, origin) {
     if(action==='restart'){await stopNetwork();await start();}
     else if(action==='corrupt-request')requestCorrupt=true;
     else if(action==='corrupt-reply')replyCorrupt=true;
+    else if(action==='delay-reply')delayReply=true;
     else if(action==='drop-notification'){dropNotification=true;}
     else if(action==='await-drop'){if(dropNotification)await new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>{dropped=undefined;reject(Error('Missing fixture drop'));},5000);
