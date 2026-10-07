@@ -53,7 +53,9 @@ and separately authorized changed-source hardware qualification. C1 is committed
 locally as `5b77b11cc0101430f432c236e415577d83622588`. C2 is locally committed as
 `9feeee8a4a59e6abb7baec78c9600226192763ea`; C3 is locally committed as
 `18f3607030b87f9e44e7312c1d08c12871197c9f`. C4's real-runtime fixture/matrix is
-implemented and passes final local verification, with exact handoff below.
+implemented and passes final local verification, checkpointed as
+`b38849cf93761f380e195a2731698d862ea84f4d`, with exact handoff below. C5's
+changed-source ARM package passes offline; measured-image/hardware work remains.
 Review/merge remain open, so none of these slices is
 closed merely because its local tests pass.
 Current durability/repair checks are retained for bounded dev/test;
@@ -312,6 +314,51 @@ Next: C5's default-feature ARM/EIF/client build and fresh reviewed hardware
 manifest. Apple container 1.4.1 is available; its cached pinned tool image has
 been inspected and public dependencies vendored offline. No ARM package pass,
 EIF/PCR, AWS, push, merge or financial activity is claimed by this C4 receipt.
+
+#### C5 offline package and next authorization gate
+
+2026-10-07: exact committed C4 source
+`b38849cf93761f380e195a2731698d862ea84f4d`, tree
+`97ac816d9491a2ffcb6bbfac95304275dca25166`, passes the shipping default-feature
+ARM64 package gate in Apple container 1.4.1. Only its `git archive` source and
+locked public vendor tree are mounted read-only; final artifact copy has a separate
+owned output directory. No network interface except loopback, NSM, work/git,
+wallet/cloud directory, inherited credential or feature-enabled fixture is present.
+The seven shipping tools build; a clean second application build produces identical
+enclave ELF; an ordinary non-Nitro boot refuses with exactly `cinder runtime fenced`.
+Every copied binary/library hash verifies independently on macOS, and the copied
+rootfs executable equals the recorded enclave binary. No new program/SBF run is
+claimed: owning program sources are unchanged.
+
+Tool-image index:
+`33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`;
+ARM64 manifest:
+`d3d2f4db64dfa8e64503cc08102b68c70d9af963cc9508d0bc7927934dd814e2`.
+Linux 6.18.35, Rust 1.97.1, OpenSSL `3.0.22-1~deb12u1`, pkg-config `1.8.1-1`;
+deterministic package flags and remapped paths are unchanged. Cargo lock SHA-256:
+`f113f7ddb0a37cc045aa0304188627a4f03567669215f0c488a9db2f41172bd3`.
+New shipping enclave ELF SHA-256:
+`4ff3a2f9fe2e73f42483645e8b3a02597544178ce83b52a72a5070aba52c924a`.
+Package register SHA-256:
+`114104d5146df25aea354c86cab98cd2c77d513d71c9d29440d0c6cde7581ccb`.
+Bundle/log: `/private/tmp/cinder-c5-arm64.DLptc0/artifacts/bundle` and
+`package.log`. Owned container `cinder-p23-c5-20261007` is absent after its
+automatic removal; the pre-existing stopped builder/image are preserved.
+
+Final joined clients use the existing unchanged generated WASM core, SHA-256
+`3231c4a70cab472f7af5e4ac2b07f5895acb22abb88b82b13b455df30d5f3f03`,
+and binding `ccd416be0ec626bd255f6d32f95e8f0eb2025854fbcd355021490839172adcdf`.
+These local artifact identities and synthetic client receipts are not hardware
+attestation, independent deployment pins or production release-distribution evidence.
+
+Next is a fresh bounded **read-only** hardware proposal and scoped permissions,
+then exact public manifest/rootfs/EIF/PCR review BEFORE key release. The historical
+`p23-20261006-ro1` session is closed; its operator/boundary templates name that
+specific namespace and do not authorize a new one. Do not reuse its resource
+ledger, old heads, keys, authorizations or guessed image measurements. No AWS
+calls/resources/spend occurred in this C5 preparation. Actual NSM/cloud concurrent
+read/stream/revoke, restore/fencing/expiry remain unqualified for this new source;
+trading/funding/native settlement and the rest of P23 remain separate gates.
 
 ### Earlier architecture review — 2026-10-06
 

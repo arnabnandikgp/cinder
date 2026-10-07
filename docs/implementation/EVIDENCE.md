@@ -499,6 +499,18 @@ and fake-observation tests do not upgrade them into live G01/P23 evidence.
 
 ## Requirement-to-phase traceability
 
+P23 remediation promotion (2026-10-07):
+[ADR 0025](../architecture/0025-concurrent-private-reads.md) and the
+[C1–C5 contract](P23-REMEDIATION.md) record the approved single-journal accepted
+read/publication and scheduling boundaries. Tracked journal/API/Runtime races,
+the actual Node/Chrome joined grid and default-feature ARM package qualify the
+bounded local slice at source `b38849cf93761f380e195a2731698d862ea84f4d`.
+Exact commands, artifacts, measurements and limitations are in TRACKER. Synthetic
+clock/witness/fault ports are not AWS/STS authority; quiet-window read recovery,
+small fixture memory and full-history repair do not establish production liveness
+or capacity. No historical EIF/PCR or native financial receipt qualifies this
+changed application. Fresh hardware and G01–G05 evidence remain separate.
+
 P23 initial promotion (2026-10-06):
 [ADR 0023](../architecture/0023-live-observation-ports.md) connects current primary
 account/position/history GET schemas to the existing private observation journal
