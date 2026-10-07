@@ -12,7 +12,7 @@ permission for another deployment, or a claim that P23 is complete.
 | C1 — Shared interpretation | in progress | Implemented locally; final checks/publication receipt below. Replay-derived indexes and pure authorization preserve canonical responses, error ordering, epochs and grants. Warm indexes never replace a fresh check; review/merge remain open. |
 | C2 — Accepted read publication | in progress | Implemented locally; verification/handoff below. Central journal publication and independently witnessed immutable reads pass acceptance/revocation/uncertainty races. No remote I/O or NSM attestation under a publication latch; exact known-writer metadata distinguishes races from faults. Review/merge and joined C4/hardware qualification remain open. |
 | C3 — Scheduling and external I/O | in progress | Implemented locally; verification/handoff below. One mutation owner remains authoritative; bounded prepare/I/O/completion and connection-owned cipher/reply delivery retain final release checks. Joined C4 qualification and review/merge remain open. |
-| C4 — Joined local qualification | open | Fixed real-runtime and actual Node/Chrome workloads pass with measured dependency, latency and memory bounds, including retained generations and continuous unrelated writes. |
+| C4 — Joined local qualification | in progress | Real-runtime Node/Chrome grid and fixed fault/resource groups pass locally; final verification/handoff in TRACKER. Retained-generation and continuous-write limits are explicit; review/merge remain open. |
 | C5 — Changed-source qualification | open | Exact-source ARM/EIF/client receipts and a separately authorized fresh hardware manifest qualify the changed application. Native, chain and financial capabilities remain independent gates. |
 
 These slices stay on the existing shallow P23 branch until a justified review
@@ -185,6 +185,44 @@ no transport deadline was raised. Strict Clippy also required boxing the owned
 deposit-evidence variant; this is private in-memory ownership, not a stored schema.
 The exact final checks and local commit receipt belong in TRACKER. Next is the
 fixed C4 joined matrix, not a new AWS session or financial activation.
+
+## C4: real Runtime joined qualification — 2026-10-07
+
+The feature-gated `--runtime-web` fixture assembles the actual Runtime, API and
+AEAD/FileReplica journal with explicit synthetic clock/witness dependencies. Its
+private stdin controls admit only the fixed history/delay envelope and bounded
+non-economic writes/faults. There is no seeded credit, external network target,
+wallet loading, new public endpoint or financial activation. Reopen retains the
+same accepted journal, keys and owner contract; dirty setup and changed owners
+refuse rather than reset. The checker freezes and hashes one executable before
+the matrix, so a concurrent Cargo build cannot change code between test cells.
+
+One shared SDK suite runs in actual Node and Chrome, through the opaque relay.
+Each client runs the 24 history/delay/watch cells plus eight fixed fault/resource
+groups. The grid joins independent HTTP/WS reads, a same-socket grant and an
+inactive Runtime tick, and records dependency work, latency and whole-service
+peak RSS. The fault groups exercise revoke/expiry during I/O, known publication
+races, unrelated writes, encrypted restart without resend, continuous ingress,
+slow consumers, and witness/head/epoch/credential-port/lease/fence refusal.
+Synthetic credential failure is not a live STS test. The existing cloud, journal,
+API and Runtime tests retain exact STS, poison/panic, uncertain acceptance,
+queued release and all-family projection coverage.
+
+Four distinct retained generations are separately exercised in the journal test:
+the writer advances without waiting, original records remain shared, a fifth
+ticket refuses, stale release fails and capacity returns after drop. Process RSS
+includes all live Runtime/carrier/history/index/candidate allocations for the
+declared grid, not a sum of estimates. The 128-MiB ceiling uses small pages and
+16-KiB history pads; it is not worst-case production capacity or Nitro/NSM evidence.
+
+Observed result: independent reads avoid the writer backend and overlap witness
+delay; commands are serviced while periodic preparation is in flight. The writer's
+durability/history cost is deliberately unchanged. Sustained global commits may
+refuse a read; the tested quiet window restores service without weakening global
+freshness or retrying a mutation. This is bounded local qualification, not an
+unconditional continuous-write liveness guarantee. Full-history repair remains
+finite/quadratic. Exact final measurements and check/source receipts are recorded
+in TRACKER; C5 qualifies the changed measured application separately.
 
 ## C2/C3 implementation constraints
 

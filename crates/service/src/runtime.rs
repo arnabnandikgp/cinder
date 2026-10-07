@@ -39,6 +39,10 @@ const REQUEST_WAIT: std::time::Duration = std::time::Duration::from_millis(250);
 // Budget from BEFORE the final signed clock sample through authorization and
 // metadata release. Not a clock source, freshness TTL or wire reply timeout.
 const READ_RELEASE: std::time::Duration = std::time::Duration::from_millis(250);
+/// Actual Runtime with explicit local file/witness/clock ports, never a shipping
+/// key-release or hardware entrypoint. Harness controls terminate on private stdin.
+#[cfg(feature = "local-fixture")]
+pub mod qualification;
 struct ReadRuntime {
     reader: Reader,
     witness: Arc<dyn ReadWitness>,

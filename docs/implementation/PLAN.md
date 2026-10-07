@@ -750,10 +750,13 @@ security decision. Before another measured run, satisfy the fresh-authority,
 publication, time, resource and joined-client gates. Preserve finance, custody,
 wire and durable
 acceptance guarantees; increasing timeouts is not this architectural qualification.
-C1/C2 now have local unpublished implementation commits; C3 implements bounded
-unreleased connection replies and observation prepare/I/O/completion. Final C3
-verification is recorded in TRACKER. Next is C4's fixed joined Runtime/client
-delay/history/fault/resource matrix; cheap handler fixtures are not that evidence.
+C1–C3 have local unpublished implementation commits. C3 implements bounded
+unreleased connection replies and observation prepare/I/O/completion; C4 joins
+actual Node/Chrome clients to the real Runtime in the fixed history/delay/watch
+and fault/resource matrix. Local check and measurement receipts are in TRACKER;
+cheap handler fixtures and prior hardware receipts are not that evidence. Global
+commit pressure may refuse reads until a quiet window; the authority gate remains
+unchanged. Whole-process fixture memory is not production capacity calibration.
 C5 requires a fresh exact-source measured build and separately reviewed manifest.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial

@@ -237,7 +237,7 @@ pub mod recovery;
 
 // Public accepted-head file for the local crash test only. Same-host storage is
 // NOT an authenticated independent witness and cannot qualify G03 freshness.
-struct LocalWitness(PathBuf);
+pub(crate) struct LocalWitness(pub(crate) PathBuf);
 impl Witness for LocalWitness {
     fn read(&mut self, _: Stream) -> Result<Anchor, cinder_journal::Error> {
         let f = File::open(&self.0).map_err(|_| cinder_journal::Error::Storage)?;
@@ -590,7 +590,7 @@ impl Handler for FixtureHandler {
         .map_err(|_| Error)
     }
 }
-fn config() -> Config {
+pub(crate) fn config() -> Config {
     let domain = Domain {
         network: NetworkId::new([1; 32]).unwrap(),
         deployment: DeploymentId::new([2; 32]).unwrap(),

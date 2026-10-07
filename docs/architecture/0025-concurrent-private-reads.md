@@ -279,10 +279,13 @@ delivery on poll I/O. Ordinary native observation/RPC requests rejoin the writer
 after I/O with exact reserved identity and original evidence time. Inactive tick
 checks signed lease/sticky fencing, not proactive cloud-history freshness; actual
 operations retain new witness checks. Trading/funding activation remains disabled.
-Local targeted races/scheduling tests pass, but actual joined-client, sustained
-write and memory qualification remain C4; fresh changed-image hardware remains C5.
-These implementation notes do not revise the authority contract or claim those
-remaining conditions have been satisfied.
+Local targeted races/scheduling tests pass. C4 now joins actual Node/Chrome
+clients to the real Runtime with the fixed delay/history/watch and fault/resource
+matrix; exact final receipts and limitations live in TRACKER. It demonstrates
+bounded local service, not an unconditional continuous-write liveness guarantee
+or maximum-sized production memory calibration. Fresh changed-image hardware
+remains C5. These notes do not revise the authority contract or inherit previous
+AWS measurements for the new source.
 
 The user approved the read/publication authority split and its release/revocation
 semantics as part of the bounded remediation direction. Each implementation step

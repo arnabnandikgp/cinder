@@ -51,8 +51,10 @@ The user approved the broad remediation recommendations. Work now follows the
 then accepted publication and bounded scheduling, a fixed joined local matrix,
 and separately authorized changed-source hardware qualification. C1 is committed
 locally as `5b77b11cc0101430f432c236e415577d83622588`. C2 is locally committed as
-`9feeee8a4a59e6abb7baec78c9600226192763ea`; C3 is implemented locally, with
-verification/handoff below. Review/merge remain open, so none of these slices is
+`9feeee8a4a59e6abb7baec78c9600226192763ea`; C3 is locally committed as
+`18f3607030b87f9e44e7312c1d08c12871197c9f`. C4's real-runtime fixture/matrix is
+implemented and passes final local verification, with exact handoff below.
+Review/merge remain open, so none of these slices is
 closed merely because its local tests pass.
 Current durability/repair checks are retained for bounded dev/test;
 a production segment/checkpoint/retention contract is not implicitly approved.
@@ -210,12 +212,106 @@ logs/tool downloads are not required private test dependencies. All new regressi
 source is tracked. No Linux/SBF/ARM/AWS/venue/funded test or hosted CI was run for
 this source, and old hardware success is not inherited.
 
-Next: C4's fixed actual Node/Chrome + real Runtime/journal matrix at accepted
+The original C3 handoff was C4's fixed actual Node/Chrome + real Runtime/journal matrix at accepted
 history 1/8/32/64 and synthetic witness delay 0/50/400 ms, one/two watches,
 concurrent reads/mutation/tick, fault/continuous-write and peak-memory gates.
 Do not count the existing cheap FixtureHandler process suite as that join. C5
 still requires fresh ARM/EIF/client receipts and a reviewed new authorization
 manifest before hardware. No old AWS caps or success receipt applies to this source.
+
+#### C4 implementation and final local verification
+
+`runtime::qualification` is compiled only with `local-fixture` and reached only
+through explicit loopback `--runtime-web`. It assembles the actual Runtime/API,
+AEAD/FileReplica journal and independently invoked synthetic witness port, not
+FixtureHandler/Holds or a second financial engine. All native/financial gates
+are false; no seeded customer credit, wallet/RPC/cloud access or external signer
+is involved. Disposable keys/configuration and bounded aggregate controls travel
+over harness stdin, never an HTTP API. Exact accepted histories 1/8/32/64 use
+16-KiB non-economic evidence pads. Reopen preserves the original key/owner contract
+and head; dirty initialization and changed owners fail closed.
+
+The shared `runtime-suite.ts` has 24 cells in EACH actual Node/Chrome client:
+writer/read witness delays 0/50/400 ms, one/two watches, two concurrent HTTP/WS
+reads, same-socket grant and actual inactive tick. It asserts new read witnesses
+without writer-backend I/O, bounded concurrent read work, exactly one mutation
+acceptance, committed watch revisions and finite process peak RSS. Private
+candidates, journal generations/history/indexes and carrier allocations are
+included in the actual process measurement, not estimated separately and summed.
+The declared 128-MiB fixture ceiling and small pages/16-KiB pads are NOT a claim
+about maximum-sized production records, signed NSM cost or the Nitro application.
+
+Eight further fixed groups (nine including the grid) cover revoke during I/O,
+expiry, known post-CAS/pre-publication races, sustained unrelated commits, replay
+without resend, continuous same-socket exact-retry traffic, the existing 32-update
+slow-consumer queue, and witness/head/epoch/credential-port/lease/fence refusal.
+Exact STS boundaries, writer poison/panic, uncertain acceptance, replica repair,
+queued release and canonical all-family projection remain their existing tracked
+cloud/journal/runtime/API regressions. The publication resource test now retains
+four DISTINCT generations across writes, verifies shared original records and
+refuses a fifth ticket without blocking the writer.
+
+The fixed matrix is hooked into the existing offline browser CI runner, with its
+job ceiling changed from ten to fifteen minutes for the added workload; no service
+application/handshake/frame deadline changed. `/usr/bin/time` reports macOS/Linux
+whole-process peak RSS and absence fails qualification. The test proxy observes
+only public frames for notification timing. Fresh Chrome profiles, children,
+private temporary files and keys are owned and cleaned by the harness.
+
+The final frozen-artifact run passes all 24 cells and nine groups in EACH actual
+Node 24.21.0 and Chrome 154.0.8037.98. The earlier unfrozen complete run also
+passes, but the final receipt is the explicitly hashed single executable:
+`3e6d595f3463c0c2ecee51923e6d13e59e311fee6918dcfce8f94c6ae2f0f3f1`.
+This is a local-fixture executable hash, NOT a shipping ARM ELF/EIF/PCR pin.
+One fixture-only parser discovery: serde's
+unit-variant handling accepted extra fields despite deny_unknown_fields; using
+empty struct variants makes the new zero-field controls reject them. SDK oracle
+corrections use the actual `account` read family and completed-grant receipt.
+No shipping API semantics were changed to satisfy these checks.
+
+Observed limitation: a global publication that changes during a 400-ms read can
+refuse it under sustained unrelated writes. After the explicitly tested quiet
+window a fresh read succeeds, without weakening global generation or retrying a
+mutation. Continuous-write read liveness is not promised. Full-history write cost
+and finite lifetime remain unchanged; old hosted/AWS receipts do not qualify this
+local source.
+
+| Final workload observation | Node | Chrome |
+| --- | --- | --- |
+| Two reads together, zero witness delay | 1.7–5.3 ms | 1.6–2.3 ms |
+| Two reads together, 50-ms witness delay | 55.9–59.2 ms | 56.7–63.3 ms |
+| Two reads together, 400-ms witness delay | 409.0–414.0 ms | 406.9–418.7 ms |
+| Same-socket grant, 400-ms writer witness delay | 2,859–3,111 ms | 2,866–3,128 ms |
+| Whole-service process peak RSS across grid/faults | 10.5–15.6 MiB | 10.5–15.6 MiB |
+
+All concurrent-read cells issue new independent witness calls with zero writer
+backend GET/witness-read delta. Whole-run replica work grows with initial history:
+15/155/1,751/6,567 GETs at 1/8/32/64 records; these totals INCLUDE initialization
+and the write, not per-read work. The roughly 105-MB cumulative ciphertext I/O at
+64 records is not resident memory or improved append asymptotics. Read concurrency
+and same-socket service improve; the unchanged write path remains the slower work.
+No cloud SLO, maximum-sized page/candidate budget or indefinite lifetime is inferred.
+
+Final source verification — 2026-10-07: the local implementation commit containing
+this receipt follows C3 `18f3607030b87f9e44e7312c1d08c12871197c9f`.
+Complete pinned `node scripts/check.mjs` passes: all 42 contracts/inventory guards,
+boundaries, formatting, default/all-feature strict lint/build, all-feature debug/
+release and shipping-default Rust suites, 14 relay and 24 private SDK cases. The
+all-feature service has 96 passing unit and eight integration cases, with seven
+named Nitro tests explicitly gated. All eight publication tests, including the
+expanded distinct-generation case, pass. The two new fixture setup/control guard
+tests and focused strict all-target/all-feature service Clippy pass. Actual Node
+and Chrome each also pass all 26 cheap-handler HTTP/WebSocket process groups after
+the new fixture entry mode; these are separate from the joined matrix.
+Metadata/format/diff checks pass after the evidence update. Logs under
+`/private/tmp/cinder-c3-check.DFahHx/`: `c4-check.log`, `runtime-final.log`,
+`http-final.log`, `c4-contracts-final.log`. Tracked regression source reproduces
+the checks without ignored research, credentials or these temporary logs.
+
+Next: C5's default-feature ARM/EIF/client build and fresh reviewed hardware
+manifest. Apple container 1.4.1 is available; its cached pinned tool image has
+been inspected and public dependencies vendored offline. No ARM package pass,
+EIF/PCR, AWS, push, merge or financial activity is claimed by this C4 receipt.
 
 ### Earlier architecture review — 2026-10-06
 

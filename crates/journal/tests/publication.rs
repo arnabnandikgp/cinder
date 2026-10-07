@@ -265,6 +265,34 @@ fn read_slots_are_bounded_shared_history_is_not_copied_and_drop_returns_capacity
         new.transactions_with_receipts().next().unwrap().0
     ));
     assert!(!std::ptr::eq(old.state().unwrap(), new.state().unwrap()));
+    drop((old, new));
+    // Retain four DISTINCT old State/index-source generations while the writer
+    // keeps accepting. The cap is on tickets, not just same-generation clones.
+    let mut generations = Vec::new();
+    for n in 22..26 {
+        generations.push(reader.verify(reader.capture().unwrap(), &witness).unwrap());
+        store
+            .commit(support::transaction(store.head(), n, vec![], vec![]))
+            .unwrap();
+    }
+    assert!(matches!(reader.capture(), Err(Failure::Busy)));
+    for pair in generations.windows(2) {
+        assert!(!std::ptr::eq(
+            pair[0].state().unwrap(),
+            pair[1].state().unwrap()
+        ));
+        assert!(std::ptr::eq(
+            pair[0].transactions_with_receipts().next().unwrap().0,
+            pair[1].transactions_with_receipts().next().unwrap().0
+        ));
+    }
+    for old in generations {
+        assert_eq!(
+            old.release(Instant::now() + Duration::from_secs(1)),
+            Err(Failure::Raced)
+        );
+    }
+    release(&reader, &witness).unwrap();
 }
 struct Other(Anchor);
 impl Witness for Other {

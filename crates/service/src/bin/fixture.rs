@@ -14,7 +14,8 @@ fn run() -> Result<(), cinder_service::Error> {
     let web = args.len() == 4 && args[3] == "--web";
     let recovery_web = args.len() == 4 && args[3] == "--recovery-web";
     let acceptance_web = args.len() == 4 && args[3] == "--acceptance-web";
-    if args.len() != 3 && !web && !recovery_web && !acceptance_web {
+    let runtime_web = args.len() == 4 && args[3] == "--runtime-web";
+    if args.len() != 3 && !web && !recovery_web && !acceptance_web && !runtime_web {
         return Err(Error);
     }
     let listen: SocketAddr = args[0].parse().map_err(|_| Error)?;
@@ -24,6 +25,14 @@ fn run() -> Result<(), cinder_service::Error> {
     let wallet = decode_hex(&args[2])?.try_into().map_err(|_| Error)?;
     let mut key = zeroize::Zeroizing::new([0; 32]);
     std::io::stdin().read_exact(&mut *key)?;
+    if runtime_web {
+        return cinder_service::runtime::qualification::run(
+            listen,
+            Path::new(&args[1]),
+            key,
+            wallet,
+        );
+    }
     let handler = if acceptance_web {
         FixtureHandler::open_acceptance(Path::new(&args[1]), key, wallet, &read_binding()?)?
     } else if recovery_web {
