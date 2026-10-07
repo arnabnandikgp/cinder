@@ -73,14 +73,66 @@ are fixed at `a1bc5c2`; both threads replied/resolved, no open threads in #55/#5
 when inspected. All eight hosted jobs and CodeRabbit succeed at that exact #58
 head. These are parent receipts, not CI for the new continuation.
 
-Qualification in progress: full pinned workspace, actual Node/Chrome standard
-and bounded-pack growth, full offline SBF custody/recovery and exact-source ARM
-default-feature package. Focused resource and wire tests already pass, but final
-source receipts/publication must be recorded before marking local preparation
-complete. Host full lint initially caught a test-only signer wrapper under the
-wrong feature guard; fixed without suppressing warnings. SBF initially stopped
-at missing local Anchor/wasm-bindgen prerequisites, before transaction tests;
-temporary pinned tools are now selected, with no global installation change.
+Local receipts: the full pinned `node scripts/check.mjs` passes at implementation
+checkpoint `b3aa47480fcb940a3837e61bc39f1653bb777005`: all 42 contracts, strict
+default/all-feature lint/build, all-feature debug/release, shipping-default debug
+and all 26 SDK/TLS tests. Journal's 13 unit cases include policy bounds, 8-MiB
+full-size archive/replay/append and the reviewed race. All five release tests
+include real trusted-preparation subprocesses for manifest versions 1/2/3.
+The final narrow wire correction at `0845ca67b93134783156d0ce8ce58f0f4c8b9b47`
+retains a zero-net withdrawal when its fee consumes the gross amount; its three
+evidence groups pass debug/release and final full-workspace lint/build passes.
+It does not connect that parser to Runtime or enable any financial capability.
+
+The complete `node tools/web-channel/check.mjs` passes: each actual Node/Chrome
+client has 14 core/verifier, 26 HTTP/WS SDK process and nine C4 Runtime groups;
+all four shipping-bounded packed growth cells pass. Frozen Runtime fixture hash:
+`013540d47b65eeef0cef6a734e9c79ee1f070a901a9d660e7004b267ddfbce05`.
+All cells reach cuts 2/8/32/64 with 100-ms replica delay, preserve accepted head65
+and original-ID/digest receipt after lost reply, restart and epoch revocation.
+Ledger remains zero-credit/no-position; there are no native financial actions.
+
+| Client / carrier | Grant reaching head64 | Largest growth grant | Peak fixture RSS across growth/replay |
+| --- | --- | --- | --- |
+| Node / HTTP | 1,766 ms | 1,814 ms | 12,894,208 bytes |
+| Node / WebSocket | 1,866 ms | 1,971 ms | 12,042,240 bytes |
+| Chrome / HTTP | 1,761 ms | 1,801 ms | 12,173,312 bytes |
+| Chrome / WebSocket | 1,777 ms | 1,934 ms | 12,910,592 bytes |
+
+The direct full-size backend test alone peaks at 52,068,352 bytes RSS (2.96s),
+not compiler RSS or a full decoded financial Runtime/Nitro capacity benchmark.
+Full default vault runner passes **59/59, none skipped**, in 466.228s, including
+actual compiled SBF normal/recovery HTTP/WS workflows in offline Surfpool.
+These retain external fixture evidence limits; they are not testnet transactions.
+Anchor 1.2.0 temporary binary matches published SHA256
+`986d99392a520dfc50b63caf4eda9b9d7619c78ffb53fc57b6f8677c60b6d27e`;
+Node 24.21.0 / Rust 1.97.1 / bindgen 0.2.129 / Chrome 154.0.8037.98 remain pinned.
+Host lint initially caught a feature guard error, fixed without suppressions;
+SBF initially stopped before tests at missing tool prerequisites. No global
+installation changed. Hardware-only ignored cases were not invoked.
+
+Exact committed source export independently passes all 42 contracts and
+plan/workspace checks (27 phases/47 documents), with no research or user files.
+The source-only ARM package at `b3aa474` passes reproducibility and ordinary-host
+boot refusal. Its copied thirteen hashes/rootfs equality verify; temporary
+stopped-container copying failed, so the generated container was removed and
+the package rebuilt/exported while running. No user artifact was deleted.
+Final ARM source `0845ca67b93134783156d0ce8ce58f0f4c8b9b47`, tree
+`0ac94f4ff6b92abf958f33bff5d63e3640e265f5`, passes default-feature release,
+clean application rebuild/byte-identical comparison and ordinary-host refusal
+in Apple container 1.4.1 / immutable tool image
+`33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`.
+Networking disabled, source/vendor read-only, build outputs isolated; no NSM,
+research, wallets or AWS configuration mounted. Generated package retained at
+`/private/tmp/cinder-p23-shipping-arm.G1JsgP/artifacts/final-bundle`.
+All thirteen copied hashes and rootfs executable equality verify. Enclave SHA256
+`653e1643770084ad58b1120a46d21e8c40032b04a40734b9909ee2ed75474209`;
+package register SHA256
+`cea81afe00e1bfaa68ccd98ad6c8da3b7541de2cac13533fe494280b63c48410`.
+This supersedes the earlier package for a new run; it is not EIF/PCR or hardware
+evidence. Both task-created build containers exited/removed; shared images and
+builder remain untouched. Raw offline logs/package are temporary/reproducible;
+code/tests/run contracts are tracked. Final PR publication receipt follows.
 
 [The next-run proposal](P23-NEXT-RUN-PROPOSAL.md) is the handoff at the AWS
 boundary, not permission to launch or activate financial capabilities. Keep P23
