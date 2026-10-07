@@ -505,9 +505,9 @@ against actual code, with pre-fix failing regressions. Nonfatal ordinary read
 refusal is distinct from periodic skip and fatal fence; boot-local immutable
 deposit rejections avoid RPC-budget depletion without creating credit; opaque
 reply waiting and absolute frame/body assembly have separate bounds. Tests and
-new-source/package receipts belong in TRACKER. Old ARM/EIF identities cannot
-qualify these changes. The user approved the bounded C5 proposal; expired AWS
-login and exact fresh-policy preflight still prevent launch. No new live result
+new-source/package receipts at `d2bf4b6` are in TRACKER. Old ARM/EIF identities cannot
+qualify these changes. The user approved the bounded C5 proposal and renewed
+AWS login; exact fresh-policy preflight still prevents launch. No new live result
 is inferred from source, approval or synthetic checks.
 
 [ADR 0025](../architecture/0025-concurrent-private-reads.md) and the

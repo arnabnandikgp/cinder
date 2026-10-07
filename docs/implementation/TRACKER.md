@@ -60,16 +60,42 @@ not credit or a new financial journal; pending/port/code/account errors are not
 terminal-cached. SDK body and opaque upstream-frame timers are absolute and
 cleared on completion/close, independently of the 15-second application wait.
 
-Focused service and relay/SDK regressions pass; complete pinned workspace and
-actual Node/Chrome checks are being rerun. Their final receipt follows below;
-older source/package checks do not qualify these application edits. C5 requires
-a rebuilt shipping ARM package and new EIF/PCR review before release. AWS
-read-only preflight currently refuses because `cinder_new`'s login has expired;
-renewed login and independently verified fresh C5 policies remain prerequisites.
-No AWS resource, key release, financial activity or merge occurred.
+Final source checkpoint `d2bf4b69968def0fd10ab8b70a056c1aea71f2f3`, tree
+`ce1735a7cfd42c8d84ffb57437b16409b443a8c7`: complete pinned
+`node scripts/check.mjs` passes (42 contract guards; default/all-feature lint and
+build; all-feature debug/release and shipping-default regressions; service 97
+unit passes plus seven explicitly ignored hardware cases in feature-enabled
+profiles; 15 relay and 26 SDK tests). Actual Node 24.21.0 and Chrome
+154.0.8037.98 each pass 24 joined Runtime cells/nine groups and all 26 existing
+HTTP/WS carrier groups. Final-release/post-CAS races now verify encrypted
+Unavailable followed by a successful read on the SAME channel, without retry.
+Frozen fixture ELF SHA-256:
+`95b9e07b2e0457b110f8ef84fbd027f2fbc968dee6c7791e1488320b76f97496`.
+400-ms independent reads complete in 411–427 ms Node / 407–419 ms Chrome;
+small local process peak RSS is 10.5–15.6 MiB, not production calibration.
 
-Next: complete exact-source checks/package, publish the review fixes on #55 and
-record both bots' dispositions; then run the approved C5 bounds only after access
+The same committed source passes the default-feature ARM package/rebuild/host
+refusal gate: enclave SHA-256
+`e69499c1e4f8444828d681c42b10580d05f50364d1de1d17f2f59665548c57f6`;
+register `2530ce282b1cad9453f538e108f6a1e07e2c3f74c66dca981838dc6fcefe9cb7`.
+All 13 copied binary/library hashes and rootfs equality verify on macOS.
+Tool-image/vendor/lock identities and isolation are unchanged from the package
+receipt below; owned container `cinder-p23-c5-review-20261007` is absent. New
+bundle: `/private/tmp/cinder-c5-review-arm64.0PsmU6/artifacts/bundle`; local
+logs: `c5-review-{check,runtime,http}.log` in
+`/private/tmp/cinder-c3-check.DFahHx` and `package.log` in the new build root.
+Only this receipt follows the tested application source. Program/SBF sources
+are unchanged; no new SBF or hardware result is claimed.
+
+The user renewed `cinder_new`'s login. The fresh read-only gate then confirms
+the intended non-root IAM identity but refuses `iam:GetPolicy` for
+`CinderP23C5Operator`; the user is preparing the fresh scoped policies. Exact
+policy verification, fresh operator runner, metadata preflight and new EIF/PCR
+review remain prerequisites. No AWS resource, key release, financial activity
+or merge occurred. Older source/package checks do not qualify these changes.
+
+Next: publish the verified review fixes on #55 and record both bots' dispositions;
+then run the approved C5 bounds only after access
 and manifest/image preflight pass. Do not execute the closed-run namespace.
 
 The user approved the broad remediation recommendations. Work now follows the
@@ -87,7 +113,7 @@ closed merely because its local tests pass.
 Current durability/repair checks are retained for bounded dev/test;
 a production segment/checkpoint/retention contract is not implicitly approved.
 
-Publication target is the same ready/open one-layer PR #55, based on
+Historical pre-review publication target was the same ready/open one-layer PR #55, based on
 `product/tee-v1` at `833955f8a4ead02a71eb5ae69a6aebd92bb85091`. Previous
 published head was `6dff3731f365463ad24c1b5fcd2cb82f19d76c86`; its green checks
 do not qualify this remediation. The new tip is the receipt-only/CI-prerequisite
