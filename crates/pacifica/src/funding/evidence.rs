@@ -120,11 +120,8 @@ pub fn transfer(
         return Err(Error::Qualification);
     }
     let amount = atoms(profile, &t.am)?;
-    if amount == 0 {
-        return Err(Error::Codec);
-    }
     match t.e.as_str() {
-        "deposit" if t.bn.is_none() && t.ra.is_none() && t.f.is_none() => {
+        "deposit" if amount != 0 && t.bn.is_none() && t.ra.is_none() && t.f.is_none() => {
             Ok(TransferObservation::Deposit {
                 signature: signature(t.tx.as_deref().ok_or(Error::Qualification)?)?,
                 amount,

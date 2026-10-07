@@ -84,6 +84,20 @@ fn links_exact_deposit_and_withdrawal_components_without_certifying_payment() {
     ));
     v["data"]["e"] = json!("withdrawal_confirmed");
     assert!(decode(&v).is_err());
+    v["data"]["tx"] = json!(bs58::encode([7; 64]).into_string());
+    v["data"]["am"] = json!("0");
+    v["data"]["ra"] = json!("1");
+    v["data"]["f"] = json!("1");
+    assert!(matches!(
+        decode(&v).unwrap(),
+        TransferObservation::Withdrawal {
+            amount: 0,
+            requested: 1_000_000,
+            fee: 1_000_000,
+            confirmed: true,
+            ..
+        }
+    ));
 }
 #[test]
 fn rejects_wrong_scopes_missing_linkage_null_aliases_and_unsafe_amounts() {
