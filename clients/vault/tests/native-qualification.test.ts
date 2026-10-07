@@ -23,11 +23,18 @@ test('native qualification reproduces the official deposit/faucet discriminators
   assert.throws(()=>nativeInstruction('withdraw',owner.toBase58()));
 });
 test('native qualification refuses wrong loader metadata, changed slot and authority before funding',()=>{
+  // Independent protocol identifier, not a fixture owner copied from ROUTE.
+  // https://solana.com/docs/core/programs/program-deployment (2026-10-08).
+  const loader='BPFLoaderUpgradeab1e11111111111111111111111';
+  assert.equal(ROUTE.loader,loader);
+  for(const field of ['program','mint','central','vault','program_data','loader','upgrade'])assert.equal(new PublicKey(ROUTE[field]).toBase58(),ROUTE[field]);
+  assert.equal(PublicKey.findProgramAddressSync([new PublicKey(ROUTE.program).toBuffer()],new PublicKey(loader))[0].toBase58(),ROUTE.program_data);
   const p=Buffer.alloc(36);p.writeUInt32LE(2);new PublicKey(ROUTE.program_data).toBuffer().copy(p,4);
   const d=Buffer.alloc(46);d.writeUInt32LE(3);d.writeBigUInt64LE(BigInt(ROUTE.slot),4);d[12]=1;new PublicKey(ROUTE.upgrade).toBuffer().copy(d,13);
-  const account=(bytes:Buffer,executable:boolean)=>({owner:ROUTE.loader,executable,data:[bytes.toString('base64'),'base64']});
+  const account=(bytes:Buffer,executable:boolean)=>({owner:loader,executable,data:[bytes.toString('base64'),'base64']});
   const program=account(p,true),data=account(d,false);assert.equal(verifyDeployment(program,data).length,1);
   assert.throws(()=>verifyDeployment({...program,owner:TOKEN_PROGRAM_ID.toBase58()},data));
+  assert.throws(()=>verifyDeployment({...program,owner:'BPFLoaderUpgradeab1e11111111111111111111'},data));
   d[4]^=1;assert.throws(()=>verifyDeployment(program,account(d,false)));d[4]^=1;
   d[13]^=1;assert.throws(()=>verifyDeployment(program,account(d,false)));
 });

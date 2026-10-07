@@ -47,9 +47,11 @@ deployment or amount/time-based completion. JS test-key persistence is explicitl
 local/plaintext, not enclave protection or secure erasure. Scope approval and
 exact execution approval remain distinct. No native/chain receipt or financial
 certificate is established by its offline tests; source cuts and lost-native-ACK
-recovery remain unqualified. The [first invocation receipt](P23-NATIVE-SEMANTICS-RECEIPT.md)
-records sponsor-locator failure before all network/financial activity, its offline
-regressions and a separately unapproved replacement. TRACKER owns publication.
+recovery remain unqualified. The [invocation receipts](P23-NATIVE-SEMANTICS-RECEIPT.md)
+record signer-locator/loader defects, three read-only RPC calls and zero financial
+activity. Independent canonical-route checks and primary-doc observation mappings
+are offline corrections, not native qualification; a fresh replacement remains
+unapproved. TRACKER owns publication.
 
 P23 additionally promotes [confidential chain ports](../architecture/0024-confidential-chain-ports.md):
 controller-bound signing/finality, purpose-separated release, original owner

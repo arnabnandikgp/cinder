@@ -815,9 +815,10 @@ The [bounded local native-semantics probe](../../tools/native-qualification/READ
 now implements exact-seal approval, fresh identities, the one-deposit/one-withdrawal
 scenario, original-wire persistence, explicit lost-reply audit separation and
 independent finalized payment checks. Its scope/bootstrap exception was approved
-2026-10-08. The first approved exact invocation stopped at a malformed sponsor
-locator before network I/O; the [receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) records
-zero financial activity, the local fix and an unapproved replacement. Offline tests
+2026-10-08. Approved invocations stopped at a malformed sponsor locator and a
+malformed loader constant; the [receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) records
+three read-only RPC calls, zero financial activity, independent route regressions
+and corrected diagnostic observation mappings. A fresh replacement is unapproved. Offline tests
 cannot supply a complete native cut, UUID recovery capability or funding provider.
 Any unsupported requirement returns as a named G01/policy question; the following
 measured financial run remains separately scoped, not automatically authorized.

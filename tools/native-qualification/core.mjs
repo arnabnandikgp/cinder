@@ -123,8 +123,12 @@ export function setupObservations(settings, loan) {
   return {status:'observed-disabled-no-debt',shipping_complete:false};
 }
 export function transfers(value, account) {
-  if(value?.channel!=='account_transfers'||!Array.isArray(value.data))return [];
-  return value.data.map(r=>{
+  if(value?.channel!=='account_transfers')return [];
+  // The documented live envelope carries one object. Retain bounded diagnostic
+  // batch fixtures too; neither shape establishes replay or a financial cut.
+  const rows=Array.isArray(value.data)?value.data:[value.data];
+  if(rows.some(r=>!r||typeof r!=='object'||Array.isArray(r)))throw Error('Transfer envelope');
+  return rows.map(r=>{
     if(r.u!==account||r.a!=='USDC'||!['deposit','withdrawal_pending','withdrawal_confirmed'].includes(r.e)
       ||!Number.isSafeInteger(r.t)||r.t<0)throw Error('Transfer schema/account');
     atoms(r.am);
@@ -133,6 +137,16 @@ export function transfers(value, account) {
     if(r.ra!==undefined)atoms(r.ra);if(r.f!==undefined)atoms(r.f);
     return structuredClone(r);
   });
+}
+export function emptyBalanceBaseline(account, history) {
+  if(account?.status!==404||account.body?.success!==false||history?.status!==200
+    ||history.body?.success!==true||!Array.isArray(history.body.data)
+    ||history.body.data.length!==0||history.body.has_more!==false)throw Error('Native baseline not established');
+  return {fresh:true,empty_balance_page_observed:true,source_cut:null};
+}
+export function flatAccountObservation(account) {
+  return account?.status===200&&account.body?.success===true
+    &&atoms(account.body.data?.balance)===0n&&atoms(account.body.data?.pending_balance)===0n;
 }
 export function depositLink(rows, signature, account) {
   const found=rows.filter(r=>r.e==='deposit'&&r.u===account&&r.tx===signature);

@@ -8,7 +8,7 @@ import { rootCertificates } from 'node:tls';
 import { createRequire } from 'node:module';
 import { setTimeout as pause } from 'node:timers/promises';
 import { LIMITS,canonical,sha,privateRead,exclusive,validateManifest,assertApproval,Journal,
-  boundedBody,decodeResponse,nativeAck,setupObservations,transfers,depositLink,withdrawalLink,paymentDelta,tokenDelta,atoms } from './core.mjs';
+  boundedBody,decodeResponse,nativeAck,setupObservations,transfers,emptyBalanceBaseline,flatAccountObservation,depositLink,withdrawalLink,paymentDelta,tokenDelta,atoms } from './core.mjs';
 import { checkEnvironment,validateSignerLocator,runDirectory,sources,tlsRoots } from './artifacts.mjs';
 
 // The independent offline harness drives this same sequence. Native receipt loss
@@ -78,7 +78,7 @@ export async function main(directory) {
     if(r.status!==200||r.body.id!==1||r.body.error||!Object.hasOwn(r.body,'result'))throw Error('RPC refused/unknown');return r.body.result;
   };
   const get=async(path,cleanup=false)=>{
-    if(!['account','account/settings','account/loan','positions','orders','account/withdraw/pending','account/withdraw/history','account/balance/history'].includes(path))throw Error('Native GET scope');
+    if(!['account','account/settings','account/loan','positions','orders','account/balance/history'].includes(path))throw Error('Native GET scope');
     const url=new URL(`/api/v1/${path}`,m.native_origin);url.searchParams.set('account',m.broker);
     if(path.endsWith('history'))url.searchParams.set('limit','20');
     return request('http',url.href,{method:'GET',headers:{accept:'application/json'}},cleanup);
@@ -191,9 +191,8 @@ export async function main(directory) {
       if(await info(m.owner)||await info(m.broker)||await info(m.owner_tokens)||await info(m.broker_tokens))throw Error('Fresh identities not empty');
       if((await rpc('getBalance',[m.sponsor,{commitment:'finalized'}])).value<100000000)throw Error('Sponsor devnet balance');},
     baseline:async()=>{
-      const account=await get('account'),history=await get('account/withdraw/history');
-      if(!(account.status===404&&account.body.success===false)||history.body.success!==true||!Array.isArray(history.body.data)||history.body.data.length||history.body.has_more!==false)throw Error('Native baseline not established');
-      j.append('native-baseline',{fresh:true,history_complete_observed:true,source_cut:null});
+      const account=await get('account'),history=await get('account/balance/history');
+      j.append('native-baseline',emptyBalanceBaseline(account,history));
     },
     disable:async stage=>{
       const result=await post('set_auto_lend_disabled',`disable-${stage}`,{disabled:true});
@@ -237,7 +236,7 @@ export async function main(directory) {
           exclusive(join(dir,'native-payment.json'),JSON.stringify({link,receipt}));return {...link,fee:ack.fee};
         }
         // Separate planned, finite observation windows, not an economic resend.
-        await capture(async()=>{await get('account/withdraw/pending',true);await get('account/withdraw/history',true);},true);
+        await capture(async()=>{await get('account',true);await get('account/balance/history',true);},true);
       }
       return null;
     },
@@ -247,18 +246,19 @@ export async function main(directory) {
     },
     closeout:async state=>{
       const account=await get('account',true),settings=await get('account/settings',true),loan=await get('account/loan',true),
-        pending=await get('account/withdraw/pending',true),positions=await get('positions',true),orders=await get('orders',true),history=await get('account/balance/history',true);
+        positions=await get('positions',true),orders=await get('orders',true),history=await get('account/balance/history',true);
       const ownerAtoms=verifyToken(await info(m.owner_tokens,true),m.owner),brokerAtoms=verifyToken(await info(m.broker_tokens,true),m.broker);
       const sol={};for(const role of ['owner','broker','sponsor']) {
         const value=(await rpc('getBalance',[m[role],{commitment:'finalized'}],true)).value;
         if(!Number.isSafeInteger(value)||value<0)throw Error('SOL balance units');sol[role]=String(value);
       }
-      const clean=ownerAtoms===BigInt(state.payment.net)&&brokerAtoms===0n&&account.body.success===true&&atoms(account.body.data?.balance)===0n
-        &&[pending,positions,orders].every(r=>r.body.success===true&&Array.isArray(r.body.data)&&r.body.data.length===0)
+      const clean=ownerAtoms===BigInt(state.payment.net)&&brokerAtoms===0n&&flatAccountObservation(account)
+        &&[positions,orders].every(r=>r.status===200&&r.body.success===true&&Array.isArray(r.body.data)&&r.body.data.length===0)
         &&setupObservations(settings.body,loan.body).status==='observed-disabled-no-debt';
       return {status:clean?'assets-reconciled-financial-gates-unqualified':'closeout-unresolved',setup:state.setup,
         deposit:depositLink(observed,state.deposit.signature,m.broker),payment:state.payment,owner_atoms:ownerAtoms.toString(),broker_atoms:brokerAtoms.toString(),
         sponsor_debit_reserved:sponsorDebit.toString(),history_observed:history.body.success===true,source_cut:null,
+        pending_balance_observed:typeof account.body.data?.pending_balance==='string'?account.body.data.pending_balance:null,pending_operations_complete:false,
         sol_balances_lamports:sol,gas_and_token_account_rent_reclaimed:false,
         lost_reply_reconciliation:'unresolved-native-UUID-query-not-established',agent_mutations:0,
         shipping:false,nitro:false,controller_credit:false,financial_completion:false};

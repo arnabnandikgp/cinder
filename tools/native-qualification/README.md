@@ -25,6 +25,9 @@ are explicit, revalidated before funding and before every chain submission.
 The first preflight streams at most 4 MiB of executable bytes through <=64-KiB
 RPC slices, then rechecks the loader header. Later sends require the same loader
 slot/authority. This is not verified source equivalence or an audited native image.
+All route identifiers must parse as canonical public keys. An independent fixture
+pins the [official loader-v3 ID](https://solana.com/docs/core/programs/program-deployment)
+and derives ProgramData rather than copying the implementation's owner constant.
 
 Once the scope is approved, offline preparation creates **two fresh disposable
 test identities** in a new private namespace. It reads only the configured CLI
@@ -52,6 +55,12 @@ made until the approved runner is explicitly invoked:
 node tools/native-qualification/run.mjs \
   work/experiments/p23-native-semantics/run-01
 ```
+
+`MAPPINGS.md` also states the sealed diagnostic observation contract: documented
+single-object transfer messages, perp balance history and observed pending balance.
+An empty history page or zero pending balance does not prove complete operations.
+The probe does not assume undocumented perp withdrawal-history/pending routes or
+substitute unrelated spot endpoints.
 
 Changing source/configuration requires a new reviewed seal, not reuse of an old
 approval. Once started, the owned lock remains and a second invocation refuses.

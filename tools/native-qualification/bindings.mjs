@@ -10,10 +10,14 @@ export const ROUTE=Object.freeze({program:'peRPsYCcB1J9jvrs29jiGdjkytxs8uHLmSPLK
   mint:'USDPqRbLidFGufty2s3oizmDEKdqx7ePTqzDMbf5ZKM',decimals:6,
   central:'2zPRq1Qvdq5A4Ld6WsH7usgCge4ApZRYfhhf5VAjfXxv',vault:'5SDFdHZGTZbyRYu54CgmRkCGnPHC5pYaN27p7XGLqnBs',
   program_data:'BMTXJd9CQAt2C2mUYH3URMoXrwZrHjgDPsTxHJx3coDK',
-  loader:'BPFLoaderUpgradeab1e11111111111111111111',
+  // Canonical loader-v3 ID, independently pinned by Solana's program-deployment reference.
+  loader:'BPFLoaderUpgradeab1e11111111111111111111111',
   // Historical deployment identity, revalidated before any funding, not source equivalence.
   slot:'376257391',upgrade:'49uAsjdwJzu3K3T2E86mUX1n5e5MLQajUdNJsmgPLCHK'});
 const {PublicKey,TransactionInstruction,SystemProgram}=web3;
+for(const field of ['program','mint','central','vault','program_data','loader','upgrade']) {
+  if(new PublicKey(ROUTE[field]).toBase58()!==ROUTE[field])throw Error('Noncanonical native route identity');
+}
 export const pub=s=>new PublicKey(s),pda=(seeds)=>PublicKey.findProgramAddressSync(seeds,pub(ROUTE.program))[0];
 export const ata=owner=>token.getAssociatedTokenAddressSync(pub(ROUTE.mint),pub(owner),true);
 export function nativeInstruction(kind,owner,amount=20000000n) {

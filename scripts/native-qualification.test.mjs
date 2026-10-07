@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, chmodSync, writeFileSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LIMITS, canonical, sha, validateManifest, assertApproval, Journal, atoms, nativeAck,
-  setupObservations, transfers, depositLink, withdrawalLink, paymentDelta, tokenDelta, boundedBody, privateRead, exclusive } from '../tools/native-qualification/core.mjs';
+  setupObservations, transfers, emptyBalanceBaseline, flatAccountObservation, depositLink, withdrawalLink, paymentDelta, tokenDelta, boundedBody, privateRead, exclusive } from '../tools/native-qualification/core.mjs';
 import { qualify } from '../tools/native-qualification/run.mjs';
 import { configuredWallet,validateSignerLocator } from '../tools/native-qualification/artifacts.mjs';
 const manifest=()=>({schema:'cinder-native-qualification-v1',cluster:'devnet',aws:false,shipping:false,
@@ -62,6 +62,21 @@ test('native amounts are exact and setup missing cache/defaults never imply read
 });
 const signature='5'.repeat(88),account='broker';
 const row={u:account,a:'USDC',e:'deposit',am:'20',t:1000,tx:signature};
+test('native documented transfer object is retained rather than silently discarded; malformed envelopes refuse',()=>{
+  assert.deepEqual(transfers({channel:'account_transfers',data:row},account),[row]);
+  assert.deepEqual(transfers({channel:'other',data:row},account),[]);
+  for(const data of [null,undefined,'bad',42,[null],[[row]]])assert.throws(()=>transfers({channel:'account_transfers',data},account));
+});
+test('native baseline uses an explicit empty balance page, not missing endpoints or a financial frontier',()=>{
+  const account={status:404,body:{success:false}},history={status:200,body:{success:true,data:[],has_more:false}};
+  assert.deepEqual(emptyBalanceBaseline(account,history),{fresh:true,empty_balance_page_observed:true,source_cut:null});
+  for(const h of [{status:404,body:{success:false}}, {...history,body:{success:true,data:[]}}, {...history,body:{...history.body,has_more:true}}, {...history,body:{...history.body,data:[{}]}}])assert.throws(()=>emptyBalanceBaseline(account,h));
+  assert.throws(()=>emptyBalanceBaseline({status:200,body:{success:true}},history));
+  const flat={status:200,body:{success:true,data:{balance:'0',pending_balance:'0'}}};
+  assert.equal(flatAccountObservation(flat),true);assert.equal(flatAccountObservation({...flat,body:{success:true,data:{balance:'0',pending_balance:'1'}}}),false);
+  assert.equal(flatAccountObservation({status:404,body:{success:false}}),false);
+  assert.throws(()=>flatAccountObservation({...flat,body:{success:true,data:{balance:'0'}}}));
+});
 test('native deposit joins only its original signature; duplicates do not create final credit',()=>{
   const rows=transfers({channel:'account_transfers',data:[row,row]},account);
   assert.equal(depositLink(rows,signature,account).status,'exact-signature-observed');

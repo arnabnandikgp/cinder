@@ -37,7 +37,35 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### Native-semantics invocation stopped before network I/O — 2026-10-08
+### Native-semantics loader preflight refusal — 2026-10-08
+
+The user approved exact `run-final-02`; source `90b0e00a46fec8cd27da9fdbc997983de12d105d`
+performed three read-only devnet RPC requests, then refused the loader owner.
+Private receipts establish the correct genesis, unchanged native ProgramData,
+slot and upgrade authority. The cause is our malformed loader-ID constant, not
+native deployment drift. Zero native HTTP/WSS, simulations, financial submissions,
+funds moved or fees. Original lock/journal/approval remain untouched; no restart.
+
+The [invocation receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) records the actual result
+and why the self-referential fixture missed it. The local correction adds canonical
+route-key validation, an independently pinned loader and derived ProgramData PDA.
+Primary-doc review also corrects this probe's single-object transfer envelope and
+documented balance-history route; it stops relying on assumed perp withdrawal
+history/pending endpoints. An empty page and zero observed pending balance remain
+diagnostic observations, not complete cuts or shipping financial authority.
+All 17 native tool, 60 contract/inventory and nine vault codec cases pass; vault
+SDK type checking and offline replay of the retained public headers also pass.
+
+The fresh offline replacement is
+`work/experiments/p23-native-semantics/run-final-03/REVIEW.md` with adjacent
+`MAPPINGS.md`, seal
+`ade4499008899fc2fc8c8d43b41df8a3836b7bed2a990bc9670935a56597c604`.
+It is unapproved/unstarted. The funding/quote/fee/bootstrap/request ceilings and
+no-AWS scope are unchanged. Next: explicit review/approval of this corrected
+exact record, then one invocation. No shipping financial activation, AWS run,
+new-head hosted CI success or stack merge is claimed.
+
+### Native-semantics signer refusal (historical, before second invocation) — 2026-10-08
 
 The user approved the exact `run-final-01` seal; its one authorized invocation
 stopped during sponsor loading because offline preparation retained trailing CLI
