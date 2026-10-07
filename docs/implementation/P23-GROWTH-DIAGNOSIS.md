@@ -107,8 +107,12 @@ or repaired. A pack is not accepted merely because an S3 object exists. Retainin
 full history still has byte-growth costs; this proposal is not a production
 capacity or durability guarantee.
 
-**No production storage code, format, timeout, retention policy or financial
-gate changed in this diagnosis.** User review is the next required decision.
+**No production storage selection, format, timeout, retention policy or financial
+gate changed in this diagnosis.** The user subsequently approved the local
+retained-history pack design/prototype. [ADR 0026](../architecture/0026-retained-history-packs.md)
+defines its candidate format, safety/bounds, explicit archive migration and
+actual-client tests. This approval does not select shipping storage or authorize
+another AWS run. Review the prototype's results before cloud promotion.
 
 ## Fixed follow-up acceptance criteria
 

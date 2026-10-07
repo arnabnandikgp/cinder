@@ -6,6 +6,7 @@ pub mod funds;
 pub mod liquidation;
 pub mod model;
 pub mod orders;
+pub mod packed;
 pub mod projection;
 pub mod protection;
 pub mod raw;

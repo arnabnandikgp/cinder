@@ -210,13 +210,18 @@ Seven offline checks cover the maintained product sources:
 | Offline Rust lint and build | rustfmt, default/all-feature Clippy and all-target build; `--group=lint` |
 | Offline Rust regressions | All-feature debug/release and shipping-default tests; `--group=rust` |
 | Offline SDK and relay regressions | Strict TypeScript, private SDK/TLS and relay tests; `--group=client` |
-| Offline browser channel qualification | Shared native/WASM core and actual Node/Chrome SDK workflows; `node tools/web-channel/check.mjs` |
+| Offline browser channel qualification | Shared native/WASM core and actual Node/Chrome SDK/C4 workflows; `node tools/web-channel/check.mjs --standard-only` |
+| Offline retained history growth | Local pack candidate, actual Node/Chrome HTTP/WS growth, original-ID restart/revocation; `node tools/web-channel/check.mjs --packed-only` |
 | Offline Anchor vault (SBF + Surfpool) | Locked SBF/IDL and signed localhost transaction workflows; `node scripts/check-vault.mjs` |
 | Offline ARM64 default-feature package | Release executables, application-crate ELF reproducibility and non-Nitro boot refusal; `tools/nitro-runtime/package-check.sh` in isolated ARM64 Linux |
 
 The workspace matrix has `fail-fast: false`; lint, Rust and SDK/relay results do
 not depend on another group's success. Each Rust profile uses `--no-fail-fast`,
 and later profiles still run when an earlier profile fails.
+The browser matrix also uses `fail-fast: false`, common pinned dependency caches
+and independent fifteen-minute job budgets. Its added pack job selects only the
+local candidate; shipping storage remains unchanged. Without a selector, the
+local browser runner executes both profiles. See [ADR 0026](architecture/0026-retained-history-packs.md).
 The independent SDK group explicitly builds its service, opaque relay, fixture
 verifier and production verifier. Its entrypoint checks that all four are
 executable before starting any fixture; it never relies on the lint job or a

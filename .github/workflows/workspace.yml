@@ -61,9 +61,17 @@ jobs:
         run: node scripts/check.mjs --group=${{ matrix.group }}
 
   web-channel-qualification:
-    name: Offline browser channel qualification
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: standard
+            name: Offline browser channel qualification
+          - mode: packed
+            name: Offline retained history growth
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -106,4 +114,4 @@ jobs:
         env:
           CINDER_WASM_BINDGEN: ${{ runner.temp }}/wasm-bindgen-0.2.129-x86_64-unknown-linux-musl/wasm-bindgen
           CINDER_TEST_CHROME: /usr/bin/google-chrome
-        run: node tools/web-channel/check.mjs
+        run: node tools/web-channel/check.mjs --${{ matrix.mode }}-only

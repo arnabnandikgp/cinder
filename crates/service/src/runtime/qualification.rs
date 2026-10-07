@@ -2,7 +2,11 @@
 //! same-host witness and delays are NOT AWS authority, credentials or attestation.
 use super::*;
 use crate::fixture::{FixtureAttester, FixtureClock, LocalWitness, config};
-use cinder_journal::{Error as JournalError, Frame, Head, replicated::*};
+use cinder_journal::{
+    Backend, Error as JournalError, Frame, Head,
+    packed::{FileStore, Packed, Store as PackStore},
+    replicated::*,
+};
 use cinder_pacifica::{execution::Origin, funding::Beneficiary};
 use serde_json::{Value, json};
 use std::{
@@ -21,6 +25,8 @@ struct Options {
     delay_ms: u64,
     broker_seed: [u8; 32],
     account: String,
+    #[serde(default)]
+    packed: bool,
 }
 impl Drop for Options {
     fn drop(&mut self) {
@@ -43,6 +49,8 @@ struct Metrics {
     writer_delay_ms: AtomicU64,
     post_cas_ms: AtomicU64,
     post_cas: AtomicBool,
+    replica_delay_ms: AtomicU64,
+    head: AtomicU64,
     advance: AtomicU64,
     fault: AtomicU8,
 }
@@ -52,7 +60,8 @@ impl Metrics {
             "replica_bytes":self.bytes.load(Ordering::SeqCst),"writer_reads":self.writer_reads.load(Ordering::SeqCst),
             "accepts":self.accepts.load(Ordering::SeqCst),"read_calls":self.read_calls.load(Ordering::SeqCst),
             "live_read_io":self.live.load(Ordering::SeqCst),"peak_read_io":self.peak.load(Ordering::SeqCst),
-            "clocks":self.clocks.load(Ordering::SeqCst),"post_cas":self.post_cas.load(Ordering::SeqCst)})
+            "clocks":self.clocks.load(Ordering::SeqCst),"post_cas":self.post_cas.load(Ordering::SeqCst),
+            "head":self.head.load(Ordering::SeqCst)})
     }
 }
 struct CountedReplica {
@@ -65,6 +74,9 @@ impl Replica for CountedReplica {
     }
     fn get(&mut self, hash: [u8; 32]) -> Result<Frame, JournalError> {
         self.metrics.gets.fetch_add(1, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(
+            self.metrics.replica_delay_ms.load(Ordering::SeqCst),
+        ));
         let frame = self.inner.get(hash)?;
         self.metrics
             .bytes
@@ -73,10 +85,39 @@ impl Replica for CountedReplica {
     }
     fn put(&mut self, frame: &Frame) -> Result<(), JournalError> {
         self.metrics.puts.fetch_add(1, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(
+            self.metrics.replica_delay_ms.load(Ordering::SeqCst),
+        ));
         self.metrics
             .bytes
             .fetch_add(frame.opaque.as_bytes().len(), Ordering::SeqCst);
         self.inner.put(frame)
+    }
+}
+struct CountedPack {
+    inner: FileStore,
+    metrics: Arc<Metrics>,
+}
+impl PackStore for CountedPack {
+    fn identity(&self) -> [u8; 32] {
+        self.inner.identity()
+    }
+    fn get(&mut self, hash: [u8; 32]) -> Result<Vec<u8>, JournalError> {
+        self.metrics.gets.fetch_add(1, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(
+            self.metrics.replica_delay_ms.load(Ordering::SeqCst),
+        ));
+        let bytes = self.inner.get(hash)?;
+        self.metrics.bytes.fetch_add(bytes.len(), Ordering::SeqCst);
+        Ok(bytes)
+    }
+    fn put(&mut self, hash: [u8; 32], bytes: &[u8]) -> Result<(), JournalError> {
+        self.metrics.puts.fetch_add(1, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(
+            self.metrics.replica_delay_ms.load(Ordering::SeqCst),
+        ));
+        self.metrics.bytes.fetch_add(bytes.len(), Ordering::SeqCst);
+        self.inner.put(hash, bytes)
     }
 }
 struct CountedWitness {
@@ -101,6 +142,7 @@ impl Witness for CountedWitness {
         }
         self.inner.accept(stream, expected, next)?;
         self.metrics.accepts.fetch_add(1, Ordering::SeqCst);
+        self.metrics.head.store(next.sequence, Ordering::SeqCst);
         let pause = self.metrics.post_cas_ms.swap(0, Ordering::SeqCst);
         if pause != 0 {
             self.metrics.post_cas.store(true, Ordering::SeqCst);
@@ -154,7 +196,31 @@ impl Clock for Time {
             .ok_or(Error)
     }
 }
-type Storage = Replicated<CountedReplica, CountedReplica, CountedWitness>;
+// Local qualification ONLY. Shipping Loaded::open still selects Replicated.
+enum Storage {
+    Frames(Replicated<CountedReplica, CountedReplica, CountedWitness>),
+    Packs(Packed<CountedPack, CountedPack, CountedWitness>),
+}
+impl Backend for Storage {
+    fn load(&mut self) -> Result<Vec<Frame>, JournalError> {
+        match self {
+            Self::Frames(s) => s.load(),
+            Self::Packs(s) => s.load(),
+        }
+    }
+    fn append(&mut self, expected: Option<Head>, frame: &Frame) -> Result<(), JournalError> {
+        match self {
+            Self::Frames(s) => s.append(expected, frame),
+            Self::Packs(s) => s.append(expected, frame),
+        }
+    }
+    fn check_current(&mut self, expected: Head) -> Result<(), JournalError> {
+        match self {
+            Self::Frames(s) => s.check_current(expected),
+            Self::Packs(s) => s.check_current(expected),
+        }
+    }
+}
 type Application = Runtime<Storage, RecordCipher>;
 fn padding(store: &mut Journal<Storage, RecordCipher>, at: u64) -> Result<(), Error> {
     let result = store
@@ -186,6 +252,11 @@ fn application(
         return Err(Error);
     }
     let fresh = !root.join("accepted").exists();
+    let layout = if options.packed {
+        b"packs-v1"
+    } else {
+        b"frames-1"
+    };
     if fresh {
         if root.read_dir()?.next().is_some() {
             return Err(Error);
@@ -196,7 +267,15 @@ fn application(
             .open(root.join("accepted"))?;
         f.write_all(&[0])?;
         f.sync_all()?;
+        let mut marker = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(root.join("layout"))?;
+        marker.write_all(layout)?;
+        marker.sync_all()?;
         File::open(root)?.sync_all()?;
+    } else if std::fs::read(root.join("layout"))? != layout {
+        return Err(Error);
     }
     let stream = Stream {
         domain: config().domain,
@@ -213,18 +292,32 @@ fn application(
             metrics: metrics.clone(),
         })
     };
-    let backend = Replicated::new(
+    let witness = CountedWitness {
+        inner: LocalWitness(root.join("accepted")),
         stream,
-        1,
-        replica("first")?,
-        replica("second")?,
-        CountedWitness {
-            inner: LocalWitness(root.join("accepted")),
-            stream,
-            metrics: metrics.clone(),
-        },
-    )
-    .map_err(|_| Error)?;
+        metrics: metrics.clone(),
+    };
+    let backend = if options.packed {
+        let pack = |name| -> Result<CountedPack, Error> {
+            Ok(CountedPack {
+                inner: if fresh {
+                    FileStore::create(&root.join(name))
+                } else {
+                    FileStore::open(&root.join(name))
+                }
+                .map_err(|_| Error)?,
+                metrics: metrics.clone(),
+            })
+        };
+        Storage::Packs(
+            Packed::new(stream, 1, pack("first")?, pack("second")?, witness).map_err(|_| Error)?,
+        )
+    } else {
+        Storage::Frames(
+            Replicated::new(stream, 1, replica("first")?, replica("second")?, witness)
+                .map_err(|_| Error)?,
+        )
+    };
     let cipher = RecordCipher::new(key, 1, stream.id).map_err(|_| Error)?;
     let mut store = if fresh {
         Journal::create(backend, cipher, config())
@@ -256,6 +349,7 @@ fn application(
     if (fresh && store.head().sequence != options.history) || store.head().sequence > 128 {
         return Err(Error);
     }
+    metrics.head.store(store.head().sequence, Ordering::SeqCst);
     let profile = Profile {
         config: config(),
         source: config().sources[0].scope,
@@ -388,6 +482,7 @@ enum Control {
     Writes { count: u64, interval_ms: u64 },
     Delay { milliseconds: u64 },
     WriterDelay { milliseconds: u64 },
+    ReplicaDelay { milliseconds: u64 },
     PostCas { milliseconds: u64 },
     Fault { kind: String },
 }
@@ -407,7 +502,9 @@ fn control(app: &Application, metrics: &Metrics, command: Control) -> Result<Val
                 std::thread::sleep(Duration::from_millis(interval_ms));
             }
         }
-        Control::Delay { milliseconds } | Control::WriterDelay { milliseconds }
+        Control::Delay { milliseconds }
+        | Control::WriterDelay { milliseconds }
+        | Control::ReplicaDelay { milliseconds }
             if milliseconds > 400 =>
         {
             return Err(Error);
@@ -415,6 +512,9 @@ fn control(app: &Application, metrics: &Metrics, command: Control) -> Result<Val
         Control::Delay { milliseconds } => metrics.delay_ms.store(milliseconds, Ordering::SeqCst),
         Control::WriterDelay { milliseconds } => metrics
             .writer_delay_ms
+            .store(milliseconds, Ordering::SeqCst),
+        Control::ReplicaDelay { milliseconds } => metrics
+            .replica_delay_ms
             .store(milliseconds, Ordering::SeqCst),
         Control::PostCas { milliseconds } => {
             if milliseconds == 0 || milliseconds > 2000 {
@@ -548,68 +648,85 @@ mod tests {
             delay_ms: 0,
             broker_seed: [9; 32],
             account: "J2xccRtuG43drESLYznHhLhQkLTdfepcKYbiQ9BsJVaf".into(),
+            packed: false,
         }
     }
     #[test]
     fn joined_runtime_fixture_has_exact_history_and_reopens_without_accepting_or_crediting() {
         let trust = FixtureAttester::new().unwrap().root().to_der().unwrap();
         for history in [1, 8, 32, 64] {
-            let root = Temp::new();
-            let metrics = Arc::new(Metrics::default());
-            let app = application(
-                &root.0,
-                Zeroizing::new([55; 32]),
-                wallet(11),
-                &options(history),
-                metrics,
-                &trust,
-            )
-            .unwrap();
-            let active = app.active.lock().unwrap();
-            let head = active.store.head();
-            assert_eq!(head.sequence, history);
-            assert_eq!(
-                active
-                    .store
-                    .state()
-                    .unwrap()
-                    .ledger()
-                    .book(cinder_kernel::ledger::Owner::Customer(
-                        config().customers[0]
-                    ))
-                    .unwrap()
-                    .cash()
-                    .atoms(),
-                0
-            );
-            drop(active);
-            drop(app);
-            let metrics = Arc::new(Metrics::default());
-            let reopened = application(
-                &root.0,
-                Zeroizing::new([55; 32]),
-                wallet(11),
-                &options(history),
-                metrics.clone(),
-                &trust,
-            )
-            .unwrap();
-            assert_eq!(reopened.active.lock().unwrap().store.head(), head);
-            assert_eq!(metrics.accepts.load(Ordering::SeqCst), 0);
-            reopened.tick().unwrap();
-            assert_eq!(metrics.clocks.load(Ordering::SeqCst), 2);
-            drop(reopened);
-            assert!(
-                application(
+            for packed in [false, true] {
+                let mut options = options(history);
+                options.packed = packed;
+                let root = Temp::new();
+                let metrics = Arc::new(Metrics::default());
+                let app = application(
                     &root.0,
                     Zeroizing::new([55; 32]),
-                    wallet(12),
-                    &options(history),
-                    Arc::new(Metrics::default()),
-                    &trust
+                    wallet(11),
+                    &options,
+                    metrics,
+                    &trust,
                 )
-                .is_err()
-            );
+                .unwrap();
+                let active = app.active.lock().unwrap();
+                let head = active.store.head();
+                assert_eq!(head.sequence, history);
+                assert_eq!(
+                    active
+                        .store
+                        .state()
+                        .unwrap()
+                        .ledger()
+                        .book(cinder_kernel::ledger::Owner::Customer(
+                            config().customers[0]
+                        ))
+                        .unwrap()
+                        .cash()
+                        .atoms(),
+                    0
+                );
+                drop(active);
+                drop(app);
+                let metrics = Arc::new(Metrics::default());
+                let reopened = application(
+                    &root.0,
+                    Zeroizing::new([55; 32]),
+                    wallet(11),
+                    &options,
+                    metrics.clone(),
+                    &trust,
+                )
+                .unwrap();
+                assert_eq!(reopened.active.lock().unwrap().store.head(), head);
+                assert_eq!(metrics.accepts.load(Ordering::SeqCst), 0);
+                reopened.tick().unwrap();
+                assert_eq!(metrics.clocks.load(Ordering::SeqCst), 2);
+                drop(reopened);
+                assert!(
+                    application(
+                        &root.0,
+                        Zeroizing::new([55; 32]),
+                        wallet(12),
+                        &options,
+                        Arc::new(Metrics::default()),
+                        &trust
+                    )
+                    .is_err()
+                );
+                options.packed = !packed;
+                assert!(
+                    application(
+                        &root.0,
+                        Zeroizing::new([55; 32]),
+                        wallet(11),
+                        &options,
+                        Arc::new(Metrics::default()),
+                        &trust
+                    )
+                    .is_err()
+                );
+            }
         }
     }
     #[test]
