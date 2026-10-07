@@ -500,6 +500,16 @@ and fake-observation tests do not upgrade them into live G01/P23 evidence.
 ## Requirement-to-phase traceability
 
 P23 remediation promotion (2026-10-07):
+Review follow-up at published `e50dc9d`: both bots' current findings are verified
+against actual code, with pre-fix failing regressions. Nonfatal ordinary read
+refusal is distinct from periodic skip and fatal fence; boot-local immutable
+deposit rejections avoid RPC-budget depletion without creating credit; opaque
+reply waiting and absolute frame/body assembly have separate bounds. Tests and
+new-source/package receipts belong in TRACKER. Old ARM/EIF identities cannot
+qualify these changes. The user approved the bounded C5 proposal; expired AWS
+login and exact fresh-policy preflight still prevent launch. No new live result
+is inferred from source, approval or synthetic checks.
+
 [ADR 0025](../architecture/0025-concurrent-private-reads.md) and the
 [C1–C5 contract](P23-REMEDIATION.md) record the approved single-journal accepted
 read/publication and scheduling boundaries. Tracked journal/API/Runtime races,

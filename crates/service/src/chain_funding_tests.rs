@@ -744,6 +744,9 @@ fn customer_deposit_missing_history_and_bad_receipt_never_credit() {
         let before = j.state().unwrap().clone();
         if missing {
             assert!(p.observe_deposit(&mut j, &c, 0).unwrap() == Outcome::Pending);
+            let calls = f.0.lock().unwrap().requests.len();
+            assert!(p.observe_deposit(&mut j, &c, 0).unwrap() == Outcome::Pending);
+            assert!(f.0.lock().unwrap().requests.len() > calls);
         } else {
             assert!(p.observe_deposit(&mut j, &c, 0).is_err());
         }
@@ -802,6 +805,12 @@ fn rejected_deposit_poll_advances_to_valid_locator_without_crediting_failure() {
     assert_eq!(index, 0);
     assert_eq!(j.transactions().count(), 1);
     assert!(!j.state().unwrap().native_funding_ready());
+    let calls = f.0.lock().unwrap().requests.len();
+    for _ in 0..8 {
+        crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).unwrap();
+    }
+    assert_eq!(f.0.lock().unwrap().requests.len(), calls);
+    assert_eq!(j.transactions().count(), 1);
 }
 #[test]
 fn immutable_deposit_ineligibility_is_rejected_but_port_and_current_receipt_errors_propagate() {
@@ -830,7 +839,11 @@ fn immutable_deposit_ineligibility_is_rejected_but_port_and_current_receipt_erro
         let mut index = 0;
         if case < 2 {
             assert!(p.observe_deposit(&mut j, &c, 0).unwrap() == Outcome::Rejected);
-            crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).unwrap();
+            let calls = f.0.lock().unwrap().requests.len();
+            for _ in 0..32 {
+                crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).unwrap();
+            }
+            assert_eq!(f.0.lock().unwrap().requests.len(), calls);
         } else {
             assert!(crate::runtime::poll_deposit(&mut p, &mut j, &c, &mut index).is_err());
         }

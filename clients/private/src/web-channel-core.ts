@@ -176,15 +176,22 @@ export class WebChannel implements ConfidentialChannel {
       await response.body?.cancel(); throw failed();
     }
     const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let total = 0;
+    // Waiting for response headers has the caller's application/handshake
+    // budget. Once a response starts, body assembly has its own absolute bound;
+    // trickled chunks cannot renew it and a stalled read is actively cancelled.
+    let timer:ReturnType<typeof setTimeout>;
+    const assembly=new Promise<never>((_,reject)=>{
+      timer=setTimeout(()=>{this.close();reject(failed());},DEADLINE);
+    });
     try {
       for (;;) {
-        const { value, done } = await reader.read(); if (done) break;
+        const { value, done } = await Promise.race([reader.read(),assembly]); if (done) break;
         total += value.length;
         if (total > maximum || chunks.length >= 4096 || this.#closed || signal.aborted) throw failed();
         chunks.push(value);
       }
       if (!total || this.#closed || signal.aborted) throw failed();
       return concat(...chunks);
-    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+    } finally { clearTimeout(timer!); await reader.cancel().catch(() => {}); reader.releaseLock(); }
   }
 }

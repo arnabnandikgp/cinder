@@ -202,6 +202,7 @@ impl Loaded {
             self.configuration.maximum_calls,
         )?;
         Ok(Port {
+            rejected_deposits: vec![false; self.configuration.deposits.len()],
             loaded: self,
             client,
             clock,
@@ -213,6 +214,10 @@ pub struct Port<T: Transport> {
     loaded: Loaded,
     client: Client<T>,
     clock: Arc<dyn Clock>,
+    // Bounded by the immutable release configuration, private and boot-local.
+    // Only finalized original-transaction ineligibility is terminal here;
+    // pending evidence and port/current-account/code errors are never cached.
+    rejected_deposits: Vec<bool>,
 }
 /// Coarse result; ACK or missing evidence never means a settled customer payment.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -339,21 +344,25 @@ impl<T: Transport> Port<T> {
             .get(index)
             .ok_or(Error)?
             .clone();
-        let rejected = || DepositRead {
-            locator: locator.clone(),
-            result: DepositResult::Rejected,
+        let rejected = |port: &mut Self| {
+            port.rejected_deposits[index] = true;
+            DepositRead {
+                locator: locator.clone(),
+                result: DepositResult::Rejected,
+            }
         };
-        let Some(tx) = self
-            .client
-            .finalized(locator.validate()?, self.clock.now()?)?
-        else {
+        let now = self.clock.now()?;
+        if self.rejected_deposits[index] {
+            return Ok(rejected(self));
+        }
+        let Some(tx) = self.client.finalized(locator.validate()?, now)? else {
             return Ok(DepositRead {
                 locator,
                 result: DepositResult::Pending,
             });
         };
         if tx.meta.get("err") != Some(&serde_json::Value::Null) {
-            return Ok(rejected());
+            return Ok(rejected(self));
         }
         let Ok(deposit) = chain::inspect_customer_deposit(
             route,
@@ -362,7 +371,7 @@ impl<T: Transport> Port<T> {
             locator.operation,
             tx.wire.as_bytes(),
         ) else {
-            return Ok(rejected());
+            return Ok(rejected(self));
         };
         if !crate::customer_deposit::valid_transaction(
             &locator,
@@ -370,7 +379,7 @@ impl<T: Transport> Port<T> {
             &tx,
             self.loaded.configuration.limits.maximum_fee_lamports,
         )? {
-            return Ok(rejected());
+            return Ok(rejected(self));
         }
         let d = &self.loaded.configuration.custody;
         let proof = chain_code::verify(

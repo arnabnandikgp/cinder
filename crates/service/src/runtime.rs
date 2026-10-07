@@ -56,6 +56,7 @@ pub(crate) struct ReadCandidate {
     encoded: PrivateBytes,
     evaluated_at: u64,
     binding: [u8; 32],
+    periodic: bool,
 }
 struct PanicFence<'a> {
     stop: &'a AtomicBool,
@@ -932,7 +933,7 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
         request: &PrivateBytes,
         now: u64,
     ) -> Result<Option<PrivateBytes>, Error> {
-        let Some(prepared) = self.prepare_read(reads, channel, request, now)? else {
+        let Some(prepared) = self.prepare_read(reads, channel, request, now, false)? else {
             return Ok(None);
         };
         self.release_read(channel, prepared)
@@ -943,6 +944,7 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
         channel: &Session,
         request: &PrivateBytes,
         now: u64,
+        periodic: bool,
     ) -> Result<Option<PreparedReply>, Error> {
         let initial = self.active_time()?;
         if initial < now {
@@ -985,6 +987,7 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                 encoded,
                 evaluated_at: current,
                 binding: cinder_api::ConfidentialChannel::binding(channel),
+                periodic,
             }),
         }))
     }
@@ -1010,6 +1013,7 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
             encoded,
             evaluated_at,
             binding,
+            periodic,
         } = candidate;
         if binding != cinder_api::ConfidentialChannel::binding(channel)
             || self
@@ -1043,6 +1047,12 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
         };
         match verified.release_if_running(until, &self.stop) {
             Ok(()) => Ok(Some(encoded)),
+            Err(ReadFailure::Busy | ReadFailure::Raced) if !periodic => {
+                cinder_api::Error::Unavailable
+                    .encode_private()
+                    .map(Some)
+                    .map_err(|_| Error)
+            }
             Err(e) => self.read_failure(e),
         }
     }
@@ -1054,7 +1064,12 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
         request: PrivateBytes,
         now: u64,
     ) -> Result<PrivateBytes, Error> {
-        self.handle_available(channel, request, now)?.ok_or(Error)
+        match self.handle_available(channel, request, now)? {
+            Some(reply) => Ok(reply),
+            None => cinder_api::Error::Unavailable
+                .encode_private()
+                .map_err(|_| Error),
+        }
     }
     fn prepare_handle(
         &self,
@@ -1076,8 +1091,13 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
                 )
             })
         {
-            self.prepare_read(reads, channel, &request, now)?
-                .ok_or(Error)
+            match self.prepare_read(reads, channel, &request, now, false)? {
+                Some(prepared) => Ok(prepared),
+                None => cinder_api::Error::Unavailable
+                    .encode_private()
+                    .map(PreparedReply::immediate)
+                    .map_err(|_| Error),
+            }
         } else {
             self.handle_available(channel, request, now)?
                 .map(PreparedReply::immediate)
@@ -1095,7 +1115,10 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
         {
             return Err(Error);
         }
-        self.handle_available(channel, request, now)
+        match self.prepare_poll(channel, request, now)? {
+            Some(prepared) => self.release_reply(channel, prepared),
+            None => Ok(None),
+        }
     }
     fn prepare_poll(
         &self,
@@ -1113,7 +1136,7 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
             return Err(Error);
         }
         match &self.reads {
-            Some(reads) => self.prepare_read(reads, channel, &request, now),
+            Some(reads) => self.prepare_read(reads, channel, &request, now, true),
             // Only the retained old-runtime diagnostic uses a missing reader.
             None => self
                 .handle_available(channel, request, now)

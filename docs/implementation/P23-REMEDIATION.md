@@ -101,6 +101,10 @@ An exact newer in-flight/accepted head is a normal refused race, not a healthy
 writer failure. Unknown heads, backward heads, wrong epochs and witness failure
 fence; there is no shared last-good witness, TTL, reload or automatic read retry.
 Commands and mutation retries retain the single writer path.
+Ordinary Busy/Raced reads return the private Unavailable response without retry
+or closing a healthy channel, including a race at final carrier release. Periodic
+preparation/release still skips such a result; an unknown head or failed witness
+still fences. These are distinct outcomes, not an authorization/freshness waiver.
 
 The actual Dynamo read port shares only immutable TLS/SigV4 configuration and
 finite credentials through Arc<Client>; each call has its own vsock/TLS exchange.

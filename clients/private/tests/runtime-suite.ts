@@ -89,17 +89,18 @@ export async function runRuntime(core:WebCore,signer:MessageSigner,h:RuntimeHarn
     const writer=client(await connect()),reader=client(await connect('http'));
     await h.control({op:'post-cas',milliseconds:1000});
     const pending=writer.request(req(175,grant));await waitFor(m=>m.post_cas);
-    await denied(()=>reader.request(req(176,{kind:'view'})),'Unpublished new CAS head released old view');
+    const raced=await reader.request(req(176,{kind:'view'}));
+    check(raced.kind==='error'&&raced.code==='unavailable','Unpublished new CAS head released old view');
     check((await pending).kind==='receipt','Post-CAS writer failed');
-    check((await client(await connect()).request(req(177,{kind:'view'}))).kind==='view','Known race poisoned healthy Runtime');
+    check((await reader.request(req(177,{kind:'view'}))).kind==='view','Known race closed the ordinary read channel');
     close();await h.finish();checks.push('Post-CAS/pre-publication refuses stale reads without fencing the accepted writer');
 
     await h.setup({history:8,delay_ms:400});await h.control({op:'writer-delay',milliseconds:0});
     const pressured=client(await connect('http')),attempt=pressured.request(req(178,{kind:'view'}));
-    const outcome=attempt.then(()=>true,()=>false);await waitFor(m=>m.live_read_io>0);
+    const outcome=attempt.then(r=>r.kind==='error'&&r.code==='unavailable');await waitFor(m=>m.live_read_io>0);
     await h.control({op:'writes',count:8,interval_ms:25});
-    check(!(await outcome),'Global generation gate silently became account-local');
-    check((await client(await connect()).request(req(179,{kind:'view'}))).kind==='view','Read did not recover after declared quiet window');
+    check(await outcome,'Global generation gate silently became account-local');
+    check((await pressured.request(req(179,{kind:'view'}))).kind==='view','Read did not recover on the same channel after the quiet window');
     close();await h.finish();checks.push('Unrelated sustained commits may refuse reads; a quiet window restores service without weakening freshness');
 
     await h.setup({history:8,delay_ms:0});const first=client(await connect('http'));

@@ -56,7 +56,7 @@ test('one absolute five-second delivery budget fences a silent upstream',{timeou
   }finally{await h.close();}
 });
 
-async function sessionFixture(delay) {
+async function sessionFixture(delay, partial=false) {
   const peers=new Set();let calls=0;
   const target=net.createServer(socket=>{
     peers.add(socket);let pending=Buffer.alloc(0),phase=0;
@@ -64,7 +64,7 @@ async function sessionFixture(delay) {
     socket.on('data',part=>{pending=Buffer.concat([pending,part]);while(pending.length>=4){const n=pending.readUInt32BE();if(pending.length<n+4)return;pending=pending.subarray(n+4);calls++;
       if(phase++===0)socket.write(frame(envelope()));
       else if(phase<=3)socket.write(frame(Buffer.from([1])));
-      else if(delay!==undefined){const timer=setTimeout(()=>{if(!socket.destroyed)socket.write(frame(Buffer.from([42])));},delay);socket.once('close',()=>clearTimeout(timer));}
+      else if(delay!==undefined){const bytes=frame(Buffer.from([42]));if(partial)socket.write(bytes.subarray(0,1));const timer=setTimeout(()=>{if(!socket.destroyed)socket.write(partial?bytes.subarray(1):bytes);},delay);socket.once('close',()=>clearTimeout(timer));}
     }});
   });
   target.listen(0,'127.0.0.1');await once(target,'listening');
@@ -78,4 +78,7 @@ test('application reply can exceed five seconds without extending handshake or r
 });
 test('silent application reply is bounded and is never resent',{timeout:20000},async()=>{
   const h=await sessionFixture();try{const start=performance.now();await assert.rejects(post(h,'/v1/exchange',h.body));const elapsed=performance.now()-start;assert(elapsed>=14000&&elapsed<17000);assert.equal(h.calls(),4);assert.equal(h.relay.activeSessions(),0);}finally{await h.close();}
+});
+test('partial upstream header has a separate absolute five-second frame deadline',{timeout:10000},async()=>{
+  const h=await sessionFixture(6200,true);try{const start=performance.now(),r=await post(h,'/v1/exchange',h.body);assert.equal(r.status,503);await r.body.cancel();const elapsed=performance.now()-start;assert(elapsed>=4800&&elapsed<6000);assert.equal(h.calls(),4);assert.equal(h.relay.activeSessions(),0);}finally{await h.close();}
 });

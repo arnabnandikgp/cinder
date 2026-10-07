@@ -46,6 +46,32 @@ application checkpoints and receipts remain in the P23 log below.
 
 ### Latest remediation implementation — 2026-10-07
 
+Review continuation after published `e50dc9d84012711d825a3a9b9821b540611696a4`:
+the user authorized both CodeRabbit and Codex addressal and approved the fresh
+`C5-RUN-PROPOSAL.md`. Three still-open findings are relevant: ordinary read
+Busy/Raced must return private Unavailable rather than close; finalized ineligible
+deposit locators must not repeatedly spend RPC budget; HTTP reply waiting must
+retain a separate five-second frame/body assembly bound. Focused regressions
+reproduce all three before the fixes. Ordinary prepared candidates distinguish
+periodic delivery; only periodic Busy/Raced skips. Final generation/auth/time,
+connection/boot checks, fatal fences and no retries remain unchanged. The chain
+port retains bounded boot-local rejection flags for immutable configured locators,
+not credit or a new financial journal; pending/port/code/account errors are not
+terminal-cached. SDK body and opaque upstream-frame timers are absolute and
+cleared on completion/close, independently of the 15-second application wait.
+
+Focused service and relay/SDK regressions pass; complete pinned workspace and
+actual Node/Chrome checks are being rerun. Their final receipt follows below;
+older source/package checks do not qualify these application edits. C5 requires
+a rebuilt shipping ARM package and new EIF/PCR review before release. AWS
+read-only preflight currently refuses because `cinder_new`'s login has expired;
+renewed login and independently verified fresh C5 policies remain prerequisites.
+No AWS resource, key release, financial activity or merge occurred.
+
+Next: complete exact-source checks/package, publish the review fixes on #55 and
+record both bots' dispositions; then run the approved C5 bounds only after access
+and manifest/image preflight pass. Do not execute the closed-run namespace.
+
 The user approved the broad remediation recommendations. Work now follows the
 [C1–C5 plan](P23-REMEDIATION.md): shared interpretation/pure authorization first,
 then accepted publication and bounded scheduling, a fixed joined local matrix,
@@ -369,7 +395,9 @@ read/stream/revoke, restore/fencing/expiry remain unqualified for this new sourc
 trading/funding/native settlement and the rest of P23 remain separate gates.
 
 Fresh untracked proposal:
-`work/experiments/p23-live/C5-RUN-PROPOSAL.md`; pending user review/approval.
+`work/experiments/p23-live/C5-RUN-PROPOSAL.md`; approved by the user on 2026-10-07.
+The artifacts above are historical pre-review inputs; rebuilding and current
+access/manifest/image checks are still required, not waived by that approval.
 It proposes one $5/four-hour/eight-boot read-serving session in a new
 `p23-20261007-ro2` namespace, with zero financial/native/RPC actions. Templates
 in `c5-permissions/` introduce only namespace/setup-policy-name substitutions;

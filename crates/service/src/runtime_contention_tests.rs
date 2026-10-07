@@ -438,7 +438,15 @@ fn real_runtime_slow_reads_and_writes_refuse_initial_reads_but_skip_busy_polls()
             receive.recv_timeout(Duration::from_secs(5)).unwrap();
             let started = Instant::now();
             // Same .handle path used for an initial subscription or ordinary read.
-            assert!(app.handle(&channel, read(3, 11, 1), NOW).is_err());
+            assert_eq!(
+                app.handle(&channel, read(3, 11, 1), NOW)
+                    .unwrap()
+                    .as_bytes(),
+                cinder_api::Error::Unavailable
+                    .encode_private()
+                    .unwrap()
+                    .as_bytes()
+            );
             assert!(started.elapsed() >= REQUEST_WAIT);
             let started = Instant::now();
             assert!(app.poll(&channel, read(4, 11, 1), NOW).unwrap().is_none());
@@ -676,6 +684,61 @@ fn final_read_gate_bounds_time_work_boot_expiry_and_panics_without_stale_output(
             }
         }
     }
+}
+
+#[test]
+fn ordinary_busy_and_raced_reads_return_unavailable_without_retry_or_channel_failure() {
+    let metrics = Arc::new(Metrics::default());
+    let app = independent(metrics.clone());
+    let channel = session();
+    let candidates: Vec<_> = (0..cinder_journal::read::MAX_READS)
+        .map(|n| {
+            app.prepare_poll(&channel, read(n as u8 + 10, 11, 1), NOW)
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    let before = metrics.private_reads.load(Ordering::SeqCst);
+    let unavailable = cinder_api::Error::Unavailable.encode_private().unwrap();
+    assert_eq!(
+        app.handle(&channel, read(20, 11, 1), NOW)
+            .unwrap()
+            .as_bytes(),
+        unavailable.as_bytes()
+    );
+    let busy = app.prepare_handle(&channel, read(21, 11, 1), NOW).unwrap();
+    assert_eq!(
+        app.release_reply(&channel, busy)
+            .unwrap()
+            .unwrap()
+            .as_bytes(),
+        unavailable.as_bytes()
+    );
+    assert!(
+        app.prepare_poll(&channel, read(22, 11, 1), NOW)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(metrics.private_reads.load(Ordering::SeqCst), before);
+    drop(candidates);
+    let ordinary = app.prepare_handle(&channel, read(23, 11, 1), NOW).unwrap();
+    let periodic = app
+        .prepare_poll(&channel, read(24, 11, 1), NOW)
+        .unwrap()
+        .unwrap();
+    padding(&mut app.active.lock().unwrap().store, 210);
+    let before = metrics.private_reads.load(Ordering::SeqCst);
+    assert_eq!(
+        app.release_reply(&channel, ordinary)
+            .unwrap()
+            .unwrap()
+            .as_bytes(),
+        unavailable.as_bytes()
+    );
+    assert!(app.release_reply(&channel, periodic).unwrap().is_none());
+    assert_eq!(metrics.private_reads.load(Ordering::SeqCst), before);
+    success(&app.handle(&channel, read(25, 11, 1), NOW).unwrap(), 3);
+    assert!(app.health() == Health::Ready);
 }
 
 #[test]
