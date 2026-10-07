@@ -61,10 +61,16 @@ closed merely because its local tests pass.
 Current durability/repair checks are retained for bounded dev/test;
 a production segment/checkpoint/retention contract is not implicitly approved.
 
-Published head/base remain `6dff3731f365463ad24c1b5fcd2cb82f19d76c86` /
-`833955f8a4ead02a71eb5ae69a6aebd92bb85091`, ready/open PR #55. Implementation
-and documentation here are local, not that head's hosted-check evidence. No AWS,
-financial activity or merge was performed. Local changes are not pushed yet.
+Publication target is the same ready/open one-layer PR #55, based on
+`product/tee-v1` at `833955f8a4ead02a71eb5ae69a6aebd92bb85091`. Previous
+published head was `6dff3731f365463ad24c1b5fcd2cb82f19d76c86`; its green checks
+do not qualify this remediation. The new tip is the receipt-only/CI-prerequisite
+successor directly after `354c5323d1ea2dfce50265bc9a2b0bf0149eae0d`, containing
+this handoff; the actual pushed head and base are recorded in the PR description.
+Tested application/package source remains `b38849cf93761f380e195a2731698d862ea84f4d`.
+New-head hosted CI and CodeRabbit review remain pending. No AWS, financial
+activity or merge was performed; publishing this verified checkpoint does not
+authorize hardware, financial activation or merge.
 Preserve unrelated `docs/user-journey.md` and `stays/`; the local qualification
 preparation example is intentionally not part of this remediation checkpoint.
 
@@ -256,7 +262,9 @@ refuses a fifth ticket without blocking the writer.
 The fixed matrix is hooked into the existing offline browser CI runner, with its
 job ceiling changed from ten to fifteen minutes for the added workload; no service
 application/handshake/frame deadline changed. `/usr/bin/time` reports macOS/Linux
-whole-process peak RSS and absence fails qualification. The test proxy observes
+whole-process peak RSS and absence fails qualification; the final CI-only handoff
+explicitly installs the Linux `time` package in its existing prerequisite step.
+The test proxy observes
 only public frames for notification timing. Fresh Chrome profiles, children,
 private temporary files and keys are owned and cleaned by the harness.
 
@@ -359,6 +367,24 @@ ledger, old heads, keys, authorizations or guessed image measurements. No AWS
 calls/resources/spend occurred in this C5 preparation. Actual NSM/cloud concurrent
 read/stream/revoke, restore/fencing/expiry remain unqualified for this new source;
 trading/funding/native settlement and the rest of P23 remain separate gates.
+
+Fresh untracked proposal:
+`work/experiments/p23-live/C5-RUN-PROPOSAL.md`; pending user review/approval.
+It proposes one $5/four-hour/eight-boot read-serving session in a new
+`p23-20261007-ro2` namespace, with zero financial/native/RPC actions. Templates
+in `c5-permissions/` introduce only namespace/setup-policy-name substitutions;
+parse and exact reverse-substitution comparisons pass. Operator/boundary hashes:
+`dcd77901e4eedfab3c36730db1c24f68176f892c540d2a180f23ecb410ce860e` /
+`78ecabb8b4184af1a8cbcecb8596d1326c005d6bdf82d5809435daf3a73c3aaa`.
+An administrator must create the two fresh scoped policies and attach only
+`CinderP23C5Operator` to the intended IAM user; the runtime boundary is NOT a
+user attachment. Live identity/price/permission checks, fresh operator runner,
+actual manifest/EIF/PCR inspection and key-release review remain prerequisites.
+Neither local templates nor an approval field grant live authority. Existing
+closed-run scripts/records are preserved; do not execute their fixed namespace.
+Final publication handoff changes only documentation and the Linux test-tool
+prerequisite; all 42 metadata guards and diff checks pass, application code and
+the tested package/client artifacts are unchanged. No new hosted pass is claimed.
 
 ### Earlier architecture review — 2026-10-06
 
