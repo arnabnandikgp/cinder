@@ -35,14 +35,17 @@ the guarantee to obtain a demo pass.
 
 ## What should happen next
 
-Local continuation now prepares manifest-bound shipping packs and strict
+The shipping continuation supplies manifest-bound packs and strict
 [documented native evidence components](P23-NATIVE-EVIDENCE.md). Those parsers
 do not connect or qualify a trusted financial provider. The
-[next hardware proposal](P23-NEXT-RUN-PROPOSAL.md) isolates storage requalification;
+[approved storage run](P23-NEXT-RUN-PROPOSAL.md) now has a separate
+[read-only hardware receipt](P23-PACKS-HARDWARE.md), including passing actual
+Node/Chrome head-64 growth, storage faults, replay and freshness checks;
 all money-movement and complete-cut gates below remain open.
 
-1. Resolve [history-growth design](P23-GROWTH-DIAGNOSIS.md) locally before adding
-   financial journal traffic. Keep its validation separate from venue semantics.
+1. Preserve the closed storage receipt and independently verified archive/owned
+   cleanup as the baseline before financial journal traffic. The bounded growth
+   gate passed; it is not production scaling or venue-semantic qualification.
 2. Prepare authenticated setup/credit/withdrawal providers and their retained
    evidence contracts; connect them through the existing Controller. Reuse M1's
    scenario assertions and P22's fault cases, not its wallets, plaintext loaders,

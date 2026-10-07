@@ -50,6 +50,80 @@ application checkpoints and receipts remain in the P23 log below.
 
 ### Shipping continuation — 2026-10-07
 
+Latest authorization/preflight: the user approved the focused hardware run in
+[the next-run contract](P23-NEXT-RUN-PROPOSAL.md), with no native/RPC/financial
+activity. All eight hosted jobs and CodeRabbit succeeded at pre-receipt #59 head
+`800346b09510f1d7a7ea30c2b335416ffe3df4f9`; no review threads when checked.
+Non-root AWS identity, Nitro eligibility, current AMI/price/quota/network metadata
+and the final thirteen package hashes reverify. Administrator setup then passed
+exact original policy/attachment and fresh-name checks. Initial pre-provisioning
+created only two empty tagged roles; AWS explicitly rejected the first tagged
+KMS creation because the supplied operator template omitted `kms:TagResource`.
+Both roles were removed after ownership checks; independent cleanup verified
+absent roles/buckets/table/test volumes, zero instances and zero recorded keys.
+No EIF, runtime credential, key release, native/RPC request or financial activity
+occurred. Fresh `p23-20261007-pack1` templates and receipts are local under ignored
+`work/experiments/p23-live/packed-permissions/` and `run-pack1/`. The updated
+operator JSON adds scoped tagging, not decryption; runtime boundary is unchanged.
+The administrator corrected the existing operator default policy; independent
+exact-policy/attachment/fresh-name checks pass. A fresh `run-pack1b` ledger
+(`CinderRun=pack1b`) preserves the rejected, closed `run-pack1` unchanged.
+The same approved namespace's names were independently absent and no prior key,
+credential, witness head, ciphertext or host existed to reuse. Six new keys,
+two stores, table and bounded roles were created. One `c6g.large` host was launched,
+with encrypted auto-deleting root, operator-only SSH and verified four-hour
+automatic shutdown. All thirteen uploaded artifacts match the source register.
+The fresh version-3/six-role manifest keeps native/funding/trading gates off;
+independent first-EIF hash/CRC/entrypoint/nonzero PCR checks and all six exact
+key/role policy readbacks pass. Actual parent-role witness-read and plaintext
+KMS-decryption denials pass. Boots 1/2 are non-debug (`Flags=NONE`). Actual Node
+and Chrome HTTP/WS cuts 2/8/32/64 pass one/two watches and parallel own zero-credit
+reads; recorded parallel latencies are 840–2,704 ms. Actual READ grants grow the
+accepted history, with head-64 growth replies at 2,147–2,606 ms. Both clients pass
+attestation pin/replay refusal, own-account READ/revocation and natural grant
+expiry. A deliberately lost reply reconciles its original pre-exposure ID/digest
+without resend. Exact process restart preserves head 64, account epoch and
+original receipts. The epoch fence advances authority to epoch 2 without changing
+the accepted head and refuses private reads. Fresh-stream old-pack loss,
+corruption, independently tested exact-object repair denial and fault replay pass;
+all eighteen accepted receipts survive restart and the failed original remains
+not-found, without resend. Witness loss refuses reads with head 20 unchanged.
+One-PUT-per-replica quota accepts only genesis (head 0), with no API initialization
+or extra tail. Natural 90-second boot lease refuses after a healthy baseline,
+preserving head 2 while the parent and all six keys remain live. Natural witness
+credential expiry also refuses private reads with unchanged head 2, enabled keys
+and valid parent credentials. All fixed application cells pass and all owned
+workers are stopped. The ciphertext archive retains and independently rehashes
+188 objects (1,183,396 bytes) and five strong final heads. Owned cleanup was
+independently verified at 10:30:46 UTC: host terminated, test EBS/stores/witness/
+roles/SSH/security group absent, six keys PendingDeletion, existing setup policies
+preserved. Local relay/tunnel exited. This invocation is closed.
+[The sanitized hardware receipt](P23-PACKS-HARDWARE.md)
+records the exact release, five profiles, seven boots, latencies, faults and
+traffic boundaries, not production capacity or P23 financial acceptance.
+Final parent HTTPS counts: S3 580/379, witness 1,134, KMS 42, venue/RPC zero.
+Conservative setup/runtime/archive/cleanup totals (including the rejected first
+attempt and manual diagnostic reads) are KMS 242, S3 1,392 and DynamoDB 1,188,
+within approved caps. No pending or uncertain resource mutation remains.
+Startup DNS/address-selection metadata exists; zero native/RPC API requests
+does not mean zero DNS. Private receipts/scripts remain local and ignored.
+Local operator preparation passes the unmodified trusted version-3 preparer
+with all six roles, bounded history and financial gates off; it rejects a
+257-record policy. It is not hardware or complete cloud-fault qualification.
+Do not overwrite/reuse closed policies/resources, assume that unreadable means
+absent, or use the untracked user preparation example. The cited hosted CI
+receipt applies only to its exact committed head, not this documentation update.
+Final docs-only verification: pinned `node scripts/check.mjs --group=contracts`
+passes 42/42 contracts, plan and workspace-boundary checks; `git diff --check`
+passes. Local operator header/read-oracle tests pass 14/14, not extra hardware
+acceptance cells. No source change or new full Rust/SBF qualification is claimed.
+Next: prepare authenticated native setup/credit/withdrawal providers and their
+local tests. A fresh bounded approval
+is required for the actual funding round trip; this read-only run grants none.
+No PR is merged and P23 remains in progress.
+
+Historical local authorization/receipts follow:
+
 User authorization: finish local shipping integration/qualification and **stop
 before AWS/Nitro tests**. No new cloud/venue/RPC/wallet activity or merge follows.
 Current implementation binds version-3 retained S3 packs, closed resource limits,

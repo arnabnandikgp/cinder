@@ -1,7 +1,7 @@
 # Retained encrypted history packs
 
-Date: 2026-10-07. **Local implementation and shipping-port preparation approved;
-changed-image hardware qualification remains open. No deployed migration.**
+Date: 2026-10-07. **Local implementation and bounded read-only shipping-port
+hardware cells passed. No deployed migration or financial qualification.**
 The [growth diagnosis](../implementation/P23-GROWTH-DIAGNOSIS.md) established
 history-dependent object calls. This candidate reduces those calls without
 removing records or the later historical-copy repair boundary.
@@ -40,7 +40,7 @@ private directories, exclusive temporary files, fsync/rename/readback.
 
 Version 3 explicitly binds `HistoryPolicy`: at most 64 KiB per original opaque
 frame, 8 MiB total original history and 256 accepted frames including genesis.
-Its largest encoded pack is **1,049,969 bytes**. These are qualification ceilings,
+Its largest encoded pack is **1,049,970 bytes**. These are qualification ceilings,
 not calibrated production retention/capacity. Lower policies are permitted; an
 existing history exceeding one refuses, never trims. The local growth fixture
 uses these same frame/history/count ceilings.
@@ -163,8 +163,11 @@ and runs growth; no argument runs both locally. No normal check needs `work/`.
 Results and exact artifacts belong in [TRACKER](../implementation/TRACKER.md).
 This is local synthetic evidence, not cloud latency calibration, independent
 storage/witness infrastructure, Nitro attestation or financial qualification.
-Next: review the shipping port/resource contract and propose a fresh measured
-hardware run. Full-size bounds and shipping selection tests are local evidence;
-actual S3 repair, cloud latency and the new measured image remain unqualified. Hardware
-cut 64 and the [financial gates](../implementation/P23-FINANCIAL-GATES.md) remain
-open. P23 is not closed by this prototype.
+The separately approved [hardware receipt](../implementation/P23-PACKS-HARDWARE.md)
+records actual Node/Chrome cuts 2/8/32/64 on the new measured version-3 image,
+S3 old-copy repair/refusal, original-receipt replay and freshness boundaries.
+These are bounded read-only observations, not full-size live memory/capacity,
+independent infrastructure, deployed migration or indefinite scaling evidence.
+The [financial gates](../implementation/P23-FINANCIAL-GATES.md) remain open;
+next is authenticated native provider preparation and a separately authorized
+funding round trip. P23 is not closed by this storage qualification.

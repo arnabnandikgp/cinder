@@ -77,8 +77,13 @@ The local shipping continuation now adds a version-3 manifest-bound S3 pack
 port, lower qualification ceilings, finite per-boot write budgets and loaded
 application binding. Legacy versions retain their original contracts, and an
 accepted head never falls back or resets across layouts. Full-size bounds,
-default-feature checks and actual-client local receipts belong to TRACKER;
-S3/Nitro qualification and production capacity remain separate. Strict
+default-feature checks and actual-client local receipts belong to TRACKER.
+The later [2026-10-07 hardware receipt](P23-PACKS-HARDWARE.md) records actual
+Node/Chrome head-64 growth, restart and bounded storage/freshness results for the
+new measured version-3 application. Its ciphertext archive and independently
+verified owned teardown pass and the invocation is closed. This is not production
+capacity, a deployed migration or financial qualification. Earlier dated receipts
+are retained, not treated as results for this new artifact. Strict
 [documented native evidence components](P23-NATIVE-EVIDENCE.md) preserve exact
 schema/unit/linkage failures without manufacturing source authentication, UUID
 correlation, completeness or final payment. No financial authority is promoted.

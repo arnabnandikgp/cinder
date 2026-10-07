@@ -787,7 +787,12 @@ AWS. Version 3 binds bounded S3 packs and actual resource policy without format
 fallback or financial activation. [The native evidence contract](P23-NATIVE-EVIDENCE.md)
 promotes strict documented components, not complete provider certificates;
 [the next-run proposal](P23-NEXT-RUN-PROPOSAL.md) requires new measured authority.
-Actual cloud growth and financial lifecycle gates remain independent/open.
+The subsequent approved [retained-pack hardware receipt](P23-PACKS-HARDWARE.md)
+records all fixed read-only application cells passing, including actual
+Node/Chrome head 64, S3 repair/refusal, restart and natural expiry. Ciphertext
+archive and independently verified owned teardown also pass; this invocation
+is closed. Earlier unpassed C5 results remain historical. Financial lifecycle
+gates are independent and remain open.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial
 activation and the existing durable storage/repair contract are unchanged.
