@@ -811,6 +811,14 @@ ordinary supervisor I/O guard spanning socket work. It does not reconnect or
 qualify setup/credit/payment/completeness. Actual changed-image/native evidence
 and provider qualification still require separately authorized live activity.
 Financial gates remain closed.
+The [bounded local native-semantics probe](../../tools/native-qualification/README.md)
+now implements exact-seal approval, fresh identities, the one-deposit/one-withdrawal
+scenario, original-wire persistence, explicit lost-reply audit separation and
+independent finalized payment checks. Its scope/bootstrap exception was approved
+2026-10-08; exact run approval and actual evidence remain pending. Offline tests
+cannot supply a complete native cut, UUID recovery capability or funding provider.
+Any unsupported requirement returns as a named G01/policy question; the following
+measured financial run remains separately scoped, not automatically authorized.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial
 activation and the existing durable storage/repair contract are unchanged.

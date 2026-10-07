@@ -1,0 +1,44 @@
+// Offline codec/layout tests. No ignored research, RPC or live identity.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { Keypair, PublicKey } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
+const require=createRequire(import.meta.url);
+const { ROUTE,nativeInstruction,verifyDeployment,verifyMint,verifyToken }=require('../../../tools/native-qualification/bindings.mjs');
+const owner=Keypair.fromSeed(Buffer.alloc(32,77)).publicKey;
+test('native qualification reproduces the official deposit/faucet discriminators, u64 and account privileges',()=>{
+  for(const name of ['deposit','mint_test_usdc']) {
+    const ix=nativeInstruction(name,owner.toBase58());
+    assert(ix.programId.equals(new PublicKey(ROUTE.program)));
+    assert.deepEqual(ix.data.subarray(0,8),createHash('sha256').update(`global:${name}`).digest().subarray(0,8));
+    assert.equal(ix.data.readBigUInt64LE(8),20000000n);assert.equal(ix.keys.length,name==='deposit'?10:8);
+    assert.deepEqual(ix.keys.filter((x:{isSigner:boolean})=>x.isSigner).map((x:{pubkey:PublicKey})=>x.pubkey.toBase58()),[owner.toBase58()]);
+    assert.deepEqual(ix.keys.map((x:{isWritable:boolean})=>x.isWritable),name==='deposit'?
+      [true,true,true,true,false,false,false,false,false,false]:[true,true,true,true,false,false,false,false]);
+    assert(ix.keys[name==='deposit'?1:2].pubkey.equals(getAssociatedTokenAddressSync(new PublicKey(ROUTE.mint),owner)));
+    assert.throws(()=>nativeInstruction(name,owner.toBase58(),1n));
+  }
+  assert.throws(()=>nativeInstruction('withdraw',owner.toBase58()));
+});
+test('native qualification refuses wrong loader metadata, changed slot and authority before funding',()=>{
+  const p=Buffer.alloc(36);p.writeUInt32LE(2);new PublicKey(ROUTE.program_data).toBuffer().copy(p,4);
+  const d=Buffer.alloc(46);d.writeUInt32LE(3);d.writeBigUInt64LE(BigInt(ROUTE.slot),4);d[12]=1;new PublicKey(ROUTE.upgrade).toBuffer().copy(d,13);
+  const account=(bytes:Buffer,executable:boolean)=>({owner:ROUTE.loader,executable,data:[bytes.toString('base64'),'base64']});
+  const program=account(p,true),data=account(d,false);assert.equal(verifyDeployment(program,data).length,1);
+  assert.throws(()=>verifyDeployment({...program,owner:TOKEN_PROGRAM_ID.toBase58()},data));
+  d[4]^=1;assert.throws(()=>verifyDeployment(program,account(d,false)));d[4]^=1;
+  d[13]^=1;assert.throws(()=>verifyDeployment(program,account(d,false)));
+});
+test('native qualification token layouts bind classic token program, quote mint, owner and encumbrances',()=>{
+  const b=Buffer.alloc(165);new PublicKey(ROUTE.mint).toBuffer().copy(b);owner.toBuffer().copy(b,32);b.writeBigUInt64LE(20000000n,64);b[108]=1;
+  const account=()=>({owner:TOKEN_PROGRAM_ID.toBase58(),executable:false,data:[b.toString('base64'),'base64']});
+  assert.equal(verifyToken(account(),owner.toBase58()),20000000n);
+  assert.throws(()=>verifyToken(account(),Keypair.fromSeed(Buffer.alloc(32,78)).publicKey.toBase58()));
+  for(const offset of [72,108,109,129]){b[offset]^=2;assert.throws(()=>verifyToken(account(),owner.toBase58()));b[offset]^=2;}
+  assert.throws(()=>verifyToken({...account(),owner:ROUTE.program},owner.toBase58()));
+  const mint=Buffer.alloc(82);mint[44]=6;mint[45]=1;
+  const m=()=>({owner:TOKEN_PROGRAM_ID.toBase58(),executable:false,data:[mint.toString('base64'),'base64']});
+  assert.doesNotThrow(()=>verifyMint(m()));mint[44]=9;assert.throws(()=>verifyMint(m()));
+});

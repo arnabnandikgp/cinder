@@ -39,6 +39,16 @@ open; passing this candidate must not close them.
 
 ## How to reuse the research
 
+The [bounded native-semantics tool](../../tools/native-qualification/README.md)
+promotes only the current official public deposit/faucet ABI, exact original
+operation/receipt linkage, one-shot budgets and offline fault assertions. Its
+diagnostic process uses fresh test identities, not historical M1 wallets,
+deployment or amount/time-based completion. JS test-key persistence is explicitly
+local/plaintext, not enclave protection or secure erasure. Scope approval and
+exact execution approval remain distinct. No native/chain receipt or financial
+certificate is established by its offline tests; source cuts and lost-native-ACK
+recovery remain unqualified. TRACKER owns the actual run/publication evidence.
+
 P23 additionally promotes [confidential chain ports](../architecture/0024-confidential-chain-ports.md):
 controller-bound signing/finality, purpose-separated release, original owner
 deposits and bounded diagnostic scheduling. Deterministic **unfunded** public

@@ -1,7 +1,8 @@
 # Next P23 financial-evidence qualification
 
-Prepared 2026-10-07. **Proposed bounds, not authorization or an executable
-manifest.** This resolves existing G01/G05 gates; it adds no phase or product
+Prepared 2026-10-07; scope approved 2026-10-08. **The test bounds and bootstrap
+exception are approved; the exact execution record remains pending.** This scopes
+the existing G01/G05 gates; it adds no phase or product
 promise. [Financial map](P23-FINANCIAL-GATES.md),
 [native contract](P23-NATIVE-EVIDENCE.md),
 [measured capture](../architecture/0028-measured-native-capture.md).
@@ -27,9 +28,9 @@ documented idempotency/finality contract and the assumptions it needs. If those
 are absent, bring the smallest required policy/interface change for review rather
 than assign an arbitrary timestamp, counter or Solana slot as a native frontier.
 
-## Recommended scope for approval
+## Approved scope (2026-10-08)
 
-| Boundary | Proposed limit |
+| Boundary | Approved ceiling |
 | --- | --- |
 | Environment | Pacifica paper/testnet and Solana devnet only; fresh disposable identities, no existing venue wallets, mainnet or customer assets |
 | Quote exposure | At most 20 faucet USDP in total; at most 2 USDP total native fees; verify current mint, units, route and fee before any submission |
@@ -40,9 +41,11 @@ than assign an arbitrary timestamp, counter or Solana slot as a native frontier.
 | AWS | No AWS resources or spend in this native-semantics probe. It is not evidence of enclave execution, parent confidentiality or shipping financial activation |
 | Unknown outcome | Persist exact request/wire before exposure; no automatic POST retry, re-signing, new UUID, replacement operation or unapproved rescue transfer |
 
-These are suggested ceilings, not measured costs or production limits. The
-120-second bootstrap window is a **new exception to review**, not an inherited
-M1 permission and not the shipping deposit policy.
+These are approved test ceilings, not measured costs or production limits. The
+120-second bootstrap exception was approved explicitly for this probe, not
+inherited from M1 and not adopted as the shipping deposit policy. The source-bound
+[one-shot tool](../../tools/native-qualification/README.md) still refuses live
+requests without approval of its exact run seal.
 
 ## Before execution
 
@@ -66,4 +69,5 @@ M1 permission and not the shipping deposit policy.
 The local probe narrows uncertainty without paying for another exploratory AWS
 session. It does **not** replace P23's actual measured workflow acceptance. No
 experiment, new program deployment, funds transfer or live request has been run
-under this proposal.
+under this approval. Preparing the exact record and passing offline tests do not
+establish native finality, lost-reply recovery or a changed-image hardware pass.

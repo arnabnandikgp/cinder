@@ -30,12 +30,63 @@
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-08. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### Native-semantics execution preparation — 2026-10-08
+
+Current branch `tee/p23-native-qualification`, immediately above #62 at
+`b1b8235457c26c41c50ab4a8a5bc0183a10ce6b6`. The user approved the proposed
+20-faucet-USDP / 0.10-devnet-SOL / no-AWS scope and the 120-second bootstrap
+exception. **Exact current execution-record approval is still pending.**
+No testnet/RPC call, funding, native action or AWS deployment has occurred.
+Preserve the same unrelated untracked examples/docs/`stays/` and stashes.
+
+The [one-shot diagnostic tool](../../tools/native-qualification/README.md)
+promotes the current official public deposit/faucet ABI and reuses the existing
+locked vault SDK only as a codec boundary. It creates fresh test identities,
+seals source/lock/Node/TLS/config/roles/UUID/routes/budgets, and refuses execution
+without exact current approval. Durable original requests/wires, counters and
+remaining cleanup capacity precede exposure; unknown outcomes cannot retry,
+re-sign, select a new UUID or automatically restart. Streamed executable/header,
+mint/token layout, simulation, finality and independent payment checks are
+separate from native completeness. A callback-level lost reply retains explicitly
+audit-only evidence, not a fabricated controller ACK. Source cuts and shipping
+credit/completion remain absent. No shipping manifest or financial flag changed.
+
+The owning offline checks pass 13 core/sequence regressions and three actual SDK
+ABI/hostile-layout cases; all 56 contract/inventory regressions pass. The parent
+#62 browser CI job timed out at its existing 30-second qualification limit.
+The unchanged actual Node/Chrome check passed locally (14 groups, 40 signed
+synthetic fixtures); one failed-job-only rerun was requested. No timeout increase,
+disabled assertion, new-head hosted success or hardware receipt is claimed.
+CodeRabbit's legitimate #62 documentation finding is addressed here: a proposed
+test scopes G01/G05; it does not resolve them. Parent review remains unmerged.
+
+Next: seal/review the exact private run record, obtain its approval, then execute
+the approved native test and publish a sanitized receipt. The API has no signed
+max-fee field: 2 USDP is an acceptance ceiling, not an enforceable native request
+guarantee; expose this in the exact review. Missing bootstrap/history/UUID/cut
+semantics are named blockers or narrowly reviewed policy questions, not new
+phases or injected provider certificates. The separate measured vault/trading/
+funding/recovery P23 gates remain open.
+
+The exact private record is prepared at
+`work/experiments/p23-native-semantics/run-final-01/REVIEW.md`, seal
+`2dbcf59f6272128e08eec9f34c113af3967549025e162ed76362d2eeff736fcc`.
+It proposes 0.035/0.025 devnet SOL funding to the fresh owner/broker (0.06 SOL
+plus bounded sponsor fees, below the approved 0.10 ceiling). No approval file,
+network trace or invocation start exists. The actual runner refuses before signer
+loading/network I/O when exact approval is absent. Preparing this artifact is not
+a native pass, external authority grant or shipping key-release record. Vault SDK
+type checking and all nine existing/new funding codec cases also pass.
+Earlier `run-01` and `run-candidate-02` records were unused offline preparations
+superseded by the final source review; their identities/records are preserved,
+not submitted, approved, funded or reused in the final candidate.
 
 ### Measured capture runtime continuation — 2026-10-07
 
@@ -88,7 +139,8 @@ merely flipping manifest booleans. P23 stays `in progress`.
 [Next native-semantics proposal](P23-NATIVE-QUALIFICATION.md): setup, exact
 signature deposit, original UUID withdrawal and lost-native-reply investigation,
 using fresh faucet-only accounts without AWS. Proposed 20-USDP/0.10-devnet-SOL
-and 120-second bootstrap bounds remain unapproved; the exact reviewed runner,
+and 120-second bootstrap bounds were unapproved at this dated checkpoint (scope
+subsequently approved 2026-10-08 above); the exact reviewed runner,
 identities and G05 seal must precede execution. No historical permissions, wallets
 or weak amount/time matcher are adopted. Changed-image Nitro and the actual
 vault/trading/funding/recovery lifecycle remain separate existing P23 gates.
