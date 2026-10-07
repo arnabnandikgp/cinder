@@ -11,7 +11,7 @@ permission for another deployment, or a claim that P23 is complete.
 | --- | --- | --- |
 | C1 — Shared interpretation | in progress | Implemented locally; final checks/publication receipt below. Replay-derived indexes and pure authorization preserve canonical responses, error ordering, epochs and grants. Warm indexes never replace a fresh check; review/merge remain open. |
 | C2 — Accepted read publication | in progress | Implemented locally; verification/handoff below. Central journal publication and independently witnessed immutable reads pass acceptance/revocation/uncertainty races. No remote I/O or NSM attestation under a publication latch; exact known-writer metadata distinguishes races from faults. Review/merge and joined C4/hardware qualification remain open. |
-| C3 — Scheduling and external I/O | open | One mutation owner remains authoritative; bounded prepare/I/O/completion work and connection-owned cipher/reply delivery avoid read and same-socket head-of-line blocking without weakening final release checks. |
+| C3 — Scheduling and external I/O | in progress | Implemented locally; verification/handoff below. One mutation owner remains authoritative; bounded prepare/I/O/completion and connection-owned cipher/reply delivery retain final release checks. Joined C4 qualification and review/merge remain open. |
 | C4 — Joined local qualification | open | Fixed real-runtime and actual Node/Chrome workloads pass with measured dependency, latency and memory bounds, including retained generations and continuous unrelated writes. |
 | C5 — Changed-source qualification | open | Exact-source ARM/EIF/client receipts and a separately authorized fresh hardware manifest qualify the changed application. Native, chain and financial capabilities remain independent gates. |
 
@@ -125,7 +125,7 @@ parallel read I/O and an owner revoke while an agent read is in flight. These ar
 real journal/API/runtime code with synthetic local dependencies, not AWS evidence.
 Exact complete-run results and source/publication receipt live in TRACKER.
 
-**Next is C3, not hardware:** separate the synchronous connection's subscription
+The original C2 handoff was C3, not hardware: separate the synchronous connection's subscription
 poll from command delivery, retaining one cipher owner and unreleased candidates
 until the connection's final authorization/generation/time gate. Bound queued jobs,
 external prepare/I/O/completion and slow consumers; do not queue a response that
@@ -133,6 +133,58 @@ already used this synchronous C2 release permit. C4 then qualifies actual client
 dependency delays, sustained unrelated writes and peak live memory. C5 requires a
 fresh exact-source manifest. Storage durability, wire format and financial policy
 remain unchanged; the full-history append cost remains a documented limitation.
+
+## C3: connection scheduling and observation I/O — 2026-10-07
+
+`transport::PreparedReply` keeps independent Read/View/Operation candidates
+unreleased until the carrier consumes them. Both TLS and web commands perform
+their carrier time check before Runtime's final signed-time/auth/generation gate;
+web periodic jobs return the same opaque candidate. The Runtime checks the exact
+owning boot and connection, not just a matching configuration. No worker owns
+Noise state or a socket, and no released read waits in an output queue.
+
+Each web connection has one scoped, joined preparation worker, one job slot and
+one completion slot. A coalesced one-slot wake signal carries no authority or
+private data. The connection handles at most one already-arrived command before
+draining completion and considering another poll. It alone encrypts/writes both
+command replies and updates. Only one periodic job can be outstanding; global
+four-ticket, eight-connection, frame, application and session limits are unchanged.
+Close drops queued work and joins finite in-flight I/O; it does not detach a worker
+or claim immediate cancellation/erasure of remote work and all retained copies.
+The 500-ms poll interval begins after completion/delivery, including normal skips.
+
+Native observation scheduling now reserves an exact one-use request under the
+writer, performs ordinary venue/RPC I/O under a separate supervisor-port owner,
+then rejoins the same writer with fresh time/authority. Pacifica completion checks
+the original accepted reservation and governed gateway; original receive timestamps
+remain evidence while its transaction uses the current logical cut. A late 429
+still records the shared cooldown. Unknown exchange spends its original permit
+without resend. Original-deposit collection similarly fetches transaction/code/
+account evidence without a journal guard; existing recognition rechecks it and
+credits once after rejoining. There is no new wire or economic finality source.
+
+When all scheduler gates are false, tick checks the fresh signed lease and sticky
+boot/publication fence, without loading cloud history merely to discover no work.
+It no longer proactively detects witness/STS loss on an otherwise inactive tick;
+every actual read/command performs its own fresh check before private output.
+Backend durability/CAS work remains under its one writer. Trading and fund-moving
+activation remain rejected by the measured manifest; their existing controller
+composition is not claimed as a newly qualified unlocked financial-I/O path.
+
+Local regressions cover queued generation/expiry/revoke, cross-connection/boot
+candidate rejection, global ticket exhaustion/release, inactive ticks without
+writer/cloud I/O, commands during stalled native I/O, late read completion and
+duplicate deposit evidence. A real Rust Noise/socket test stalls a periodic job,
+delivers a same-socket command before releasing it, checks cipher/update ordering,
+and joins close during I/O. That scheduling test uses a synthetic Handler; actual
+Node/Chrome joined to the real Runtime remains C4, not inferred from it.
+
+An unplanned carrier detail was a cumulative five-second frame wait in the first
+blocking completion-loop prototype. Bounded wake notification fixes the schedule;
+no transport deadline was raised. Strict Clippy also required boxing the owned
+deposit-evidence variant; this is private in-memory ownership, not a stored schema.
+The exact final checks and local commit receipt belong in TRACKER. Next is the
+fixed C4 joined matrix, not a new AWS session or financial activation.
 
 ## C2/C3 implementation constraints
 

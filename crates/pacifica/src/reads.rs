@@ -5,7 +5,10 @@ use crate::{
     execution::{Gateway, Origin, ReadPermit, Reply},
     observation::{self, Kind, MAX_BODY, MAX_ROWS, Message},
 };
-use cinder_journal::{Backend, Committed, Journal, Protection, model::CommitId};
+use cinder_journal::{
+    Backend, Committed, Journal, Protection,
+    model::{CommitId, Transaction},
+};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -182,16 +185,58 @@ pub struct DiagnosticPoll {
     /// Reserved cleanup capacity, only for a trusted frozen-pool scheduler.
     pub cleanup: bool,
 }
-/// Archive bounded non-429 responses, including missing accounts, without
-/// economic effects. A 429 instead persists the existing shared cooldown record.
-/// This is not a provider of Setup/Credit/Withdrawal/Coverage.
-pub fn diagnostic<B: Backend, P: Protection, T: Transport>(
+enum Selection {
+    Observation { kind: Kind, cursor: Option<String> },
+    Diagnostic(Diagnostic),
+}
+/// Non-clone completion identity created only after durable credit reservation.
+/// It carries no signing key, journal mutation authority, or replacement request.
+/// The one writer revalidates its exact retained reservation before ingestion.
+pub struct Completion {
+    contract: [u8; 32],
+    reserved: Transaction,
+    evidence: CommitId,
+    selection: Selection,
+}
+struct Reservation {
+    id: CommitId,
+    evidence: CommitId,
+    at: u64,
+    cleanup: bool,
+}
+impl std::fmt::Debug for Completion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ReadCompletion([PRIVATE])")
+    }
+}
+fn reserve<B: Backend, P: Protection>(
+    journal: &mut Journal<B, P>,
+    gateway: &Gateway,
+    input: Reservation,
+    query: Query,
+    selection: Selection,
+) -> Result<(Request, Completion), Error> {
+    let permit = gateway.reserve_read(journal, input.id, input.at, input.cleanup)?;
+    Ok((
+        Request { query, permit },
+        Completion {
+            contract: gateway.release_commitment(journal.configuration())?,
+            reserved: journal
+                .transaction(input.id)
+                .ok_or(Error::Qualification)?
+                .clone(),
+            evidence: input.evidence,
+            selection,
+        },
+    ))
+}
+/// Reserve once under the mutation owner, then hand only this request to I/O.
+/// Completion is a separate, single-use private token, not a freshness cache.
+pub fn prepare_diagnostic<B: Backend, P: Protection>(
     journal: &mut Journal<B, P>,
     gateway: &Gateway,
     input: DiagnosticPoll,
-    transport: &mut T,
-) -> Result<Outcome, Error> {
-    use cinder_journal::model::{Input, PrivateBytes, Transaction};
+) -> Result<(Request, Completion), Error> {
     let (profile, policy) = gateway.read_binding();
     if input.reservation == input.evidence
         || journal.transaction(input.evidence).is_some()
@@ -204,44 +249,157 @@ pub fn diagnostic<B: Backend, P: Protection, T: Transport>(
         origin: policy.origin,
         target: account_target(path, paged, &profile.account, None)?,
     };
-    let permit = gateway.reserve_read(journal, input.reservation, input.at, input.cleanup)?;
+    let kind = input.kind;
+    reserve(
+        journal,
+        gateway,
+        Reservation {
+            id: input.reservation,
+            evidence: input.evidence,
+            at: input.at,
+            cleanup: input.cleanup,
+        },
+        query,
+        Selection::Diagnostic(kind),
+    )
+}
+/// Prepare one exact account/cursor request. No automatic paging or retries.
+pub fn prepare_poll<B: Backend, P: Protection>(
+    journal: &mut Journal<B, P>,
+    gateway: &Gateway,
+    input: Poll,
+) -> Result<(Request, Completion), Error> {
+    let (profile, policy) = gateway.read_binding();
+    if input.reservation == input.evidence
+        || journal.transaction(input.evidence).is_some()
+        || policy.read_cost < MIN_READ_COST
+    {
+        return Err(Error::Qualification);
+    }
+    let query = Query {
+        origin: policy.origin,
+        target: target(input.kind, &profile.account, input.cursor.as_deref())?,
+    };
+    let view = observation::replay(journal, profile)?;
+    if input.cursor.is_some() && view.cursors.get(&input.kind) != Some(&input.cursor) {
+        return Err(Error::Qualification);
+    }
+    let selection = Selection::Observation {
+        kind: input.kind,
+        cursor: input.cursor,
+    };
+    reserve(
+        journal,
+        gateway,
+        Reservation {
+            id: input.reservation,
+            evidence: input.evidence,
+            at: input.at,
+            cleanup: input.cleanup,
+        },
+        query,
+        selection,
+    )
+}
+/// Rejoin the SAME authoritative writer after bounded I/O. Intervening commands
+/// may advance the head; do not discard adverse native observations merely for
+/// that change. Verify configuration and the original accepted reservation, then
+/// commit at the current logical cut while preserving the actual receive time.
+pub fn complete<B: Backend, P: Protection>(
+    journal: &mut Journal<B, P>,
+    gateway: &Gateway,
+    completion: Completion,
+    reply: Reply,
+) -> Result<Outcome, Error> {
+    let logical = journal.verified_state()?.logical_time();
+    if completion.contract != gateway.release_commitment(journal.configuration())?
+        || journal.transaction(completion.reserved.id) != Some(&completion.reserved)
+        || journal.transaction(completion.evidence).is_some()
+    {
+        return Err(Error::Qualification);
+    }
     let Reply::Response {
         status,
         body,
         received_at,
         retry_after_ms,
-    } = transport.get(Request { query, permit })
+    } = reply
     else {
         return Ok(Outcome::Unavailable);
     };
-    if received_at < input.at || body.as_bytes().len() > MAX_BODY {
+    if received_at < completion.reserved.at {
+        return Err(Error::Qualification);
+    }
+    if matches!(completion.selection, Selection::Diagnostic(_)) && body.as_bytes().len() > MAX_BODY
+    {
         return Err(Error::Qualification);
     }
     if status == 429 {
-        gateway.record_read_limit(journal, input.reservation, received_at, retry_after_ms)?;
+        gateway.record_read_limit(journal, completion.reserved.id, received_at, retry_after_ms)?;
         return Ok(Outcome::Limited);
     }
-    // Keep the exact body, not a lossy parsed balance or caller-invented cutoff.
-    let raw=PrivateBytes::new(serde_json::to_vec(&serde_json::json!({"schema":"cinder-native-diagnostic-v1","kind":input.kind,"account":profile.account,
-        "status":status,"received_at":received_at,"body":body.as_bytes()})).map_err(|_|Error::Codec)?)?;
-    let tx = Transaction {
-        id: input.evidence,
-        expected: journal.head(),
-        at: received_at,
-        evidence: vec![],
-        inputs: vec![Input {
-            source: profile.source,
-            source_cut: None,
-            authority_epoch: 0,
-            observed_at: received_at,
-            raw,
-            event: None,
-        }],
-        order_observations: vec![],
-        funds_observations: vec![],
-        controls: vec![],
-    };
-    Ok(Outcome::Ingested(journal.commit(tx)?))
+    let at = received_at.max(logical);
+    let (profile, _) = gateway.read_binding();
+    match completion.selection {
+        Selection::Diagnostic(kind) => {
+            use cinder_journal::model::{Input, PrivateBytes};
+            let raw=PrivateBytes::new(serde_json::to_vec(&serde_json::json!({"schema":"cinder-native-diagnostic-v1","kind":kind,"account":profile.account,
+                "status":status,"received_at":received_at,"body":body.as_bytes()})).map_err(|_|Error::Codec)?)?;
+            Ok(Outcome::Ingested(journal.commit(Transaction {
+                id: completion.evidence,
+                expected: journal.head(),
+                at,
+                evidence: vec![],
+                inputs: vec![Input {
+                    source: profile.source,
+                    source_cut: None,
+                    authority_epoch: 0,
+                    observed_at: received_at,
+                    raw,
+                    event: None,
+                }],
+                order_observations: vec![],
+                funds_observations: vec![],
+                controls: vec![],
+            })?))
+        }
+        Selection::Observation { kind, cursor } => {
+            if status != 200 {
+                return Ok(Outcome::Unavailable);
+            }
+            if body.as_bytes().len() > MAX_BODY {
+                return Err(Error::Limit);
+            }
+            let body = std::str::from_utf8(body.as_bytes())
+                .map_err(|_| Error::Codec)?
+                .to_owned();
+            Ok(Outcome::Ingested(observation::ingest(
+                journal,
+                profile,
+                Message {
+                    kind,
+                    account: profile.account.clone(),
+                    cursor,
+                    received_at,
+                    body,
+                },
+                completion.evidence,
+                at,
+            )?))
+        }
+    }
+}
+/// Archive bounded non-429 responses, including missing accounts, without
+/// economic effects. A 429 instead persists the existing shared cooldown record.
+/// This is not a provider of Setup/Credit/Withdrawal/Coverage.
+pub fn diagnostic<B: Backend, P: Protection, T: Transport>(
+    journal: &mut Journal<B, P>,
+    gateway: &Gateway,
+    input: DiagnosticPoll,
+    transport: &mut T,
+) -> Result<Outcome, Error> {
+    let (request, completion) = prepare_diagnostic(journal, gateway, input)?;
+    complete(journal, gateway, completion, transport.get(request))
 }
 
 /// Poll one page through the same pool journal and credit policy as execution.
@@ -254,62 +412,6 @@ pub fn poll<B: Backend, P: Protection, T: Transport>(
     input: Poll,
     transport: &mut T,
 ) -> Result<Outcome, Error> {
-    let (profile, policy) = gateway.read_binding();
-    if input.reservation == input.evidence
-        || journal.transaction(input.evidence).is_some()
-        || policy.read_cost < MIN_READ_COST
-    {
-        return Err(Error::Qualification);
-    }
-    let query = Query {
-        origin: policy.origin,
-        target: target(input.kind, &profile.account, input.cursor.as_deref())?,
-    };
-    // Reject skipped/repeated cursor scheduling before spending/exposure. The
-    // parser separately validates the response's cursor and commits any gap.
-    let view = observation::replay(journal, profile)?;
-    if input.cursor.is_some() && view.cursors.get(&input.kind) != Some(&input.cursor) {
-        return Err(Error::Qualification);
-    }
-    let permit = gateway.reserve_read(journal, input.reservation, input.at, input.cleanup)?;
-    let reply = transport.get(Request { query, permit });
-    let Reply::Response {
-        status,
-        body,
-        received_at,
-        retry_after_ms,
-    } = reply
-    else {
-        return Ok(Outcome::Unavailable);
-    };
-    if received_at < input.at {
-        return Err(Error::Qualification);
-    }
-    if status == 429 {
-        gateway.record_read_limit(journal, input.reservation, received_at, retry_after_ms)?;
-        return Ok(Outcome::Limited);
-    }
-    if status != 200 {
-        return Ok(Outcome::Unavailable);
-    }
-    if body.as_bytes().len() > MAX_BODY {
-        return Err(Error::Limit);
-    }
-    let body = std::str::from_utf8(body.as_bytes())
-        .map_err(|_| Error::Codec)?
-        .to_owned();
-    let committed = observation::ingest(
-        journal,
-        profile,
-        Message {
-            kind: input.kind,
-            account: profile.account.clone(),
-            cursor: input.cursor,
-            received_at,
-            body,
-        },
-        input.evidence,
-        received_at,
-    )?;
-    Ok(Outcome::Ingested(committed))
+    let (request, completion) = prepare_poll(journal, gateway, input)?;
+    complete(journal, gateway, completion, transport.get(request))
 }

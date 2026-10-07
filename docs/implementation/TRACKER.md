@@ -50,8 +50,9 @@ The user approved the broad remediation recommendations. Work now follows the
 [C1–C5 plan](P23-REMEDIATION.md): shared interpretation/pure authorization first,
 then accepted publication and bounded scheduling, a fixed joined local matrix,
 and separately authorized changed-source hardware qualification. C1 is committed
-locally as `5b77b11cc0101430f432c236e415577d83622588`. C2 is now implemented locally;
-its verification/handoff is below. Review/merge remain open, so neither slice is
+locally as `5b77b11cc0101430f432c236e415577d83622588`. C2 is locally committed as
+`9feeee8a4a59e6abb7baec78c9600226192763ea`; C3 is implemented locally, with
+verification/handoff below. Review/merge remain open, so none of these slices is
 closed merely because its local tests pass.
 Current durability/repair checks are retained for bounded dev/test;
 a production segment/checkpoint/retention contract is not implicitly approved.
@@ -148,14 +149,73 @@ not a new ignored experiment or required private dependency. No Linux/SBF/ARM/
 AWS/venue/funded test was run for this source, and previous hardware/hosted
 success is not inherited as new-source evidence.
 
-Next: C3's bounded external
-prepare/I/O/completion and connection-owned scheduling. Do not enqueue already
-released C2 responses: the connection must own unreleased candidates until its
-final generation/auth/time gate and sole Noise cipher writer. Keep C4's fixed
-Node/Chrome matrix, sustained-write/memory bounds and C5's separately reviewed
-changed-image manifest. The existing full-history append/repair remains unchanged
-and is still a finite/quadratic dev-test limitation. No C3–C5/P23 closure, push,
-merge, financial activity or new AWS run is claimed.
+The original C2 handoff was bounded external prepare/I/O/completion and
+connection-owned scheduling; C3's implementation receipt follows. The existing
+full-history append/repair remains unchanged and is still a finite/quadratic
+dev-test limitation. No C3–C5/P23 closure, push, merge, financial activity or new
+AWS run is claimed.
+
+#### C3 implementation and next handoff
+
+The shipping Runtime now prepares opaque unreleased Read/View/Operation replies.
+TLS and web carriers perform their time checks, then consume the exact owning
+boot/connection's current-generation/auth/signed-time release gate immediately
+before encryption/write. Web connections have one scoped joined periodic worker,
+one job and completion slot, one coalesced wake slot and their sole cipher/socket
+owner. Already-arrived ingress is serviced before starting another poll; each lap
+also drains completion, so continuous commands cannot starve authorization/expiry.
+There is no detached worker, released-response queue, automatic read/mutation
+retry, new dependency or increased transport deadline. Four global read tickets,
+eight connections and existing directional/session/frame limits remain unchanged.
+
+Native observation/RPC collection now drops the mutation guard during ordinary
+external I/O. The writer durably reserves the exact request, then rejoins fresh
+authority and its original reservation on completion. A changed logical head is
+not a reason to omit a late 429 or verified original deposit: commit at the current
+cut, retain original observation times, consume/credit once. Unknown exchanges
+retain spent credits without resend. Backend history/durability work stays under
+its single writer; manifest-forbidden trading/fund-moving branches are preserved,
+not newly activated or claimed as unlocked financial-I/O qualification.
+
+Inactive tick now checks qualified signed boot time and sticky publication fencing
+without a cloud-history load. This intentionally does not proactively detect idle
+witness/STS loss; every actual command/read must still perform its own fresh check.
+Four Runtime cases test queued release/revoke/expiry/boot/connection, global slot
+bounds, inactive tick, and concurrent grant/read during stalled native observation.
+One actual Rust Noise/socket case (two close variants) tests command delivery
+during a stalled synthetic poll, cipher/update ordering and joined close. Two
+Pacifica phase tests retain late timestamps and exact reservation/config binding;
+one chain test collects original evidence, advances the writer, credits once and
+deduplicates without repoll. These are local synthetic dependencies, not AWS.
+
+Unplanned work: replace a blocking completion wait with coalesced wake notification
+after reproducing cumulative frame timeout; box the large owned deposit-evidence
+variant for strict Clippy. Neither required a wire/deadline/schema change. The
+previous disposable Node toolchain was absent on resume; a fresh official pinned
+24.21.0 archive was checksum-verified rather than using system Node 26.8.2.
+
+Final C3 verification — 2026-10-07: pinned Rust 1.97.1 / Node 24.21.0 on Apple
+silicon pass complete locked/offline `node scripts/check.mjs`: 42 contract/inventory
+tests, dependency boundaries, formatting, shipping/default and all-feature strict
+Clippy/builds, all-feature debug/release and shipping-default Rust suites, 14 relay
+and 24 private SDK tests. The all-feature service passes 94 unit and eight
+integration tests, with seven named Nitro tests still explicitly gated. Pacifica's
+read suite passes all 15 cases. Named killed-child helpers remain parent-invoked.
+`node tools/web-channel/check-http.mjs` additionally passes all 26 existing groups
+in each of actual Node and Chrome 154.0.8037.98; these remain synthetic cheap-handler
+carrier regressions, not C4's real Runtime join. The local implementation commit
+containing this receipt follows C2 `9feeee8a4a59e6abb7baec78c9600226192763ea`.
+Logs: `/private/tmp/cinder-c3-check.DFahHx/check.log` and `http.log`. Temporary
+logs/tool downloads are not required private test dependencies. All new regression
+source is tracked. No Linux/SBF/ARM/AWS/venue/funded test or hosted CI was run for
+this source, and old hardware success is not inherited.
+
+Next: C4's fixed actual Node/Chrome + real Runtime/journal matrix at accepted
+history 1/8/32/64 and synthetic witness delay 0/50/400 ms, one/two watches,
+concurrent reads/mutation/tick, fault/continuous-write and peak-memory gates.
+Do not count the existing cheap FixtureHandler process suite as that join. C5
+still requires fresh ARM/EIF/client receipts and a reviewed new authorization
+manifest before hardware. No old AWS caps or success receipt applies to this source.
 
 ### Earlier architecture review — 2026-10-06
 

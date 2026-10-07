@@ -228,6 +228,61 @@ pub enum Outcome {
     /// Final physical effects applied to the existing funds lifecycle.
     Settled,
 }
+/// Unreleased original-deposit evidence from the configured, bounded chain port.
+/// No host can construct it and no RPC result alone credits the customer.
+pub(crate) struct DepositRead {
+    locator: crate::customer_deposit::Locator,
+    result: DepositResult,
+}
+enum DepositResult {
+    Pending,
+    Rejected,
+    Found(Box<DepositEvidence>),
+}
+struct DepositEvidence {
+    deposit: chain::CustomerDeposit,
+    tx: crate::chain_rpc::Finalized,
+    accounts: crate::chain_rpc::Accounts,
+    deployment: chain_receipt::Deployment,
+    proof: chain_code::Verified,
+    maximum_fee: u64,
+}
+impl DepositRead {
+    /// Rejoin the same mutation owner with fresh authority. Original receipt,
+    /// code, current token accounts and configured customer binding are all
+    /// checked by the existing recognizer before the one journal commit.
+    pub(crate) fn complete<B: Backend, P: Protection>(
+        self,
+        j: &mut Journal<B, P>,
+    ) -> Result<Outcome, Error> {
+        j.verified_state().map_err(|_| Error)?;
+        match self.result {
+            DepositResult::Pending => Ok(Outcome::Pending),
+            DepositResult::Rejected => Ok(Outcome::Rejected),
+            DepositResult::Found(evidence) => {
+                let DepositEvidence {
+                    deposit,
+                    tx,
+                    accounts,
+                    deployment,
+                    proof,
+                    maximum_fee,
+                } = *evidence;
+                crate::customer_deposit::recognize(
+                    j,
+                    &self.locator,
+                    deposit,
+                    tx,
+                    accounts,
+                    &deployment,
+                    proof,
+                    maximum_fee,
+                )?;
+                Ok(Outcome::Settled)
+            }
+        }
+    }
+}
 fn id() -> Result<CommitId, Error> {
     let mut b = [0; 32];
     openssl::rand::rand_bytes(&mut b)?;
@@ -267,31 +322,55 @@ impl<T: Transport> Port<T> {
         if crate::customer_deposit::recorded(j, locator)? {
             return Ok(Outcome::Settled);
         }
+        self.collect_deposit(funding.route(), index)?.complete(j)
+    }
+    /// Only configured identity metadata is handed to I/O. Native/chain signing
+    /// keys never leave their existing controllers, and no journal guard is
+    /// needed while fetching original transaction/code/account evidence.
+    pub(crate) fn collect_deposit(
+        &mut self,
+        route: &cinder_pacifica::funding::Route,
+        index: usize,
+    ) -> Result<DepositRead, Error> {
+        let locator = self
+            .loaded
+            .configuration
+            .deposits
+            .get(index)
+            .ok_or(Error)?
+            .clone();
+        let rejected = || DepositRead {
+            locator: locator.clone(),
+            result: DepositResult::Rejected,
+        };
         let Some(tx) = self
             .client
             .finalized(locator.validate()?, self.clock.now()?)?
         else {
-            return Ok(Outcome::Pending);
+            return Ok(DepositRead {
+                locator,
+                result: DepositResult::Pending,
+            });
         };
         if tx.meta.get("err") != Some(&serde_json::Value::Null) {
-            return Ok(Outcome::Rejected);
+            return Ok(rejected());
         }
         let Ok(deposit) = chain::inspect_customer_deposit(
-            funding.route(),
+            route,
             self.loaded.endpoint.network,
             locator.account,
             locator.operation,
             tx.wire.as_bytes(),
         ) else {
-            return Ok(Outcome::Rejected);
+            return Ok(rejected());
         };
         if !crate::customer_deposit::valid_transaction(
-            locator,
+            &locator,
             &deposit,
             &tx,
             self.loaded.configuration.limits.maximum_fee_lamports,
         )? {
-            return Ok(Outcome::Rejected);
+            return Ok(rejected());
         }
         let d = &self.loaded.configuration.custody;
         let proof = chain_code::verify(
@@ -303,17 +382,23 @@ impl<T: Transport> Port<T> {
         )?;
         let keys = chain_receipt::effect_keys(deposit.target(), d)?;
         let accounts = self.client.accounts(&keys, tx.slot, proof.at())?;
-        crate::customer_deposit::recognize(
-            j,
+        Ok(DepositRead {
             locator,
-            deposit,
-            tx,
-            accounts,
-            d,
-            proof,
-            self.loaded.configuration.limits.maximum_fee_lamports,
-        )?;
-        Ok(Outcome::Settled)
+            result: DepositResult::Found(Box::new(DepositEvidence {
+                deposit,
+                tx,
+                accounts,
+                deployment: d.clone(),
+                proof,
+                maximum_fee: self.loaded.configuration.limits.maximum_fee_lamports,
+            })),
+        })
+    }
+    pub(crate) fn deposit_locator(
+        &self,
+        index: usize,
+    ) -> Result<&crate::customer_deposit::Locator, Error> {
+        self.loaded.configuration.deposits.get(index).ok_or(Error)
     }
     /// One bounded read locator per scheduler cut; no dynamic parent input.
     pub fn deposit_count(&self) -> usize {

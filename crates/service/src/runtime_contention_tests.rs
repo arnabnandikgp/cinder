@@ -1,5 +1,5 @@
 //! Offline diagnosis only: real Runtime/API/AEAD/Replicated, synthetic I/O.
-//! No sockets, AWS credentials, native dispatch, funds or production changes.
+//! Synthetic I/O; no AWS credentials, native dispatch or funds.
 use super::*;
 use crate::fixture::FixtureAttester;
 use cinder_api::wire::{Command, Grant, READ, Request};
@@ -199,9 +199,9 @@ fn application(metrics: Arc<Metrics>) -> Application {
             execution: Level::Qualified,
             origin: Origin::Testnet,
             expiry_ms: 3000,
-            credits: 100,
-            cleanup_reserve: 20,
-            read_cost: 10,
+            credits: 600,
+            cleanup_reserve: 120,
+            read_cost: cinder_pacifica::reads::MIN_READ_COST,
         },
         Zeroizing::new([7; 32]),
         1,
@@ -267,12 +267,14 @@ fn application(metrics: Arc<Metrics>) -> Application {
             store,
             gateway,
             funding,
-            egress,
-            chain: None,
             poll_ms: None,
             next_poll: NOW,
             read_kind: 0,
             deposit_index: 0,
+        }),
+        io: Mutex::new(NativeIo {
+            egress,
+            chain: None,
         }),
         api,
         clock,
@@ -673,5 +675,222 @@ fn final_read_gate_bounds_time_work_boot_expiry_and_panics_without_stale_output(
                 assert!(app.health() == Health::Fenced);
             }
         }
+    }
+}
+
+#[test]
+fn queued_reads_recheck_generation_expiry_boot_and_connection_at_delivery() {
+    for case in 0..5 {
+        let metrics = Arc::new(Metrics::default());
+        let mut app = independent(metrics);
+        let time = Arc::new(AdjustableTime(AtomicU64::new(NOW)));
+        app.clock = time.clone();
+        let channel = session();
+        let prepared = app
+            .prepare_poll(&channel, read(1, 11, 1), NOW)
+            .unwrap()
+            .unwrap();
+        match case {
+            0 => {
+                // The candidate waited in a completion queue across an accepted
+                // unrelated commit. It cannot emit even unchanged account data.
+                padding(&mut app.active.lock().unwrap().store, 210);
+                assert!(app.release_reply(&channel, prepared).unwrap().is_none());
+            }
+            1 => {
+                time.0.store(NOW + 60_000, Ordering::SeqCst);
+                assert_eq!(
+                    app.release_reply(&channel, prepared)
+                        .unwrap()
+                        .unwrap()
+                        .as_bytes(),
+                    cinder_api::Error::Unauthorized
+                        .encode_private()
+                        .unwrap()
+                        .as_bytes()
+                );
+            }
+            2 => {
+                app.fence();
+                assert!(app.release_reply(&channel, prepared).is_err());
+            }
+            3 => {
+                let other = Session::established(configuration().domain, [9; 32], NOW + 120_000);
+                assert!(app.release_reply(&other, prepared).is_err());
+            }
+            _ => {
+                let other = independent(Arc::new(Metrics::default()));
+                assert!(other.release_reply(&channel, prepared).is_err());
+                assert!(other.health() == Health::Ready);
+            }
+        }
+        assert!(
+            app.health()
+                == if case == 2 {
+                    Health::Fenced
+                } else {
+                    Health::Ready
+                }
+        );
+        if case != 2 {
+            // Consumption (including refusal) returns the retained ticket slot.
+            assert!(app.reads.as_ref().unwrap().reader.capture().is_ok());
+        }
+    }
+}
+
+#[test]
+fn queued_agent_reply_is_discarded_after_revoke_and_tickets_are_globally_bounded() {
+    let metrics = Arc::new(Metrics::default());
+    let app = independent(metrics.clone());
+    let channel = session();
+    success(&app.handle(&channel, grant(40), NOW).unwrap(), 1);
+    let prepared = app
+        .prepare_poll(&channel, read(1, 31, 1), NOW)
+        .unwrap()
+        .unwrap();
+    success(
+        &app.handle(&channel, request(41, Command::Revoke, 11, 1), NOW)
+            .unwrap(),
+        1,
+    );
+    assert!(app.release_reply(&channel, prepared).unwrap().is_none());
+    assert_eq!(
+        app.poll(&channel, read(2, 31, 1), NOW)
+            .unwrap()
+            .unwrap()
+            .as_bytes(),
+        cinder_api::Error::Unauthorized
+            .encode_private()
+            .unwrap()
+            .as_bytes()
+    );
+    let candidates: Vec<_> = (0..cinder_journal::read::MAX_READS)
+        .map(|n| {
+            app.prepare_poll(&channel, read(n as u8 + 10, 11, 2), NOW)
+                .unwrap()
+                .unwrap()
+        })
+        .collect();
+    let before = metrics.private_reads.load(Ordering::SeqCst);
+    assert!(
+        app.prepare_poll(&channel, read(20, 11, 2), NOW)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(metrics.private_reads.load(Ordering::SeqCst), before);
+    drop(candidates);
+    assert!(
+        app.prepare_poll(&channel, read(21, 11, 2), NOW)
+            .unwrap()
+            .is_some()
+    );
+    assert!(app.health() == Health::Ready);
+}
+
+#[test]
+fn inactive_scheduler_checks_signed_lease_without_writer_or_cloud_io() {
+    let metrics = Arc::new(Metrics::default());
+    let mut app = independent(metrics.clone());
+    let time = Arc::new(AdjustableTime(AtomicU64::new(NOW)));
+    app.clock = time.clone();
+    metrics.reset();
+    let held = app.active.lock().unwrap();
+    for _ in 0..3 {
+        app.tick().unwrap();
+    }
+    assert_eq!(metrics.counts(), [0; 4]);
+    assert_eq!(metrics.private_reads.load(Ordering::SeqCst), 0);
+    assert!(app.health() == Health::Ready);
+    time.0.store(NOW + 120_000, Ordering::SeqCst);
+    assert!(app.tick().is_err());
+    assert!(app.health() == Health::Fenced);
+    drop(held);
+    assert!(app.handle(&session(), grant(40), NOW).is_err());
+}
+
+#[test]
+fn native_observation_io_releases_writer_and_rejoins_original_reserved_completion() {
+    use cinder_pacifica::{execution::Reply, reads};
+    struct Stalled {
+        entered: mpsc::SyncSender<()>,
+        resume: mpsc::Receiver<()>,
+        calls: usize,
+        status: u16,
+    }
+    impl reads::Transport for Stalled {
+        fn get(&mut self, request: reads::Request) -> Reply {
+            request.consume(NOW).unwrap();
+            self.calls += 1;
+            self.entered.send(()).unwrap();
+            self.resume.recv_timeout(Duration::from_secs(3)).unwrap();
+            if self.status == 0 {
+                Reply::Unknown
+            } else {
+                Reply::Response {
+                    status: self.status,
+                    body: PrivateBytes::new(br#"{"error":"rate limited"}"#.to_vec()).unwrap(),
+                    received_at: NOW,
+                    retry_after_ms: Some(1000),
+                }
+            }
+        }
+    }
+    for status in [0, 429] {
+        let metrics = Arc::new(Metrics::default());
+        let mut app = independent(metrics);
+        app.gates.native_reads = true;
+        let before = {
+            let mut active = app.active.lock().unwrap();
+            let Active {
+                store,
+                gateway,
+                poll_ms,
+                ..
+            } = &mut *active;
+            gateway
+                .initialize_reads(store, CommitId::new([210; 32]).unwrap(), NOW)
+                .unwrap();
+            *poll_ms = Some(100);
+            store.state().unwrap().ledger().clone()
+        };
+        let (entered, observed) = mpsc::sync_channel(1);
+        let (release, resume) = mpsc::sync_channel(1);
+        let mut transport = Stalled {
+            entered,
+            resume,
+            calls: 0,
+            status,
+        };
+        std::thread::scope(|scope| {
+            let job = scope.spawn(|| {
+                // Same single I/O-owner boundary as tick_observations; fake only
+                // the network exchange, not the API, budget or journal phases.
+                let _io = app.io.lock().unwrap();
+                app.poll_venue(&mut transport).unwrap();
+            });
+            observed.recv_timeout(Duration::from_secs(3)).unwrap();
+            assert!(app.active.try_lock().is_ok());
+            let channel = session();
+            success(&app.handle(&channel, grant(40), NOW).unwrap(), 1);
+            success(&app.handle(&channel, read(1, 11, 1), NOW).unwrap(), 3);
+            // A second tick skips the occupied I/O port; it must not duplicate
+            // the reservation, exchange, controller selection or native credit.
+            let head = app.active.lock().unwrap().store.head();
+            app.tick().unwrap();
+            assert_eq!(app.active.lock().unwrap().store.head(), head);
+            release.send(()).unwrap();
+            job.join().unwrap();
+        });
+        assert_eq!(transport.calls, 1);
+        let mut active = app.active.lock().unwrap();
+        assert_eq!(active.store.state().unwrap().ledger(), &before);
+        assert_eq!(active.read_kind, 1);
+        assert_eq!(active.next_poll, NOW + 100);
+        if status == 429 {
+            let Active { store, gateway, .. } = &mut *active;
+            assert!(!gateway.read_available(store, NOW, true).unwrap());
+        }
+        assert!(app.health() == Health::Ready);
     }
 }

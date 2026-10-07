@@ -688,6 +688,42 @@ fn customer_deposit_original_receipt_credits_once_without_seeded_customer_funds(
     );
 }
 #[test]
+fn collected_deposit_rejoins_later_writer_cut_without_repoll_or_duplicate_credit() {
+    let temp = support::Temp::new();
+    let mut j = Journal::create(
+        SqliteBackend::create(&temp.db).unwrap(),
+        support::FixtureProtection,
+        config(),
+    )
+    .unwrap();
+    let c = controller();
+    let f = fake(10);
+    let mut p = deposit(&f, &c);
+    let first = p.collect_deposit(c.route(), 0).unwrap();
+    let second = p.collect_deposit(c.route(), 0).unwrap();
+    let calls = f.0.lock().unwrap().requests.len();
+    let mut unrelated = tx(&j, 200, vec![], vec![]);
+    unrelated.at = 500;
+    unrelated.evidence = vec![PrivateBytes::new(b"unrelated accepted command".to_vec()).unwrap()];
+    j.commit(unrelated).unwrap();
+    assert!(first.complete(&mut j).unwrap() == Outcome::Settled);
+    assert_eq!(j.transactions().last().unwrap().at, 500);
+    assert_eq!(j.transactions().last().unwrap().inputs[0].observed_at, 100);
+    let state = j.state().unwrap().clone();
+    let head = j.head();
+    assert!(second.complete(&mut j).unwrap() == Outcome::Settled);
+    assert_eq!(j.head(), head);
+    assert_eq!(j.state().unwrap(), &state);
+    assert_eq!(f.0.lock().unwrap().requests.len(), calls);
+    assert!(
+        f.0.lock()
+            .unwrap()
+            .requests
+            .iter()
+            .all(|r| r["method"] != "sendTransaction")
+    );
+}
+#[test]
 fn customer_deposit_missing_history_and_bad_receipt_never_credit() {
     for missing in [true, false] {
         let temp = support::Temp::new();

@@ -248,6 +248,11 @@ impl Verified {
     }
 }
 impl Reader {
+    /// Ownership only, not a freshness check or release permit. A runtime must
+    /// not consume another boot's otherwise similarly configured candidate.
+    pub fn owns(&self, verified: &Verified) -> bool {
+        Arc::ptr_eq(&self.inner, &verified.ticket.inner)
+    }
     /// Capture without holding any writer or remote-I/O lock.
     pub fn capture(&self) -> Result<Ticket, Failure> {
         if self.inner.fenced.load(Ordering::SeqCst) {

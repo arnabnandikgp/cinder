@@ -257,7 +257,11 @@ pub fn recognize<B: Backend, P: Protection>(
         .commit(Transaction {
             id: locator.commit(domain)?,
             expected: journal.head(),
-            at: accounts.at,
+            // Preserve receive/effect times in evidence, but an unrelated API
+            // commit may have advanced logical time while RPC I/O was in flight.
+            at: accounts
+                .at
+                .max(journal.state().map_err(|_| Error)?.logical_time()),
             evidence: vec![],
             inputs: vec![input],
             order_observations: vec![],

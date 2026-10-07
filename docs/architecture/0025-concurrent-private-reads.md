@@ -270,6 +270,20 @@ architecture review before that experiment. The existing two real-runtime
 contention diagnostics are distinct evidence. A future abstract model would not
 be implementation, AWS, audit, SDK or P23 closure evidence.
 
+2026-10-07 implementation disposition: C1 shares accepted interpretation and pure
+authorization; C2 supplies centrally published, individually witnessed bounded
+read tickets. C3 retains those tickets through command/periodic preparation and
+consumes the release gate on the connection's sole cipher owner. A one-slot wake
+signal joins bounded ingress and a scoped periodic worker without blocking command
+delivery on poll I/O. Ordinary native observation/RPC requests rejoin the writer
+after I/O with exact reserved identity and original evidence time. Inactive tick
+checks signed lease/sticky fencing, not proactive cloud-history freshness; actual
+operations retain new witness checks. Trading/funding activation remains disabled.
+Local targeted races/scheduling tests pass, but actual joined-client, sustained
+write and memory qualification remain C4; fresh changed-image hardware remains C5.
+These implementation notes do not revise the authority contract or claim those
+remaining conditions have been satisfied.
+
 The user approved the read/publication authority split and its release/revocation
 semantics as part of the bounded remediation direction. Each implementation step
 must satisfy the conditions above; approval is not evidence that it does. Numerical

@@ -750,6 +750,14 @@ security decision. Before another measured run, satisfy the fresh-authority,
 publication, time, resource and joined-client gates. Preserve finance, custody,
 wire and durable
 acceptance guarantees; increasing timeouts is not this architectural qualification.
+C1/C2 now have local unpublished implementation commits; C3 implements bounded
+unreleased connection replies and observation prepare/I/O/completion. Final C3
+verification is recorded in TRACKER. Next is C4's fixed joined Runtime/client
+delay/history/fault/resource matrix; cheap handler fixtures are not that evidence.
+C5 requires a fresh exact-source measured build and separately reviewed manifest.
+Inactive ticks check signed lease/sticky fence without proactive cloud polling;
+actual operations retain independent current checks. Manifest-forbidden financial
+activation and the existing durable storage/repair contract are unchanged.
 Review corrections also belong to this fixed checklist: release exactly the
 measured role set, continue after ineligible original deposits without hiding
 port/storage failures, close expired unsent physical plans only on verified

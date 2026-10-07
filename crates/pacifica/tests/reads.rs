@@ -83,6 +83,98 @@ struct Fake {
 }
 
 #[test]
+fn split_completion_preserves_receive_time_after_unrelated_commits_and_revocation() {
+    for status in [200, 429] {
+        let temp = Temp::new();
+        let mut j = activated(&temp);
+        let g = gateway();
+        let ledger = j.state().unwrap().ledger().clone();
+        let (request, completion) = reads::prepare_diagnostic(
+            &mut j,
+            &g,
+            reads::DiagnosticPoll {
+                kind: reads::Diagnostic::Loan,
+                reservation: id(1),
+                evidence: id(101),
+                at: 100,
+                cleanup: false,
+            },
+        )
+        .unwrap();
+        assert_eq!(format!("{completion:?}"), "ReadCompletion([PRIVATE])");
+        let mut transport = Fake::new(response(status, json!({"error":"late-response"})));
+        let reply = transport.get(request);
+        // A native key revoke is accepted while this response awaits the writer.
+        // Its response/cooldown is still adverse evidence, not signing authority.
+        g.deactivate(&mut j, id(247), 500).unwrap();
+        let outcome = reads::complete(&mut j, &g, completion, reply).unwrap();
+        if status == 200 {
+            assert!(matches!(outcome, Outcome::Ingested(_)));
+            let tx = j.transaction(id(101)).unwrap();
+            assert_eq!(tx.at, 500);
+            assert_eq!(tx.inputs[0].observed_at, 100);
+            let body: Value = serde_json::from_slice(tx.inputs[0].raw.as_bytes()).unwrap();
+            assert_eq!(body["received_at"], 100);
+        } else {
+            assert!(matches!(outcome, Outcome::Limited));
+        }
+        assert_eq!(j.state().unwrap().ledger(), &ledger);
+        assert_eq!(transport.targets.len(), 1);
+        assert!(g.read_available(&mut j, 500, true).is_err());
+    }
+}
+
+#[test]
+fn split_observation_completion_uses_current_cut_and_exact_original_reservation() {
+    let temp = Temp::new();
+    let mut j = activated(&temp);
+    let g = gateway();
+    let ledger = j.state().unwrap().ledger().clone();
+    let (request, completion) =
+        reads::prepare_poll(&mut j, &g, input(1, Kind::Trades, None)).unwrap();
+    let mut transport = Fake::new(response(200, page(json!([]))));
+    let reply = transport.get(request);
+    j.commit(Transaction {
+        id: id(200),
+        expected: j.head(),
+        at: 500,
+        evidence: vec![PrivateBytes::new(b"unrelated-control".to_vec()).unwrap()],
+        inputs: vec![],
+        controls: vec![],
+        order_observations: vec![],
+        funds_observations: vec![],
+    })
+    .unwrap();
+    assert!(matches!(
+        reads::complete(&mut j, &g, completion, reply).unwrap(),
+        Outcome::Ingested(_)
+    ));
+    assert_eq!(j.transaction(id(101)).unwrap().at, 500);
+    assert_eq!(j.state().unwrap().ledger(), &ledger);
+    assert_eq!(transport.targets.len(), 1);
+    assert!(
+        observation::replay(&mut j, &profile())
+            .unwrap()
+            .gaps
+            .is_empty()
+    );
+    // A similarly configured journal is not the original reservation authority.
+    let other_temp = Temp::new();
+    let mut other = activated(&other_temp);
+    let (_, completion) = reads::prepare_poll(
+        &mut j,
+        &g,
+        Poll {
+            at: 500,
+            ..input(2, Kind::Trades, None)
+        },
+    )
+    .unwrap();
+    assert!(reads::complete(&mut other, &g, completion, Reply::Unknown).is_err());
+    assert!(other.transaction(id(102)).is_none());
+}
+
+#[test]
 fn diagnostic_settings_debt_and_funding_history_are_private_evidence_not_financial_effects() {
     use reads::{Diagnostic, DiagnosticPoll};
     for (kind, path, status) in [

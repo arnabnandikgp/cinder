@@ -4,8 +4,8 @@ use crate::{
     Error,
     attestation::{MAX_QUOTE, MAX_SESSION, Policy},
     transport::{
-        Clock, Handler, Lifetime, Listener, MAX_CONNECTIONS, Session, Socket, read_frame,
-        write_frame,
+        Clock, Handler, Lifetime, Listener, MAX_CONNECTIONS, PreparedReply, Session, Socket,
+        read_frame, write_frame,
     },
 };
 use cinder_journal::model::PrivateBytes;
@@ -30,6 +30,16 @@ pub const UPDATE: &[u8] = b"CINDER-PRIVATE-UPDATE-1\0";
 pub const FIELDS: usize = 128;
 /// Public quote envelope bound: fields, expiry, bounded signed quote.
 pub const MAX_ENVELOPE: usize = FIELDS + 8 + MAX_QUOTE;
+type PollOutput = Result<Option<PreparedReply>, Error>;
+struct Polling {
+    send: std::sync::mpsc::SyncSender<PrivateBytes>,
+    receive: std::sync::mpsc::Receiver<PollOutput>,
+}
+struct Inbox {
+    wire: std::sync::mpsc::Receiver<Zeroizing<Vec<u8>>>,
+    wake: std::sync::mpsc::Receiver<()>,
+    notify: std::sync::mpsc::SyncSender<()>,
+}
 /// Purpose-separated web quote provider; no parent approval/trust callback.
 pub trait Attester: Send + Sync {
     /// Quote exact canonical context. Qualified implementations locally validate
@@ -191,6 +201,8 @@ impl Server {
         let mut reader = socket.try_clone()?;
         let shutdown = socket.try_clone()?;
         let (send, receive) = std::sync::mpsc::sync_channel(1);
+        let (notify, wake) = std::sync::mpsc::sync_channel(1);
+        let ready = notify.clone();
         thread::scope(|scope| {
             let worker = scope.spawn(move || {
                 let result = (|| -> Result<(), Error> {
@@ -206,13 +218,27 @@ impl Server {
                         )?;
                         drop(delivery);
                         send.try_send(wire).map_err(|_| Error)?;
+                        // Coalesced notification only, never a data/authority
+                        // queue. A full wake slot already guarantees a wakeup.
+                        let _ = ready.try_send(());
                     }
                 })();
                 if result.is_err() {
                     let _ = shutdown.shutdown(Shutdown::Both);
+                    let _ = ready.try_send(());
                 }
             });
-            let result = self.application(&mut socket, &mut endpoint, &session, expires, receive);
+            let result = self.application(
+                &mut socket,
+                &mut endpoint,
+                &session,
+                expires,
+                Inbox {
+                    wire: receive,
+                    wake,
+                    notify,
+                },
+            );
             let _ = socket.shutdown(Shutdown::Both);
             let _ = worker.join();
             result
@@ -224,95 +250,187 @@ impl Server {
         endpoint: &mut Endpoint,
         session: &Session,
         expires: u64,
-        receive: std::sync::mpsc::Receiver<Zeroizing<Vec<u8>>>,
+        inbox: Inbox,
+    ) -> Result<(), Error> {
+        // One joinable preparation worker and one outstanding poll per live
+        // connection. It owns neither a socket nor the Noise cipher. Both queues
+        // hold at most one item; Runtime tickets also enforce the global cap.
+        let (send, jobs) = std::sync::mpsc::sync_channel::<PrivateBytes>(1);
+        let (complete, replies) = std::sync::mpsc::sync_channel::<PollOutput>(1);
+        let ready = inbox.notify.clone();
+        thread::scope(|scope| {
+            let worker = scope.spawn(move || {
+                while let Ok(request) = jobs.recv() {
+                    let result = self.clock.now().and_then(|now| {
+                        if now >= expires {
+                            return Err(Error);
+                        }
+                        self.handler.prepare_poll(session, request, now)
+                    });
+                    let failed = result.is_err();
+                    if complete.try_send(result).is_err() {
+                        break;
+                    }
+                    let _ = ready.try_send(());
+                    if failed {
+                        break;
+                    }
+                }
+            });
+            let result = self.application_loop(
+                socket,
+                endpoint,
+                session,
+                expires,
+                inbox,
+                Polling {
+                    send,
+                    receive: replies,
+                },
+            );
+            // application_loop drops its job sender and result receiver first.
+            // An in-flight bounded I/O job is joined, not detached on close.
+            if worker.join().is_err() {
+                return Err(Error);
+            }
+            result
+        })
+    }
+    fn application_loop(
+        &self,
+        socket: &mut impl Socket,
+        endpoint: &mut Endpoint,
+        session: &Session,
+        expires: u64,
+        inbox: Inbox,
+        polling: Polling,
     ) -> Result<(), Error> {
         let mut sequence = 1;
         let mut socket_mode = false;
         let mut watch: Option<(u32, PrivateBytes, Option<[u8; 32]>, u64)> = None;
         let mut next_poll = Instant::now();
+        let mut pending = false;
         loop {
             if self.clock.now()? >= expires {
                 return Err(Error);
             }
-            // Poll independently of ingress activity: a stream of valid commands
-            // must not starve updates, expiry or current READ authorization.
-            if Instant::now() >= next_poll {
-                next_poll = Instant::now() + Duration::from_millis(500);
-                if let Some((correlation, request, revision, ordinal)) = &mut watch {
-                    let reply = self
-                        .handler
-                        .poll(session, request.clone(), self.clock.now()?)?;
-                    // Preserve a request-service interval after slow witness
-                    // I/O, including busy skips; never immediately catch up.
-                    next_poll = Instant::now() + Duration::from_millis(500);
-                    if self.clock.now()? >= expires {
+            // Prefer already-arrived ingress over starting a periodic read.
+            // Each iteration still drains completion/schedules after at most one
+            // command: continuous traffic cannot starve checks or updates.
+            let wait = if watch.is_some() && !pending {
+                next_poll
+                    .saturating_duration_since(Instant::now())
+                    .min(Duration::from_millis(250))
+            } else {
+                Duration::from_millis(250)
+            };
+            match inbox.wake.recv_timeout(wait) {
+                Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err(Error),
+            }
+            let wire = match inbox.wire.try_recv() {
+                Ok(wire) => Some(wire),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => return Err(Error),
+                Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            };
+            if let Some(wire) = wire {
+                if sequence >= cinder_web_channel::MAX_RECORDS {
+                    return Err(Error);
+                }
+                let clear = endpoint.open(&wire).map_err(|_| Error)?;
+                let (delivery, request) =
+                    records::read_delivery(sequence, &clear).map_err(|_| Error)?;
+                if socket_mode && delivery == 1 {
+                    return Err(Error);
+                }
+                socket_mode |= delivery != 1;
+                let now = self.clock.now()?;
+                if now >= expires {
+                    return Err(Error);
+                }
+                let request = PrivateBytes::new(request.to_vec()).map_err(|_| Error)?;
+                if delivery == 3 {
+                    // Never dispatch a mutation disguised as a subscription.
+                    let valid = cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r|
+                    matches!(r.command,cinder_api::wire::Command::Read(q) if q.cursor == [0;40]));
+                    if !valid || watch.is_some() {
                         return Err(Error);
                     }
-                    let Some(reply) = reply else {
-                        continue;
-                    };
-                    let fresh = revision_of(reply.as_bytes());
-                    if fresh.is_none() || fresh != *revision {
-                        *ordinal = ordinal.checked_add(1).ok_or(Error)?;
-                        self.deliver(socket, endpoint, *correlation, &reply, true, Some(*ordinal))?;
-                        *revision = fresh;
-                        if fresh.is_none() {
+                }
+                let prepared = self.handler.prepare_handle(session, request.clone(), now)?;
+                if self.clock.now()? >= expires {
+                    return Err(Error);
+                }
+                let reply = self
+                    .handler
+                    .release_reply(session, prepared)?
+                    .ok_or(Error)?;
+                self.deliver(
+                    socket,
+                    endpoint,
+                    sequence,
+                    &reply,
+                    socket_mode,
+                    (delivery == 3).then_some(1),
+                )?;
+                if delivery == 3 {
+                    let revision = revision_of(reply.as_bytes());
+                    if revision.is_none() {
+                        return Err(Error);
+                    }
+                    watch = Some((sequence, request, revision, 1));
+                    next_poll = Instant::now() + Duration::from_millis(500);
+                }
+                sequence += 1;
+                if sequence == cinder_web_channel::MAX_RECORDS && watch.is_none() {
+                    return Ok(());
+                }
+            }
+            if pending {
+                match polling.receive.try_recv() {
+                    Ok(result) => {
+                        pending = false;
+                        // Cadence starts after preparation AND delivery, even
+                        // when a generation/capacity race emits nothing.
+                        if self.clock.now()? >= expires {
                             return Err(Error);
                         }
+                        if let Some(prepared) = result? {
+                            // Final authorization, signed time and publication
+                            // gate happen here, never in the preparation queue.
+                            if let Some(reply) = self.handler.release_reply(session, prepared)? {
+                                let (correlation, _, revision, ordinal) =
+                                    watch.as_mut().ok_or(Error)?;
+                                let fresh = revision_of(reply.as_bytes());
+                                if fresh.is_none() || fresh != *revision {
+                                    *ordinal = ordinal.checked_add(1).ok_or(Error)?;
+                                    self.deliver(
+                                        socket,
+                                        endpoint,
+                                        *correlation,
+                                        &reply,
+                                        true,
+                                        Some(*ordinal),
+                                    )?;
+                                    *revision = fresh;
+                                    if fresh.is_none() {
+                                        return Err(Error);
+                                    }
+                                }
+                            }
+                        }
+                        next_poll = Instant::now() + Duration::from_millis(500);
                     }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => return Err(Error),
                 }
             }
-            let wire = match receive.recv_timeout(Duration::from_millis(250)) {
-                Ok(wire) => wire,
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err(Error),
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
-            };
-            if sequence >= cinder_web_channel::MAX_RECORDS {
-                return Err(Error);
-            }
-            let clear = endpoint.open(&wire).map_err(|_| Error)?;
-            let (delivery, request) =
-                records::read_delivery(sequence, &clear).map_err(|_| Error)?;
-            if socket_mode && delivery == 1 {
-                return Err(Error);
-            }
-            socket_mode |= delivery != 1;
-            let now = self.clock.now()?;
-            if now >= expires {
-                return Err(Error);
-            }
-            let request = PrivateBytes::new(request.to_vec()).map_err(|_| Error)?;
-            if delivery == 3 {
-                // Never dispatch a mutation disguised as a subscription.
-                let valid = cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r|
-                    matches!(r.command,cinder_api::wire::Command::Read(q) if q.cursor == [0;40]));
-                if !valid || watch.is_some() {
-                    return Err(Error);
-                }
-            }
-            let reply = self.handler.handle(session, request.clone(), now)?;
-            if self.clock.now()? >= expires {
-                return Err(Error);
-            }
-            self.deliver(
-                socket,
-                endpoint,
-                sequence,
-                &reply,
-                socket_mode,
-                (delivery == 3).then_some(1),
-            )?;
-            if delivery == 3 {
-                let revision = revision_of(reply.as_bytes());
-                if revision.is_none() {
-                    return Err(Error);
-                }
-                watch = Some((sequence, request, revision, 1));
-                next_poll = Instant::now() + Duration::from_millis(500);
-            }
-            sequence += 1;
-            if sequence == cinder_web_channel::MAX_RECORDS && watch.is_none() {
-                return Ok(());
+            if !pending
+                && Instant::now() >= next_poll
+                && let Some((_, request, _, _)) = &watch
+            {
+                polling.send.try_send(request.clone()).map_err(|_| Error)?;
+                pending = true;
             }
         }
     }
@@ -432,6 +550,142 @@ mod tests {
     fn send(socket: &mut TcpStream, endpoint: &mut Endpoint, sequence: u32) {
         let clear = records::request(sequence, b"PRIVATE-APPLICATION").unwrap();
         write_frame(socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+    }
+    #[test]
+    fn slow_poll_never_owns_cipher_or_blocks_same_socket_command_and_close_joins_it() {
+        struct Stalled {
+            entered: std::sync::mpsc::SyncSender<()>,
+            release: Mutex<std::sync::mpsc::Receiver<()>>,
+            active: AtomicUsize,
+            calls: AtomicUsize,
+        }
+        impl Stalled {
+            fn page(revision: u8, now: u64) -> Result<PrivateBytes, Error> {
+                cinder_api::Response::Read(cinder_api::reads::Page {
+                    kind: 2,
+                    revision: [revision; 32],
+                    next: [0; 40],
+                    evaluated_at: now,
+                    rows: Vec::new(),
+                })
+                .encode()
+                .map_err(|_| Error)
+            }
+        }
+        impl Handler for Stalled {
+            fn handle(
+                &self,
+                _: &Session,
+                _: PrivateBytes,
+                now: u64,
+            ) -> Result<PrivateBytes, Error> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Self::page(1, now)
+            }
+            fn poll(
+                &self,
+                _: &Session,
+                _: PrivateBytes,
+                now: u64,
+            ) -> Result<Option<PrivateBytes>, Error> {
+                assert_eq!(self.active.fetch_add(1, Ordering::SeqCst), 0);
+                self.entered.try_send(()).unwrap();
+                // A finite synthetic transport barrier. With the old loop,
+                // command two could not be delivered before this was released.
+                let received = self
+                    .release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(2));
+                self.active.fetch_sub(1, Ordering::SeqCst);
+                received.map_err(|_| Error)?;
+                Self::page(2, now).map(Some)
+            }
+        }
+        for close_during_io in [false, true] {
+            let (entered, observed) = std::sync::mpsc::sync_channel(1);
+            let (release, resume) = std::sync::mpsc::sync_channel(1);
+            let app = Arc::new(Stalled {
+                entered,
+                release: Mutex::new(resume),
+                active: AtomicUsize::new(0),
+                calls: AtomicUsize::new(0),
+            });
+            let server = Server::new(
+                policy(),
+                Arc::new(FixtureClock),
+                Arc::new(FixtureAttester::new().unwrap()),
+                Arc::new(FixtureClock),
+                app.clone(),
+            )
+            .unwrap();
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let stop = Arc::new(AtomicBool::new(false));
+            let flag = stop.clone();
+            let worker = thread::spawn(move || server.run(listener, flag));
+            let (mut socket, mut endpoint, expires, binding) = client(port);
+            let request = cinder_api::wire::Request {
+                domain: policy_domain(),
+                account: cinder_kernel::identity::AccountId::new([3; 32]).unwrap(),
+                id: cinder_kernel::identity::RequestId::new([4; 32]).unwrap(),
+                policy: cinder_kernel::identity::PolicyVersion::new(1).unwrap(),
+                epoch: 1,
+                signer: [5; 32],
+                session: binding,
+                expires_at: expires,
+                command: cinder_api::wire::Command::Read(cinder_api::reads::Query {
+                    kind: 2,
+                    cursor: [0; 40],
+                    limit: 1,
+                }),
+                signature: [7; 64],
+            };
+            let clear =
+                records::socket_request(1, request.encode().unwrap().as_bytes(), true).unwrap();
+            write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+            let first = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+            assert_eq!(&first[..4], &1u32.to_be_bytes());
+            let initial = records::read_response(&mut endpoint, 1, &first[4..]).unwrap();
+            assert!(initial.starts_with(UPDATE));
+            observed.recv_timeout(Duration::from_secs(2)).unwrap();
+            assert_eq!(app.active.load(Ordering::SeqCst), 1);
+            if close_during_io {
+                stop.store(true, Ordering::SeqCst);
+                socket.shutdown(Shutdown::Both).unwrap();
+            } else {
+                let clear = records::socket_request(2, b"COMMAND-WHILE-POLLING", false).unwrap();
+                let started = Instant::now();
+                write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+                let batch = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+                assert_eq!(&batch[..4], &2u32.to_be_bytes());
+                let reply = records::read_response(&mut endpoint, 2, &batch[4..]).unwrap();
+                assert_eq!(revision_of(&reply), Some([1; 32]));
+                assert!(started.elapsed() < Duration::from_secs(1));
+                assert_eq!(app.active.load(Ordering::SeqCst), 1);
+            }
+            release.send(()).unwrap();
+            if !close_during_io {
+                let batch = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+                assert_eq!(&batch[..4], &1u32.to_be_bytes());
+                let clear = records::read_response(&mut endpoint, 1, &batch[4..]).unwrap();
+                assert_eq!(&clear[UPDATE.len()..UPDATE.len() + 8], &2u64.to_be_bytes());
+                assert_eq!(revision_of(&clear[UPDATE.len() + 8..]), Some([2; 32]));
+                stop.store(true, Ordering::SeqCst);
+            }
+            worker.join().unwrap().unwrap();
+            assert_eq!(app.active.load(Ordering::SeqCst), 0);
+            assert_eq!(
+                app.calls.load(Ordering::SeqCst),
+                if close_during_io { 1 } else { 2 }
+            );
+        }
+    }
+    fn policy_domain() -> Domain {
+        Domain {
+            network: NetworkId::new([1; 32]).unwrap(),
+            deployment: DeploymentId::new([2; 32]).unwrap(),
+        }
     }
     #[test]
     fn subscription_skips_busy_polls_delivers_next_revision_and_closes_on_failure() {

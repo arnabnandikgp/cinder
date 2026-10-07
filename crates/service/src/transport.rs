@@ -89,6 +89,24 @@ pub trait Attester: Send + Sync {
     /// No host boolean or caller-supplied quote substitutes for real NSM.
     fn quote(&self, policy: &Policy, context: &Context<'_>) -> Result<Vec<u8>, Error>;
 }
+/// Opaque, unreleased private read (or a checked command/error response).
+/// A preparation worker cannot turn it into wire bytes;
+/// the connection must return it to its handler immediately before delivery.
+/// Dropping it releases any retained journal ticket and private candidate.
+pub struct PreparedReply {
+    pub(crate) inner: Prepared,
+}
+pub(crate) enum Prepared {
+    Immediate(PrivateBytes),
+    Accepted(crate::runtime::ReadCandidate),
+}
+impl PreparedReply {
+    pub(crate) fn immediate(bytes: PrivateBytes) -> Self {
+        Self {
+            inner: Prepared::Immediate(bytes),
+        }
+    }
+}
 /// Synchronous bounded application handler. It owns the one protected journal;
 /// all successes/errors return over the same TLS connection. Never logs inputs.
 pub trait Handler: Send + Sync {
@@ -99,6 +117,18 @@ pub trait Handler: Send + Sync {
         request: PrivateBytes,
         now: u64,
     ) -> Result<PrivateBytes, Error>;
+    /// Prepare an ordinary reply without prematurely releasing an immutable
+    /// read. The carrier performs its clock checks before consuming the final
+    /// release gate, immediately before encrypting/writing the response.
+    fn prepare_handle(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<PreparedReply, Error> {
+        self.handle(channel, request, now)
+            .map(PreparedReply::immediate)
+    }
     /// Periodic signed Read only. `None` means temporary lock contention: emit
     /// nothing, never cached private state. Failures remain fatal to the stream.
     /// Implementations without a busy controller use the ordinary handler.
@@ -114,6 +144,30 @@ pub trait Handler: Send + Sync {
             return Err(Error);
         }
         self.handle(channel, request, now).map(Some)
+    }
+    /// Prepare one signed Read without touching the connection's cipher. The
+    /// shipping Runtime retains its witnessed ticket, not an already-released
+    /// response. Default fixture handlers have no journal publication to retain.
+    fn prepare_poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PreparedReply>, Error> {
+        self.poll(channel, request, now)
+            .map(|r| r.map(PreparedReply::immediate))
+    }
+    /// Consume once on the cipher-owning connection. Call immediately before
+    /// encryption, not before placing an output in a queue. No automatic retry.
+    fn release_reply(
+        &self,
+        _channel: &Session,
+        prepared: PreparedReply,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        match prepared.inner {
+            Prepared::Immediate(reply) => Ok(Some(reply)),
+            Prepared::Accepted(_) => Err(Error),
+        }
     }
 }
 /// Live established session, constructed only by the TLS server handshake.
@@ -468,10 +522,14 @@ impl Server {
                 return Err(Error);
             }
             let request = PrivateBytes::new(request.to_vec()).map_err(|_| Error)?;
-            let reply = self.handler.handle(&session, request, now)?;
+            let prepared = self.handler.prepare_handle(&session, request, now)?;
             if self.clock.now()? >= expires {
                 return Err(Error);
             }
+            let reply = self
+                .handler
+                .release_reply(&session, prepared)?
+                .ok_or(Error)?;
             write_frame(&mut tls, reply.as_bytes(), MAX_RESPONSE)?;
         }
         Ok(())

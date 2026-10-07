@@ -78,7 +78,8 @@ fn run() -> Result<(), cinder_service::Error> {
     };
     let listener = VsockListener::bind(manifest.ingress, 3)?;
     // Joinable finite supervisor. No unbounded queue; one cut each second, at
-    // most one escaped dispatch. Each cut rechecks independent witness + time.
+    // most one escaped dispatch. Active work rechecks independent witness/time;
+    // inactive cuts check the signed boot lease and sticky local fence only.
     let worker_runtime = runtime.clone();
     let worker_stop = stop.clone();
     let worker = std::thread::spawn(move || {
