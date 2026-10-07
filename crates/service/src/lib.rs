@@ -16,6 +16,8 @@ pub mod customer_deposit;
 pub mod egress;
 #[cfg(feature = "local-fixture")]
 pub mod fixture;
+/// Bounded native transfer capture with TLS terminating inside the enclave.
+pub mod native_capture;
 pub mod nsm;
 /// Sealed-journal recovery preparation and recipient-encrypted independent delivery.
 pub mod recovery;
@@ -26,6 +28,10 @@ pub mod verifier;
 pub mod vsock;
 /// Attested Noise ingress into the same private financial handler as TLS.
 pub mod web;
+
+#[cfg(test)]
+#[path = "../../journal/tests/support/mod.rs"]
+mod test_support;
 
 /// Deliberately redacted failures; neither OpenSSL nor application bodies escape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

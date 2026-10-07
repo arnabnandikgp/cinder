@@ -37,6 +37,39 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### Native capture continuation — 2026-10-07
+
+Local bounded slice on `tee/p23-native-capture`, based on #60 at
+`b2af93eb74519075fa689325093df2fd6f7726d6`. Preserve the user's untracked
+`crates/service/examples/qualification-v2.rs`, `docs/user-journey.md`, `stays/`
+and existing stashes. No merge, new AWS/venue/RPC request or wallet use occurred.
+
+Implemented shared-credit preparation and immutable capture identity, ordered raw
+archive at the current journal head, fixed-origin native WSS over enclave-owned
+TLS 1.3, finite socket/header/frame/message/byte budgets, opaque distinct parent
+relay routes, and immediate abort on sink failure. No financial postings,
+readiness/cut/payment certificates, automatic reconnect or shipping activation.
+Nine owning local test groups use an independent RFC6455/TLS peer plus journal
+restart/context/budget tests. The pinned protocol graph and compiled-out
+plaintext logging are guarded; [ADR 0027](../architecture/0027-native-transfer-capture.md)
+records dependencies, OS-entropy/erasure limits and hardware scope. The complete
+pinned local runner passed 43 contract checks, strict default/all-feature lint and
+build, all-feature debug/release and shipping-default Rust profiles, 15 relay
+cases and 26 SDK/TLS cases. The first attempt stopped on local disk exhaustion;
+only the explicitly authorized rebuildable `target/debug/incremental` cache was
+removed. The successful complete rerun used `CARGO_INCREMENTAL=0` (also used by
+hosted CI), without disabling any test group. Final formatted owning-source
+debug/release checks and strict lint are recorded with publication below; no
+new-head hosted CI/review or hardware pass is claimed.
+
+Next: wire this bounded capture through the loaded measured configuration and
+supervisor without holding the mutation guard during I/O; then qualify native
+setup, operation-specific final credit and exact payment/terminal debit providers.
+Fresh-account bootstrap and lost-native-ACK semantics remain named open gates.
+Only after the provider/activation gates pass, prepare a fresh G05-approved live
+funding round trip. P23 remains `in progress`; all prior storage receipts stay
+historical and closed.
+
 Provider continuation is published ready/open as [#60](https://github.com/arnabnandikgp/cinder/pull/60)
 on `tee/p23-funding-providers`, based on #59 at
 `6ecaf39cbf48d0308bab7e69b283a80d2424482c`. The existing open predecessors remain

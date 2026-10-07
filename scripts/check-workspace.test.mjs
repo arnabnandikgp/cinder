@@ -27,6 +27,8 @@ function fixture() {
     {name: 'cinder-pacifica',kind:null,path:'/repo/crates/pacifica',req:'=0.1.0',target:null},
     ...['openssl', 'aws-nitro-enclaves-cose', 'aws-nitro-enclaves-nsm-api', 'serde_cbor', 'zeroize'].map(name => ({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p => p.name === name).version}`,target:null,features:[],uses_default_features:true,optional:false})),
     {name:'socket2',kind:null,source:dependencyPolicy.registry,req:'=0.6.5',target:null,features:['all'],uses_default_features:false,optional:false},
+    {name:'tungstenite',kind:null,source:dependencyPolicy.registry,req:'=0.30.0',target:null,features:['handshake'],uses_default_features:false,optional:false},
+    {name:'log',kind:null,source:dependencyPolicy.registry,req:'=0.4.34',target:null,features:['max_level_off','release_max_level_off'],uses_default_features:true,optional:false},
     ...['serde','serde_json','base64','aws-sigv4','aws-credential-types'].map(name=>({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p=>p.name===name).version}`,target:null,features:name==='serde'?['derive']:name==='base64'?['alloc']:name==='aws-sigv4'?['sign-http','http1']:[],uses_default_features:!['base64','aws-sigv4'].includes(name),optional:false})),
   ];
   packages[7].dependencies = ['snow','zeroize','sha2','getrandom','wasm-bindgen'].map(name => ({
@@ -145,6 +147,15 @@ test('cloud signing cannot acquire default providers, SigV4a or optional platfor
     for (const change of [d=>{d.req='*';},d=>{d.features.push('unapproved');},d=>{d.optional=true;},d=>{d.target='cfg(unix)';}]) {
       const m=fixture();change(m.packages[6].dependencies.find(d=>d.name===name));
       assert.match(validateWorkspace(m).join('\n'),/cloud dependency configuration not approved/);
+    }
+  }
+});
+
+test('native capture retains exact handshake-only dependency and compile-time plaintext-log suppression',()=>{
+  for (const name of ['tungstenite','log']) {
+    for (const change of [d=>{d.req='*';},d=>{d.features=[];},d=>{d.features.push('unapproved');},d=>{d.uses_default_features=!d.uses_default_features;},d=>{d.optional=true;},d=>{d.target='cfg(unix)';}]) {
+      const m=fixture();change(m.packages[6].dependencies.find(d=>d.name===name));
+      assert.match(validateWorkspace(m).join('\n'),/native capture dependency configuration not approved/);
     }
   }
 });

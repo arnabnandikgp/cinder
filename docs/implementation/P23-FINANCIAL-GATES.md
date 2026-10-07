@@ -51,6 +51,11 @@ all money-movement and complete-cut gates below remain open.
    scenario assertions and P22's fault cases, not its wallets, plaintext loaders,
    injected witnesses or prior permission. Start with account setup and an
    original-operation funding round trip, without trading.
+   The offline capture transport/archive in
+   [ADR 0027](../architecture/0027-native-transfer-capture.md) is the next bounded
+   component: it retains raw transfer evidence without settlement or readiness.
+   Loaded-manifest/supervisor activation and actual native qualification remain
+   open; a library port or local TLS peer is not a deployed capture provider.
 3. Add a **narrow measured financial activation policy** only once the relevant
    providers and bounded admission are tested. `boot::Manifest::validate` still
    rejects `funding` and `trading`; `Runtime::tick` has composed controller paths

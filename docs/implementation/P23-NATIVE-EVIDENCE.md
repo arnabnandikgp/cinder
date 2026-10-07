@@ -108,6 +108,17 @@ and request a policy decision; never quietly label synthetic evidence as native.
 
 ## Current boundary
 
+The next offline component adds a budgeted bounded native-transfer capture:
+`pacifica::capture::{prepare, Archive}` and
+`service::native_capture::Port`, with a distinct fixed-host opaque WSS relay.
+[ADR 0027](../architecture/0027-native-transfer-capture.md) records the actual
+TLS/upgrade/limits, pinned protocol dependency, compiled-out plaintext logging,
+independent local peer tests and exact remaining activation gates. Every retained
+input remains raw (`event=None`, no causal cut or authority epoch); capture cannot
+manufacture setup, credit or payment certificates. The loaded runtime/manifest
+is not yet wired to activate this port. This is neither actual native capture nor
+hardware evidence, and the prior closed AWS receipt does not qualify the new image.
+
 The shipping manifest still forbids funding and trading. Setup/credit/payment,
 complete execution/funding cuts and final native recovery are named open gates.
 The retained-pack hardware invocation is closed, with all fixed read-only cells
