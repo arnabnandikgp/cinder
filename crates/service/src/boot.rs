@@ -124,7 +124,7 @@ impl HistoryPolicy {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
-    /// Closed schema: 1 (five roles), 2 (chain), 3 (bounded retained packs + chain).
+    /// Closed schema: 1 (five roles), 2 (chain), 3 (packs), 4 (finite native capture).
     pub version: u32,
     /// Exact 64-byte network/deployment namespace.
     pub domain: Vec<u8>,
@@ -162,11 +162,14 @@ pub struct Manifest {
     /// Explicit pack selection, omitted from legacy version 1/2 encodings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history: Option<HistoryPolicy>,
+    /// Version 4's separate fixed WSS route and one-capture-per-boot resource policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_capture: Option<crate::native_capture::Policy>,
 }
 impl Manifest {
     /// Refuse ambiguous routes, key-role reuse, missing trust or live activation.
     pub fn validate(&self) -> Result<(), Error> {
-        if !matches!(self.version,1..=3) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
+        if !matches!(self.version,1..=4) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
             || self.application==[0;32] || self.stream==[0;32] || self.generation==0 || self.epoch==0
             || self.slots.len()!=if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
             || (self.first.resource==self.second.resource) || self.gates.maximum_boot_ms==0 || self.gates.maximum_boot_ms>3_600_000
@@ -186,7 +189,7 @@ impl Manifest {
         ];
         match (self.version, &self.chain) {
             (1, None) => {}
-            (2 | 3, Some(peer)) => {
+            (2..=4, Some(peer)) => {
                 peer.validate()?;
                 if peer.network.as_slice() != &self.domain[..32] {
                     return Err(Error);
@@ -197,8 +200,31 @@ impl Manifest {
         }
         match (self.version, &self.history) {
             (1 | 2, None) => {}
-            (3, Some(policy)) => {
+            (3 | 4, Some(policy)) => {
                 policy.limits()?;
+            }
+            _ => return Err(Error),
+        }
+        match (self.version, &self.native_capture) {
+            (1..=3, None) => {}
+            (4, Some(policy)) => {
+                policy.validate()?;
+                let history = self.history.as_ref().ok_or(Error)?;
+                // Conservative raw JSON/frame overhead; storage still enforces
+                // the actual remaining history and write budgets independently.
+                let message = policy
+                    .limits
+                    .maximum_message
+                    .checked_mul(4)
+                    .and_then(|n| n.checked_add(8192))
+                    .ok_or(Error)?;
+                if !self.gates.native_reads
+                    || policy.limits.maximum_ms > self.gates.maximum_boot_ms
+                    || message > history.record_bytes as usize
+                {
+                    return Err(Error);
+                }
+                ports.push(policy.port);
             }
             _ => return Err(Error),
         }
@@ -264,7 +290,8 @@ impl Manifest {
                 match self.version {
                     1 => b"CINDER-RUNTIME-MANIFEST-1\0".as_slice(),
                     2 => b"CINDER-RUNTIME-MANIFEST-2\0".as_slice(),
-                    _ => b"CINDER-RUNTIME-MANIFEST-3\0".as_slice(),
+                    3 => b"CINDER-RUNTIME-MANIFEST-3\0".as_slice(),
+                    _ => b"CINDER-RUNTIME-MANIFEST-4\0".as_slice(),
                 },
                 &serde_cbor::to_vec(self).map_err(|_| Error)?,
             ]
@@ -288,7 +315,8 @@ impl Manifest {
             match self.version {
                 1 => b"CKR1".as_slice(),
                 2 => b"CKR2".as_slice(),
-                _ => b"CKR3".as_slice(),
+                3 => b"CKR3".as_slice(),
+                _ => b"CKR4".as_slice(),
             },
             &[role.code()],
             &self.generation.to_be_bytes(),
@@ -646,6 +674,7 @@ pub(crate) fn qualification_manifest() -> Manifest {
         },
         chain: None,
         history: None,
+        native_capture: None,
     }
 }
 
@@ -822,6 +851,74 @@ mod tests {
                 _ => p.put_bytes -= 1,
             }
             assert_ne!(packed.digest().unwrap(), changed.digest().unwrap());
+        }
+        let mut captured = packed.clone();
+        captured.version = 4;
+        captured.native_capture = Some(crate::native_capture::Policy {
+            port: 9008,
+            root: captured.venue_root.clone(),
+            root_hash: captured.venue_root_hash,
+            limits: cinder_pacifica::capture::Limits {
+                maximum_ms: 5000,
+                maximum_messages: 16,
+                maximum_bytes: 8192,
+                maximum_message: 4096,
+            },
+        });
+        captured.validate().unwrap();
+        assert_ne!(captured.digest().unwrap(), packed.digest().unwrap());
+        assert!(
+            captured
+                .wrap(Role::Funds, &[6; 32])
+                .unwrap()
+                .starts_with(b"CKR4")
+        );
+        captured
+            .unwrap(Role::Funds, captured.wrap(Role::Funds, &[6; 32]).unwrap())
+            .unwrap();
+        assert!(
+            captured
+                .unwrap(Role::Funds, packed.wrap(Role::Funds, &[6; 32]).unwrap())
+                .is_err()
+        );
+        for legacy in [1, 2, 3] {
+            let mut changed = captured.clone();
+            changed.version = legacy;
+            assert!(changed.validate().is_err());
+        }
+        for case in 0..15 {
+            let mut changed = captured.clone();
+            let p = changed.native_capture.as_mut().unwrap();
+            match case {
+                0 => p.port = changed.ingress,
+                1 => p.port = changed.bootstrap,
+                2 => p.port = changed.venue_port,
+                3 => p.port = changed.chain.as_ref().unwrap().port,
+                4 => p.port = changed.first.port,
+                5 => p.port = changed.slots[0].endpoint.port,
+                6 => p.root_hash = [2; 32],
+                7 => p.limits.maximum_ms = 30001,
+                8 => p.limits.maximum_messages = 257,
+                9 => p.limits.maximum_bytes = 1048577,
+                10 => p.limits.maximum_message = 16384,
+                11 => changed.gates.native_reads = false,
+                12 => changed.gates.maximum_boot_ms = 4999,
+                13 => changed.native_capture = None,
+                _ => changed.gates.funding = true,
+            }
+            assert!(changed.validate().is_err(), "capture case {case}");
+        }
+        for case in 0..5 {
+            let mut changed = captured.clone();
+            let p = changed.native_capture.as_mut().unwrap();
+            match case {
+                0 => p.port += 1,
+                1 => p.limits.maximum_ms -= 1,
+                2 => p.limits.maximum_messages -= 1,
+                3 => p.limits.maximum_bytes -= 1,
+                _ => p.limits.maximum_message -= 1,
+            }
+            assert_ne!(captured.digest().unwrap(), changed.digest().unwrap());
         }
     }
     #[test]

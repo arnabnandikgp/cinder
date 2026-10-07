@@ -37,6 +37,59 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### Measured capture runtime continuation — 2026-10-07
+
+Local branch `tee/p23-capture-runtime`, directly above #61 at
+`b2395dd7201c0cca714633f308cc0913066d19ba`. Existing predecessors are unmerged.
+Preserve the user's untracked `crates/service/examples/qualification-v2.rs`,
+`docs/user-journey.md`, `stays/` and existing stashes. No AWS/native/RPC call,
+wallet use, financial activity or merge occurred.
+
+Implemented manifest version 4's exact route/root/finite capture policy, distinct
+ports, actual loaded application derivation and changed-policy refusal before
+cloud restore. Legacy encodings remain unchanged and financial gates remain off.
+The shipping entrypoint runs a separate one-shot worker: shared credits and the
+start are durable before I/O, every raw result rejoins the current head, neither
+runtime I/O guard spans the socket, and time/epoch/archive/panic failures fence
+the boot without another connection. No continuous feed, financial provider,
+credit/cut/payment certificate or automatic reconnect is claimed.
+
+The continuation also addresses #61's actual review findings: the connect uses
+the remaining absolute duration rather than an unconditional five seconds; a
+received bounded body survives a post-read clock failure as explicitly
+`unverified_after_read` raw evidence. It ends capture and cannot certify financial
+events. Independent current sink clock/witness requirements remain unchanged;
+failed durability still fences. These changes are not yet a merge or a resolution
+receipt for the parent review threads.
+
+Focused locked/offline debug checks pass all 14 native capture/runtime groups,
+the versioned-manifest regression and all five release/provisioning tests.
+The final-source complete pinned host runner passed: 43 contract/inventory
+checks, strict default/all-feature lint/build, all-feature debug/release and
+shipping-default Rust suites, 15 relay cases and 26 SDK/TLS cases. It used
+`CARGO_INCREMENTAL=0`; no required test group was disabled. After adding the
+proposal/links, all 43 contracts and the 52-document foundation revalidated.
+Publication checkpoint follows below. No Linux package, new-head hosted CI/review, new EIF/PCR
+or hardware pass is claimed. [ADR 0028](../architecture/0028-measured-native-capture.md)
+records the consumed contract, tests and limitations.
+
+Next: qualify the existing setup, operation-specific native final-credit and
+terminal-debit/final-payment semantics using the retained capture and chain ports.
+Current primary schemas do not themselves prove setup atomicity, complete credit
+totals or no later withdrawal effect. Do not select a local timestamp, batch,
+balance delta or parser result as a causal certificate. Fresh-account bootstrap,
+lost native reply and bounded G05 approval remain existing open gates. Actual
+provider implementation/financial activation follows qualified semantics, not
+merely flipping manifest booleans. P23 stays `in progress`.
+
+[Next native-semantics proposal](P23-NATIVE-QUALIFICATION.md): setup, exact
+signature deposit, original UUID withdrawal and lost-native-reply investigation,
+using fresh faucet-only accounts without AWS. Proposed 20-USDP/0.10-devnet-SOL
+and 120-second bootstrap bounds remain unapproved; the exact reviewed runner,
+identities and G05 seal must precede execution. No historical permissions, wallets
+or weak amount/time matcher are adopted. Changed-image Nitro and the actual
+vault/trading/funding/recovery lifecycle remain separate existing P23 gates.
+
 ### Native capture continuation — 2026-10-07
 
 Published ready/open as [#61](https://github.com/arnabnandikgp/cinder/pull/61) on

@@ -46,14 +46,19 @@ pub struct VsockStream {
 impl VsockStream {
     /// One bounded connect to one exact destination; never retries.
     pub fn connect(target: Target) -> Result<Self, Error> {
+        Self::connect_bounded(target, Duration::from_secs(5))
+    }
+    /// A finite native worker may have less than the ordinary five-second
+    /// connection allowance left. Never extend its absolute capture deadline.
+    pub(crate) fn connect_bounded(target: Target, timeout: Duration) -> Result<Self, Error> {
+        if timeout.is_zero() || timeout > Duration::from_secs(5) {
+            return Err(Error);
+        }
         #[cfg(target_os = "linux")]
         {
             use socket2::{Domain, SockAddr, Socket, Type};
             let inner = Socket::new(Domain::VSOCK, Type::STREAM, None)?;
-            inner.connect_timeout(
-                &SockAddr::vsock(target.cid, target.port),
-                Duration::from_secs(5),
-            )?;
+            inner.connect_timeout(&SockAddr::vsock(target.cid, target.port), timeout)?;
             if inner.peer_addr()?.as_vsock_address() != Some((target.cid, target.port)) {
                 return Err(Error);
             }
@@ -63,7 +68,7 @@ impl VsockStream {
         }
         #[cfg(not(target_os = "linux"))]
         {
-            let _ = target;
+            let _ = (target, timeout);
             Err(Error)
         }
     }

@@ -285,6 +285,7 @@ fn application(metrics: Arc<Metrics>) -> Application {
             egress,
             chain: None,
         }),
+        capture: Mutex::new(None),
         api,
         clock,
         stop: Arc::new(AtomicBool::new(false)),
@@ -700,6 +701,187 @@ fn slow_independent_reads_do_not_block_each_other_or_mutations_and_revoke_refuse
     });
 }
 struct AdjustableTime(AtomicU64);
+fn capture_application() -> Application {
+    capture_application_with_metrics(Arc::new(Metrics::default()))
+}
+fn capture_application_with_metrics(metrics: Arc<Metrics>) -> Application {
+    let mut app = application(metrics);
+    app.gates.native_reads = true;
+    let limits = cinder_pacifica::capture::Limits {
+        maximum_ms: 1000,
+        maximum_messages: 16,
+        maximum_bytes: 4096,
+        maximum_message: 1024,
+    };
+    let root = FixtureAttester::new().unwrap().root().to_der().unwrap();
+    *app.capture.get_mut().unwrap() = Some((
+        crate::native_capture::Port::new(
+            Origin::Testnet,
+            Target::new(3, 9008).unwrap(),
+            Trust::from_der(&root, openssl::sha::sha256(&root)).unwrap(),
+            app.clock.clone(),
+        )
+        .unwrap(),
+        limits,
+    ));
+    let mut active = app.active.lock().unwrap();
+    let Active { store, gateway, .. } = &mut *active;
+    gateway
+        .initialize_reads(store, CommitId::new([61; 32]).unwrap(), NOW)
+        .unwrap();
+    drop(active);
+    app
+}
+#[test]
+fn native_capture_rejoins_commands_without_holding_either_runtime_io_guard() {
+    use cinder_pacifica::capture::Kind;
+    let app = capture_application();
+    let before = app
+        .active
+        .lock()
+        .unwrap()
+        .store
+        .state()
+        .unwrap()
+        .ledger()
+        .clone();
+    let (entered, observed) = mpsc::sync_channel(1);
+    let (release, continue_io) = mpsc::sync_channel(1);
+    std::thread::scope(|scope| {
+        let worker = &app;
+        let job = scope.spawn(move || {
+            worker.capture_using(|_, request, sink| {
+                let mut q = request.consume(NOW).unwrap();
+                sink(q.record(Kind::Opened, vec![], NOW).unwrap())?;
+                entered.send(()).unwrap();
+                continue_io.recv_timeout(Duration::from_secs(5)).unwrap();
+                sink(
+                    q.record(Kind::Text, b"unknown private transfer body".to_vec(), NOW)
+                        .unwrap(),
+                )?;
+                sink(q.record(Kind::Interrupted, vec![], NOW).unwrap())
+            })
+        });
+        observed.recv_timeout(Duration::from_secs(3)).unwrap();
+        assert!(app.active.try_lock().is_ok());
+        assert!(app.io.try_lock().is_ok());
+        let channel = session();
+        success(&app.handle(&channel, grant(40), NOW).unwrap(), 1);
+        success(&app.handle(&channel, read(1, 11, 1), NOW).unwrap(), 3);
+        let head = app.active.lock().unwrap().store.head();
+        app.capture_using(|_, _, _| panic!("one-shot capture reconnected"))
+            .unwrap();
+        assert_eq!(app.active.lock().unwrap().store.head(), head);
+        release.send(()).unwrap();
+        job.join().unwrap().unwrap();
+    });
+    let active = app.active.lock().unwrap();
+    assert_eq!(active.store.state().unwrap().ledger(), &before);
+    assert!(!active.store.state().unwrap().native_funding_ready());
+    let inputs: Vec<_> = active
+        .store
+        .transactions()
+        .flat_map(|t| &t.inputs)
+        .collect();
+    assert_eq!(inputs.len(), 4); // start, opened, raw text, uncertain stop
+    assert!(
+        inputs
+            .iter()
+            .all(|i| i.event.is_none() && i.source_cut.is_none() && i.authority_epoch == 0)
+    );
+    assert!(active.store.head().sequence > 2);
+    assert!(app.health() == Health::Ready);
+}
+#[test]
+fn native_capture_refuses_future_results_stops_on_fence_and_cannot_retry() {
+    use cinder_pacifica::capture::Kind;
+    for case in 0..3 {
+        let metrics = Arc::new(Metrics::default());
+        let app = capture_application_with_metrics(metrics.clone());
+        let head = app.active.lock().unwrap().store.head();
+        assert!(
+            app.capture_using(|_, request, sink| {
+                let mut q = request.consume(NOW).unwrap();
+                match case {
+                    0 => {
+                        app.fence();
+                    }
+                    1 => {}
+                    _ => {
+                        // Independently revoke the writer epoch during network I/O.
+                        metrics
+                            .anchor
+                            .lock()
+                            .unwrap()
+                            .as_ref()
+                            .unwrap()
+                            .lock()
+                            .unwrap()
+                            .epoch += 1;
+                    }
+                }
+                sink(
+                    q.record(Kind::Opened, vec![], NOW + u64::from(case == 1))
+                        .unwrap(),
+                )
+            })
+            .is_err()
+        );
+        assert!(app.health() == Health::Fenced);
+        assert!(app.capture.lock().unwrap().is_none());
+        assert_eq!(
+            app.active.lock().unwrap().store.head().sequence,
+            head.sequence + 2
+        );
+        assert!(
+            app.capture_using(|_, _, _| panic!("failed capture retried"))
+                .is_err()
+        );
+    }
+}
+#[test]
+fn native_capture_absent_budget_exhausted_and_short_lease_do_not_expose_requests() {
+    let app = application(Arc::new(Metrics::default()));
+    let head = app.active.lock().unwrap().store.head();
+    app.capture_using(|_, _, _| panic!("legacy runtime opened capture"))
+        .unwrap();
+    assert_eq!(app.active.lock().unwrap().store.head(), head);
+    for short_lease in [false, true] {
+        let mut app = capture_application();
+        if short_lease {
+            app.deadline = NOW + 999;
+        } else {
+            let mut active = app.active.lock().unwrap();
+            let Active { store, gateway, .. } = &mut *active;
+            for n in 62..66 {
+                gateway
+                    .reserve_read(store, CommitId::new([n; 32]).unwrap(), NOW, false)
+                    .unwrap();
+            }
+        }
+        let head = app.active.lock().unwrap().store.head();
+        let result = app.capture_using(|_, _, _| panic!("unavailable capture exposed request"));
+        assert_eq!(result.is_err(), short_lease);
+        assert_eq!(app.active.lock().unwrap().store.head(), head);
+        assert!(app.capture.lock().unwrap().is_none());
+    }
+}
+#[test]
+fn native_capture_transport_panic_stickily_fences_the_boot_without_reusing_the_port() {
+    let app = capture_application();
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = app.capture_using(|_, _, _| panic!("synthetic entropy failure"));
+        }))
+        .is_err()
+    );
+    assert!(app.health() == Health::Fenced);
+    assert!(app.capture.lock().unwrap().is_none());
+    assert!(
+        app.capture_using(|_, _, _| panic!("panic capture retried"))
+            .is_err()
+    );
+}
 impl Clock for AdjustableTime {
     fn now(&self) -> Result<u64, Error> {
         Ok(self.0.load(Ordering::SeqCst))

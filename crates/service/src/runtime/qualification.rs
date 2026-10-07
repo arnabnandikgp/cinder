@@ -469,6 +469,7 @@ fn application(
             egress,
             chain: None,
         }),
+        capture: Mutex::new(None),
         api,
         clock,
         stop: Arc::new(AtomicBool::new(false)),

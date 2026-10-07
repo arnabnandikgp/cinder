@@ -125,11 +125,19 @@ pub struct Record {
     sequence: u32,
     kind: Kind,
     received_at: u64,
+    unverified_after_read: bool,
     body: PrivateBytes,
 }
 impl std::fmt::Debug for Record {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("NativeCaptureRecord([PRIVATE])")
+    }
+}
+impl Record {
+    /// Transport time (last-known only for an explicitly unverified message).
+    /// The writer still requires its own current qualified clock and witness.
+    pub fn observed_at(&self) -> u64 {
+        self.received_at
     }
 }
 impl Query {
@@ -184,8 +192,21 @@ impl Query {
             sequence: self.sequence,
             kind,
             received_at: at,
+            unverified_after_read: false,
             body,
         })
+    }
+    /// Retain an already received body when the post-read clock/deadline check
+    /// fails. Last-known time is NOT its receipt time or financial authority.
+    /// Ends capture immediately; normal message/byte bounds still apply.
+    pub fn record_unverified(&mut self, kind: Kind, body: Vec<u8>) -> Result<Record, Error> {
+        if !kind.message() {
+            return Err(Error::Qualification);
+        }
+        let mut record = self.record(kind, body, self.last_at())?;
+        record.unverified_after_read = true;
+        self.ended = true;
+        Ok(record)
     }
 }
 /// Writer-owned completion, separate from transport and all signing authority.
@@ -199,6 +220,21 @@ pub struct Archive {
     at: u64,
     ended: bool,
 }
+/// Validate the actual loaded account/read policy before activating a capture
+/// port. Exposes only the fixed origin, never a signer or mutable account binding.
+pub fn validate_gateway(gateway: &Gateway) -> Result<Origin, Error> {
+    let (profile, policy) = gateway.read_binding();
+    let account = bs58::decode(&profile.account)
+        .into_vec()
+        .map_err(|_| Error::Qualification)?;
+    if account.len() != 32
+        || bs58::encode(account).into_string() != profile.account
+        || policy.read_cost < MIN_READ_COST
+    {
+        return Err(Error::Qualification);
+    }
+    Ok(policy.origin)
+}
 /// Reserve and retain intent under the journal guard; release it before I/O.
 /// An uncertain preparation commit must be reopened, not retried with fresh IDs.
 pub fn prepare<B: Backend, P: Protection>(
@@ -207,13 +243,8 @@ pub fn prepare<B: Backend, P: Protection>(
     plan: Plan,
 ) -> Result<(Request, Archive), Error> {
     plan.limits.validate()?;
+    validate_gateway(gateway)?;
     let (profile, policy) = gateway.read_binding();
-    let account = bs58::decode(&profile.account)
-        .into_vec()
-        .map_err(|_| Error::Qualification)?;
-    if account.len() != 32 || bs58::encode(account).into_string() != profile.account {
-        return Err(Error::Qualification);
-    }
     if plan.at == 0
         || plan.reservation == plan.capture
         || journal.transaction(plan.capture).is_some()
@@ -299,7 +330,8 @@ impl Archive {
             "schema":"cinder-native-capture-record-v1", "binding":self.binding,
             "sequence":record.sequence, "kind":record.kind,
             "received_at":record.received_at,
-            "clock_sample":if matches!(record.kind,Kind::Interrupted|Kind::Limited){"last_known"}else{"fresh"},
+            "clock_sample":if record.unverified_after_read {"unverified_after_read"}
+                else if matches!(record.kind,Kind::Interrupted|Kind::Limited){"last_known"}else{"fresh"},
             "body":record.body.as_bytes()
         })).map_err(|_| Error::Codec)?)?;
         let result = journal.commit(transaction(
@@ -311,7 +343,7 @@ impl Archive {
         ))?;
         self.next = self.next.checked_add(1).ok_or(Error::Limit)?;
         self.at = record.received_at;
-        self.ended = record.kind.terminal();
+        self.ended = record.kind.terminal() || record.unverified_after_read;
         Ok(result)
     }
 }

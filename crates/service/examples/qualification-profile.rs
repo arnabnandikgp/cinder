@@ -250,6 +250,7 @@ fn run() -> Result<(), Error> {
         version: 1,
         chain: None,
         history: None,
+        native_capture: None,
         domain: [domain.network.bytes(), domain.deployment.bytes()].concat(),
         application: [1; 32],
         stream: id(19)?,

@@ -189,6 +189,13 @@ impl Configuration {
         if let Some(policy) = &manifest.history {
             loaded.application = loaded.application.with_history(policy)?;
         }
+        if let Some(policy) = &manifest.native_capture {
+            let origin =
+                cinder_pacifica::capture::validate_gateway(&loaded.gateway).map_err(|_| Error)?;
+            let capture = crate::native_capture::Loaded::new(origin, policy)?;
+            loaded.application = loaded.application.with_capture(&capture)?;
+            loaded.capture = Some(capture);
+        }
         Ok(loaded)
     }
     fn construct_using(
@@ -287,6 +294,7 @@ impl Configuration {
             application,
             origin: self.execution.origin,
             chain,
+            capture: None,
         })
     }
 }
@@ -318,6 +326,7 @@ pub struct Loaded {
     application: ApplicationContract,
     origin: cinder_pacifica::execution::Origin,
     chain: Option<chain_funding::Loaded>,
+    capture: Option<crate::native_capture::Loaded>,
 }
 /// Public health is deliberately coarse; no balances, customer counts or keys.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -346,6 +355,13 @@ pub struct Runtime<B: Backend + Send, P: Protection + Send> {
     // One bounded supervisor I/O owner, never acquired by customer commands or
     // private reads. Its guard may span I/O; the journal mutation guard may not.
     io: Mutex<NativeIo>,
+    // Separate finite worker, never a reconnecting scheduler or network queue.
+    capture: Mutex<
+        Option<(
+            crate::native_capture::Port,
+            cinder_pacifica::capture::Limits,
+        )>,
+    >,
     api: Service<RiskAdmission>,
     clock: Arc<dyn Clock>,
     stop: Arc<AtomicBool>,
@@ -412,6 +428,11 @@ impl Loaded {
                 != manifest.domain
         {
             return Err(Error);
+        }
+        match (&self.capture, &manifest.native_capture) {
+            (None, None) => {}
+            (Some(capture), Some(policy)) if capture.matches(policy) => {}
+            _ => return Err(Error),
         }
         let now = clock.now()?;
         let stream = Stream {
@@ -504,8 +525,9 @@ impl Loaded {
             self.origin,
             Target::new(3, manifest.venue_port)?,
             Trust::from_der(&manifest.venue_root, manifest.venue_root_hash)?,
-            private_clock,
+            private_clock.clone(),
         )?;
+        let capture = self.capture.map(|p| p.open(private_clock)).transpose()?;
         let reader = store
             .attach_reader(ReadBinding {
                 stream,
@@ -527,6 +549,7 @@ impl Loaded {
                 deposit_index: 0,
             }),
             io: Mutex::new(NativeIo { egress, chain }),
+            capture: Mutex::new(capture),
             api: self.api,
             clock,
             stop,
@@ -572,6 +595,95 @@ fn commit_id() -> Result<CommitId, Error> {
 }
 
 impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
+    /// Explicit one-shot boot worker. Consumes the loaded port before any I/O;
+    /// repeated/concurrent calls cannot reconnect. A fresh boot is a new capture,
+    /// never a replayed native event or resumed financial operation.
+    pub fn capture_once(&self) -> Result<(), Error> {
+        self.capture_using(|port, request, sink| port.capture(request, sink))
+    }
+    fn capture_using(
+        &self,
+        run: impl FnOnce(
+            crate::native_capture::Port,
+            cinder_pacifica::capture::Request,
+            &mut dyn FnMut(cinder_pacifica::capture::Record) -> Result<(), Error>,
+        ) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        let result = (|| {
+            self.active_time()?;
+            let capture = self.capture.lock().map_err(|_| Error)?.take();
+            let Some((port, limits)) = capture else {
+                return Ok(());
+            };
+            self.capture_prepared(limits, |request, sink| run(port, request, sink))
+        })();
+        if result.is_err() {
+            self.fence();
+        }
+        result
+    }
+    fn capture_prepared(
+        &self,
+        limits: cinder_pacifica::capture::Limits,
+        run: impl FnOnce(
+            cinder_pacifica::capture::Request,
+            &mut dyn FnMut(cinder_pacifica::capture::Record) -> Result<(), Error>,
+        ) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        if !self.gates.native_reads {
+            return Err(Error);
+        }
+        let (request, mut archive) = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let at = self.active_time()?;
+            if at
+                .checked_add(limits.maximum_ms)
+                .is_none_or(|end| end > self.deadline)
+            {
+                return Err(Error);
+            }
+            let Active { store, gateway, .. } = &mut *active;
+            if store.verified_state().map_err(|_| Error)?.logical_time() > at {
+                return Err(Error);
+            }
+            if !gateway
+                .read_available(store, at, false)
+                .map_err(|_| Error)?
+            {
+                return Ok(());
+            }
+            cinder_pacifica::capture::prepare(
+                store,
+                gateway,
+                cinder_pacifica::capture::Plan {
+                    reservation: commit_id()?,
+                    capture: commit_id()?,
+                    at,
+                    limits,
+                },
+            )
+            .map_err(|_| Error)?
+        };
+        // No financial journal or general supervisor I/O guard during capture.
+        run(request, &mut |record| {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let at = self.active_time()?;
+            let Active { store, gateway, .. } = &mut *active;
+            if record.observed_at() > at
+                || store.verified_state().map_err(|_| Error)?.logical_time() > at
+            {
+                return Err(Error);
+            }
+            archive
+                .append(store, gateway, commit_id()?, record)
+                .map_err(|_| Error)?;
+            Ok(())
+        })
+    }
     fn active_time(&self) -> Result<u64, Error> {
         if self.stop.load(Ordering::SeqCst)
             || self.reads.as_ref().is_some_and(|r| r.reader.fenced())

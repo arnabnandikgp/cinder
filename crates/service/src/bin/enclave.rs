@@ -77,6 +77,14 @@ fn run() -> Result<(), cinder_service::Error> {
         )?)
     };
     let listener = VsockListener::bind(manifest.ingress, 3)?;
+    // Separate finite capture: journal guard released for socket I/O. Never loop
+    // or reconnect after a stop. Legacy manifests load no capture capability.
+    let capture = manifest.native_capture.as_ref().map(|_| {
+        let capture_runtime = runtime.clone();
+        std::thread::spawn(move || {
+            let _ = capture_runtime.capture_once();
+        })
+    });
     // Joinable finite supervisor. No unbounded queue; one cut each second, at
     // most one escaped dispatch. Active work rechecks independent witness/time;
     // inactive cuts check the signed boot lease and sticky local fence only.
@@ -97,6 +105,9 @@ fn run() -> Result<(), cinder_service::Error> {
     };
     runtime.fence();
     let _ = worker.join();
+    if let Some(capture) = capture {
+        let _ = capture.join();
+    }
     nsm.now()?;
     result
 }

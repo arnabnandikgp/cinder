@@ -19,7 +19,7 @@ current release qualification or reusable permission. See
 | Private HTTP/WS and wallet/agent signatures | SDK/WASM Noise, opaque relay and enclave `--web` ingress invoke the same API | Qualify this changed measured image and actual SDK on non-debug Nitro; P20's TLS-only receipts are not interchangeable |
 | Private journal and freshness | Two S3 ciphertext replicas, separate DynamoDB witness, recipient-bound KMS and finite lease | New exact release/root/role policies and writer epoch; fresh interruption/restore receipts |
 | Native signing | Durable Gateway dispatch and one-shot TLS POST | Fresh native account/agent authority, real precision profile, explicit activation and live observations |
-| Native observations | Finite read-only scheduler, budgeted account-scoped GETs and diagnostic archives | Qualify actual transport framing/schema/cadence and current account setup; diagnostic bodies cannot supply missing causal certificates |
+| Native observations | Finite read-only scheduler, budgeted account-scoped GETs/diagnostics and measured one-shot native WSS capture | Qualify actual transport framing/schema/cadence and current account setup; raw bodies cannot supply missing causal certificates |
 | Complete order history | Explicit trusted `Coverage` seam and exact terminal execution-set checks | A qualified live provider; a hash, page ending, cancel ACK or successful TLS cannot stand in for completeness |
 | Funding | Exact kernel accrual/settlement; native history retained with a named gap | Actual hourly boundary, both-sign convention, valuation/precision and gross customer allocation when the native position is net-flat |
 | Solana custody | Controller-bound enclave codec/signing/RPC, streamed approved code, finalized receipts/counters and owner-deposit observer; independent Anchor vectors/SBF tests | Qualify changed-image six-role release, actual devnet deployment/governance/CA/genesis/framing and original transaction effects |
@@ -34,6 +34,11 @@ loaded RPC/policy/key identity into the application commitment. Version 1 remain
 the old inactive five-role encoding. Neither broker/trading nor storage seeds may
 substitute for funds. Parent relays forward opaque HTTPS bytes only; `clients/vault`
 remains an independent owner-side codec/oracle, not a plaintext parent signer.
+Version 3 retains bounded packs; version 4 additionally requires an explicit
+separate native WSS root/route and finite one-capture-per-boot policy. It does not
+reconnect or enable financial actions. [ADR 0028](../architecture/0028-measured-native-capture.md)
+records loaded binding, lease/resource refusal, archive rejoin and panic fencing.
+The old version-3 hardware receipt is not qualification of this changed image.
 
 The chain controller locally issues/reconciles existing durable mandates, but
 shipping manifest validation **still rejects** `funding` and `trading`. Do not
@@ -86,7 +91,7 @@ open until actual evidence is recorded.
 | Controller and owner codecs | Four physical rails plus owner deposit, optional CU limit, exact large-u64/signature/ABI vectors independently checked in Rust and Anchor/web3.js |
 | Enclave RPC and receipts | TLS/root/hostname/time/framing negatives; original finalized status/wire, classic SPL/mint/recipient/counter checks; bounded full-code/tail/header stream |
 | Joined durable funds | One authoritative journal; lost ACK/restart preserves original wire without retry; only verified expired no-wire/no-effect physical plans can release holds; missing history cannot credit; release/return/payout and owner credit exactly once; native debit stays pending; signature lookup is not a complete source cut |
-| Release and scheduler | Version-1 compatibility, exact version-2 six-role capsule coverage, distinct seeds, actual component binding, finite lease/stop, durable read budget/cooldown/revocation, rejection advances deposit polling without hiding other errors, bounded request waiting and post-I/O idle interval |
+| Release and scheduler | Legacy 1/2/3 compatibility, exact six-role capsule coverage and version-4 capture binding, distinct seeds, finite lease/stop, durable read budget/cooldown/revocation, rejection advances deposit polling without hiding other errors, bounded request waiting, one-shot capture without writer/I/O lock contention, and post-I/O idle interval |
 | Full host regression | Pinned `node scripts/check.mjs`: contracts, dependencies, strict default/all-feature lint/build, debug/release/default Rust, relay and private SDK |
 | Program and browser | Full `node scripts/check-vault.mjs` with offline Surfpool; actual Node/Chrome/WASM `node tools/web-channel/check.mjs`, no skipped required workflows |
 | Shipping package | Source-only, network-disabled ARM64 default-feature package; independent application rebuild has identical ELF; ordinary non-Nitro boot refuses |

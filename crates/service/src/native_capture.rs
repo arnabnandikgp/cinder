@@ -12,6 +12,7 @@ use cinder_pacifica::{
     execution::Origin,
 };
 use openssl::sha::sha256;
+use serde::{Deserialize, Serialize};
 use std::{
     io::{self, Read, Write},
     sync::Arc,
@@ -20,6 +21,72 @@ use std::{
 use tungstenite::{Message, client::IntoClientRequest, protocol::WebSocketConfig};
 
 const MAX_HEADERS: usize = 8192;
+/// Measured public trust and finite bounds for exactly one capture per boot.
+/// It neither authorizes money movement nor promises stream completeness.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Policy {
+    /// Dedicated parent CID 3 route, distinct from every other manifest port.
+    pub port: u32,
+    /// Explicit canonical DER trust anchor; no ambient root discovery.
+    pub root: Vec<u8>,
+    /// Independently approved digest of that exact anchor.
+    pub root_hash: [u8; 32],
+    /// Absolute time, decoded message and byte ceilings.
+    pub limits: cinder_pacifica::capture::Limits,
+}
+impl Policy {
+    /// Validate without opening a socket or releasing a credential.
+    pub fn validate(&self) -> Result<(), Error> {
+        self.limits.validate().map_err(|_| Error)?;
+        Target::new(3, self.port)?;
+        Trust::from_der(&self.root, self.root_hash)?;
+        Ok(())
+    }
+}
+/// Actual consumed policy. Both provisioning and runtime use this derivation.
+pub(crate) struct Loaded {
+    origin: Origin,
+    policy: Policy,
+    trust: Trust,
+}
+impl Loaded {
+    pub(crate) fn new(origin: Origin, policy: &Policy) -> Result<Self, Error> {
+        policy.validate()?;
+        Ok(Self {
+            origin,
+            policy: policy.clone(),
+            trust: Trust::from_der(&policy.root, policy.root_hash)?,
+        })
+    }
+    pub(crate) fn commitment(&self) -> Result<[u8; 32], Error> {
+        Ok(sha256(
+            &[
+                b"CINDER-LOADED-NATIVE-CAPTURE-1\0".as_slice(),
+                &route_commitment(self.origin, Target::new(3, self.policy.port)?, &self.trust),
+                &serde_cbor::to_vec(&self.policy.limits).map_err(|_| Error)?,
+            ]
+            .concat(),
+        ))
+    }
+    pub(crate) fn matches(&self, policy: &Policy) -> bool {
+        self.policy == *policy
+    }
+    pub(crate) fn open(
+        self,
+        clock: Arc<dyn Clock>,
+    ) -> Result<(Port, cinder_pacifica::capture::Limits), Error> {
+        Ok((
+            Port::new(
+                self.origin,
+                Target::new(3, self.policy.port)?,
+                self.trust,
+                clock,
+            )?,
+            self.policy.limits,
+        ))
+    }
+}
 /// Fixed native WS hosts, separate from Pacifica's REST API hosts.
 pub(crate) fn host(origin: Origin) -> &'static str {
     match origin {
@@ -55,15 +122,7 @@ impl Port {
     }
     /// Actual route/root/origin component for later loaded-manifest integration.
     pub fn commitment(&self) -> [u8; 32] {
-        sha256(
-            &[
-                b"CINDER-NATIVE-WSS-1\0".as_slice(),
-                host(self.origin).as_bytes(),
-                &self.target.encode(),
-                &self.trust.digest(),
-            ]
-            .concat(),
-        )
+        route_commitment(self.origin, self.target, &self.trust)
     }
     /// One request, one connection, one exact subscription. No order/withdrawal
     /// method exists. The sink briefly reacquires the writer to retain each fact.
@@ -80,7 +139,10 @@ impl Port {
         if query.origin() != self.origin {
             return Err(Error);
         }
-        let socket = match VsockStream::connect(self.target) {
+        let Some(timeout) = connect_budget(query.limits().maximum_ms, start.elapsed()) else {
+            return stop(&mut query, Kind::Limited, &mut sink);
+        };
+        let socket = match VsockStream::connect_bounded(self.target, timeout) {
             Ok(socket) => socket,
             Err(_) => return stop(&mut query, Kind::Interrupted, &mut sink),
         };
@@ -93,6 +155,23 @@ impl Port {
             &mut sink,
         )
     }
+}
+fn connect_budget(maximum_ms: u64, elapsed: Duration) -> Option<Duration> {
+    Duration::from_millis(maximum_ms)
+        .checked_sub(elapsed)
+        .filter(|d| !d.is_zero())
+        .map(|d| d.min(Duration::from_secs(5)))
+}
+fn route_commitment(origin: Origin, target: Target, trust: &Trust) -> [u8; 32] {
+    sha256(
+        &[
+            b"CINDER-NATIVE-WSS-1\0".as_slice(),
+            host(origin).as_bytes(),
+            &target.encode(),
+            &trust.digest(),
+        ]
+        .concat(),
+    )
 }
 /// Count plaintext wire bytes as well as decoded message limits. Before upgrade,
 /// this also bounds the library's otherwise larger HTTP header allocation.
@@ -149,14 +228,14 @@ fn run<S: Socket>(
     else {
         return stop(&mut query, Kind::Limited, sink);
     };
-    if socket.prepare().is_err() {
-        return stop(&mut query, Kind::Interrupted, sink);
-    }
     let deadline_socket = match socket.try_clone() {
         Ok(s) => s,
         Err(_) => return stop(&mut query, Kind::Interrupted, sink),
     };
     let _lifetime = Lifetime::bounded(deadline_socket, remaining);
+    if socket.prepare().is_err() {
+        return stop(&mut query, Kind::Interrupted, sink);
+    }
     let opening = (|| {
         let now = clock.now()?;
         if now < query.last_at() {
@@ -251,13 +330,6 @@ fn run<S: Socket>(
             Ok(message) => message,
             Err(_) => return stop(&mut query, Kind::Interrupted, sink),
         };
-        let at = match clock.now() {
-            Ok(at) if at >= query.last_at() => at,
-            _ => return stop(&mut query, Kind::Interrupted, sink),
-        };
-        if start.elapsed() >= duration {
-            return stop(&mut query, Kind::Limited, sink);
-        }
         let (kind, body) = match message {
             Message::Text(body) => (Kind::Text, body.as_bytes().to_vec()),
             Message::Binary(body) => (Kind::Binary, body.to_vec()),
@@ -280,6 +352,14 @@ fn run<S: Socket>(
         {
             return stop(&mut query, Kind::Limited, sink);
         }
+        let at = match clock.now() {
+            Ok(at) if at >= query.last_at() && start.elapsed() < duration => at,
+            _ => {
+                // Bytes were already received. Retain uncertainty explicitly,
+                // never timestamp them as fresh or consume another message.
+                return sink(query.record_unverified(kind, body).map_err(|_| Error)?);
+            }
+        };
         bytes += body.len();
         messages += 1;
         sink(query.record(kind, body, at).map_err(|_| Error)?)?;

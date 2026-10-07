@@ -88,4 +88,21 @@ impl ApplicationContract {
             ),
         })
     }
+    /// Extend with the actual fixed native capture route/trust/limits, not a
+    /// caller-supplied hash. The account/origin is already bound by the Gateway.
+    pub(crate) fn with_capture(
+        self,
+        capture: &crate::native_capture::Loaded,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            digest: sha256(
+                &[
+                    b"CINDER-LOADED-CAPTURE-1\0".as_slice(),
+                    &self.digest,
+                    &capture.commitment()?,
+                ]
+                .concat(),
+            ),
+        })
+    }
 }
