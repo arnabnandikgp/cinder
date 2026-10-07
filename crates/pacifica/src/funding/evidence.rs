@@ -20,6 +20,59 @@ fn atoms(profile: &Profile, value: &str) -> Result<u64, Error> {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct WithdrawalReply {
+    success: bool,
+    data: WithdrawalData,
+    error: Option<String>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WithdrawalData {
+    batch_nonce: u64,
+    requested_amount: String,
+    fee_amount: String,
+}
+/// Accepted request identity and advertised amounts, NOT a debit or payment.
+/// The response has no account or request UUID; only the original authenticated
+/// dispatch can bind it to those identities.
+#[derive(Clone, PartialEq, Eq)]
+pub struct WithdrawalAcknowledgment {
+    /// Native batch nonce, not a request UUID or settlement frontier.
+    pub batch: u64,
+    /// Gross quote atoms acknowledged for the request.
+    pub requested: u64,
+    /// Advertised fee, not proof of the fee ultimately charged.
+    pub fee: u64,
+}
+impl std::fmt::Debug for WithdrawalAcknowledgment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("WithdrawalAcknowledgment([PRIVATE])")
+    }
+}
+/// Decode the documented successful withdrawal response. HTTP status, source
+/// authentication and original-operation binding are separate caller obligations.
+pub fn withdrawal_acknowledgment(
+    profile: &Profile,
+    bytes: &[u8],
+) -> Result<WithdrawalAcknowledgment, Error> {
+    profile.commitment()?;
+    if bytes.is_empty() || bytes.len() > MAX_BODY {
+        return Err(Error::Limit);
+    }
+    let reply: WithdrawalReply = serde_json::from_slice(bytes).map_err(|_| Error::Codec)?;
+    let requested = atoms(profile, &reply.data.requested_amount)?;
+    let fee = atoms(profile, &reply.data.fee_amount)?;
+    if !reply.success || reply.error.is_some() || requested == 0 || fee > requested {
+        return Err(Error::Qualification);
+    }
+    Ok(WithdrawalAcknowledgment {
+        batch: reply.data.batch_nonce,
+        requested,
+        fee,
+    })
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Envelope {
     channel: String,
     data: Transfer,
@@ -82,6 +135,18 @@ impl std::fmt::Debug for TransferObservation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("TransferObservation([PRIVATE])")
     }
+}
+/// Bounded authenticated native transfer bytes and their receive policy.
+/// Construction does not authenticate a source; the enclave transport owns that.
+pub struct TransferMessage<'a> {
+    /// Independently qualified native quote-asset symbol.
+    pub quote_symbol: &'a str,
+    /// Original private WebSocket message, never parent-decoded state.
+    pub bytes: &'a [u8],
+    /// Enclave-qualified receive timestamp in milliseconds.
+    pub received_at: u64,
+    /// Maximum source-event age, in milliseconds.
+    pub maximum_age_ms: u64,
 }
 /// Decode one bounded documented account_transfers message. Missing linkage,
 /// explicit-null optional fields, aliases, duplicate fields, wrong account/asset,

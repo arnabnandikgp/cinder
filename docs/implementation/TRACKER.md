@@ -37,6 +37,43 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+Local continuation is `tee/p23-funding-providers`, based on #59 at
+`6ecaf39cbf48d0308bab7e69b283a80d2424482c`. The existing open predecessors remain
+unchanged; no new hardware, native/RPC request, wallet use or merge is authorized
+by this offline implementation. The prior shipping run below is closed.
+
+### Financial providers — 2026-10-07
+
+Implemented first bounded provider components: deposit transfer linkage requiring
+the exact original finalized chain signature, and strict native withdrawal
+ACK decoding, original request → batch lookup from retained HTTP-200 replies, and
+account/asset/gross/time-bound transfer observation correlation. Restart restores
+the mapping without cash postings, hold release or a second send. A missing native
+ACK remains unresolved; loss of a customer reply after native ACK retention is a
+different, recoverable case. Shared batches are refused rather than assigned by
+amount/time. Deposit observations never mint venue credit; partial/whole reported
+amounts retain the transit/readiness gates. Advertised/observed fee differences
+remain visible for later actual settlement. This also closes an encountered
+evidence-framing defect: opaque native
+reply/wire/failed-chain bytes are not interpreted as controller/gateway records.
+No new ledger or record format, dependency, financial policy or activation exists.
+
+Final focused local checks: locked/offline `cargo test -p cinder-pacifica
+--all-features --test funding --test funding_evidence`, in debug and release,
+passes 31 funding cases and four evidence groups. The one explicitly allowlisted
+child worker is invoked by its parent
+kill/restart test, not claimed as an independently run scenario. Pinned
+`node scripts/check.mjs` passed all 42 contracts, strict default/all-feature
+lint/build, all-feature debug/release and shipping-default tests, and 26 SDK/TLS
+cases. The deposit join was added during that run; its final owning-crate
+debug/release tests and strict all-feature workspace lint were rerun afterward.
+No fresh hardware or hosted CI/review result is claimed for this source.
+Next: publish this bounded provider slice;
+then prepare authenticated native capture, setup and original-deposit credit
+recognition. Finality/completeness, fresh-account bootstrap, lost-native-ACK
+reconciliation and actual funding/recovery remain open provider gates, not extra
+storage tests. Fresh live financial activity needs its own G05 manifest approval.
+
 P23 is in progress. Shipping continuation is published ready/open as #59 on
 `tee/p23-shipping-packs`, based on reviewed #58 (`tee/p23-packed-history`) at
 `a1bc5c2bfce92402c22fc8bf53cc36b1cb9f6d5c`, stacked above #56 (`tee/p23-growth-diagnosis`) at

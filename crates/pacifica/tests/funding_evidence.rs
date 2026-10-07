@@ -45,6 +45,68 @@ fn decode(v: &Value) -> Result<TransferObservation, cinder_pacifica::Error> {
     )
 }
 #[test]
+fn withdrawal_acknowledgment_decodes_exact_identity_without_certifying_payment() {
+    let body = json!({"success":true,"data":{
+        "batch_nonce":0,"requested_amount":"10.000001","fee_amount":"1"
+    },"error":null});
+    let decode = |v: &Value| {
+        evidence::withdrawal_acknowledgment(&profile(), &serde_json::to_vec(v).unwrap())
+    };
+    let ack = decode(&body).unwrap();
+    assert_eq!(
+        (ack.batch, ack.requested, ack.fee),
+        (0, 10_000_001, 1_000_000)
+    );
+    assert_eq!(format!("{ack:?}"), "WithdrawalAcknowledgment([PRIVATE])");
+    for fee in ["0", "10.000001"] {
+        let mut v = body.clone();
+        v["data"]["fee_amount"] = json!(fee);
+        assert!(decode(&v).is_ok());
+    }
+    for (field, value) in [
+        ("batch_nonce", Value::Null),
+        ("batch_nonce", json!(-1)),
+        ("batch_nonce", json!("42")),
+        ("batch_nonce", json!(1.5)),
+        ("requested_amount", Value::Null),
+        ("requested_amount", json!(1)),
+        ("requested_amount", json!("0")),
+        ("requested_amount", json!("-1")),
+        ("requested_amount", json!("1e1")),
+        ("requested_amount", json!("0.0000001")),
+        ("requested_amount", json!("18446744073710.000000")),
+        ("fee_amount", Value::Null),
+        ("fee_amount", json!("-1")),
+        ("fee_amount", json!("10.000002")),
+        ("unknown", json!(1)),
+    ] {
+        let mut v = body.clone();
+        v["data"][field] = value;
+        assert!(decode(&v).is_err(), "accepted {field}");
+    }
+    for field in ["batch_nonce", "requested_amount", "fee_amount"] {
+        let mut v = body.clone();
+        v["data"].as_object_mut().unwrap().remove(field);
+        assert!(decode(&v).is_err());
+    }
+    for (field, value) in [
+        ("success", json!(false)),
+        ("data", Value::Null),
+        ("error", json!("duplicate request")),
+        ("unknown", json!(true)),
+    ] {
+        let mut v = body.clone();
+        v[field] = value;
+        assert!(decode(&v).is_err());
+    }
+    let duplicate = serde_json::to_string(&body)
+        .unwrap()
+        .replace("\"batch_nonce\":0", "\"batch_nonce\":0,\"batch_nonce\":0");
+    assert!(evidence::withdrawal_acknowledgment(&profile(), duplicate.as_bytes()).is_err());
+    assert!(evidence::withdrawal_acknowledgment(&profile(), &[]).is_err());
+    assert!(evidence::withdrawal_acknowledgment(&profile(), &vec![0; 65_537]).is_err());
+}
+#[test]
 fn links_exact_deposit_and_withdrawal_components_without_certifying_payment() {
     assert_eq!(
         decode(&transfer("deposit")).unwrap(),

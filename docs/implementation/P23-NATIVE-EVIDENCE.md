@@ -34,17 +34,46 @@ flags, rather than accepting unsafe settings or a missing debt response as ready
 Debug output redacts values. Unit/time/asset inputs require the independently
 qualified profile; no decimal precision is inferred from an example string.
 
+`withdrawal_acknowledgment` strictly decodes the documented success response's
+batch nonce, gross requested amount and advertised fee. The response contains
+neither account nor request UUID. `Controller::withdrawal_acknowledgment` binds it
+only through the original exposed plan and its retained HTTP-200 response in the
+same verified journal. It rebuilds that mapping after restart, checks exact gross,
+and refuses a batch shared by multiple retained local requests. Failed, missing,
+malformed or backdated replies do not establish a binding. No response-record
+format, financial posting or new persistence store is introduced.
+
+`Controller::linked_deposit_transfer` requires a deposit plan and the exact
+successful finalized original chain signature already retained by the chain
+controller. It validates account/asset/time and rejects reported amounts above
+the original gross. Partial and whole reported amounts remain observations:
+neither creates venue cash nor establishes operation-specific final credit.
+
+`Controller::linked_withdrawal_transfer` checks a subsequent source-authenticated
+message against that mapping, the configured account/asset, gross, event age and
+original dispatch time. Pending and confirmed events remain observations. Fees
+that differ from the advertised fee remain visible; neither the ACK nor the join
+declares the fee paid, fabricates chain finality, advances a native frontier or
+releases a hold. Opaque retained reply/wire/failed-chain bodies cannot be replayed
+as controller/gateway metadata even when they contain an internal magic prefix.
+
 These types are **not** `Setup.complete`, `Credit`, `Withdrawal` or `Coverage`.
 The module opens no socket, reads no wallet and changes no financial state. An
 untrusted caller cannot make its bytes authoritative by invoking the parser.
 There is intentionally no conversion that manufactures a source cut, finalized
-payment, UUID binding or readiness from these fields.
+payment or readiness from these fields. A free-standing decoded ACK is not an
+original UUID binding; that mapping comes from the retained original dispatch.
 
 Tests in `crates/pacifica/tests/funding_evidence.rs` cover exact observations,
 scope/time/size/linkage failures, null/missing/duplicate fields, malformed/zero
 signatures, overflow/inexact amounts, default lending, debt and incompatible
 margin. Existing P16 tests continue to own idempotent original-operation matching,
 credit/payment gates and uncertain/no-resend behavior. Neither set is live proof.
+The controller regressions also cover deposit linkage before/after original
+chain finality and restart without minting credit; durable ACK restart; wrong account/asset/
+batch/gross, ambiguous batch reuse, fee overruns, hostile raw response prefixes
+and lost-native-ACK refusal. These are offline fixtures, not authenticated native
+capture or hardware qualification.
 
 ## Provider qualification required before wiring financial admission
 
@@ -56,8 +85,11 @@ credit/payment gates and uncertain/no-resend behavior. Neither set is live proof
    event to that signature and verify its configured finalized Solana effect.
    Establish operation-specific final credit totals/fees; aggregate balance or
    matching amount/time is insufficient.
-3. Bind a withdrawal's persisted UUID to its batch without requiring a successful
-   ACK, then establish terminal native debit/no-later-effect and independently
+3. Qualify the retained successful-ACK path on actual rails and resolve the
+   separate case where the native reply is lost before durable acceptance. The
+   implemented mapping recovers a lost *client* reply after the native ACK was
+   retained; it cannot reconstruct a lost *native* ACK from amount/time alone.
+   Then establish terminal native debit/no-later-effect and independently
    finalized payment to the allowlisted broker. Batch identity alone is not UUID
    correlation; `withdrawal_confirmed` alone is not Solana finality.
 4. Establish complete bounded execution histories, disconnect/pagination behavior
@@ -78,6 +110,6 @@ and request a policy decision; never quietly label synthetic evidence as native.
 
 The shipping manifest still forbids funding and trading. Setup/credit/payment,
 complete execution/funding cuts and final native recovery are named open gates.
-The next storage hardware run is independent: it can qualify the changed image
-and history growth without enabling money movement. Actual provider capture and
-financial activation require a separate bounded manifest and qualified evidence.
+The retained-pack hardware invocation is closed, with all fixed read-only cells
+passing. It grants no financial activity. Actual provider capture and financial
+activation require a separate bounded manifest and qualified evidence.
