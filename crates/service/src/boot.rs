@@ -82,11 +82,49 @@ pub struct Slot {
     /// Approved body hash; fresh recipient release cannot substitute other data.
     pub plaintext_hash: [u8; 32],
 }
+/// Version 3's retained-pack resource contract. These are bounded qualification
+/// ceilings, not a production throughput or retention/garbage-collection policy.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct HistoryPolicy {
+    /// Maximum original opaque frame bytes (at most 64 KiB).
+    pub record_bytes: u32,
+    /// Maximum accepted original opaque history (at most 8 MiB).
+    pub history_bytes: u32,
+    /// Maximum accepted frames including genesis (at most 256).
+    pub records: u32,
+    /// Per replica, per boot PUT attempts, charged before signing/I/O.
+    pub put_requests: u32,
+    /// Per replica, per boot PUT bytes, including repairs and uncertain writes.
+    pub put_bytes: u64,
+}
+impl HistoryPolicy {
+    /// Derive the actual backend limits from the measured fields.
+    pub fn limits(&self) -> Result<cinder_journal::packed::Limits, Error> {
+        let limits = cinder_journal::packed::Limits {
+            record_bytes: self.record_bytes as usize,
+            history_bytes: self.history_bytes as usize,
+            records: self.records as usize,
+        };
+        limits.validate().map_err(|_| Error)?;
+        if self.record_bytes > 65_536
+            || self.history_bytes > 8_388_608
+            || self.records > 256
+            || self.put_requests == 0
+            || self.put_requests > 1024
+            || self.put_bytes < limits.pack_bytes().map_err(|_| Error)? as u64
+            || self.put_bytes > 134_217_728
+        {
+            return Err(Error);
+        }
+        Ok(limits)
+    }
+}
 /// Included verbatim in the measured image; no secrets/customer directory here.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
-    /// Closed schema: 1 (five-role P20) or 2 (purpose-separated chain preparation).
+    /// Closed schema: 1 (five roles), 2 (chain), 3 (bounded retained packs + chain).
     pub version: u32,
     /// Exact 64-byte network/deployment namespace.
     pub domain: Vec<u8>,
@@ -121,11 +159,14 @@ pub struct Manifest {
     /// Version 2's public chain routing/trust. Omitted in version 1 encoding.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chain: Option<crate::chain_funding::Peer>,
+    /// Explicit pack selection, omitted from legacy version 1/2 encodings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history: Option<HistoryPolicy>,
 }
 impl Manifest {
     /// Refuse ambiguous routes, key-role reuse, missing trust or live activation.
     pub fn validate(&self) -> Result<(), Error> {
-        if !matches!(self.version,1|2) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
+        if !matches!(self.version,1..=3) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
             || self.application==[0;32] || self.stream==[0;32] || self.generation==0 || self.epoch==0
             || self.slots.len()!=if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
             || (self.first.resource==self.second.resource) || self.gates.maximum_boot_ms==0 || self.gates.maximum_boot_ms>3_600_000
@@ -145,12 +186,19 @@ impl Manifest {
         ];
         match (self.version, &self.chain) {
             (1, None) => {}
-            (2, Some(peer)) => {
+            (2 | 3, Some(peer)) => {
                 peer.validate()?;
                 if peer.network.as_slice() != &self.domain[..32] {
                     return Err(Error);
                 }
                 ports.push(peer.port);
+            }
+            _ => return Err(Error),
+        }
+        match (self.version, &self.history) {
+            (1 | 2, None) => {}
+            (3, Some(policy)) => {
+                policy.limits()?;
             }
             _ => return Err(Error),
         }
@@ -183,7 +231,7 @@ impl Manifest {
         ]
         .iter()
         .any(|r| !self.slots.iter().any(|s| s.role == *r))
-            || (self.version == 2 && !self.slots.iter().any(|s| s.role == Role::Funds))
+            || (self.version >= 2 && !self.slots.iter().any(|s| s.role == Role::Funds))
         {
             return Err(Error);
         }
@@ -213,10 +261,10 @@ impl Manifest {
         self.validate()?;
         Ok(sha256(
             &[
-                if self.version == 1 {
-                    b"CINDER-RUNTIME-MANIFEST-1\0".as_slice()
-                } else {
-                    b"CINDER-RUNTIME-MANIFEST-2\0".as_slice()
+                match self.version {
+                    1 => b"CINDER-RUNTIME-MANIFEST-1\0".as_slice(),
+                    2 => b"CINDER-RUNTIME-MANIFEST-2\0".as_slice(),
+                    _ => b"CINDER-RUNTIME-MANIFEST-3\0".as_slice(),
                 },
                 &serde_cbor::to_vec(self).map_err(|_| Error)?,
             ]
@@ -237,10 +285,10 @@ impl Manifest {
             return Err(Error);
         }
         Ok([
-            if self.version == 1 {
-                b"CKR1".as_slice()
-            } else {
-                b"CKR2".as_slice()
+            match self.version {
+                1 => b"CKR1".as_slice(),
+                2 => b"CKR2".as_slice(),
+                _ => b"CKR3".as_slice(),
             },
             &[role.code()],
             &self.generation.to_be_bytes(),
@@ -597,6 +645,7 @@ pub(crate) fn qualification_manifest() -> Manifest {
             maximum_boot_ms: 60000,
         },
         chain: None,
+        history: None,
     }
 }
 
@@ -718,6 +767,61 @@ mod tests {
                 _ => changed.version = 1,
             }
             assert!(changed.validate().is_err(), "case {case}");
+        }
+        let policy = HistoryPolicy {
+            record_bytes: 65536,
+            history_bytes: 8388608,
+            records: 256,
+            put_requests: 512,
+            put_bytes: 134217728,
+        };
+        let mut packed = m.clone();
+        packed.version = 3;
+        packed.history = Some(policy.clone());
+        packed.validate().unwrap();
+        assert_ne!(packed.digest().unwrap(), m.digest().unwrap());
+        assert!(
+            packed
+                .wrap(Role::Funds, &[6; 32])
+                .unwrap()
+                .starts_with(b"CKR3")
+        );
+        assert!(
+            packed
+                .unwrap(Role::Funds, m.wrap(Role::Funds, &[6; 32]).unwrap())
+                .is_err()
+        );
+        let own = packed.wrap(Role::Funds, &[6; 32]).unwrap();
+        packed.unwrap(Role::Funds, own).unwrap();
+        for case in 0..12 {
+            let mut changed = packed.clone();
+            match case {
+                0 => changed.history = None,
+                1 => changed.version = 2,
+                2 => changed.gates.funding = true,
+                3 => changed.gates.trading = true,
+                4 => changed.history.as_mut().unwrap().record_bytes = 65537,
+                5 => changed.history.as_mut().unwrap().history_bytes = 8388609,
+                6 => changed.history.as_mut().unwrap().records = 257,
+                7 => changed.history.as_mut().unwrap().put_requests = 1025,
+                8 => changed.history.as_mut().unwrap().put_bytes = 134217729,
+                9 => changed.history.as_mut().unwrap().put_bytes = 1,
+                10 => changed.history.as_mut().unwrap().records = 0,
+                _ => changed.chain = None,
+            }
+            assert!(changed.validate().is_err(), "pack policy case {case}");
+        }
+        for field in 0..5 {
+            let mut changed = packed.clone();
+            let p = changed.history.as_mut().unwrap();
+            match field {
+                0 => p.record_bytes -= 1,
+                1 => p.history_bytes -= 1,
+                2 => p.records -= 1,
+                3 => p.put_requests -= 1,
+                _ => p.put_bytes -= 1,
+            }
+            assert_ne!(packed.digest().unwrap(), changed.digest().unwrap());
         }
     }
     #[test]

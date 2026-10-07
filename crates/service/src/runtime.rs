@@ -4,7 +4,7 @@ use crate::{
     Error,
     boot::{Gates, Manifest, Role},
     chain_funding,
-    cloud::{Client, Credential, DynamoWitness, S3Replica},
+    cloud::{Client, Credential, DynamoWitness, S3Packs, S3Replica},
     egress::{Egress, Trust},
     release::ApplicationContract,
     transport::{Clock, Handler, Prepared, PreparedReply, Session},
@@ -16,6 +16,7 @@ use cinder_journal::{
     encrypted::RecordCipher,
     model::*,
     orders,
+    packed::Packed,
     read::{Binding as ReadBinding, Failure as ReadFailure, Reader, Witness as ReadWitness},
     replicated::{Replicated, Stream, Witness},
 };
@@ -184,7 +185,11 @@ impl Configuration {
         mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
     ) -> Result<Loaded, Error> {
         manifest.validate()?;
-        self.construct_using(&mut keys, manifest.chain.as_ref())
+        let mut loaded = self.construct_using(&mut keys, manifest.chain.as_ref())?;
+        if let Some(policy) = &manifest.history {
+            loaded.application = loaded.application.with_history(policy)?;
+        }
+        Ok(loaded)
     }
     fn construct_using(
         self,
@@ -348,6 +353,41 @@ pub struct Runtime<B: Backend + Send, P: Protection + Send> {
     gates: Gates,
     reads: Option<ReadRuntime>,
 }
+/// Explicit shipping layout selected by the measured manifest, never by host
+/// object presence or fallback. Legacy versions retain their original backend.
+pub enum Storage {
+    /// Version 1/2 frame objects.
+    Frames(Replicated<S3Replica, S3Replica, DynamoWitness>),
+    /// Version 3 bounded retained packs.
+    Packs(Packed<S3Packs, S3Packs, DynamoWitness>),
+}
+impl Backend for Storage {
+    fn load(&mut self) -> Result<Vec<cinder_journal::Frame>, cinder_journal::Error> {
+        match self {
+            Self::Frames(s) => s.load(),
+            Self::Packs(s) => s.load(),
+        }
+    }
+    fn append(
+        &mut self,
+        expected: Option<cinder_journal::Head>,
+        frame: &cinder_journal::Frame,
+    ) -> Result<(), cinder_journal::Error> {
+        match self {
+            Self::Frames(s) => s.append(expected, frame),
+            Self::Packs(s) => s.append(expected, frame),
+        }
+    }
+    fn check_current(
+        &mut self,
+        expected: cinder_journal::Head,
+    ) -> Result<(), cinder_journal::Error> {
+        match self {
+            Self::Frames(s) => s.check_current(expected),
+            Self::Packs(s) => s.check_current(expected),
+        }
+    }
+}
 impl Loaded {
     /// Actual application component for trusted provisioning before KMS Encrypt.
     pub fn commitment(&self) -> [u8; 32] {
@@ -361,7 +401,7 @@ impl Loaded {
         parent: Credential,
         clock: Arc<dyn Clock>,
         stop: Arc<AtomicBool>,
-    ) -> Result<Runtime<Replicated<S3Replica, S3Replica, DynamoWitness>, RecordCipher>, Error> {
+    ) -> Result<Runtime<Storage, RecordCipher>, Error> {
         manifest.validate()?;
         if self.application.digest() != manifest.application
             || [
@@ -388,14 +428,8 @@ impl Loaded {
         if parent.access == self.witness.access {
             return Err(Error);
         }
-        let first = S3Replica::new(
-            Client::new(manifest.first.clone(), copy(), clock.clone())?,
-            stream,
-        )?;
-        let second = S3Replica::new(
-            Client::new(manifest.second.clone(), copy(), clock.clone())?,
-            stream,
-        )?;
+        let first = Client::new(manifest.first.clone(), copy(), clock.clone())?;
+        let second = Client::new(manifest.second.clone(), copy(), clock.clone())?;
         let mut witness = DynamoWitness::new(
             Client::new(manifest.witness.clone(), self.witness, clock.clone())?,
             stream,
@@ -405,8 +439,29 @@ impl Loaded {
         if anchor.epoch != manifest.epoch {
             return Err(Error);
         }
-        let backend =
-            Replicated::new(stream, manifest.epoch, first, second, witness).map_err(|_| Error)?;
+        let backend = match &manifest.history {
+            None => Storage::Frames(
+                Replicated::new(
+                    stream,
+                    manifest.epoch,
+                    S3Replica::new(first, stream)?,
+                    S3Replica::new(second, stream)?,
+                    witness,
+                )
+                .map_err(|_| Error)?,
+            ),
+            Some(policy) => Storage::Packs(
+                Packed::with_limits(
+                    stream,
+                    manifest.epoch,
+                    S3Packs::new(first, stream, policy)?,
+                    S3Packs::new(second, stream, policy)?,
+                    witness,
+                    policy.limits()?,
+                )
+                .map_err(|_| Error)?,
+            ),
+        };
         let cipher = RecordCipher::new(self.storage, manifest.generation, manifest.stream)
             .map_err(|_| Error)?;
         let fresh = anchor.head.is_none();

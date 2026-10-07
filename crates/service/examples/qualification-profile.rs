@@ -58,7 +58,7 @@ fn run() -> Result<(), Error> {
             "trading":body(Role::Trading)?.as_slice(),
             "broker":body(Role::Broker)?.as_slice(),"witness":witness
         });
-        if manifest.version == 2 {
+        if manifest.version >= 2 {
             input["funds"] = json!(body(Role::Funds)?.as_slice());
         }
         let output = zeroize::Zeroizing::new(serde_cbor::to_vec(&input).map_err(|_| Error)?);
@@ -249,6 +249,7 @@ fn run() -> Result<(), Error> {
     let manifest = Manifest {
         version: 1,
         chain: None,
+        history: None,
         domain: [domain.network.bytes(), domain.deployment.bytes()].concat(),
         application: [1; 32],
         stream: id(19)?,

@@ -74,4 +74,18 @@ impl ApplicationContract {
             ),
         }
     }
+    /// Bind the consumed retained-pack policy as well as its governed manifest.
+    pub fn with_history(self, policy: &crate::boot::HistoryPolicy) -> Result<Self, Error> {
+        policy.limits()?;
+        Ok(Self {
+            digest: sha256(
+                &[
+                    b"CINDER-LOADED-HISTORY-1\0".as_slice(),
+                    &self.digest,
+                    &serde_cbor::to_vec(policy).map_err(|_| Error)?,
+                ]
+                .concat(),
+            ),
+        })
+    }
 }

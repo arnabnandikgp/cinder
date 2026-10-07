@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55), ready/open; [#56](https://github.com/arnabnandikgp/cinder/pull/56), offline diagnosis |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58); shipping continuation local |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -37,9 +37,9 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-P23 is in progress. The published live-qualification work is on
-`tee/p23-live-qualification`; the user-approved offline pack prototype is now on
-`tee/p23-packed-history`, stacked above #56 (`tee/p23-growth-diagnosis`) at
+P23 is in progress. Current local shipping continuation is on
+`tee/p23-shipping-packs`, based on reviewed #58 (`tee/p23-packed-history`) at
+`a1bc5c2bfce92402c22fc8bf53cc36b1cb9f6d5c`, stacked above #56 (`tee/p23-growth-diagnosis`) at
 `60eee0c558d800d6613bd1ae72e43bddadd51e13`, above #55 at
 `eac1f57c16367d97ad5f32931880c979de522227`. All derive from
 merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
@@ -47,6 +47,44 @@ merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 [ADR 0024](../architecture/0024-confidential-chain-ports.md) define the fixed
 local checklist and remaining capability gates. The historical pre-review
 application checkpoints and receipts remain in the P23 log below.
+
+### Shipping continuation — 2026-10-07
+
+User authorization: finish local shipping integration/qualification and **stop
+before AWS/Nitro tests**. No new cloud/venue/RPC/wallet activity or merge follows.
+Current implementation binds version-3 retained S3 packs, closed resource limits,
+six-role/chain release and actual loaded application policy. Versions 1/2 retain
+their bytes/digests and frame layout; no format fallback or automatic migration.
+Original full history/AEAD/witness/CAS/repair/fresh-read guarantees remain.
+Record/history/count and per-replica per-boot PUT/byte caps fail closed; whole-run
+quotas and changed-image hardware qualification are separately required.
+[ADR 0026](../architecture/0026-retained-history-packs.md) describes exact bounds
+and limitations; this is not production capacity/retention calibration.
+
+[Native evidence components](P23-NATIVE-EVIDENCE.md) strictly decode documented
+setup/loan/transfer fields. They do not authenticate source, establish complete
+cuts or create financial completion certificates. Lost-ACK UUID/batch binding,
+final credit/debit, execution/funding completeness, fresh-account bootstrap and
+actual recovery remain named open capabilities. Trading/funding stay forbidden.
+The historical M1 heuristic/exception is not silently imported.
+
+Existing stack review disposition: #56 wording and #58 competing-history race
+are fixed at `a1bc5c2`; both threads replied/resolved, no open threads in #55/#56/#58
+when inspected. All eight hosted jobs and CodeRabbit succeed at that exact #58
+head. These are parent receipts, not CI for the new continuation.
+
+Qualification in progress: full pinned workspace, actual Node/Chrome standard
+and bounded-pack growth, full offline SBF custody/recovery and exact-source ARM
+default-feature package. Focused resource and wire tests already pass, but final
+source receipts/publication must be recorded before marking local preparation
+complete. Host full lint initially caught a test-only signer wrapper under the
+wrong feature guard; fixed without suppressing warnings. SBF initially stopped
+at missing local Anchor/wasm-bindgen prerequisites, before transaction tests;
+temporary pinned tools are now selected, with no global installation change.
+
+[The next-run proposal](P23-NEXT-RUN-PROPOSAL.md) is the handoff at the AWS
+boundary, not permission to launch or activate financial capabilities. Keep P23
+in progress. Do not reuse closed C5 resources/policies or fabricate live receipts.
 
 ### Offline growth continuation — 2026-10-07
 

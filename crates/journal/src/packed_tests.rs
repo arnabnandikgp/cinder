@@ -207,6 +207,116 @@ fn competing_same_frame_between_anchor_and_history_cannot_overwrite_accepted_tai
 }
 
 #[test]
+fn deployment_bounds_refuse_before_new_writes_and_never_reset_accepted_history() {
+    let limits = Limits {
+        record_bytes: 128,
+        history_bytes: 384,
+        records: 3,
+    };
+    let (mut old, a, b, w, history) = setup(3);
+    let archive = old.snapshot().unwrap();
+    let mut bounded =
+        Packed::with_limits(stream(), 1, a.clone(), b.clone(), w.clone(), limits).unwrap();
+    assert_eq!(bounded.load().unwrap(), history[..3]);
+    let before = (
+        a.0.lock().unwrap().puts,
+        b.0.lock().unwrap().puts,
+        w.0.lock().unwrap().cas,
+    );
+    assert_eq!(
+        bounded.append(Some(history[2].head), &history[3]),
+        Err(Error::Limit)
+    );
+    for restricted in [
+        Limits {
+            record_bytes: 127,
+            ..limits
+        },
+        Limits {
+            records: 2,
+            ..limits
+        },
+        Limits {
+            history_bytes: 383,
+            ..limits
+        },
+    ] {
+        let mut candidate =
+            Packed::with_limits(stream(), 1, a.clone(), b.clone(), w.clone(), restricted).unwrap();
+        assert!(candidate.load().is_err());
+        assert_eq!(candidate.restore_snapshot(&archive), Err(Error::Limit));
+    }
+    assert_eq!(
+        before,
+        (
+            a.0.lock().unwrap().puts,
+            b.0.lock().unwrap().puts,
+            w.0.lock().unwrap().cas
+        )
+    );
+    assert_eq!(w.0.lock().unwrap().anchor.head, Some(history[2].head));
+    for invalid in [
+        Limits {
+            record_bytes: 0,
+            ..limits
+        },
+        Limits {
+            history_bytes: 127,
+            ..limits
+        },
+        Limits {
+            records: 0,
+            ..limits
+        },
+        Limits {
+            record_bytes: MAX_RECORD + 1,
+            history_bytes: MAX_RECORD + 1,
+            ..limits
+        },
+    ] {
+        assert!(
+            Packed::with_limits(stream(), 1, a.clone(), b.clone(), w.clone(), invalid).is_err()
+        );
+    }
+    let (a, b, w) = (Memory::default(), Memory::default(), Trust::default());
+    let mut candidate =
+        Packed::with_limits(stream(), 1, a.clone(), b.clone(), w.clone(), limits).unwrap();
+    assert_eq!(
+        candidate.append(None, &frames(1, 129)[0]),
+        Err(Error::Limit)
+    );
+    assert_eq!(a.0.lock().unwrap().puts, 0);
+    assert_eq!(w.0.lock().unwrap().anchor.head, None);
+}
+
+#[test]
+fn bounded_shipping_ceiling_replays_and_appends_full_size_history() {
+    let limits = Limits {
+        record_bytes: 65536,
+        history_bytes: 8388608,
+        records: 256,
+    };
+    let (a, b, w) = (Memory::default(), Memory::default(), Trust::default());
+    let history = frames(128, limits.record_bytes);
+    w.0.lock().unwrap().anchor.head = Some(history[126].head);
+    let archive = encode_snapshot(stream(), &history[..127]).unwrap();
+    let mut p = Packed::with_limits(stream(), 1, a.clone(), b.clone(), w.clone(), limits).unwrap();
+    p.restore_snapshot(&archive).unwrap();
+    assert_eq!(p.load().unwrap(), history[..127]);
+    p.append(Some(history[126].head), &history[127]).unwrap();
+    assert_eq!(p.load().unwrap(), history);
+    let next = Frame::new(
+        128,
+        history[127].head.hash,
+        PrivateBytes::new(vec![1]).unwrap(),
+    );
+    let before = w.0.lock().unwrap().cas;
+    assert_eq!(p.append(Some(history[127].head), &next), Err(Error::Limit));
+    assert_eq!(w.0.lock().unwrap().cas, before);
+    assert_eq!(w.0.lock().unwrap().anchor.head, Some(history[127].head));
+}
+
+#[test]
 fn canonical_codec_rejects_domains_partitions_order_hashes_lengths_and_trailing_bytes() {
     let history = frames(33, 32);
     for end in [0, 15, 16, 31, 32] {

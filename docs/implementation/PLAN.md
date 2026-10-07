@@ -782,6 +782,12 @@ review, pack-specific cloud ports and fresh hardware qualification before promot
 [The financial continuation map](P23-FINANCIAL-GATES.md)
 identifies the existing setup/credit/payment/cut/funding/recovery provider seams
 and staged actual-rail evidence; it does not add new phase acceptance milestones.
+The user subsequently authorized local shipping integration, stopping before
+AWS. Version 3 binds bounded S3 packs and actual resource policy without format
+fallback or financial activation. [The native evidence contract](P23-NATIVE-EVIDENCE.md)
+promotes strict documented components, not complete provider certificates;
+[the next-run proposal](P23-NEXT-RUN-PROPOSAL.md) requires new measured authority.
+Actual cloud growth and financial lifecycle gates remain independent/open.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial
 activation and the existing durable storage/repair contract are unchanged.

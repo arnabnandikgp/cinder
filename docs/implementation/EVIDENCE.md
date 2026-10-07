@@ -73,6 +73,15 @@ boundary. Canonical grouping reduces object calls; all history bytes remain.
 Its journal/file/Runtime and actual Node/Chrome growth receipts are local evidence
 only. Shipping S3, manifest binding, full-size memory/capacity, explicit deployed
 migration and changed-image hardware qualification remain separate gates.
+The local shipping continuation now adds a version-3 manifest-bound S3 pack
+port, lower qualification ceilings, finite per-boot write budgets and loaded
+application binding. Legacy versions retain their original contracts, and an
+accepted head never falls back or resets across layouts. Full-size bounds,
+default-feature checks and actual-client local receipts belong to TRACKER;
+S3/Nitro qualification and production capacity remain separate. Strict
+[documented native evidence components](P23-NATIVE-EVIDENCE.md) preserve exact
+schema/unit/linkage failures without manufacturing source authentication, UUID
+correlation, completeness or final payment. No financial authority is promoted.
 Subsequent PR #55 corrections qualify exact role coverage, rejected-deposit
 progress, verified expired no-wire closure, absence of unsupported source cuts
 and bounded lock backpressure. They require new host/ARM application evidence;

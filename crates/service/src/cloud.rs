@@ -193,9 +193,22 @@ impl Client {
         headers: Vec<(&str, &str)>,
         body: &[u8],
     ) -> Result<Http, Error> {
+        self.call_bounded(method, path, headers, body, MAX_BODY)
+    }
+    fn call_bounded(
+        &self,
+        method: &str,
+        path: &str,
+        headers: Vec<(&str, &str)>,
+        body: &[u8],
+        bound: usize,
+    ) -> Result<Http, Error> {
+        if bound != MAX_BODY && self.endpoint.service != "s3" {
+            return Err(Error);
+        }
         let start = Instant::now();
         let now = self.clock.now()?;
-        let wire = signed(
+        let wire = signed_bounded(
             &self.endpoint,
             &self.credentials,
             now,
@@ -203,9 +216,17 @@ impl Client {
             path,
             &headers,
             body,
+            bound,
         )?;
         let socket = VsockStream::connect(Target::new(3, self.endpoint.port)?)?;
-        let response = exchange(socket, &self.trust, &self.endpoint.host()?, now, &wire)?;
+        let response = exchange(
+            socket,
+            &self.trust,
+            &self.endpoint.host()?,
+            now,
+            &wire,
+            bound,
+        )?;
         let end = self.clock.now()?;
         completed(&self.credentials, start, now, end)?;
         Ok(response)
@@ -238,6 +259,7 @@ fn completed(credentials: &Credential, start: Instant, now: u64, end: u64) -> Re
     }
     Ok(())
 }
+#[cfg(all(test, feature = "local-fixture"))]
 fn signed(
     e: &Endpoint,
     c: &Credential,
@@ -247,8 +269,27 @@ fn signed(
     headers: &[(&str, &str)],
     body: &[u8],
 ) -> Result<Zeroizing<Vec<u8>>, Error> {
+    signed_bounded(e, c, now, method, path, headers, body, MAX_BODY)
+}
+#[allow(clippy::too_many_arguments)]
+fn signed_bounded(
+    e: &Endpoint,
+    c: &Credential,
+    now: u64,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: &[u8],
+    bound: usize,
+) -> Result<Zeroizing<Vec<u8>>, Error> {
+    if bound == 0
+        || bound > cinder_journal::packed::MAX_PACK_BYTES
+        || (bound != MAX_BODY && (e.service != "s3" || !matches!(method, "GET" | "PUT")))
+    {
+        return Err(Error);
+    }
     if !matches!(method, "POST" | "PUT" | "GET")
-        || body.len() > MAX_BODY
+        || body.len() > bound
         || !path.starts_with('/')
         || path.len() > 512
         || path
@@ -322,6 +363,7 @@ fn exchange<S: Socket>(
     host: &str,
     now: u64,
     wire: &[u8],
+    bound: usize,
 ) -> Result<Http, Error> {
     let _life = Lifetime::new(socket.try_clone()?);
     let mut config = trust.connector()?.configure()?;
@@ -334,9 +376,16 @@ fn exchange<S: Socket>(
     }
     tls.write_all(wire)?;
     tls.flush()?;
-    parse(&mut tls)
+    parse_bounded(&mut tls, bound)
 }
+#[cfg(test)]
 fn parse(reader: &mut impl Read) -> Result<Http, Error> {
+    parse_bounded(reader, MAX_BODY)
+}
+fn parse_bounded(reader: &mut impl Read, bound: usize) -> Result<Http, Error> {
+    if bound == 0 || bound > cinder_journal::packed::MAX_PACK_BYTES {
+        return Err(Error);
+    }
     let mut h = Zeroizing::new(Vec::new());
     while !h.ends_with(b"\r\n\r\n") {
         if h.len() >= MAX_HEADER {
@@ -394,7 +443,7 @@ fn parse(reader: &mut impl Read) -> Result<Http, Error> {
         return Err(Error);
     }
     let n = n.parse::<usize>().map_err(|_| Error)?;
-    if n > MAX_BODY {
+    if n > bound {
         return Err(Error);
     }
     let mut body = Zeroizing::new(vec![0; n]);
@@ -643,6 +692,105 @@ impl Replica for S3Replica {
     }
 }
 
+/// Explicit retained-pack S3 port. Uses a disjoint format prefix and measured
+/// body/write bounds; never decodes/falls back to legacy frame objects. Exact
+/// canonical PUTs can repair corrupt copies; the backend independently reads
+/// back both new and historical objects before accepting the witness head.
+pub struct S3Packs {
+    client: Client,
+    id: [u8; 32],
+    prefix: String,
+    bound: usize,
+    requests: u32,
+    bytes: u64,
+}
+impl S3Packs {
+    /// Bind current bucket/stream and the actual measured qualification policy.
+    pub fn new(
+        client: Client,
+        stream: Stream,
+        policy: &crate::boot::HistoryPolicy,
+    ) -> Result<Self, Error> {
+        let bound = policy.limits()?.pack_bytes().map_err(|_| Error)?;
+        if client.endpoint.service != "s3" || stream.id == [0; 32] {
+            return Err(Error);
+        }
+        let id = sha256(
+            format!(
+                "cinder-s3:{}:{}",
+                client.endpoint.region, client.endpoint.resource
+            )
+            .as_bytes(),
+        );
+        Ok(Self {
+            client,
+            id,
+            prefix: format!("{}/packs-1", stream_key(stream)),
+            bound,
+            requests: policy.put_requests,
+            bytes: policy.put_bytes,
+        })
+    }
+    fn path(&self, hash: [u8; 32]) -> Result<String, cinder_journal::Error> {
+        if hash == [0; 32] {
+            return Err(cinder_journal::Error::Invalid);
+        }
+        Ok(format!("/{}/{}", self.prefix, hex(&hash)))
+    }
+    fn charge(&mut self, size: usize) -> Result<(), cinder_journal::Error> {
+        if size == 0 || size > self.bound {
+            return Err(cinder_journal::Error::Limit);
+        }
+        let requests = self
+            .requests
+            .checked_sub(1)
+            .ok_or(cinder_journal::Error::Limit)?;
+        let bytes = self
+            .bytes
+            .checked_sub(size as u64)
+            .ok_or(cinder_journal::Error::Limit)?;
+        self.requests = requests;
+        self.bytes = bytes;
+        Ok(())
+    }
+}
+impl cinder_journal::packed::Store for S3Packs {
+    fn identity(&self) -> [u8; 32] {
+        self.id
+    }
+    fn get(&mut self, hash: [u8; 32]) -> Result<Vec<u8>, cinder_journal::Error> {
+        let path = self.path(hash)?;
+        let mut response = self
+            .client
+            .call_bounded("GET", &path, vec![], &[], self.bound)
+            .map_err(|_| cinder_journal::Error::Storage)?;
+        if response.status != 200 || response.body.is_empty() {
+            return Err(cinder_journal::Error::Storage);
+        }
+        // Move the bounded ciphertext buffer; do not allocate a second body copy.
+        Ok(std::mem::take(&mut *response.body))
+    }
+    fn put(&mut self, hash: [u8; 32], bytes: &[u8]) -> Result<(), cinder_journal::Error> {
+        let path = self.path(hash)?;
+        self.charge(bytes.len())?;
+        let response = self
+            .client
+            .call_bounded(
+                "PUT",
+                &path,
+                vec![("content-type", "application/octet-stream")],
+                bytes,
+                self.bound,
+            )
+            .map_err(|_| cinder_journal::Error::Storage)?;
+        if response.status == 200 {
+            Ok(())
+        } else {
+            Err(cinder_journal::Error::Storage)
+        }
+    }
+}
+
 // Hardware qualification needs to distinguish an authenticated AWS denial
 // from a broken route. No status/body inspection API exists in production.
 #[cfg(test)]
@@ -685,6 +833,165 @@ pub(crate) fn qualification_cas_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn response_bounds_are_checked_before_reading_untrusted_body() {
+        struct HeaderOnly {
+            header: std::io::Cursor<Vec<u8>>,
+        }
+        impl Read for HeaderOnly {
+            fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+                assert!(
+                    self.header.position() < self.header.get_ref().len() as u64,
+                    "oversized body must not be read"
+                );
+                self.header.read(out)
+            }
+        }
+        for bound in [1, MAX_BODY, 1_049_969] {
+            let mut reader = HeaderOnly {
+                header: std::io::Cursor::new(
+                    format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", bound + 1)
+                        .into_bytes(),
+                ),
+            };
+            assert!(parse_bounded(&mut reader, bound).is_err());
+        }
+        let body = vec![42; MAX_BODY + 1];
+        let mut wire =
+            format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len()).into_bytes();
+        wire.extend_from_slice(&body);
+        assert!(parse(&mut wire.as_slice()).is_err());
+        assert_eq!(
+            parse_bounded(&mut wire.as_slice(), body.len())
+                .unwrap()
+                .body
+                .as_slice(),
+            body
+        );
+        assert!(parse_bounded(&mut wire.as_slice(), 0).is_err());
+        assert!(
+            parse_bounded(
+                &mut wire.as_slice(),
+                cinder_journal::packed::MAX_PACK_BYTES + 1
+            )
+            .is_err()
+        );
+    }
+    #[cfg(feature = "local-fixture")]
+    #[test]
+    fn pack_signing_bounds_do_not_expand_other_services_or_legacy_requests() {
+        let m = crate::boot::qualification_manifest();
+        let now = crate::transport::Clock::now(&crate::fixture::FixtureClock).unwrap();
+        let credentials = Credential {
+            access: "TESTACCESS0000000000".into(),
+            secret: "disposable-test-secret-0000000000000000".into(),
+            token: "disposable-token".into(),
+            expires: now + 60000,
+        };
+        let bound = crate::boot::HistoryPolicy {
+            record_bytes: 65536,
+            history_bytes: 8388608,
+            records: 256,
+            put_requests: 512,
+            put_bytes: 134217728,
+        }
+        .limits()
+        .unwrap()
+        .pack_bytes()
+        .unwrap();
+        let body = vec![42; bound];
+        let path = "/stream/packs-1/digest";
+        assert!(signed(&m.first, &credentials, now, "PUT", path, &[], &body).is_err());
+        let wire =
+            signed_bounded(&m.first, &credentials, now, "PUT", path, &[], &body, bound).unwrap();
+        let header = std::str::from_utf8(&wire[..wire.len() - body.len()]).unwrap();
+        assert!(header.contains(&format!(
+            "x-amz-content-sha256: {}\r\n",
+            hex(&sha256(&body))
+        )));
+        assert!(header.contains(&format!("Content-Length: {bound}\r\n")));
+        assert!(
+            signed_bounded(
+                &m.first,
+                &credentials,
+                now,
+                "PUT",
+                path,
+                &[],
+                &vec![0; bound + 1],
+                bound
+            )
+            .is_err()
+        );
+        for endpoint in [&m.witness, &m.slots[0].endpoint] {
+            assert!(
+                signed_bounded(endpoint, &credentials, now, "GET", path, &[], &[], bound).is_err()
+            );
+        }
+        assert!(
+            signed_bounded(&m.first, &credentials, now, "POST", path, &[], &[], bound).is_err()
+        );
+    }
+    #[cfg(feature = "local-fixture")]
+    #[test]
+    fn pack_namespace_and_write_budget_are_exact_and_finite() {
+        use cinder_journal::packed::Store;
+        let endpoint = crate::boot::qualification_manifest().first;
+        let stream = Stream {
+            domain: crate::fixture::config().domain,
+            id: [3; 32],
+        };
+        let credentials = || Credential {
+            access: "TESTACCESS0000000000".into(),
+            secret: "disposable-test-secret-0000000000000000".into(),
+            token: "disposable-token".into(),
+            expires: crate::transport::Clock::now(&crate::fixture::FixtureClock).unwrap() + 60000,
+        };
+        let policy = crate::boot::HistoryPolicy {
+            record_bytes: 65536,
+            history_bytes: 8388608,
+            records: 256,
+            put_requests: 2,
+            put_bytes: 134217728,
+        };
+        let mut packs = S3Packs::new(
+            Client::new(
+                endpoint.clone(),
+                credentials(),
+                Arc::new(crate::fixture::FixtureClock),
+            )
+            .unwrap(),
+            stream,
+            &policy,
+        )
+        .unwrap();
+        let frames = S3Replica::new(
+            Client::new(
+                endpoint,
+                credentials(),
+                Arc::new(crate::fixture::FixtureClock),
+            )
+            .unwrap(),
+            stream,
+        )
+        .unwrap();
+        assert_eq!(packs.identity(), frames.identity()); // Same bucket is not an independent replica.
+        assert_ne!(packs.path([4; 32]).unwrap(), frames.path([4; 32]));
+        assert!(packs.path([4; 32]).unwrap().contains("/packs-1/"));
+        assert!(packs.path([0; 32]).is_err());
+        let before = (packs.requests, packs.bytes);
+        assert!(packs.charge(0).is_err());
+        assert!(packs.charge(packs.bound + 1).is_err());
+        assert_eq!(before, (packs.requests, packs.bytes));
+        packs.charge(1).unwrap();
+        packs.charge(1).unwrap();
+        assert!(packs.charge(1).is_err());
+        assert_eq!((packs.requests, packs.bytes), (0, before.1 - 2));
+        packs.requests = 1;
+        packs.bytes = 1;
+        assert!(packs.charge(2).is_err());
+        assert_eq!((packs.requests, packs.bytes), (1, 1));
+    }
     #[test]
     fn cloud_completion_rechecks_finite_credentials_and_both_time_bounds() {
         let now = 1_700_000_000_000;

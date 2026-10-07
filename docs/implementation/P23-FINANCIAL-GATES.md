@@ -35,6 +35,12 @@ the guarantee to obtain a demo pass.
 
 ## What should happen next
 
+Local continuation now prepares manifest-bound shipping packs and strict
+[documented native evidence components](P23-NATIVE-EVIDENCE.md). Those parsers
+do not connect or qualify a trusted financial provider. The
+[next hardware proposal](P23-NEXT-RUN-PROPOSAL.md) isolates storage requalification;
+all money-movement and complete-cut gates below remain open.
+
 1. Resolve [history-growth design](P23-GROWTH-DIAGNOSIS.md) locally before adding
    financial journal traffic. Keep its validation separate from venue semantics.
 2. Prepare authenticated setup/credit/withdrawal providers and their retained
