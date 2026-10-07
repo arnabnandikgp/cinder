@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58); shipping continuation local |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -37,7 +37,7 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-P23 is in progress. Current local shipping continuation is on
+P23 is in progress. Shipping continuation is published ready/open as #59 on
 `tee/p23-shipping-packs`, based on reviewed #58 (`tee/p23-packed-history`) at
 `a1bc5c2bfce92402c22fc8bf53cc36b1cb9f6d5c`, stacked above #56 (`tee/p23-growth-diagnosis`) at
 `60eee0c558d800d6613bd1ae72e43bddadd51e13`, above #55 at
@@ -132,7 +132,20 @@ package register SHA256
 This supersedes the earlier package for a new run; it is not EIF/PCR or hardware
 evidence. Both task-created build containers exited/removed; shared images and
 builder remain untouched. Raw offline logs/package are temporary/reproducible;
-code/tests/run contracts are tracked. Final PR publication receipt follows.
+code/tests/run contracts are tracked.
+
+Publication: ready/open [#59](https://github.com/arnabnandikgp/cinder/pull/59),
+`tee/p23-shipping-packs` → `tee/p23-packed-history`, initial evidence head
+`773217fb357f4522ca42bd1b84599f171a1dd2e4`. Native stack #57 is
+#55 → #56 → #58 → #59; all three parent branch heads are unchanged.
+Hosted CI/review for #59 are newly pending, not inherited from parent/local
+results. This publication-only successor records actual PR/base and passes the
+contracts/workspace/whitespace guards; its own new-head checks remain separate.
+No PR is merged. User-owned untracked files and unrelated stashes remain out
+of the commit/export. The next action is review/fresh-manifest preparation at
+the AWS boundary, not launch: no new AWS/native/RPC activity occurred. Storage
+local qualification is complete; the P23 financial provider/lifecycle gates
+listed above remain open and no production capacity/retention policy is approved.
 
 [The next-run proposal](P23-NEXT-RUN-PROPOSAL.md) is the handoff at the AWS
 boundary, not permission to launch or activate financial capabilities. Keep P23
