@@ -60,6 +60,13 @@ receipts. Completed original receipts survive a later one-way freeze, while new
 old-epoch actions stay fenced. See [the P23 receipt](TRACKER.md#p23--live-integration-qualification)
 for commands, logs, exact artifacts, counterexamples and current live blockers.
 No historical experiment authority or injected native completion was promoted.
+The subsequent [offline growth diagnosis](P23-GROWTH-DIAGNOSIS.md) promotes only
+synthetic replica-latency instrumentation, a real Runtime/AEAD/original-ID replay
+counterexample and an expanded healthy I/O count regression. It does not import
+run-2 accounts/keys or establish its exact latency cause. The
+[financial gate map](P23-FINANCIAL-GATES.md) links remaining native provider
+contracts without upgrading diagnostic bodies to setup, credit, payment or
+complete-cut certificates. Shipping storage and financial permissions are unchanged.
 Subsequent PR #55 corrections qualify exact role coverage, rejected-deposit
 progress, verified expired no-wire closure, absence of unsupported source cuts
 and bounded lock backpressure. They require new host/ARM application evidence;

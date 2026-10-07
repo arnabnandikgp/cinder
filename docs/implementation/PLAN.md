@@ -773,6 +773,12 @@ preserved. This hardware invocation is closed, but cut 64 remains unpassed and
 C5/P23 financial/production acceptance does not follow. Next is focused local
 growth diagnosis and a separately reviewed remediation, not further cases in the
 closed invocation.
+[The offline diagnosis](P23-GROWTH-DIAGNOSIS.md) now reproduces a safely accepted
+late reply under synthetic replica latency and retains the original receipt after
+encrypted replay. It proposes retained encrypted packs for user review, not an
+approved replacement storage contract. [The financial continuation map](P23-FINANCIAL-GATES.md)
+identifies the existing setup/credit/payment/cut/funding/recovery provider seams
+and staged actual-rail evidence; it does not add new phase acceptance milestones.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial
 activation and the existing durable storage/repair contract are unchanged.
