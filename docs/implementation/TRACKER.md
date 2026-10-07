@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60), ready/open |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -39,7 +39,8 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ### Native capture continuation — 2026-10-07
 
-Local bounded slice on `tee/p23-native-capture`, based on #60 at
+Published ready/open as [#61](https://github.com/arnabnandikgp/cinder/pull/61) on
+`tee/p23-native-capture`, based on #60 at
 `b2af93eb74519075fa689325093df2fd6f7726d6`. Preserve the user's untracked
 `crates/service/examples/qualification-v2.rs`, `docs/user-journey.md`, `stays/`
 and existing stashes. No merge, new AWS/venue/RPC request or wallet use occurred.
@@ -59,8 +60,12 @@ cases and 26 SDK/TLS cases. The first attempt stopped on local disk exhaustion;
 only the explicitly authorized rebuildable `target/debug/incremental` cache was
 removed. The successful complete rerun used `CARGO_INCREMENTAL=0` (also used by
 hosted CI), without disabling any test group. Final formatted owning-source
-debug/release checks and strict lint are recorded with publication below; no
-new-head hosted CI/review or hardware pass is claimed.
+debug/release checks pass all nine groups, and strict all-feature workspace lint,
+format and diff checks pass. Implementation/check checkpoint:
+`213d5fc043edb28477db77116a705ba1e0e81645`; publication receipt changes only this
+handoff. No new-head hosted CI/review or hardware pass is claimed. Existing
+predecessors remain unmerged and unchanged; do not treat this publication as
+closing P23 or resetting review status.
 
 Next: wire this bounded capture through the loaded measured configuration and
 supervisor without holding the mutation guard during I/O; then qualify native
