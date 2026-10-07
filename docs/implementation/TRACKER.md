@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62), ready/open |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-08. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -39,7 +39,8 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ### Native-semantics execution preparation — 2026-10-08
 
-Current branch `tee/p23-native-qualification`, immediately above #62 at
+Published ready/open as [#63](https://github.com/arnabnandikgp/cinder/pull/63) on
+`tee/p23-native-qualification`, immediately above #62 at
 `b1b8235457c26c41c50ab4a8a5bc0183a10ce6b6`. The user approved the proposed
 20-faucet-USDP / 0.10-devnet-SOL / no-AWS scope and the 120-second bootstrap
 exception. **Exact current execution-record approval is still pending.**
@@ -87,6 +88,10 @@ type checking and all nine existing/new funding codec cases also pass.
 Earlier `run-01` and `run-candidate-02` records were unused offline preparations
 superseded by the final source review; their identities/records are preserved,
 not submitted, approved, funded or reused in the final candidate.
+Implementation checkpoint `d9fc8391f61f1d98a2dd203068b6b9c30703345d` is published;
+this receipt changes only the tracker. Hosted new-head CI/review is pending, not
+claimed green. The parent's cancelled lint cell and browser rerun are not
+substituted with a fictitious full CI pass. No stack merge occurred.
 
 ### Measured capture runtime continuation — 2026-10-07
 
