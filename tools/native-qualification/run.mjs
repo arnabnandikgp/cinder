@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { setTimeout as pause } from 'node:timers/promises';
 import { LIMITS,canonical,sha,privateRead,exclusive,validateManifest,assertApproval,Journal,
   boundedBody,decodeResponse,nativeAck,setupObservations,transfers,depositLink,withdrawalLink,paymentDelta,tokenDelta,atoms } from './core.mjs';
-import { checkEnvironment,runDirectory,sources,tlsRoots } from './artifacts.mjs';
+import { checkEnvironment,validateSignerLocator,runDirectory,sources,tlsRoots } from './artifacts.mjs';
 
 // The independent offline harness drives this same sequence. Native receipt loss
 // is injected at the port boundary before it can become a controller ACK.
@@ -50,9 +50,12 @@ export async function main(directory) {
   };
   // A fresh lock is never removed automatically, even on a clean result. Read-only
   // analysis does not clear it; an interrupted live invocation cannot restart.
+  for(const path of [join(dir,'owner.key'),join(dir,'broker.key'),config.wallet])validateSignerLocator(path);
   mkdirSync(join(dir,'running.lock'),{mode:0o700});
   const j=new Journal(dir,m,Date.now);j.begin();
-  const owner=load(join(dir,'owner.key'),m.owner),broker=load(join(dir,'broker.key'),m.broker),sponsor=load(config.wallet,m.sponsor);
+  let owner,broker,sponsor;
+  try {owner=load(join(dir,'owner.key'),m.owner);broker=load(join(dir,'broker.key'),m.broker);sponsor=load(config.wallet,m.sponsor);}
+  catch {j.append('stopped',{reason:'Signer loading refused before any network request'});throw Error('Signer loading refused');}
   let lastHttp=0,sequence=0,nativeDepositAt,programDigest,sponsorDebit=0n;const observed=[];
   const request=async(kind,url,options,cleanup=false)=>{
     assertApproval(m,approval,Date.now());

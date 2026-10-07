@@ -1,7 +1,9 @@
 # Next P23 financial-evidence qualification
 
 Prepared 2026-10-07; scope approved 2026-10-08. **The test bounds and bootstrap
-exception are approved; the exact execution record remains pending.** This scopes
+exception are approved. The approved first exact invocation stopped before
+network I/O; a corrected replacement requires fresh exact approval.** See the
+[invocation receipt](P23-NATIVE-SEMANTICS-RECEIPT.md). This scopes
 the existing G01/G05 gates; it adds no phase or product
 promise. [Financial map](P23-FINANCIAL-GATES.md),
 [native contract](P23-NATIVE-EVIDENCE.md),
@@ -68,6 +70,6 @@ requests without approval of its exact run seal.
 
 The local probe narrows uncertainty without paying for another exploratory AWS
 session. It does **not** replace P23's actual measured workflow acceptance. No
-experiment, new program deployment, funds transfer or live request has been run
-under this approval. Preparing the exact record and passing offline tests do not
+native request, new program deployment or funds transfer has occurred in the
+stopped invocation. Preparing the replacement and passing offline tests do not
 establish native finality, lost-reply recovery or a changed-image hardware pass.

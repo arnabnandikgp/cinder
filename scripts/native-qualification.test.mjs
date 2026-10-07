@@ -1,17 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, chmodSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, chmodSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LIMITS, canonical, sha, validateManifest, assertApproval, Journal, atoms, nativeAck,
   setupObservations, transfers, depositLink, withdrawalLink, paymentDelta, tokenDelta, boundedBody, privateRead, exclusive } from '../tools/native-qualification/core.mjs';
 import { qualify } from '../tools/native-qualification/run.mjs';
+import { configuredWallet,validateSignerLocator } from '../tools/native-qualification/artifacts.mjs';
 const manifest=()=>({schema:'cinder-native-qualification-v1',cluster:'devnet',aws:false,shipping:false,
   native_origin:'https://test-api.pacifica.fi',wss_origin:'wss://test-ws.pacifica.fi/ws',
   genesis:'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',rpc_origin:'https://devnet.helius-rpc.com',
   limits:{...LIMITS},bootstrap_exception:true,lost_native_reply:true,withdraw_uuid:'12345678-1234-4234-8234-123456789abc',
   sources:'a'.repeat(64),tls_roots:'b'.repeat(64),node:'24.21.0',owner:'owner',broker:'broker',sponsor:'sponsor'});
 function temp(fn){const dir=mkdtempSync(join(tmpdir(),'cinder-native-offline-'));try{return fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}}
+test('native offline sponsor locator strips CLI display padding without reading key material',()=>{
+  assert.equal(configuredWallet('Config File: other\nKeypair Path: /private/tmp/test wallet.json \nCommitment: confirmed\n'),'/private/tmp/test wallet.json');
+  assert.equal(configuredWallet('Keypair Path:\t/private/tmp/test.json \r\n'),'/private/tmp/test.json');
+  for(const text of ['No keypair','Keypair Path: relative.json','Keypair Path: \n','Keypair Path: /a\nKeypair Path: /b','Keypair Path: /a\u0000b'])assert.throws(()=>configuredWallet(text));
+});
+test('native signer metadata must pass before a run can start; sealed locators are not trimmed',()=>temp(dir=>{
+  const file=join(dir,'signer.json');exclusive(file,'not-read-as-a-key');
+  assert.doesNotThrow(()=>validateSignerLocator(file));
+  for(const path of [file+' ',join(dir,'missing'),'relative.json',dir])assert.throws(()=>validateSignerLocator(path));
+  const link=join(dir,'link');symlinkSync(file,link);assert.throws(()=>validateSignerLocator(link));
+  chmodSync(file,0o644);assert.throws(()=>validateSignerLocator(file));
+}));
 test('native qualification requires exact current approval, not prior scope or changed budgets',()=>{
   const m=manifest(), approval={approved:true,manifest:validateManifest(m),reference:'specific review',not_after:2000};
   assert.doesNotThrow(()=>assertApproval(m,approval,1000));

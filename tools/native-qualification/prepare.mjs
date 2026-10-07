@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { web3,ROUTE,ata } from './bindings.mjs';
 import { LIMITS,privateRead,exclusive,validateManifest,sha } from './core.mjs';
-import { checkEnvironment,runDirectory,sources,tlsRoots } from './artifacts.mjs';
+import { checkEnvironment,configuredWallet,validateSignerLocator,runDirectory,sources,tlsRoots } from './artifacts.mjs';
 async function main() {
 checkEnvironment();
 const [directory,rpcFile]=process.argv.slice(2);if(!directory||!rpcFile||process.argv.length!==4)throw Error('Usage: prepare.mjs RUN_DIRECTORY PRIVATE_RPC_FILE');
@@ -15,7 +15,7 @@ const dir=runDirectory(directory,{exists:false}),rpc=privateRead(rpcFile,4096).t
 try { const {lstatSync}=await import('node:fs');lstatSync(dir);throw Error('Run namespace already exists'); }catch(e){if(e.code!=='ENOENT')throw e;}
 if(u.origin!=='https://devnet.helius-rpc.com'||u.username||u.password||u.hash||u.pathname!=='/')throw Error('Fixed devnet RPC required');
 const config=execFileSync('solana',['config','get'],{encoding:'utf8',env:{...process.env,NO_DNA:'1'}});
-const wallet=config.match(/^Keypair Path: (.+)$/m)?.[1];if(!wallet)throw Error('Configured sponsor not found');
+const wallet=configuredWallet(config);validateSignerLocator(wallet);
 const sponsor=execFileSync('solana',['address'],{encoding:'utf8',env:{...process.env,NO_DNA:'1'}}).trim();
 new web3.PublicKey(sponsor);
 mkdirSync(dir,{mode:0o700,recursive:true});

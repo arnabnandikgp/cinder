@@ -1,5 +1,5 @@
 import { readFileSync, lstatSync } from 'node:fs';
-import { resolve, relative } from 'node:path';
+import { resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rootCertificates } from 'node:tls';
 import { sha,canonical } from './core.mjs';
@@ -14,6 +14,20 @@ export function checkEnvironment() {
   if(process.versions.node!=='24.21.0')throw Error('Pinned Node required');
   for(const name of ['NODE_EXTRA_CA_CERTS','NODE_TLS_REJECT_UNAUTHORIZED','NODE_USE_SYSTEM_CA','NODE_OPTIONS',
     'HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','https_proxy','http_proxy','all_proxy'])if(process.env[name])throw Error('Ambient transport override forbidden');
+}
+// CLI text pads its display values. Normalize that formatting during offline
+// preparation only; an already sealed execution locator must never be rewritten.
+export function configuredWallet(config) {
+  const lines=config.split(/\r?\n/).filter(line=>line.startsWith('Keypair Path:'));
+  if(lines.length!==1)throw Error('One configured sponsor locator required');
+  const path=lines[0].slice('Keypair Path:'.length).trim();
+  if(!isAbsolute(path)||/[\x00-\x1f\x7f]/.test(path))throw Error('Absolute sponsor locator required');
+  return path;
+}
+export function validateSignerLocator(path) {
+  if(typeof path!=='string'||path!==path.trim()||!isAbsolute(path)||/[\x00-\x1f\x7f]/.test(path))throw Error('Signer locator shape');
+  const st=lstatSync(path);
+  if(!st.isFile()||st.isSymbolicLink()||st.uid!==process.getuid()||st.mode&0o077||st.size<1||st.size>8192)throw Error('Signer locator permissions/size');
 }
 export function runDirectory(path,{exists=true}={}) {
   const dir=resolve(path),scope=resolve(root,'work/experiments/p23-native-semantics');

@@ -37,7 +37,28 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### Native-semantics execution preparation — 2026-10-08
+### Native-semantics invocation stopped before network I/O — 2026-10-08
+
+The user approved the exact `run-final-01` seal; its one authorized invocation
+stopped during sponsor loading because offline preparation retained trailing CLI
+display whitespace in the wallet locator. The original journal contains only
+`start`: zero RPC/HTTP/WSS calls, financial submissions, funds moved or fees.
+The lock/private originals are preserved without restart or rescue. This is a
+local preparation defect, not a native capability result or P23 pass.
+The [sanitized receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) records the diagnosis,
+strict metadata-before-start fix and actual offline checks: 15 native regressions,
+58 contracts/inventory checks, nine vault codec checks and SDK type checking.
+
+The corrected offline replacement is
+`work/experiments/p23-native-semantics/run-final-02/REVIEW.md`, seal
+`160e00d1a5a7286f3dbabeda1aecdf5ccd9123b600eeae319548bfeeb8d1e59f`.
+Fresh identities and the validated sponsor locator are bound; financial limits,
+bootstrap exception and fee-acceptance limitation are unchanged. It has no
+approval, journal or lock, and made no live requests. Next: user review/approval
+of that exact replacement, then one bounded invocation. No AWS, shipping financial
+activation, stack merge or complete hosted-CI pass is claimed by this correction.
+
+### Native-semantics execution preparation (historical, before invocation) — 2026-10-08
 
 Published ready/open as [#63](https://github.com/arnabnandikgp/cinder/pull/63) on
 `tee/p23-native-qualification`, immediately above #62 at

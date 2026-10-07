@@ -31,6 +31,10 @@ test identities** in a new private namespace. It reads only the configured CLI
 sponsor's address/configuration at preparation time, not its secret. It copies
 only the supplied devnet RPC URL to private configuration; no public key/secret
 from an old experiment is used as a test identity.
+CLI display padding is normalized before sealing. An absolute, existing,
+owner-only regular signer file is required before identities are created;
+metadata validation does not read its secret. Execution rechecks the exact
+sealed locators before starting and never silently changes a sealed path.
 
 ```sh
 node tools/native-qualification/prepare.mjs \
