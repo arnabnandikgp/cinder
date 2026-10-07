@@ -251,6 +251,9 @@ impl<A: Store, B: Store, W: Witness> Backend for Packed<A, B, W> {
             return Err(Error::Limit);
         }
         let history = self.history()?;
+        if history.last().map(Pack::head) != expected {
+            return Err(Error::Stale);
+        }
         let total = history.iter().flat_map(|pack| &pack.0).try_fold(
             frame.opaque.as_bytes().len(),
             |n, old| {

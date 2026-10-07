@@ -162,6 +162,51 @@ fn healthy_counts_scale_with_packs_and_preserve_every_original_frame() {
 }
 
 #[test]
+fn competing_same_frame_between_anchor_and_history_cannot_overwrite_accepted_tail() {
+    struct BetweenReads {
+        inner: Trust,
+        prior: Anchor,
+        first: bool,
+    }
+    impl Witness for BetweenReads {
+        fn read(&mut self, stream: Stream) -> Result<Anchor, Error> {
+            if std::mem::take(&mut self.first) {
+                return Ok(self.prior);
+            }
+            self.inner.read(stream)
+        }
+        fn accept(&mut self, stream: Stream, expected: Anchor, next: Head) -> Result<(), Error> {
+            self.inner.accept(stream, expected, next)
+        }
+    }
+    for n in [15, 16, 50] {
+        let (mut other, a, b, w, history) = setup(n);
+        let expected = Some(history[n - 1].head);
+        let prior = Anchor {
+            epoch: 1,
+            head: expected,
+        };
+        other.append(expected, &history[n]).unwrap();
+        let first = a.0.lock().unwrap().data.clone();
+        let second = b.0.lock().unwrap().data.clone();
+        let writes = (a.0.lock().unwrap().puts, b.0.lock().unwrap().puts);
+        // The losing writer observes the prior anchor, then the winner's fresh
+        // accepted history. Both proposed the SAME original frame/hash.
+        let witness = BetweenReads {
+            inner: w.clone(),
+            prior,
+            first: true,
+        };
+        let mut loser = Packed::new(stream(), 1, a.clone(), b.clone(), witness).unwrap();
+        assert_eq!(loser.append(expected, &history[n]), Err(Error::Stale));
+        assert_eq!(writes, (a.0.lock().unwrap().puts, b.0.lock().unwrap().puts));
+        assert_eq!(a.0.lock().unwrap().data, first);
+        assert_eq!(b.0.lock().unwrap().data, second);
+        assert_eq!(other.load().unwrap(), history);
+    }
+}
+
+#[test]
 fn canonical_codec_rejects_domains_partitions_order_hashes_lengths_and_trailing_bytes() {
     let history = frames(33, 32);
     for end in [0, 15, 16, 31, 32] {

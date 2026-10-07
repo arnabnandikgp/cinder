@@ -57,9 +57,11 @@ the guarantee to obtain a demo pass.
    evidence; then actual fenced/settled/backed recovery. Some observer semantics
    can be prepared independently, but trading cannot bypass credit/cut gates and
    recovery cannot bypass terminal history or returned backing.
-6. Wire the real SDK frontend to those qualified capabilities. Clearly identify
-   any remaining read-only/simulated UI. P24's release/customer-funds review and a
-   new venue integration are not added to this P23 continuation.
+6. Carry the existing Node/browser SDK and service qualification workflows onto
+   those actual capabilities. A product trading terminal, market-data UI and
+   self-service browser/agent UX remain separate follow-ups, not P23 merge gates.
+   Clearly identify any separately demonstrated read-only/simulated UI. P24's
+   release/customer-funds review and a new venue integration remain separate.
 
 ## Minimal evidence receipt for each provider
 

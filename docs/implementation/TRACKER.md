@@ -173,6 +173,18 @@ no AWS/native activity or shipping-storage selection follows from publication.
 
 ### Latest remediation implementation — 2026-10-07
 
+Pack review continuation: the #58 same-epoch competing-writer finding is valid.
+Append now compares the freshly loaded tail with the original expected head
+before any pack writes. A focused same-frame race at heads 14/15/49 fails on
+the old implementation (two unwanted writes) and passes after the fix, retaining
+both accepted replicas and the original full replay. The full journal unit
+suite and release-mode race test pass; all 42 contracts and plan/workspace
+checks pass. The #56 wording finding is also valid: its continuation now states
+that existing Node/browser SDK qualification is in scope, while a product
+terminal, market-data UI and self-service UX are separate follow-ups. No storage
+format, deadline, financial capability or AWS authority changes in this review
+correction. Fresh-head hosted checks remain separate; nothing is merged.
+
 Review continuation after published `e50dc9d84012711d825a3a9b9821b540611696a4`:
 the user authorized both CodeRabbit and Codex addressal and approved the fresh
 `C5-RUN-PROPOSAL.md`. Three findings were relevant: ordinary read
