@@ -750,14 +750,29 @@ security decision. Before another measured run, satisfy the fresh-authority,
 publication, time, resource and joined-client gates. Preserve finance, custody,
 wire and durable
 acceptance guarantees; increasing timeouts is not this architectural qualification.
-C1–C3 have local unpublished implementation commits. C3 implements bounded
-unreleased connection replies and observation prepare/I/O/completion; C4 joins
+C1–C3 and C4 are published on #55; their reviewed source/check/package receipts
+are in TRACKER. C3 implements bounded unreleased connection replies and
+observation prepare/I/O/completion; C4 joins
 actual Node/Chrome clients to the real Runtime in the fixed history/delay/watch
 and fault/resource matrix. Local check and measurement receipts are in TRACKER;
 cheap handler fixtures and prior hardware receipts are not that evidence. Global
 commit pressure may refuse reads until a quiet window; the authority gate remains
 unchanged. Whole-process fixture memory is not production capacity calibration.
 C5 requires a fresh exact-source measured build and separately reviewed manifest.
+The approved 2026-10-07 read-only run uses that build: actual Node/Chrome reads
+at the minimal initialized head 2 and exact heads 8/32 pass, as do non-economic
+agent lifecycle, encrypted restart and replica/witness/epoch fencing. The
+64-record growth cut is unpassed: its unavailable original grant reconciles as
+accepted head 51 without resend. Natural application-lease expiry passes with
+parent and witness credentials still valid. The separate real 900-second witness
+STS-expiry case also refuses private reads with the parent alive and longer
+application lease; no clock/credential manipulation or captured AWS ExpiredToken
+response is claimed. The bounded ciphertext/head archive and independent owned
+teardown pass; six test KMS keys are PendingDeletion and setup policies are
+preserved. This hardware invocation is closed, but cut 64 remains unpassed and
+C5/P23 financial/production acceptance does not follow. Next is focused local
+growth diagnosis and a separately reviewed remediation, not further cases in the
+closed invocation.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial
 activation and the existing durable storage/repair contract are unchanged.

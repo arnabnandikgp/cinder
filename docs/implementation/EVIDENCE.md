@@ -507,8 +507,31 @@ deposit rejections avoid RPC-budget depletion without creating credit; opaque
 reply waiting and absolute frame/body assembly have separate bounds. Tests and
 new-source/package receipts at `d2bf4b6` are in TRACKER. Old ARM/EIF identities cannot
 qualify these changes. The user approved the bounded C5 proposal and renewed
-AWS login; exact fresh-policy preflight still prevents launch. No new live result
-is inferred from source, approval or synthetic checks.
+AWS login. Exact fresh-policy/identity, current AMI/price/quota/network and owned
+termination checks pass, and one fresh C5 host launched 2026-10-07 03:13:48 UTC.
+Its public-only image is independently downloaded/inspected before six exact
+PCR/context key policies; parent plaintext-decrypt and witness-access denials
+pass. Initial actual Node/Chrome concurrent reads, same-socket grant/two watches,
+agent revocation and natural expiry pass with zero financial/native/RPC activity.
+The strong initialized head is sequence 2, explicitly not a sequence-1 pass;
+exact sequence-8/32 reads pass too. Cut 64 is unpassed; its unavailable original
+grant reconciles as accepted head 51 with no resend. Actual encrypted restart
+preserves all 49 operations/digests and authority epoch 3; replica loss refuses
+the one retained revoke, proved not accepted after restart. Independent witness
+loss and epoch 1→2 fence stop private reads while preserving head/hash. The
+90-second lease naturally stops the enclave while parent/credentials remain
+valid. Separate real 900-second witness STS expiry also refuses private reads
+with parent alive, longer application lease and no clock change/renewal. This
+is expiry/freshness refusal, not a captured AWS ExpiredToken response. Six boots;
+final runtime connection counts are S3 2,936/1,500, DDB 778, KMS 36, native/RPC
+0/0. The 116-object/93,238-byte ciphertext archive and all three strong heads
+verify locally. Independent teardown confirms terminated host, absent tagged EBS/
+buckets/table/roles/SG/SSH, six seven-day PendingDeletion keys and preserved
+administrator policies. Combined operator/runtime calls: KMS 147, S3 4,690, DDB
+813, within approved caps; billing is delayed, not a final invoice observation.
+The invocation is closed; the 64-record gate is still unpassed. Actual final source,
+image/client receipts and limitations belong in TRACKER; this evidence does not
+close P23 or any financial/production gate.
 
 [ADR 0025](../architecture/0025-concurrent-private-reads.md) and the
 [C1–C5 contract](P23-REMEDIATION.md) record the approved single-journal accepted

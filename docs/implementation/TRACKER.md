@@ -48,7 +48,7 @@ application checkpoints and receipts remain in the P23 log below.
 
 Review continuation after published `e50dc9d84012711d825a3a9b9821b540611696a4`:
 the user authorized both CodeRabbit and Codex addressal and approved the fresh
-`C5-RUN-PROPOSAL.md`. Three still-open findings are relevant: ordinary read
+`C5-RUN-PROPOSAL.md`. Three findings were relevant: ordinary read
 Busy/Raced must return private Unavailable rather than close; finalized ineligible
 deposit locators must not repeatedly spend RPC budget; HTTP reply waiting must
 retain a separate five-second frame/body assembly bound. Focused regressions
@@ -87,18 +87,107 @@ logs: `c5-review-{check,runtime,http}.log` in
 Only this receipt follows the tested application source. Program/SBF sources
 are unchanged; no new SBF or hardware result is claimed.
 
-The user renewed `cinder_new`'s login. The fresh read-only gate then confirms
-the intended non-root IAM identity but refuses `iam:GetPolicy` for
-`CinderP23C5Operator`; the user is preparing the fresh scoped policies. Exact
-policy verification, fresh operator runner, metadata preflight and new EIF/PCR
-review remain prerequisites. No AWS resource, key release, financial activity
-or merge occurred. Older source/package checks do not qualify these changes.
+The fixes and receipt successor are published as `4849a83749e3e646b960f029ef99c33c2327da3c`
+on #55; all three CodeRabbit/Codex findings are replied to and resolved. Hosted
+Rust regressions/lint/build, SDK/relay, browser, contract inventory, ARM package,
+Anchor/SBF/Surfpool and CodeRabbit checks all pass on that head. This is not a
+hardware or merge receipt.
 
-Next: publish the verified review fixes on #55 and record both bots' dispositions;
-then run the approved C5 bounds only after access
-and manifest/image preflight pass. Do not execute the closed-run namespace.
+The user renewed the intended non-root `cinder_new` login and created the fresh
+policies. Both C5 v1 documents independently match the local templates; preflight
+confirms the fresh roles/buckets/table/SSH/SG names are unused. Current Amazon-owned ARM AMI,
+Nitro-capable `c6g.large`, regional vCPU quota, account-owned network and price
+checks pass. Source-built LOCAL profile/V2/preparer checks retain all three
+gates false and six role capsules below 4 KiB. Fresh local operator tools live
+in ignored `work/experiments/p23-live/c5-tools/`; the old run-1 tools/ledger are
+unchanged. The public-only package verifies 13 artifact hashes; six harness
+oracle tests/browser bundling pass, not NSM evidence.
 
-The user approved the broad remediation recommendations. Work now follows the
+Approved C5 has now launched its ONE fresh host in `p23-20261007-ro2`, at
+2026-10-07 03:13:48 UTC; instance `i-0d2dd891264958c33`. Termination permission
+passes an actual non-mutating dry run on this owned ID; the four-hour
+terminate-on-shutdown safeguard precedes host package setup. Exact-source
+image/manifest/PCR review remains mandatory before recipient-bound key release.
+Trading, funding, native scheduler and financial activity remain disabled.
+The hardware schedule fixes the existing cases and includes a recorded limit:
+the actual service requires API/funds initialization (sequence 2), so sequence
+1 cannot be an initialized live cut. Measure/report that minimal actual head
+honestly; grow only through real grants/revokes, to at most sequence 64 INCLUDING
+initialization, not 64 API operations plus hidden setup. No extra test cases or
+deadline extension is authorized by that limitation.
+
+Completed hardware checkpoints: independently downloaded application EIF
+`d7f2d3d855111cf9201d9f7c3b5c397ea6857b1177ab7fe1f95479064a2bbf36`
+passes CRC/version/entrypoint and exact PCR/context pinning; six-purpose NSM
+release and parent plaintext-decrypt/witness denial pass. Actual Node/Chrome
+minimal initialized head 2 and exact head 8/32 pass one/two-watch concurrent
+HTTP/WS reads, plus same-socket grant, READ-agent revocation and natural expiry.
+Full-history growth hits an unavailable reply at head 50; original-ID lookup
+confirms its grant committed as head 51. No resend or deadline increase. The
+64-record cut is unpassed, not a calibrated maximum-capacity claim. A separate
+local harness session-expiry refusal is preserved as pre-sign/no-wire, not an
+application pass/failure; new independent commands use fresh attestation.
+
+Actual encrypted restart preserves all 49 operation IDs/digests, epoch 3 and
+head/hash 51. Replica loss closes the retained revocation reply; strong head and
+post-restart original-ID reconciliation prove it was not accepted and all prior
+state remains unchanged. Witness-relay loss refuses private reads. A healthy
+restored boot then conditionally advances witness epoch 1→2 without changing its
+head/hash, and the old worker refuses private reads. The separate 90-second
+application lease expires naturally: healthy baseline at 03:50:50.777 UTC,
+refusal/absent enclave at 03:52:33.593, with parent supervisor still alive and
+witness credentials valid until 04:47:43. No parent kill, clock change or
+credential renewal causes that result. The separate fresh 900-second witness STS
+case passes: healthy baseline at 03:57:10.511 UTC, real expiry at 04:08:46,
+post-expiry private connection/read refusal and absent enclave at 04:09:11 with
+parent supervisor still alive and no budget stop. The 40-minute application
+lease/one-hour parent credentials, no clock manipulation and no renewal keep
+this distinct from lease/parent termination. This establishes the real STS
+expiry/freshness refusal, not a captured AWS ExpiredToken response. Six total
+boots; final runtime metadata counts are S3 2,936/1,500, DDB 778, KMS 36 and
+native/RPC 0/0. The owned service is stopped. All 116 ciphertext objects (93,238
+bytes) and three strong heads are archived with checked sizes, SHA-256 and private
+local permissions; original head remains epoch 2/sequence 51, lease/expiry heads
+epoch 1/sequence 2. Inventory SHA-256:
+`15a2738ef0a64f69d7e174d5c8b13eb3d1c7fd6504483d635da832c50a8f8e69`.
+Independent teardown verifies at 04:19:55.868 UTC: exact host terminated
+(confirmed 04:15:24.799, about 62 minutes after launch), tagged root EBS absent,
+both buckets/table/roles/SG/SSH absent, six KMS keys PendingDeletion with seven-day
+window, administrator policies and historical resources preserved. No uncertain
+resource mutations remain; owned local tunnel/relay are absent. Final operator
+calls: STS 35, IAM 48, EC2 27, DDB 35, S3 254, KMS 111. Combined runtime/operator
+counts: KMS 147, S3 4,690, DDB 813, below approved caps. Billing is delayed; the
+approved $5 cap is not an observed final invoice. No financial activity or
+application-source/deadline change. This invocation is closed/read-only; never
+reuse its namespace or cleanup ledger.
+
+The lease-only EIF is
+`e7f71a8ba42b6af6c57fe2dd396cb1a63076ffc9295e9cb97e05a36215c7b77a`;
+STS-expiry EIF is
+`b81887bad82bb7d00155c6d54b513c554af37bfd87d592dd5f53e01978bd4a67`.
+Both are separately downloaded/inspected and exactly pinned to six KMS purposes
+before release; their public input manifests differ from the application profile,
+not their reviewed executable source. Exact PCR0/1/2, manifests, ciphertext
+capsules, SDK pins and private original-operation receipts remain locally under
+ignored `work/experiments/p23-live/run-2/`. Operator scripts are preserved in
+`c5-tools/`, not shipped or treated as application/hardware proof.
+
+Next: publish this sanitized receipt, then investigate the cut-64 growth failure
+locally against the retained original-operation/head evidence. A new bounded
+remediation/hardware proposal needs review; do not force a pass through longer
+deadlines, resend the accepted original or reuse this closed invocation. C5's
+64-record gate remains unpassed, P23 financial/native/recovery workflows remain
+separate, and no automatic merge or financial activation is authorized.
+
+This hardware receipt successor changes only PLAN/TRACKER/EVIDENCE and the C5
+status row. The final pinned contracts group passes all 42 guards plus the plan
+and workspace boundaries; `git diff --check` passes. Prior full source/ARM/client
+results remain tied to `d2bf4b6`; new receipt-head CI is separate and pending.
+Private evidence/operator tools and unrelated untracked files are excluded.
+
+The user approved the broad remediation recommendations. Historical initial
+implementation checkpoints below are superseded by the published reviewed
+source/CI/package and actual partial hardware handoff above. Work follows the
 [C1–C5 plan](P23-REMEDIATION.md): shared interpretation/pure authorization first,
 then accepted publication and bounded scheduling, a fixed joined local matrix,
 and separately authorized changed-source hardware qualification. C1 is committed
@@ -107,8 +196,9 @@ locally as `5b77b11cc0101430f432c236e415577d83622588`. C2 is locally committed a
 `18f3607030b87f9e44e7312c1d08c12871197c9f`. C4's real-runtime fixture/matrix is
 implemented and passes final local verification, checkpointed as
 `b38849cf93761f380e195a2731698d862ea84f4d`, with exact handoff below. C5's
-changed-source ARM package passes offline; measured-image/hardware work remains.
-Review/merge remain open, so none of these slices is
+changed-source ARM package passes offline; the fresh hardware checkpoint and
+remaining/unpassed gates are recorded above. Relevant reviews are resolved;
+merge remains unauthorized, so none of these slices is
 closed merely because its local tests pass.
 Current durability/repair checks are retained for bounded dev/test;
 a production segment/checkpoint/retention contract is not implicitly approved.
