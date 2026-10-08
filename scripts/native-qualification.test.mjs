@@ -80,6 +80,16 @@ test('persistent diagnostic seals bounded original-wire forwarding and distinct 
   assert.throws(()=>validateManifest({...staged,faucet_mode:'broker-direct'}));
 });
 function temp(fn){const dir=mkdtempSync(join(tmpdir(),'cinder-native-offline-'));try{return fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}}
+test('offline preparation describes the delivery scope without granting standing live authority',()=>{
+  const source=readFileSync(new URL('../tools/native-qualification/prepare.mjs',import.meta.url),'utf8');
+  assert.match(source,/scope_approval:reliable\?'Delivery diagnostic: same-wire maxRetries=5, 60 status polls, faucet mode '/);
+  assert.match(source,/scenario==='staged-direct'\?'broker-direct':'owner-via-broker'/);
+  assert.match(source,/requires a separate current approval/);
+  assert.match(source,/execution_approval:'pending'/);
+  assert.match(source,/each independent round needs explicit current user authorization/);
+  assert.match(source,/each requires its own current seal-bound approval/);
+  assert.doesNotMatch(source,/without another permission request after each failure|latest user explicitly authorized|under the latest user authorization/);
+});
 test('native offline sponsor locator strips CLI display padding without reading key material',()=>{
   assert.equal(configuredWallet('Config File: other\nKeypair Path: /private/tmp/test wallet.json \nCommitment: confirmed\n'),'/private/tmp/test wallet.json');
   assert.equal(configuredWallet('Keypair Path:\t/private/tmp/test.json \r\n'),'/private/tmp/test.json');

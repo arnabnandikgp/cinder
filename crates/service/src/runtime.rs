@@ -980,7 +980,10 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                     *next_poll = now.checked_add(poll_ms.ok_or(Error)?).ok_or(Error)?;
                     Some((request, completion, policy.clone()))
                 }
-                Step::Waiting | Step::Exhausted | Step::Observed(_) => None,
+                Step::Waiting | Step::Exhausted | Step::Observed(_) => {
+                    *next_poll = now.checked_add(poll_ms.ok_or(Error)?).ok_or(Error)?;
+                    None
+                }
             }
         };
         if let Some((request, completion, policy)) = prepared {

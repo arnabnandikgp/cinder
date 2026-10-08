@@ -715,7 +715,8 @@ Local success does not close the phase before PR review/merge or enable live por
 
 Depends on: P20, P22.
 
-Continuation order approved 2026-10-08: complete native financial providers,
+Historical continuation order, superseded by the subsequent direction below:
+complete native financial providers,
 measured funding, bounded trading/funding and operator-assisted recovery before
 stack review/CI/merge housekeeping. Touch remaining earlier-PR work during this
 run only for a blocking defect or a discovered bug. Do not merge for stack depth,
@@ -737,9 +738,10 @@ The latest tracker handoff supersedes historical investigation-first actions.
 
 The later user-approved [demo deposit policy](../architecture/0029-demo-deposit-confirmation.md)
 is a deposit-only testnet bookkeeping assumption, implemented with separate
-durable assurance and bounded original-signature GET polling. Complete its
-fresh initialized-account readiness and changed-image qualification in the first existing
-workstream. Loaded-policy/scheduler wiring is implemented offline through explicit
+durable assurance and bounded original-signature GET polling. Continue only its
+offline implementation in this workstream; fresh initialized-account readiness
+and changed-image qualification remain deferred to a separately authorized run.
+Loaded-policy/scheduler wiring is implemented offline through explicit
 manifest version 5; it creates no transfers and disables generic diagnostic capture
 in this narrow mode. It is not strong native completion, risk readiness,
 automatic recovery or a new acceptance phase; withdrawal and final-cut gates

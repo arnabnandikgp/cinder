@@ -355,6 +355,44 @@ fn scheduler_archives_setup_reads_without_native_credit_or_complete_certificate(
     app.poll_native(&mut reply).unwrap();
     assert_eq!(reply.calls, 0);
     assert_eq!(app.active.lock().unwrap().store.head(), head);
+    assert_eq!(app.active.lock().unwrap().next_poll, NOW + 4000);
+}
+#[test]
+fn setup_waiting_and_exhausted_steps_advance_the_runtime_poll_deadline() {
+    for waiting in [true, false] {
+        let p = if waiting {
+            demo::Policy {
+                interval_ms: 3000,
+                ..policy()
+            }
+        } else {
+            demo::Policy {
+                maximum_reads: 2,
+                ..policy()
+            }
+        };
+        let (app, time) = application_base(p);
+        let mut first = response(NOW, setup_bodies()[0].clone());
+        app.poll_native(&mut first).unwrap();
+        assert_eq!(first.calls, 1);
+        if !waiting {
+            time.0.store(NOW + 1000, Ordering::SeqCst);
+            let mut second = response(NOW + 1000, setup_bodies()[1].clone());
+            app.poll_native(&mut second).unwrap();
+            assert_eq!(second.calls, 1);
+        }
+        let at = NOW + if waiting { 1000 } else { 2000 };
+        time.0.store(at, Ordering::SeqCst);
+        let mut unused = response(at, setup_bodies()[2].clone());
+        app.poll_native(&mut unused).unwrap();
+        assert_eq!(unused.calls, 0);
+        assert_eq!(app.active.lock().unwrap().next_poll, at + 1000);
+        let head = app.active.lock().unwrap().store.head();
+        time.0.store(at + 1, Ordering::SeqCst);
+        app.tick().unwrap();
+        assert_eq!(app.active.lock().unwrap().store.head(), head);
+        assert!(!app.gates.funding && !app.gates.trading);
+    }
 }
 #[test]
 fn initial_demo_preflight_reaches_the_same_runtime_without_financial_activation() {

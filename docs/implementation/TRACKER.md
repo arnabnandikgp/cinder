@@ -37,6 +37,46 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### Current-head review closeout — 2026-10-08
+
+The integrated continuation was published on #63 at
+`9f80c90636346bf75c2e3e6408b45429403994e0`. All eight hosted jobs pass at that
+exact head: contracts, strict lint/build, Rust regressions, SDK/relay, complete
+browser qualification, retained-history growth, ARM64 package and SBF/Surfpool.
+CodeRabbit completed that review and identified four relevant narrow corrections.
+
+This follow-up advances setup polling's volatile deadline for waiting, exhausted
+and observed outcomes, aligns PLAN/financial-map instructions with the current
+independent-merge/deferred-live decision, and removes invented standing authority
+from diagnostic preparation. Each new seal still needs its own current execution
+approval; preparation makes no live call. Waiting/exhausted regressions and the
+existing observed-outcome test check the cadence without enabling financial gates.
+The first new exhaustion fixture used an invalid one-read policy; corrected to
+the existing two-read minimum, without changing production policy or assertions.
+
+Local validation: all 149 service unit tests pass, seven explicit hardware-only
+ignores; strict all-target/all-feature service Clippy and all 80 contract/inventory
+checks pass. The native tool's 37 offline cases include sealed-scope wording and
+unchanged exact current-approval enforcement. The initial incorrectly qualified
+test filter ran zero tests and is not evidence; the complete service run above is.
+The earlier full-workspace, SDK/browser/history and 64 vault receipts remain
+dated predecessor evidence, not a substitute for this follow-up's hosted checks.
+Exact staged-source export `cedb0f22e42bc2449224be218cf6112dd6cbe461` separately
+passes 96 shipping-default service unit tests (seven named hardware ignores),
+all 12 demo Runtime cases, default/all-feature strict service lint, format and
+all 80 contracts. Its plan guard checks 27 phases/53 tracked documents; the local
+54th document is unrelated and untracked. The export has no research, wallets,
+cloud configuration or user example, only dependency/build cache links. The
+initial export command used the temporary directory instead of the repository
+and failed before testing; the corrected explicit-repository export passes above.
+
+Next: publish this bounded correction on #63, confirm its own CI/review, then
+merge the existing eight-PR stack atomically into `product/tee-v1`. Resolve the
+fixed parent threads after their corrections land and record actual merge heads.
+No deferred live financial test, credit polling or new AWS/venue run is reopened.
+P23 remains in progress after implementation merge; preserve the residuals and
+unrelated local user files described below.
+
 ### Finish and merge the independent P23 stack — 2026-10-08
 
 Latest user direction explicitly authorizes completing remaining independent

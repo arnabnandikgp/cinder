@@ -198,12 +198,14 @@ the guarantee to obtain a demo pass.
 
 ## What should happen next
 
-Execution order approved 2026-10-08: finish native providers/readiness, measured
-funding round trip, bounded trading/funding, and operator-assisted recovery before
-stack review/CI/merge housekeeping. Correct earlier-stack defects during that
-work only if they block a workstream or a bug is discovered. This is the existing
-P23 scope, not four new phases or permission to bypass its financial/authority
-gates. Keep unavailable capabilities explicit and complete independent work.
+Current merge order, 2026-10-08: finish independent implementation and offline
+tests, address relevant stack reviews, verify current-head CI, then merge the
+existing stack. The [merge disposition](#merge-scope-and-deferred-acceptance)
+supersedes the earlier live-work-first sequence. Deferred native readiness,
+funding, trading and recovery qualification are not implementation-merge gates.
+The live sequence below describes a later separately authorized resumption,
+not a request to reopen the parked investigation or current invocation.
+P23 remains in progress after merge; unavailable capabilities stay disabled.
 
 The shipping continuation supplies manifest-bound packs and strict
 [documented native evidence components](P23-NATIVE-EVIDENCE.md). Those parsers
