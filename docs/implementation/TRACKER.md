@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55), ready/open |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55), ready/open; [#56](https://github.com/arnabnandikgp/cinder/pull/56), offline diagnosis |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -37,12 +37,62 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-P23 is authorized and in progress on `tee/p23-live-qualification`, based on
+P23 is in progress. The published live-qualification work is on
+`tee/p23-live-qualification`; the user-approved offline continuation is now on
+`tee/p23-growth-diagnosis`, stacked above #55 at
+`eac1f57c16367d97ad5f32931880c979de522227`. Both derive from
 merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 [Live qualification](../operations/live-qualification.md) and
 [ADR 0024](../architecture/0024-confidential-chain-ports.md) define the fixed
 local checklist and remaining capability gates. The historical pre-review
 application checkpoints and receipts remain in the P23 log below.
+
+### Offline growth continuation — 2026-10-07
+
+The user approved local growth diagnosis and an independent financial-gap map,
+not another AWS run or financial activation. The focused follow-up adds only
+test instrumentation/regressions and tracked planning evidence; shipping source,
+storage format, deadlines, repair/freshness and gates are unchanged.
+
+[Growth diagnosis](P23-GROWTH-DIAGNOSIS.md) derives and measures healthy append's
+3N+2 replica GETs / two PUTs. The existing count regression now covers heads
+0/8/24/32/50/64. A real Runtime/API/AEAD/Replicated test with unique READ grants
+reaches head 50, then injected 100-ms replica calls take 16,281 ms for the next
+grant (155 GETs, two PUTs, seven witness reads, one CAS). Original-ID lookup and
+explicit encrypted replay retain its COMPLETE receipt/head 51 and all 51
+transactions; financial ledger unchanged, no orders/attempts. The twelve
+contention regressions pass. This is a synthetic latency counterexample, not
+an actual SDK timeout, a fresh process boot, measured AWS timing or cut-64 pass.
+
+[Financial continuation map](P23-FINANCIAL-GATES.md) connects setup, owner deposit,
+native credit/payment, terminal execution cuts, exact funding and recovery gaps
+to current code and refusal behavior. It does not reopen approved economics,
+import M1/M2 authority, flip activation booleans or add implementation phases.
+
+Next required user review: the recommended byte-bounded encrypted-history pack
+design/prototype, preserving all frames, repair, freshness and original receipts.
+No pack/checkpoint/retention replacement is approved or implemented. An earlier
+GET cannot silently substitute for the later repair check. Specify format/head
+binding, bounds, interrupted writes, archive/replay and copy-repair behavior
+before shipping a storage change; then test locally and propose a fresh bounded
+hardware requalification. C5 cut 64 and all actual financial lifecycle gates
+remain open. Do not reuse closed run-2 or merge automatically.
+
+Local owning-layer verification: final service library debug/release each
+98 passes / seven explicitly ignored Nitro cases; strict feature-enabled service
+Clippy, Rustfmt and diff whitespace checks pass. The pinned contracts group
+passes all 42 guards plus plan/workspace checks. The strengthened reproduction
+also checks a fresh API record cache after replay. No hardware test was invoked;
+no production/SBF/browser/package sources changed, so their prior receipts are
+not claimed as new runs. Diagnostic source
+`088be95661b374770b7d6885ef0798b04dccf93d` is published ready for review as
+[#56](https://github.com/arnabnandikgp/cinder/pull/56), base
+`tee/p23-live-qualification` at `eac1f57c16367d97ad5f32931880c979de522227`.
+Native GitHub stack #57 contains #55 → #56. Parent #55's hosted checks
+are green at the unchanged parent head; #56's hosted
+CI/review is new/pending, not inherited from that result. This publication receipt
+changes only TRACKER. Neither PR is merged; the next action remains user review
+of the storage proposal, not another AWS or financial run.
 
 ### Latest remediation implementation — 2026-10-07
 
@@ -172,10 +222,10 @@ capsules, SDK pins and private original-operation receipts remain locally under
 ignored `work/experiments/p23-live/run-2/`. Operator scripts are preserved in
 `c5-tools/`, not shipped or treated as application/hardware proof.
 
-Next: publish this sanitized receipt, then investigate the cut-64 growth failure
-locally against the retained original-operation/head evidence. A new bounded
-remediation/hardware proposal needs review; do not force a pass through longer
-deadlines, resend the accepted original or reuse this closed invocation. C5's
+The sanitized receipt is published as `eac1f57`; local growth diagnosis is now
+recorded in the continuation above. A new bounded remediation/hardware proposal
+needs review; do not force a pass through longer deadlines, resend the accepted
+original or reuse this closed invocation. C5's
 64-record gate remains unpassed, P23 financial/native/recovery workflows remain
 separate, and no automatic merge or financial activation is authorized.
 

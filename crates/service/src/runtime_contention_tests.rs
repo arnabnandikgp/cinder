@@ -24,6 +24,7 @@ struct Metrics {
     puts: AtomicUsize,
     reads: AtomicUsize,
     accepts: AtomicUsize,
+    replica_delay_ms: AtomicU64,
     witness_delay_ms: AtomicU64,
     entered: Mutex<Option<mpsc::Sender<()>>>,
     anchor: Mutex<Option<Arc<Mutex<Anchor>>>>,
@@ -33,6 +34,12 @@ struct Metrics {
     private_failure: AtomicBool,
 }
 impl Metrics {
+    fn replica_delay(&self) {
+        let delay = self.replica_delay_ms.load(Ordering::SeqCst);
+        if delay != 0 {
+            std::thread::sleep(Duration::from_millis(delay));
+        }
+    }
     fn counts(&self) -> [usize; 4] {
         [&self.gets, &self.puts, &self.reads, &self.accepts].map(|n| n.load(Ordering::SeqCst))
     }
@@ -53,11 +60,13 @@ impl Replica for MemoryReplica {
     }
     fn put(&mut self, frame: &Frame) -> Result<(), JournalError> {
         self.metrics.puts.fetch_add(1, Ordering::SeqCst);
+        self.metrics.replica_delay();
         self.frames.insert(frame.head.hash, frame.clone());
         Ok(())
     }
     fn get(&mut self, digest: [u8; 32]) -> Result<Frame, JournalError> {
         self.metrics.gets.fetch_add(1, Ordering::SeqCst);
+        self.metrics.replica_delay();
         self.frames
             .get(&digest)
             .cloned()
@@ -376,10 +385,13 @@ fn read(n: u8, seed: u8, epoch: u64) -> PrivateBytes {
     )
 }
 fn grant(n: u8) -> PrivateBytes {
+    grant_key(n, 31)
+}
+fn grant_key(n: u8, agent_seed: u8) -> PrivateBytes {
     request(
         n,
         Command::Grant(Grant {
-            key: public(31),
+            key: public(agent_seed),
             methods: READ,
             market: configuration().markets[0].unit().market,
             maximum_lots: 1,
@@ -398,7 +410,7 @@ fn success(reply: &PrivateBytes, kind: u8) {
 
 #[test]
 fn accepted_history_io_growth_is_measured_without_changing_durability() {
-    for padding_count in [0, 8, 24] {
+    for padding_count in [0, 8, 24, 32, 50, 64] {
         let metrics = Arc::new(Metrics::default());
         let mut s = store(metrics.clone());
         for n in 0..padding_count {
@@ -414,6 +426,106 @@ fn accepted_history_io_growth_is_measured_without_changing_durability() {
             counts[0], counts[1], counts[2], counts[3]
         );
     }
+}
+
+#[test]
+fn replica_latency_can_outlive_reply_budget_while_original_grant_is_durable() {
+    let metrics = Arc::new(Metrics::default());
+    let app = application(metrics.clone());
+    let channel = session();
+    // Two initialization frames, then 49 real API grants: head 50, 51 frames.
+    // Unique keys avoid a duplicate grant; all economic gates remain disabled.
+    for n in 1..=49 {
+        success(&app.handle(&channel, grant_key(n, n + 70), NOW).unwrap(), 1);
+    }
+    let before = app.active.lock().unwrap().store.head();
+    let ledger = app
+        .active
+        .lock()
+        .unwrap()
+        .store
+        .state()
+        .unwrap()
+        .ledger()
+        .clone();
+    assert_eq!(before.sequence, 50);
+    metrics.reset();
+    metrics.replica_delay_ms.store(100, Ordering::SeqCst);
+    let started = Instant::now();
+    let reply = app.handle(&channel, grant(200), NOW).unwrap();
+    let elapsed = started.elapsed();
+    // Synthetic per-call latency, not an AWS measurement or an SDK/carrier test.
+    // The real Runtime write exceeds the SDK's current 15-second reply budget.
+    assert!(elapsed >= Duration::from_secs(15));
+    success(&reply, 1);
+    let counts = metrics.counts();
+    assert_eq!(counts[0], 3 * 51 + 2);
+    assert_eq!(counts[1], 2);
+    assert_eq!(counts[3], 1);
+    eprintln!(
+        "growth-runtime before_head=50 replica_latency_ms=100 elapsed_ms={} replica_gets={} replica_puts={} witness_reads={} witness_cas={}",
+        elapsed.as_millis(),
+        counts[0],
+        counts[1],
+        counts[2],
+        counts[3]
+    );
+    // Model a caller that did not obtain the late reply. Never send grant 200 again.
+    // Query its original ID, then explicitly replay the encrypted journal.
+    metrics.replica_delay_ms.store(0, Ordering::SeqCst);
+    let lookup = |id| {
+        app.handle(
+            &channel,
+            request(
+                id,
+                Command::Operation(RequestId::new([200; 32]).unwrap()),
+                11,
+                1,
+            ),
+            NOW,
+        )
+        .unwrap()
+    };
+    assert_eq!(lookup(201).as_bytes(), reply.as_bytes());
+    let mut active = app.active.lock().unwrap();
+    let accepted = active.store.head();
+    assert_eq!(accepted.sequence, 51);
+    assert_eq!(active.store.transactions().count(), 51);
+    active.store.reload().unwrap();
+    assert_eq!(active.store.head(), accepted);
+    assert_eq!(active.store.transactions().count(), 51);
+    // A fresh API must derive the receipt from replay, not its previous cache.
+    let restored_api = Service::new(
+        Contract {
+            owners: app.api.owner_bindings().to_vec(),
+            maximum_auth_lifetime: 120_000,
+            maximum_grant_lifetime: 120_000,
+        },
+        RiskAdmission { enabled: false },
+    )
+    .unwrap();
+    let restored = restored_api
+        .handle(
+            &mut active.store,
+            &channel,
+            &request(
+                203,
+                Command::Operation(RequestId::new([200; 32]).unwrap()),
+                11,
+                1,
+            ),
+            NOW,
+        )
+        .unwrap()
+        .encode()
+        .unwrap();
+    assert_eq!(restored.as_bytes(), reply.as_bytes());
+    assert!(active.store.state().unwrap().attempts().is_empty());
+    assert!(active.store.state().unwrap().orders().is_empty());
+    assert_eq!(active.store.state().unwrap().ledger(), &ledger);
+    drop(active);
+    assert_eq!(lookup(202).as_bytes(), reply.as_bytes());
+    assert_eq!(app.active.lock().unwrap().store.head(), accepted);
 }
 
 #[test]
