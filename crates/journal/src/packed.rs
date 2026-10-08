@@ -1,4 +1,4 @@
-//! Retained-history pack prototype. Not selected by the shipping Nitro runtime.
+//! Retained-history packs with explicit deployment-specific resource bounds.
 //! Frames/AEAD/witness semantics stay unchanged; no checkpoint, cache or pruning.
 use crate::{
     Backend, Error, Frame, Head, MAX_HISTORY_BYTES, MAX_RECORDS,
@@ -22,9 +22,64 @@ const MAGIC: &[u8] = b"CINDER-PACK-1\0";
 /// Fixed canonical sequence partition; changing it requires a new storage format.
 pub const PACK_RECORDS: usize = 16;
 /// Maximum encoded pack, including every legal full-size frame and its headers.
-/// This exceeds the current shipping S3 body's limit; promotion must qualify a
-/// pack-specific transport bound, not enlarge all cloud responses implicitly.
+/// The shipping S3 pack port uses a smaller manifest-bound limit. This absolute
+/// codec ceiling never enlarges ordinary cloud responses implicitly.
 pub const MAX_PACK_BYTES: usize = MAGIC.len() + 100 + PACK_RECORDS * (MAX_RECORD + 80);
+
+/// Additional deployment bounds; never enlarge the journal's absolute limits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    /// Maximum opaque bytes in one original frame.
+    pub record_bytes: usize,
+    /// Maximum sum of original opaque bytes, not duplicated tail versions.
+    pub history_bytes: usize,
+    /// Maximum accepted frame count, including genesis.
+    pub records: usize,
+}
+impl Limits {
+    /// Absolute codec bounds used by explicitly selected local prototypes.
+    pub const ABSOLUTE: Self = Self {
+        record_bytes: MAX_RECORD,
+        history_bytes: MAX_HISTORY_BYTES,
+        records: MAX_RECORDS,
+    };
+    /// Validate before allocating or accessing a store.
+    pub fn validate(self) -> Result<(), Error> {
+        if self.record_bytes == 0
+            || self.record_bytes > MAX_RECORD
+            || self.history_bytes < self.record_bytes
+            || self.history_bytes > MAX_HISTORY_BYTES
+            || self.records == 0
+            || self.records > MAX_RECORDS
+        {
+            return Err(Error::Limit);
+        }
+        Ok(())
+    }
+    /// Exact upper bound for a canonical full pack under this policy.
+    pub fn pack_bytes(self) -> Result<usize, Error> {
+        self.validate()?;
+        Ok(MAGIC.len() + 100 + PACK_RECORDS * (self.record_bytes + 80))
+    }
+    fn frames(self, frames: &[Frame]) -> Result<(), Error> {
+        if frames.len() > self.records {
+            return Err(Error::Limit);
+        }
+        let mut total = 0usize;
+        for frame in frames {
+            if frame.opaque.as_bytes().len() > self.record_bytes {
+                return Err(Error::Limit);
+            }
+            total = total
+                .checked_add(frame.opaque.as_bytes().len())
+                .ok_or(Error::Limit)?;
+        }
+        if total > self.history_bytes {
+            return Err(Error::Limit);
+        }
+        Ok(())
+    }
+}
 
 /// Trusted bounded opaque-object port. No plaintext, list-based discovery or
 /// mutable latest pointer. Separate deployed failure domains remain mandatory.
@@ -112,11 +167,24 @@ pub struct Packed<A: Store, B: Store, W: Witness> {
     first: A,
     second: B,
     witness: W,
+    limits: Limits,
 }
 impl<A: Store, B: Store, W: Witness> Packed<A, B, W> {
     /// Explicit format selection and provisioned epoch. Never initializes the
     /// witness or falls back to legacy frame objects. Not live deployment approval.
     pub fn new(stream: Stream, epoch: u64, first: A, second: B, witness: W) -> Result<Self, Error> {
+        Self::with_limits(stream, epoch, first, second, witness, Limits::ABSOLUTE)
+    }
+    /// Explicit bounded deployment selection. No implicit layout migration.
+    pub fn with_limits(
+        stream: Stream,
+        epoch: u64,
+        first: A,
+        second: B,
+        witness: W,
+        limits: Limits,
+    ) -> Result<Self, Error> {
+        limits.validate()?;
         if stream.id == [0; 32]
             || epoch == 0
             || first.identity() == [0; 32]
@@ -131,6 +199,7 @@ impl<A: Store, B: Store, W: Witness> Packed<A, B, W> {
             first,
             second,
             witness,
+            limits,
         })
     }
     fn anchor(&mut self) -> Result<Anchor, Error> {
@@ -143,7 +212,9 @@ impl<A: Store, B: Store, W: Witness> Packed<A, B, W> {
     fn fetch(&mut self, expected: Head) -> Result<Pack, Error> {
         for store in [&mut self.first as &mut dyn Store, &mut self.second] {
             if let Ok(bytes) = store.get(expected.hash)
+                && bytes.len() <= self.limits.pack_bytes()?
                 && let Ok(pack) = Pack::decode(self.stream, expected, &bytes)
+                && self.limits.frames(&pack.0).is_ok()
             {
                 return Ok(pack);
             }
@@ -155,7 +226,7 @@ impl<A: Store, B: Store, W: Witness> Packed<A, B, W> {
         let Some(mut expected) = anchor.head else {
             return Ok(Vec::new());
         };
-        if expected.sequence >= MAX_RECORDS as u64 {
+        if expected.sequence >= self.limits.records as u64 {
             return Err(Error::Limit);
         }
         let mut packs = Vec::new();
@@ -166,7 +237,7 @@ impl<A: Store, B: Store, W: Witness> Packed<A, B, W> {
                 total = total
                     .checked_add(frame.opaque.as_bytes().len())
                     .ok_or(Error::Limit)?;
-                if total > MAX_HISTORY_BYTES {
+                if total > self.limits.history_bytes {
                     return Err(Error::Limit);
                 }
             }
@@ -212,6 +283,7 @@ impl<A: Store, B: Store, W: Witness> Packed<A, B, W> {
     /// and replay the unchanged AEAD records; old writers must separately fence.
     pub fn restore_snapshot(&mut self, bytes: &[u8]) -> Result<(), Error> {
         let frames = decode_snapshot(self.stream, bytes)?;
+        self.limits.frames(&frames)?;
         let anchor = self.anchor()?;
         if frames.last().map(|frame| frame.head) != anchor.head {
             return Err(Error::Stale);
@@ -235,6 +307,9 @@ impl<A: Store, B: Store, W: Witness> Backend for Packed<A, B, W> {
     }
     fn append(&mut self, expected: Option<Head>, frame: &Frame) -> Result<(), Error> {
         frame.validate()?;
+        if frame.opaque.as_bytes().len() > self.limits.record_bytes {
+            return Err(Error::Limit);
+        }
         let anchor = self.anchor()?;
         if anchor.head != expected {
             return Err(Error::Stale);
@@ -247,7 +322,7 @@ impl<A: Store, B: Store, W: Witness> Backend for Packed<A, B, W> {
         {
             return Err(Error::Invalid);
         }
-        if sequence >= MAX_RECORDS as u64 {
+        if sequence >= self.limits.records as u64 {
             return Err(Error::Limit);
         }
         let history = self.history()?;
@@ -261,7 +336,7 @@ impl<A: Store, B: Store, W: Witness> Backend for Packed<A, B, W> {
                     .ok_or(Error::Limit)
             },
         )?;
-        if total > MAX_HISTORY_BYTES {
+        if total > self.limits.history_bytes {
             return Err(Error::Limit);
         }
         let mut next = if sequence.is_multiple_of(PACK_RECORDS as u64) {

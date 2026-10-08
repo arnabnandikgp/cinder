@@ -1,7 +1,7 @@
-# Retained encrypted history packs — local prototype
+# Retained encrypted history packs
 
-Date: 2026-10-07. **Local design/prototype approved; not selected by the shipping
-Nitro runtime, not a cloud migration or new hardware qualification.**
+Date: 2026-10-07. **Local implementation and bounded read-only shipping-port
+hardware cells passed. No deployed migration or financial qualification.**
 The [growth diagnosis](../implementation/P23-GROWTH-DIAGNOSIS.md) established
 history-dependent object calls. This candidate reduces those calls without
 removing records or the later historical-copy repair boundary.
@@ -10,12 +10,13 @@ removing records or the later historical-copy repair boundary.
 
 `journal::packed::Packed` implements the existing Backend. No new dependency,
 financial equation, API wire, cipher, timeout or witness schema is introduced.
-The new module is compiled normally, but **only the explicit local-fixture
-Runtime can select it**. `Loaded::open` and the shipping S3 adapter still select
-legacy per-frame Replicated storage. There is no fallback between formats.
+`Loaded::open` now selects bounded S3 packs only for an explicit version-3
+manifest. Versions 1/2 retain legacy per-frame Replicated storage, their original
+digest and role envelopes. There is no fallback between formats. A missing pack
+at an accepted legacy head refuses boot; it never resets or initializes that head.
 
 - Fixed canonical groups contain sequences `[16k, min(16k+15, head)]`.
-  Sixteen is a prototype format parameter, not an approved capacity limit.
+Sixteen is the format parameter, not an approved service capacity limit.
 - `CINDER-PACK-1\0`, network/deployment/stream IDs, a big-endian count, then
   length-prefixed original frame encodings. Frame hashes and original AEAD
   context/nonce/key generation are unchanged.
@@ -31,18 +32,34 @@ legacy per-frame Replicated storage. There is no fallback between formats.
 
 ### Bounds and costs
 
-Original bounds remain: 4,096 frames, 64 MiB total opaque history, 1 MiB per
+Absolute codec bounds remain: 4,096 frames, 64 MiB total opaque history, 1 MiB per
 opaque frame. A pack is at most `MAGIC.len()+100+16*(MAX_RECORD+80)` bytes,
 approximately **16 MiB**, including headers. The local FileStore checks size
 before reading, bounds the read itself, rejects direct symlink objects and uses
 private directories, exclusive temporary files, fsync/rename/readback.
 
-**Shipping S3 currently accepts only a frame-sized response. It cannot be used
-as this pack port.** Promotion needs a pack-specific bounded transport, reviewed
-allocation/copy/RSS and timeout/credential/budget behavior. Do not enlarge all
-cloud responses or claim that small-record fixture RSS qualifies maximum-size
-packs. The prototype holds complete history and temporary pack copies in memory;
-this is deliberately not a streaming production-capacity implementation.
+Version 3 explicitly binds `HistoryPolicy`: at most 64 KiB per original opaque
+frame, 8 MiB total original history and 256 accepted frames including genesis.
+Its largest encoded pack is **1,049,970 bytes**. These are qualification ceilings,
+not calibrated production retention/capacity. Lower policies are permitted; an
+existing history exceeding one refuses, never trims. The local growth fixture
+uses these same frame/history/count ceilings.
+
+`S3Packs` uses a separate `/packs-1/<ending-frame-hash>` namespace and checks
+Content-Length before allocating a response. Only bounded S3 GET/PUT can use the
+pack response limit; KMS, DynamoDB and legacy frames keep their original bound.
+Existing TLS trust, signed time, credential expiration, ten-second I/O bound and
+no-retry behavior remain. The ciphertext response buffer moves into the decoder
+without a second body copy. Complete history and transient decoded packs still
+occupy memory; full-size and browser RSS checks are separate from Nitro capacity.
+
+Each replica has manifest-bound, per-boot PUT attempt/byte allowances, consumed
+before signing/I/O, including failed or uncertain writes and repair. Maximums
+are 1,024 attempts and 128 MiB per replica per boot. A failed charge performs no
+I/O and cannot move the witness. These are not fleet-global quotas: restarting
+does not recover a spent allowance or constrain unlimited authorized boots.
+The hardware run therefore also requires independent whole-run request/object/
+byte caps. Exhaustion refuses writes; it must not reset history. There is no GC.
 
 Healthy append with N existing accepted frames and M=ceil(N/16) required packs
 performs **3M+2 GETs and two PUTs**, instead of 3N+2 GETs and two PUTs. At existing
@@ -56,13 +73,16 @@ Retaining every partial-tail version duplicates prefixes: a full group stores
 1+...+16 frame copies across its versions, up to 8.5 times the original payload
 per replica before overhead/orphans. Failed proposals can leave additional orphan
 objects. No pruning, garbage collection, checkpoint or retention policy is
-approved here; storage quota/orphan handling is a promotion gate.
+approved here. Per-boot write bounds and whole-run limits bound new orphans for
+qualification; production storage quotas and orphan handling remain separate.
 
 ## Append and failures
 
 1. Read the fresh epoch/head and require the exact caller-expected head.
 2. Load every required pack from a valid copy; verify the full chain/limits and
-   check the fresh head again. One lost copy can be read from the other.
+   check the fresh head again. Require the loaded history to match the original
+   expected head **before any writes**, even if a competing same-epoch writer
+   accepted the same frame. One lost copy can be read from the other.
 3. Write/read back the complete new tail in both stores.
 4. Independently GET **both copies of every old required pack**, including the
    previous partial tail. Repair missing/corrupt copies with exact readback.
@@ -84,6 +104,14 @@ successful repair is an observed acceptance-boundary condition, not a guarantee
 against later simultaneous deletion. These limitations also apply to legacy
 replication.
 
+S3 PUT is exact replacement, rather than create-only: a corrupt object at a
+content-addressed key must be repairable. Canonical partition and original frame
+hashes determine the unique correct bytes. New and old objects independently
+read back before CAS; an untrusted overwrite cannot establish acceptance. The
+S3 identity includes the bucket and region, so selecting the same bucket under
+two ports fails the distinct-replica check; separate buckets alone do not prove
+separate administration or availability.
+
 ## Explicit archive and migration
 
 Both backends share the byte-identical full `CINDER-SNAPSHOT-1\0` archive codec.
@@ -97,11 +125,18 @@ authenticate and replay the full archive with its original configuration and key
 
 A synthetic migration test fences the old writer using a new trusted epoch,
 imports the archive and retains every original receipt. That is not a deployed
-migration runbook. Before shipping: fence every old writer/capability, bind format
-and pack policy to the governed application/recovery manifest, qualify cloud
+migration runbook. For a future deployed migration: fence every old writer/capability,
+bind format and pack policy to the governed application/recovery manifest, qualify cloud
 ports, archive access, interruption/restore, resources and changed measurements.
 Never infer permission from an old C5 artifact. The local fixture's durable
 layout marker refuses a format change on reopen rather than attempting migration.
+
+The version-3 manifest uses `CINDER-RUNTIME-MANIFEST-3` and `CKR3` role envelopes;
+every history field changes the digest and loaded application commitment. The
+six actual key roles, chain contract and resource policy must agree before
+release. Versions 1/2 reject a pack policy; version 3 requires it and the chain
+contract. It still rejects trading and funding activation. A new public manifest
+changes PCRs and requires fresh approval; a source/ELF build is not that approval.
 
 ## Qualification and remaining gate
 
@@ -128,7 +163,11 @@ and runs growth; no argument runs both locally. No normal check needs `work/`.
 Results and exact artifacts belong in [TRACKER](../implementation/TRACKER.md).
 This is local synthetic evidence, not cloud latency calibration, independent
 storage/witness infrastructure, Nitro attestation or financial qualification.
-Next: review this candidate's format/resource/migration contract; only then
-promote bounded cloud ports and propose a fresh measured hardware run. Hardware
-cut 64 and the [financial gates](../implementation/P23-FINANCIAL-GATES.md) remain
-open. P23 is not closed by this prototype.
+The separately approved [hardware receipt](../implementation/P23-PACKS-HARDWARE.md)
+records actual Node/Chrome cuts 2/8/32/64 on the new measured version-3 image,
+S3 old-copy repair/refusal, original-receipt replay and freshness boundaries.
+These are bounded read-only observations, not full-size live memory/capacity,
+independent infrastructure, deployed migration or indefinite scaling evidence.
+The [financial gates](../implementation/P23-FINANCIAL-GATES.md) remain open;
+next is authenticated native provider preparation and a separately authorized
+funding round trip. P23 is not closed by this storage qualification.

@@ -21,6 +21,8 @@ use zeroize::Zeroizing;
 const MAGIC: &[u8] = b"CINDER-PACIFICA-FUNDING-1\0";
 /// Narrow legacy Solana instruction/message codec; no RPC or ambient wallet.
 pub mod chain;
+/// Strict documented setup/transfer wire parsing; not a financial certificate.
+pub mod evidence;
 pub mod recovery;
 /// Governed binding between an opaque private account and its public payout owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

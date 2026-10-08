@@ -196,7 +196,7 @@ impl Clock for Time {
             .ok_or(Error)
     }
 }
-// Local qualification ONLY. Shipping Loaded::open still selects Replicated.
+// Local qualification ONLY. The shipping selector is independently manifest-bound.
 enum Storage {
     Frames(Replicated<CountedReplica, CountedReplica, CountedWitness>),
     Packs(Packed<CountedPack, CountedPack, CountedWitness>),
@@ -310,7 +310,22 @@ fn application(
             })
         };
         Storage::Packs(
-            Packed::new(stream, 1, pack("first")?, pack("second")?, witness).map_err(|_| Error)?,
+            Packed::with_limits(
+                stream,
+                1,
+                pack("first")?,
+                pack("second")?,
+                witness,
+                crate::boot::HistoryPolicy {
+                    record_bytes: 65_536,
+                    history_bytes: 8_388_608,
+                    records: 256,
+                    put_requests: 512,
+                    put_bytes: 134_217_728,
+                }
+                .limits()?,
+            )
+            .map_err(|_| Error)?,
         )
     } else {
         Storage::Frames(

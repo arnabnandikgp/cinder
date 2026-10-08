@@ -233,9 +233,10 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
         root: root.clone(),
         root_hash: hash,
     };
-    for version in [1, 2] {
+    for version in [1, 2, 3] {
         let mut manifest = Manifest {
-        version: 1,
+            version: 1,
+            history: None,
         domain: [[1; 32], [2; 32]].concat(),
         application: [1; 32],
         stream: [42; 32],
@@ -281,8 +282,17 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
     };
         let mut configuration = runtime_configuration();
         let mut input = serde_json::json!({"manifest":null,"configuration":null,"storage":vec![55;32],"trading":vec![7;32],"broker":vec![9;32],"witness":null});
-        let expected = if version == 2 {
-            manifest.version = 2;
+        let expected = if version >= 2 {
+            manifest.version = version;
+            if version == 3 {
+                manifest.history = Some(cinder_service::boot::HistoryPolicy {
+                    record_bytes: 65536,
+                    history_bytes: 8388608,
+                    records: 256,
+                    put_requests: 512,
+                    put_bytes: 134217728,
+                });
+            }
             let mut slot = manifest.slots[0].clone();
             slot.role = Role::Funds;
             slot.endpoint.resource =
@@ -367,7 +377,11 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
         for role in m.slots.iter().map(|s| s.role) {
             let path = out.join(format!("{}.plain", role.name()));
             let bytes = std::fs::read(&path).unwrap();
-            assert!(bytes.starts_with(if version == 1 { b"CKR1" } else { b"CKR2" }));
+            assert!(bytes.starts_with(match version {
+                1 => b"CKR1",
+                2 => b"CKR2",
+                _ => b"CKR3",
+            }));
             assert!(bytes.len() <= 4096);
             #[cfg(unix)]
             {

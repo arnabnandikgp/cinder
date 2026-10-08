@@ -2,7 +2,8 @@
 
 This is a **qualification build**, not a live brokerage deployment. The measured
 version-1 manifest rejects all native activation; version 2 permits bounded
-read-only qualification but still rejects trading and funding. Private SDK auth,
+read-only qualification; version 3 additionally binds bounded retained S3 packs.
+All three still reject trading and funding. Private SDK auth,
 grants and views use the actual API and journal. No fixture funds, synthetic fill
 or fake exposure is injected. P22 owns integrated offline financial scenarios;
 P23 owns qualified venue/chain workflows. P20 hardware must still prove actual

@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55), ready/open; [#56](https://github.com/arnabnandikgp/cinder/pull/56), offline diagnosis |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -37,9 +37,9 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-P23 is in progress. The published live-qualification work is on
-`tee/p23-live-qualification`; the user-approved offline pack prototype is now on
-`tee/p23-packed-history`, stacked above #56 (`tee/p23-growth-diagnosis`) at
+P23 is in progress. Shipping continuation is published ready/open as #59 on
+`tee/p23-shipping-packs`, based on reviewed #58 (`tee/p23-packed-history`) at
+`a1bc5c2bfce92402c22fc8bf53cc36b1cb9f6d5c`, stacked above #56 (`tee/p23-growth-diagnosis`) at
 `60eee0c558d800d6613bd1ae72e43bddadd51e13`, above #55 at
 `eac1f57c16367d97ad5f32931880c979de522227`. All derive from
 merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
@@ -47,6 +47,183 @@ merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 [ADR 0024](../architecture/0024-confidential-chain-ports.md) define the fixed
 local checklist and remaining capability gates. The historical pre-review
 application checkpoints and receipts remain in the P23 log below.
+
+### Shipping continuation — 2026-10-07
+
+Latest authorization/preflight: the user approved the focused hardware run in
+[the next-run contract](P23-NEXT-RUN-PROPOSAL.md), with no native/RPC/financial
+activity. All eight hosted jobs and CodeRabbit succeeded at pre-receipt #59 head
+`800346b09510f1d7a7ea30c2b335416ffe3df4f9`; no review threads when checked.
+Non-root AWS identity, Nitro eligibility, current AMI/price/quota/network metadata
+and the final thirteen package hashes reverify. Administrator setup then passed
+exact original policy/attachment and fresh-name checks. Initial pre-provisioning
+created only two empty tagged roles; AWS explicitly rejected the first tagged
+KMS creation because the supplied operator template omitted `kms:TagResource`.
+Both roles were removed after ownership checks; independent cleanup verified
+absent roles/buckets/table/test volumes, zero instances and zero recorded keys.
+No EIF, runtime credential, key release, native/RPC request or financial activity
+occurred. Fresh `p23-20261007-pack1` templates and receipts are local under ignored
+`work/experiments/p23-live/packed-permissions/` and `run-pack1/`. The updated
+operator JSON adds scoped tagging, not decryption; runtime boundary is unchanged.
+The administrator corrected the existing operator default policy; independent
+exact-policy/attachment/fresh-name checks pass. A fresh `run-pack1b` ledger
+(`CinderRun=pack1b`) preserves the rejected, closed `run-pack1` unchanged.
+The same approved namespace's names were independently absent and no prior key,
+credential, witness head, ciphertext or host existed to reuse. Six new keys,
+two stores, table and bounded roles were created. One `c6g.large` host was launched,
+with encrypted auto-deleting root, operator-only SSH and verified four-hour
+automatic shutdown. All thirteen uploaded artifacts match the source register.
+The fresh version-3/six-role manifest keeps native/funding/trading gates off;
+independent first-EIF hash/CRC/entrypoint/nonzero PCR checks and all six exact
+key/role policy readbacks pass. Actual parent-role witness-read and plaintext
+KMS-decryption denials pass. Boots 1/2 are non-debug (`Flags=NONE`). Actual Node
+and Chrome HTTP/WS cuts 2/8/32/64 pass one/two watches and parallel own zero-credit
+reads; recorded parallel latencies are 840–2,704 ms. Actual READ grants grow the
+accepted history, with head-64 growth replies at 2,147–2,606 ms. Both clients pass
+attestation pin/replay refusal, own-account READ/revocation and natural grant
+expiry. A deliberately lost reply reconciles its original pre-exposure ID/digest
+without resend. Exact process restart preserves head 64, account epoch and
+original receipts. The epoch fence advances authority to epoch 2 without changing
+the accepted head and refuses private reads. Fresh-stream old-pack loss,
+corruption, independently tested exact-object repair denial and fault replay pass;
+all eighteen accepted receipts survive restart and the failed original remains
+not-found, without resend. Witness loss refuses reads with head 20 unchanged.
+One-PUT-per-replica quota accepts only genesis (head 0), with no API initialization
+or extra tail. Natural 90-second boot lease refuses after a healthy baseline,
+preserving head 2 while the parent and all six keys remain live. Natural witness
+credential expiry also refuses private reads with unchanged head 2, enabled keys
+and valid parent credentials. All fixed application cells pass and all owned
+workers are stopped. The ciphertext archive retains and independently rehashes
+188 objects (1,183,396 bytes) and five strong final heads. Owned cleanup was
+independently verified at 10:30:46 UTC: host terminated, test EBS/stores/witness/
+roles/SSH/security group absent, six keys PendingDeletion, existing setup policies
+preserved. Local relay/tunnel exited. This invocation is closed.
+[The sanitized hardware receipt](P23-PACKS-HARDWARE.md)
+records the exact release, five profiles, seven boots, latencies, faults and
+traffic boundaries, not production capacity or P23 financial acceptance.
+Final parent HTTPS counts: S3 580/379, witness 1,134, KMS 42, venue/RPC zero.
+Conservative setup/runtime/archive/cleanup totals (including the rejected first
+attempt and manual diagnostic reads) are KMS 242, S3 1,392 and DynamoDB 1,188,
+within approved caps. No pending or uncertain resource mutation remains.
+Startup DNS/address-selection metadata exists; zero native/RPC API requests
+does not mean zero DNS. Private receipts/scripts remain local and ignored.
+Local operator preparation passes the unmodified trusted version-3 preparer
+with all six roles, bounded history and financial gates off; it rejects a
+257-record policy. It is not hardware or complete cloud-fault qualification.
+Do not overwrite/reuse closed policies/resources, assume that unreadable means
+absent, or use the untracked user preparation example. The cited hosted CI
+receipt applies only to its exact committed head, not this documentation update.
+Final docs-only verification: pinned `node scripts/check.mjs --group=contracts`
+passes 42/42 contracts, plan and workspace-boundary checks; `git diff --check`
+passes. Local operator header/read-oracle tests pass 14/14, not extra hardware
+acceptance cells. No source change or new full Rust/SBF qualification is claimed.
+Next: prepare authenticated native setup/credit/withdrawal providers and their
+local tests. A fresh bounded approval
+is required for the actual funding round trip; this read-only run grants none.
+No PR is merged and P23 remains in progress.
+
+Historical local authorization/receipts follow:
+
+User authorization: finish local shipping integration/qualification and **stop
+before AWS/Nitro tests**. No new cloud/venue/RPC/wallet activity or merge follows.
+Current implementation binds version-3 retained S3 packs, closed resource limits,
+six-role/chain release and actual loaded application policy. Versions 1/2 retain
+their bytes/digests and frame layout; no format fallback or automatic migration.
+Original full history/AEAD/witness/CAS/repair/fresh-read guarantees remain.
+Record/history/count and per-replica per-boot PUT/byte caps fail closed; whole-run
+quotas and changed-image hardware qualification are separately required.
+[ADR 0026](../architecture/0026-retained-history-packs.md) describes exact bounds
+and limitations; this is not production capacity/retention calibration.
+
+[Native evidence components](P23-NATIVE-EVIDENCE.md) strictly decode documented
+setup/loan/transfer fields. They do not authenticate source, establish complete
+cuts or create financial completion certificates. Lost-ACK UUID/batch binding,
+final credit/debit, execution/funding completeness, fresh-account bootstrap and
+actual recovery remain named open capabilities. Trading/funding stay forbidden.
+The historical M1 heuristic/exception is not silently imported.
+
+Existing stack review disposition: #56 wording and #58 competing-history race
+are fixed at `a1bc5c2`; both threads replied/resolved, no open threads in #55/#56/#58
+when inspected. All eight hosted jobs and CodeRabbit succeed at that exact #58
+head. These are parent receipts, not CI for the new continuation.
+
+Local receipts: the full pinned `node scripts/check.mjs` passes at implementation
+checkpoint `b3aa47480fcb940a3837e61bc39f1653bb777005`: all 42 contracts, strict
+default/all-feature lint/build, all-feature debug/release, shipping-default debug
+and all 26 SDK/TLS tests. Journal's 13 unit cases include policy bounds, 8-MiB
+full-size archive/replay/append and the reviewed race. All five release tests
+include real trusted-preparation subprocesses for manifest versions 1/2/3.
+The final narrow wire correction at `0845ca67b93134783156d0ce8ce58f0f4c8b9b47`
+retains a zero-net withdrawal when its fee consumes the gross amount; its three
+evidence groups pass debug/release and final full-workspace lint/build passes.
+It does not connect that parser to Runtime or enable any financial capability.
+
+The complete `node tools/web-channel/check.mjs` passes: each actual Node/Chrome
+client has 14 core/verifier, 26 HTTP/WS SDK process and nine C4 Runtime groups;
+all four shipping-bounded packed growth cells pass. Frozen Runtime fixture hash:
+`013540d47b65eeef0cef6a734e9c79ee1f070a901a9d660e7004b267ddfbce05`.
+All cells reach cuts 2/8/32/64 with 100-ms replica delay, preserve accepted head65
+and original-ID/digest receipt after lost reply, restart and epoch revocation.
+Ledger remains zero-credit/no-position; there are no native financial actions.
+
+| Client / carrier | Grant reaching head64 | Largest growth grant | Peak fixture RSS across growth/replay |
+| --- | --- | --- | --- |
+| Node / HTTP | 1,766 ms | 1,814 ms | 12,894,208 bytes |
+| Node / WebSocket | 1,866 ms | 1,971 ms | 12,042,240 bytes |
+| Chrome / HTTP | 1,761 ms | 1,801 ms | 12,173,312 bytes |
+| Chrome / WebSocket | 1,777 ms | 1,934 ms | 12,910,592 bytes |
+
+The direct full-size backend test alone peaks at 52,068,352 bytes RSS (2.96s),
+not compiler RSS or a full decoded financial Runtime/Nitro capacity benchmark.
+Full default vault runner passes **59/59, none skipped**, in 466.228s, including
+actual compiled SBF normal/recovery HTTP/WS workflows in offline Surfpool.
+These retain external fixture evidence limits; they are not testnet transactions.
+Anchor 1.2.0 temporary binary matches published SHA256
+`986d99392a520dfc50b63caf4eda9b9d7619c78ffb53fc57b6f8677c60b6d27e`;
+Node 24.21.0 / Rust 1.97.1 / bindgen 0.2.129 / Chrome 154.0.8037.98 remain pinned.
+Host lint initially caught a feature guard error, fixed without suppressions;
+SBF initially stopped before tests at missing tool prerequisites. No global
+installation changed. Hardware-only ignored cases were not invoked.
+
+Exact committed source export independently passes all 42 contracts and
+plan/workspace checks (27 phases/47 documents), with no research or user files.
+The source-only ARM package at `b3aa474` passes reproducibility and ordinary-host
+boot refusal. Its copied thirteen hashes/rootfs equality verify; temporary
+stopped-container copying failed, so the generated container was removed and
+the package rebuilt/exported while running. No user artifact was deleted.
+Final ARM source `0845ca67b93134783156d0ce8ce58f0f4c8b9b47`, tree
+`0ac94f4ff6b92abf958f33bff5d63e3640e265f5`, passes default-feature release,
+clean application rebuild/byte-identical comparison and ordinary-host refusal
+in Apple container 1.4.1 / immutable tool image
+`33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`.
+Networking disabled, source/vendor read-only, build outputs isolated; no NSM,
+research, wallets or AWS configuration mounted. Generated package retained at
+`/private/tmp/cinder-p23-shipping-arm.G1JsgP/artifacts/final-bundle`.
+All thirteen copied hashes and rootfs executable equality verify. Enclave SHA256
+`653e1643770084ad58b1120a46d21e8c40032b04a40734b9909ee2ed75474209`;
+package register SHA256
+`cea81afe00e1bfaa68ccd98ad6c8da3b7541de2cac13533fe494280b63c48410`.
+This supersedes the earlier package for a new run; it is not EIF/PCR or hardware
+evidence. Both task-created build containers exited/removed; shared images and
+builder remain untouched. Raw offline logs/package are temporary/reproducible;
+code/tests/run contracts are tracked.
+
+Publication: ready/open [#59](https://github.com/arnabnandikgp/cinder/pull/59),
+`tee/p23-shipping-packs` → `tee/p23-packed-history`, initial evidence head
+`773217fb357f4522ca42bd1b84599f171a1dd2e4`. Native stack #57 is
+#55 → #56 → #58 → #59; all three parent branch heads are unchanged.
+Hosted CI/review for #59 are newly pending, not inherited from parent/local
+results. This publication-only successor records actual PR/base and passes the
+contracts/workspace/whitespace guards; its own new-head checks remain separate.
+No PR is merged. User-owned untracked files and unrelated stashes remain out
+of the commit/export. The next action is review/fresh-manifest preparation at
+the AWS boundary, not launch: no new AWS/native/RPC activity occurred. Storage
+local qualification is complete; the P23 financial provider/lifecycle gates
+listed above remain open and no production capacity/retention policy is approved.
+
+[The next-run proposal](P23-NEXT-RUN-PROPOSAL.md) is the handoff at the AWS
+boundary, not permission to launch or activate financial capabilities. Keep P23
+in progress. Do not reuse closed C5 resources/policies or fabricate live receipts.
 
 ### Offline growth continuation — 2026-10-07
 
