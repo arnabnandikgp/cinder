@@ -19,7 +19,7 @@ const allowed = new Map([
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
   ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'ed25519-dalek:normal', 'bs58:normal', 'zeroize:normal']],
   ['cinder-api', ['cinder-kernel:normal', 'cinder-journal:normal', 'sha2:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
-  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'cinder-web-channel:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal', 'serde:normal', 'serde_json:normal', 'base64:normal', 'aws-sigv4:normal', 'aws-credential-types:normal']],
+  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'cinder-web-channel:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal', 'serde:normal', 'serde_json:normal', 'base64:normal', 'aws-sigv4:normal', 'aws-credential-types:normal', 'tungstenite:normal', 'log:normal']],
   ['cinder-web-channel', ['snow:normal', 'zeroize:normal', 'sha2:normal', 'getrandom:normal', 'wasm-bindgen:normal']],
 ]);
 
@@ -55,6 +55,13 @@ export function validateWorkspace(metadata) {
     const expected = [...(allowed.get(pkg.name) ?? [])].sort();
     if (JSON.stringify(actual) !== JSON.stringify(expected)) errors.push(`${pkg.name}: forbidden dependency edge`);
     for (const dep of pkg.dependencies ?? []) {
+      if (pkg.name === 'cinder-service' && ['tungstenite','log'].includes(dep.name)) {
+        const version = dep.name === 'tungstenite' ? '=0.30.0' : '=0.4.34';
+        const features = dep.name === 'tungstenite' ? ['handshake'] : ['max_level_off','release_max_level_off'];
+        if (dep.req!==version || dep.source!==dependencyPolicy.registry || dep.path || dep.target!=null || dep.optional
+            || dep.uses_default_features!==(dep.name==='log') || JSON.stringify(dep.features)!==JSON.stringify(features)) errors.push('cinder-service: native capture dependency configuration not approved');
+        continue;
+      }
       if (pkg.name === 'cinder-web-channel') {
         const features = dep.name === 'snow' ? ['use-curve25519','use-chacha20poly1305','use-sha2','use-getrandom'] : dep.name === 'getrandom' ? ['wasm_js'] : [];
         const target = ['getrandom','wasm-bindgen'].includes(dep.name) ? 'cfg(target_arch = "wasm32")' : null;

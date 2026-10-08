@@ -800,6 +800,14 @@ Transfer joins remain non-financial observations; successful native ACK retentio
 is distinct from losing the native reply before persistence. This slice does not
 close credit/payment/cut/bootstrap gates or enable money movement; its evidence
 and next bounded provider step belong in TRACKER and P23-NATIVE-EVIDENCE.
+The following bounded offline slice implements budgeted native account-transfer
+capture through enclave TLS and a distinct fixed-host WSS relay, with raw ordered
+evidence retained at the current journal head. [ADR 0027](../architecture/0027-native-transfer-capture.md)
+defines the finite capture/dependency/entropy/logging contracts and local peer
+tests. It is not activated by the loaded runtime/manifest yet, does not reconnect,
+and does not qualify setup/credit/payment or completeness. Bind the actual loaded
+capture policy/route and join its preparation/I/O/archive before a separately
+authorized live qualification. Financial gates remain closed.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial
 activation and the existing durable storage/repair contract are unchanged.

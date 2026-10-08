@@ -1,4 +1,6 @@
 //! Pacifica-specific evidence boundary. No sockets, keys, clocks or ledger copies.
+/// Budgeted bounded native transfer capture; raw observations are not finality.
+pub mod capture;
 pub mod execution;
 pub mod funding;
 mod native;

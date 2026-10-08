@@ -312,6 +312,18 @@ pub(crate) struct Lifetime {
 }
 impl Lifetime {
     pub(crate) fn new(socket: impl Socket) -> Self {
+        Self::with_limits(
+            socket,
+            IO_TIMEOUT,
+            Duration::from_millis(attestation::MAX_SESSION),
+        )
+    }
+    /// Absolute resource deadline for a one-shot native stream. Do not call
+    /// ready(): this deadline includes TLS and WebSocket negotiation.
+    pub(crate) fn bounded(socket: impl Socket, duration: Duration) -> Self {
+        Self::with_limits(socket, duration, Duration::ZERO)
+    }
+    fn with_limits(socket: impl Socket, handshake: Duration, session: Duration) -> Self {
         let state = Arc::new((Mutex::new((false, false)), Condvar::new()));
         let c = state.clone();
         let worker = thread::spawn(move || {
@@ -320,7 +332,7 @@ impl Lifetime {
                 let _ = socket.shutdown(Shutdown::Both);
                 return;
             };
-            let Ok((s, _)) = cv.wait_timeout_while(s, IO_TIMEOUT, |s| !s.0 && !s.1) else {
+            let Ok((s, _)) = cv.wait_timeout_while(s, handshake, |s| !s.0 && !s.1) else {
                 let _ = socket.shutdown(Shutdown::Both);
                 return;
             };
@@ -331,9 +343,7 @@ impl Lifetime {
                 let _ = socket.shutdown(Shutdown::Both);
                 return;
             }
-            let Ok((s, _)) =
-                cv.wait_timeout_while(s, Duration::from_millis(attestation::MAX_SESSION), |s| !s.0)
-            else {
+            let Ok((s, _)) = cv.wait_timeout_while(s, session, |s| !s.0) else {
                 let _ = socket.shutdown(Shutdown::Both);
                 return;
             };
@@ -584,6 +594,22 @@ pub fn relay_egress(
     first_ipv4((host, 443).to_socket_addrs()?)?;
     relay_socket(listener, || connect_https(host), stop, RelayKind::Egress)
 }
+/// Distinct fixed-origin native WSS relay. The parent copies ciphertext only;
+/// it cannot select an account, decode transfers or certify economic completion.
+pub fn relay_native_capture(
+    listener: crate::vsock::VsockListener,
+    origin: cinder_pacifica::execution::Origin,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    let host = crate::native_capture::host(origin);
+    first_ipv4((host, 443).to_socket_addrs()?)?;
+    relay_socket(
+        listener,
+        || connect_https(host),
+        stop,
+        RelayKind::StreamEgress,
+    )
+}
 /// Fixed devnet RPC relay. Only opaque TLS is copied; RPC credentials, methods,
 /// signed transactions and responses remain inside the enclave TLS channel.
 pub fn relay_chain(
@@ -626,6 +652,7 @@ fn connect_https_with<I: Iterator<Item = SocketAddr>, S>(
 enum RelayKind {
     Ingress,
     Egress,
+    StreamEgress,
 }
 fn relay_socket<L: Listener, S: Socket>(
     listener: L,
@@ -657,12 +684,12 @@ fn relay_socket<L: Listener, S: Socket>(
                     let _ = upstream.shutdown(Shutdown::Both);
                     continue;
                 }
-                // Private streams emit only when state changes, so silence is
-                // not a failed request. The enclave enforces handshake/frame
-                // deadlines; this opaque ingress retains the absolute session
+                // Private/native streams can be quiet, so silence is not a
+                // failed one-shot request. The enclave enforces handshake/frame
+                // deadlines; this opaque relay retains the absolute session
                 // lifetime, byte/connection caps and bounded writes. One-shot
                 // native/cloud RPC egress keeps its short read timeout.
-                if matches!(kind, RelayKind::Ingress)
+                if matches!(kind, RelayKind::Ingress | RelayKind::StreamEgress)
                     && (client.idle().is_err() || upstream.idle().is_err())
                 {
                     let _ = client.shutdown(Shutdown::Both);

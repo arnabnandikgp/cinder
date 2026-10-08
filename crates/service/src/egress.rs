@@ -35,6 +35,9 @@ pub struct Trust {
     digest: [u8; 32],
 }
 impl Trust {
+    pub(crate) fn digest(&self) -> [u8; 32] {
+        self.digest
+    }
     /// Validate bounded canonical DER against the independently expected digest.
     pub fn from_der(der: &[u8], expected: [u8; 32]) -> Result<Self, Error> {
         if der.is_empty()

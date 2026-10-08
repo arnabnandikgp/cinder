@@ -1,5 +1,5 @@
 {
-  "lockfileSha256": "f113f7ddb0a37cc045aa0304188627a4f03567669215f0c488a9db2f41172bd3",
+  "lockfileSha256": "1f26209784a22f59199d015c4dcb0ec4f9bc2baa66ce8011c160f076dcbc0337",
   "registry": "registry+https://github.com/rust-lang/crates.io-index",
   "packages": [
     {
@@ -758,6 +758,8 @@
       "buildScript": false,
       "features": [
         "alloc",
+        "max_level_off",
+        "release_max_level_off",
         "std"
       ]
     },
@@ -1478,6 +1480,89 @@
       "version": "0.57.1",
       "buildScript": true,
       "features": []
+    },
+    {
+      "name": "chacha20",
+      "version": "0.10.2",
+      "buildScript": false,
+      "features": [
+        "rng"
+      ]
+    },
+    {
+      "name": "data-encoding",
+      "version": "2.11.1",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "getrandom",
+      "version": "0.4.3",
+      "buildScript": true,
+      "features": [
+        "std",
+        "sys_rng"
+      ]
+    },
+    {
+      "name": "httparse",
+      "version": "1.10.1",
+      "buildScript": true,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "r-efi",
+      "version": "6.0.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "rand",
+      "version": "0.10.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std",
+        "std_rng",
+        "sys_rng",
+        "thread_rng"
+      ]
+    },
+    {
+      "name": "rand_core",
+      "version": "0.10.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "sha1",
+      "version": "0.11.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "oid"
+      ]
+    },
+    {
+      "name": "tungstenite",
+      "version": "0.30.0",
+      "buildScript": false,
+      "features": [
+        "data-encoding",
+        "handshake",
+        "http",
+        "httparse",
+        "sha1"
+      ]
     }
   ]
 }
