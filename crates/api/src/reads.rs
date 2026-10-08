@@ -4,8 +4,8 @@ use crate::{
     wire::{Command, Reader, Request, Writer},
 };
 use cinder_journal::{
-    Backend, Journal, Protection,
     model::{PrivateBytes, Resource},
+    read::Source,
 };
 use cinder_kernel::{
     amounts::MarketUnit,
@@ -112,9 +112,9 @@ fn optional(w: &mut Writer, n: Option<i128>) {
     }
 }
 impl<A: Admission> Service<A> {
-    pub(crate) fn read<B: Backend, P: Protection>(
+    pub(crate) fn read(
         &self,
-        journal: &Journal<B, P>,
+        journal: &impl Source,
         req: &Request,
         records: &[Record],
         q: Query,

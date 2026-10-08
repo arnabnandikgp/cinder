@@ -22,6 +22,7 @@ export interface WebCore {
 export interface WebOptions { baseUrl: string; policy: ReleasePolicy; core: WebCore; transport?: 'http'|'websocket' }
 type Verifier = (quote: Uint8Array, policy: Uint8Array, context: QuoteContext) => Promise<VerifiedQuote>;
 const MAX_BATCH = 1048576 + 65 * 34, DEADLINE = 5000;
+const REPLY_DEADLINE = 15000;
 const failed = () => Error('Confidential web channel unavailable; reconcile on a fresh session');
 const copy = (value: Uint8Array, size: number) => {
   if (!(value instanceof Uint8Array) || value.length !== size || !value.some(b => b)) throw failed();
@@ -103,7 +104,9 @@ export class WebChannel implements ConfidentialChannel {
     if (this.#closed || this.#busy || !(input instanceof Uint8Array) || input.length === 0 || input.length > 1024) { this.close(); throw failed(); }
     this.context(); this.#busy = true;
     const clear = Uint8Array.from(input), abort = new AbortController(); this.#active = abort;
-    const timer = setTimeout(() => this.close(), DEADLINE);
+    // Application acceptance can include durable cloud writes. This never
+    // extends handshake/frame assembly, retries a command or renews the session.
+    const timer = setTimeout(() => this.close(), REPLY_DEADLINE);
     try {
       const sequence = ++this.#sequence;
       const wire = this.#socket?this.#endpoint!.socket_request(sequence,clear,false):this.#endpoint!.request(sequence, clear); clear.fill(0);
@@ -173,15 +176,22 @@ export class WebChannel implements ConfidentialChannel {
       await response.body?.cancel(); throw failed();
     }
     const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let total = 0;
+    // Waiting for response headers has the caller's application/handshake
+    // budget. Once a response starts, body assembly has its own absolute bound;
+    // trickled chunks cannot renew it and a stalled read is actively cancelled.
+    let timer:ReturnType<typeof setTimeout>;
+    const assembly=new Promise<never>((_,reject)=>{
+      timer=setTimeout(()=>{this.close();reject(failed());},DEADLINE);
+    });
     try {
       for (;;) {
-        const { value, done } = await reader.read(); if (done) break;
+        const { value, done } = await Promise.race([reader.read(),assembly]); if (done) break;
         total += value.length;
         if (total > maximum || chunks.length >= 4096 || this.#closed || signal.aborted) throw failed();
         chunks.push(value);
       }
       if (!total || this.#closed || signal.aborted) throw failed();
       return concat(...chunks);
-    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+    } finally { clearTimeout(timer!); await reader.cancel().catch(() => {}); reader.releaseLock(); }
   }
 }

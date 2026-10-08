@@ -19,6 +19,8 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 const MAGIC: &[u8] = b"CINDER-PACIFICA-FUNDING-1\0";
+/// Narrow legacy Solana instruction/message codec; no RPC or ambient wallet.
+pub mod chain;
 pub mod recovery;
 /// Governed binding between an opaque private account and its public payout owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -169,6 +171,14 @@ impl Plan {
     pub fn epoch(&self) -> u64 {
         self.epoch
     }
+    /// Original local signing deadline in milliseconds, not a chain slot.
+    pub fn expires_at(&self) -> u64 {
+        self.expires_at
+    }
+    /// Durable plan time; a backwards clock cannot authorize signing.
+    pub fn prepared_at(&self) -> u64 {
+        self.at
+    }
 }
 /// Non-clone custody capability. The enclave chain boundary builds/signs only
 /// this instruction and persists its exact signed wire before sending once.
@@ -196,7 +206,12 @@ impl std::fmt::Debug for VerifiedWire {
     }
 }
 /// Non-clone signed delivery returned ONLY after durable exact-wire persistence.
-pub struct ChainDelivery(PrivateBytes);
+pub struct ChainDelivery {
+    wire: PrivateBytes,
+    network: [u8; 32],
+    expires_at: u64,
+    expires_at_slot: u64,
+}
 impl std::fmt::Debug for ChainDelivery {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ChainDelivery([PRIVATE])")
@@ -205,7 +220,19 @@ impl std::fmt::Debug for ChainDelivery {
 impl ChainDelivery {
     /// Consume once in the qualified cluster egress port; no redirects or retries.
     pub fn into_wire(self) -> PrivateBytes {
-        self.0
+        self.wire
+    }
+    /// Original configured genesis; a generic chain wire does not encode it.
+    pub fn network(&self) -> [u8; 32] {
+        self.network
+    }
+    /// Original local delivery deadline, not reset by persistence or restart.
+    pub fn expires_at(&self) -> u64 {
+        self.expires_at
+    }
+    /// Original chain instruction deadline, distinct from millisecond time.
+    pub fn expires_at_slot(&self) -> u64 {
+        self.expires_at_slot
     }
 }
 impl std::fmt::Debug for ChainAction {
@@ -347,6 +374,9 @@ enum Record {
         signature: Vec<u8>,
         hash: [u8; 32],
     },
+    Unsent {
+        attempt: Vec<u8>,
+    },
 }
 #[derive(Serialize, Deserialize)]
 struct Archive {
@@ -361,6 +391,7 @@ struct History {
     chains: Vec<(Vec<u8>, Vec<u8>, bool)>,
     final_credits: Vec<Vec<u8>>,
     wires: Vec<(Vec<u8>, Vec<u8>, [u8; 32])>,
+    unsent: Vec<Vec<u8>>,
 }
 /// Derived residual report. Amounts come only from the common ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -554,6 +585,19 @@ impl Controller {
     pub fn route(&self) -> &Route {
         &self.route
     }
+    /// Sign only this broker's exact prepared deposit/return message. No seed
+    /// export, arbitrary message signing or HTTP master-key fallback is offered.
+    pub fn sign_chain(
+        &self,
+        prepared: chain::Prepared<'_>,
+        simulation: chain::Simulation,
+        at: u64,
+    ) -> Result<VerifiedWire, Error> {
+        if prepared.signer() != self.route.broker {
+            return Err(Error::Qualification);
+        }
+        prepared.sign(Zeroizing::new(self.key.to_bytes()), simulation, at)
+    }
     fn evidence(&self, record: Record) -> Result<PrivateBytes, Error> {
         let mut bytes = MAGIC.to_vec();
         bytes.extend(
@@ -593,7 +637,7 @@ impl Controller {
             return Err(Error::Qualification);
         }
         let mut result = History::default();
-        for tx in j.transactions() {
+        for (tx, receipt) in j.transactions_with_receipts() {
             if tx.at > at {
                 return Err(Error::Qualification);
             }
@@ -606,21 +650,21 @@ impl Controller {
                     }
                     // Retained evidence from a rejected financial proposal is
                     // still evidence, but cannot authorize a later dispatch.
-                    if j.transaction_receipt(tx.id).is_none_or(|r| {
-                        r.controls.is_some()
-                            || r.inputs.iter().any(|i| {
-                                !matches!(
-                                    i,
-                                    InputResult::Normalized(
-                                        Disposition::Applied | Disposition::Duplicate
-                                    )
+                    if receipt.controls.is_some()
+                        || receipt.inputs.iter().any(|i| {
+                            !matches!(
+                                i,
+                                InputResult::Normalized(
+                                    Disposition::Applied | Disposition::Duplicate
                                 )
-                            })
-                            || r.funds_observations.iter().any(|ok| !ok)
-                    }) {
+                            )
+                        })
+                        || receipt.funds_observations.iter().any(|ok| !ok)
+                    {
                         continue;
                     }
                     match archive.record {
+                        Record::Unsent { attempt } => result.unsent.push(attempt),
                         Record::Wire {
                             attempt,
                             signature,
@@ -998,6 +1042,42 @@ impl Controller {
         }
         .encode()
     }
+    /// Locate and re-verify the one originally persisted wire. After restart
+    /// this is evidence only, never a ChainDelivery or authority to sign again.
+    pub fn retained_wire<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        attempt: AttemptKey,
+        at: u64,
+    ) -> Result<Option<VerifiedWire>, Error> {
+        let history = self.history(j, at)?;
+        let matches: Vec<_> = history
+            .wires
+            .iter()
+            .filter(|(a, _, _)| *a == attempt.encode())
+            .collect();
+        if matches.len() > 1 {
+            return Err(Error::Qualification);
+        }
+        let Some((_, signature, hash)) = matches.first().copied() else {
+            return Ok(None);
+        };
+        let contract = self.original_chain_contract(j, attempt, at)?;
+        let mut found = None;
+        for tx in j.transactions() {
+            for bytes in &tx.evidence {
+                if <[u8; 32]>::from(Sha256::digest(bytes.as_bytes())) == *hash {
+                    let verified =
+                        chain::inspect(contract.as_bytes(), attempt, bytes.as_bytes())?.verified;
+                    if verified.signature.as_slice() != signature || found.is_some() {
+                        return Err(Error::Qualification);
+                    }
+                    found = Some(verified);
+                }
+            }
+        }
+        found.map(Some).ok_or(Error::Qualification)
+    }
     /// Persist the verified ORIGINAL signed chain wire before any submission.
     /// Lost/uncertain commits return no delivery. Restart may only reconcile the
     /// retained wire/signature/operation, not create a different blockhash/signature.
@@ -1053,7 +1133,101 @@ impl Controller {
         j.verified_state()?
             .qualified_funds_delivery(wire.attempt)
             .map_err(|_| Error::Qualification)?;
-        Ok(ChainDelivery(wire.wire))
+        Ok(ChainDelivery {
+            wire: wire.wire,
+            network: action.network,
+            expires_at: p.expires_at,
+            expires_at_slot: p.counters.expires_at_slot,
+        })
+    }
+    /// Close an expired physical plan only when verified journal history proves
+    /// no send capability was ever retained. Expiry alone cannot close a retained
+    /// wire, and this rule never applies to native HTTP withdrawals.
+    pub fn close_unsent_chain<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        id: CommitId,
+        at: u64,
+        attempt: AttemptKey,
+    ) -> Result<bool, Error> {
+        let history = self.history(j, at)?;
+        let plans = history
+            .plans
+            .iter()
+            .filter(|p| p.attempt == attempt.encode())
+            .collect::<Vec<_>>();
+        if !history.bound || plans.len() != 1 || plans[0].rail == Rail::Withdraw {
+            return Err(Error::Qualification);
+        }
+        let plan = plans[0];
+        if at < plan.expires_at || history.wires.iter().any(|(a, _, _)| *a == plan.attempt) {
+            return Ok(false);
+        }
+        let state = j.verified_state()?;
+        let operation = state
+            .funds()
+            .iter()
+            .find(|o| o.attempt == Some(attempt))
+            .ok_or(Error::Qualification)?;
+        let movement = state
+            .ledger()
+            .movements()
+            .iter()
+            .find(|m| m.mandate.attempt == attempt)
+            .ok_or(Error::Qualification)?;
+        if operation.faulted
+            || movement.faulted
+            || movement.debit.atoms() != 0
+            || movement.settled.atoms() != 0
+            || !movement.receipts.is_empty()
+            || history.chains.iter().any(|(a, _, _)| *a == plan.attempt)
+            || history.final_credits.contains(&plan.attempt)
+            || operation.proof.as_ref().is_some_and(|p| {
+                p.debit.atoms() != 0
+                    || p.settled.atoms() != 0
+                    || !p.receipts.is_empty()
+                    || !p.coverage.is_empty()
+            })
+        {
+            return Err(Error::Qualification);
+        }
+        if operation.terminal {
+            return if history.unsent.contains(&plan.attempt) {
+                Ok(true)
+            } else {
+                Err(Error::Qualification)
+            };
+        }
+        if !state
+            .attempts()
+            .iter()
+            .any(|a| a.key == attempt && a.kind == AttemptKind::Funds && a.possibly_exposed)
+            || j.transaction(id).is_some()
+        {
+            return Err(Error::Qualification);
+        }
+        let mut tx = self.tx(
+            j,
+            id,
+            at,
+            Record::Unsent {
+                attempt: plan.attempt.clone(),
+            },
+        )?;
+        self.terminal(&mut tx, plan, 0, vec![], vec![])?;
+        tx.funds_observations[0].raw = self.evidence(Record::Unsent {
+            attempt: plan.attempt.clone(),
+        })?;
+        checked(j.commit(tx)?)?;
+        if !j
+            .verified_state()?
+            .funds()
+            .iter()
+            .any(|o| o.attempt == Some(attempt) && o.terminal && !o.faulted)
+        {
+            return Err(Error::Qualification);
+        }
+        Ok(true)
     }
     fn scope(&self, location: Location) -> Result<EventScope, Error> {
         self.profile

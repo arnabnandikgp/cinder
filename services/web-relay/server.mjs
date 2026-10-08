@@ -6,6 +6,7 @@ import { upgrade } from './websocket.mjs';
 
 export const MAX_BATCH = 1048576 + 65 * 34;
 const MAX_RECORD = 16400, MAX_ENVELOPE = 16520, DEADLINE = 5000;
+const REPLY_DEADLINE = 15000;
 const unavailable = () => Error('Web delivery unavailable; reconcile on a fresh session');
 
 class Peer {
@@ -19,6 +20,9 @@ class Peer {
     this.socket.on('data', data => {
       let at=0;
       while(at<data.length&&!this.dead){
+        // Absolute assembly budget starts with the first byte, including a
+        // partial length header. Idle streaming sockets have no such timer.
+        if(!this.frameTimer)this.frameTimer=setTimeout(()=>this.close(),DEADLINE);
         const maximum=this.stream?MAX_BATCH+4:this.pending?.maximum;
         if(!maximum||this.chunks.length>=4096)return this.close();
         const needed=this.size===undefined?4-this.total:this.size+4-this.total;
@@ -27,6 +31,7 @@ class Peer {
         if(this.size===undefined&&this.total===4){this.size=Buffer.concat(this.chunks,4).readUInt32BE();if(!this.size||this.size>maximum)return this.close();}
         if(this.size!==undefined&&this.total===this.size+4){
           const body=Buffer.concat(this.chunks,this.total).subarray(4);
+          clearTimeout(this.frameTimer);this.frameTimer=undefined;
           this.chunks=[];this.total=0;this.size=undefined;
           if(this.stream){try{this.stream(body);}catch{return this.close();}}
           else{if(at!==data.length)return this.close();const p=this.pending;this.pending=undefined;p.resolve(body);}
@@ -37,6 +42,7 @@ class Peer {
   close() {
     if (this.dead) return;
     this.dead = true; this.socket.destroy(); this.onClose?.();
+    clearTimeout(this.frameTimer);this.frameTimer=undefined;
     this.pending?.reject(unavailable()); this.pending = undefined;
     this.chunks = []; this.total = 0; this.size = undefined;
   }
@@ -109,6 +115,11 @@ export function createWebRelay({ target, origin }) {
           reply = await peer.exchange(body.subarray(32), MAX_RECORD); peer.phase++;
         } else {
           if (peer.phase !== 2) throw unavailable();
+          // The bounded body and established session were already checked.
+          // Durable cloud acceptance can outlast a handshake/frame deadline;
+          // keep the application reply separately finite, without resends.
+          clearTimeout(timer);
+          timer = setTimeout(() => { abort(); req.destroy(); res.destroy(); }, REPLY_DEADLINE);
           reply = await peer.exchange(body.subarray(32), MAX_BATCH);
         }
       }

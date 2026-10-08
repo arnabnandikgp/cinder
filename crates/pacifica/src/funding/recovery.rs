@@ -223,8 +223,7 @@ impl Controller {
 
         // Do not mix venue causal cuts/milliseconds with Solana slots. Vault and
         // broker receipt cuts belong to the qualified chain source only.
-        for tx in j.transactions() {
-            let receipt = j.transaction_receipt(tx.id).ok_or(BindingError::Mismatch)?;
+        for (tx, receipt) in j.transactions_with_receipts() {
             for (input, outcome) in tx.inputs.iter().zip(&receipt.inputs) {
                 // Resolved raw/rejected envelopes are not applied chain postings.
                 // Their original absent cut cannot become a permanent extra fault.

@@ -55,3 +55,30 @@ test('one absolute five-second delivery budget fences a silent upstream',{timeou
     assert(performance.now()-start<6500);assert.equal(h.relay.activeSessions(),0);
   }finally{await h.close();}
 });
+
+async function sessionFixture(delay, partial=false) {
+  const peers=new Set();let calls=0;
+  const target=net.createServer(socket=>{
+    peers.add(socket);let pending=Buffer.alloc(0),phase=0;
+    socket.on('error',()=>{});socket.on('close',()=>peers.delete(socket));
+    socket.on('data',part=>{pending=Buffer.concat([pending,part]);while(pending.length>=4){const n=pending.readUInt32BE();if(pending.length<n+4)return;pending=pending.subarray(n+4);calls++;
+      if(phase++===0)socket.write(frame(envelope()));
+      else if(phase<=3)socket.write(frame(Buffer.from([1])));
+      else if(delay!==undefined){const bytes=frame(Buffer.from([42]));if(partial)socket.write(bytes.subarray(0,1));const timer=setTimeout(()=>{if(!socket.destroyed)socket.write(partial?bytes.subarray(1):bytes);},delay);socket.once('close',()=>clearTimeout(timer));}
+    }});
+  });
+  target.listen(0,'127.0.0.1');await once(target,'listening');
+  const relay=createWebRelay({target:{host:'127.0.0.1',port:target.address().port}});
+  relay.server.listen(0,'127.0.0.1');await once(relay.server,'listening');
+  const h={relay,base:`http://127.0.0.1:${relay.server.address().port}`,calls:()=>calls,close:async()=>{await relay.close();for(const s of peers)s.destroy();await new Promise(r=>target.close(r));}};
+  try{const quoted=await post(h,'/v1/attestation');await quoted.body.cancel();const body=Buffer.concat([envelope().subarray(64,96),Buffer.from([1])]);for(let i=0;i<2;i++){const r=await post(h,'/v1/session',body);assert.equal(r.status,200);await r.body.cancel();}return {...h,body};}catch(e){await h.close();throw e;}
+}
+test('application reply can exceed five seconds without extending handshake or retrying',{timeout:12000},async()=>{
+  const h=await sessionFixture(6200);try{const start=performance.now(),r=await post(h,'/v1/exchange',h.body);assert.equal(r.status,200);assert.deepEqual(Buffer.from(await r.arrayBuffer()),Buffer.from([42]));assert(performance.now()-start>=6000);assert.equal(h.calls(),4);}finally{await h.close();}
+});
+test('silent application reply is bounded and is never resent',{timeout:20000},async()=>{
+  const h=await sessionFixture();try{const start=performance.now();await assert.rejects(post(h,'/v1/exchange',h.body));const elapsed=performance.now()-start;assert(elapsed>=14000&&elapsed<17000);assert.equal(h.calls(),4);assert.equal(h.relay.activeSessions(),0);}finally{await h.close();}
+});
+test('partial upstream header has a separate absolute five-second frame deadline',{timeout:10000},async()=>{
+  const h=await sessionFixture(6200,true);try{const start=performance.now(),r=await post(h,'/v1/exchange',h.body);assert.equal(r.status,503);await r.body.cancel();const elapsed=performance.now()-start;assert(elapsed>=4800&&elapsed<6000);assert.equal(h.calls(),4);assert.equal(h.relay.activeSessions(),0);}finally{await h.close();}
+});

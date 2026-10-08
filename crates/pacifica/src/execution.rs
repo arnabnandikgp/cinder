@@ -223,6 +223,10 @@ impl std::fmt::Debug for Gateway {
     }
 }
 impl Gateway {
+    pub(crate) fn read_binding(&self) -> (&Profile, &Policy) {
+        (&self.profile, &self.policy)
+    }
+
     /// Load caller-supplied enclave key material, not a wallet/file/environment.
     /// The seed must be independently generated and never registered for another
     /// native account or network; the native signature cannot enforce that rule.
@@ -464,6 +468,21 @@ impl Gateway {
         journal.commit(tx)?;
         Ok(())
     }
+    /// Boot only: install a fresh read-budget identity, or resume the exact active
+    /// identity. Never revive a revoked epoch or reset accumulated credits.
+    pub fn initialize_reads<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        id: CommitId,
+        at: u64,
+    ) -> Result<(), Error> {
+        let history = self.history(journal, at)?;
+        if history.epoch == 0 {
+            self.activate(journal, id, at)
+        } else {
+            self.active(&history)
+        }
+    }
     /// Trusted administrator port: durably fence this key even across restarts.
     /// Revoking an escaped native credential at the venue is a separate operation.
     pub fn deactivate<B: Backend, P: Protection>(
@@ -520,6 +539,33 @@ impl Gateway {
             cost: self.policy.read_cost,
             until: at.checked_add(self.policy.expiry_ms).ok_or(Error::Limit)?,
         })
+    }
+    /// Preflight the shared durable read budget without spending/refunding it.
+    /// Only capacity/cooldown is a false result; invalid authority/history fails.
+    pub fn read_available<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        at: u64,
+        cleanup: bool,
+    ) -> Result<bool, Error> {
+        let history = self.history(journal, at)?;
+        match self.credit(&history, at, self.policy.read_cost, cleanup) {
+            Ok(()) => Ok(true),
+            Err(Error::Limit) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+    /// Resume this account's committed cursor. A cursor is not terminal coverage.
+    pub fn read_cursor<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        kind: observation::Kind,
+    ) -> Result<Option<String>, Error> {
+        Ok(observation::replay(journal, &self.profile)?
+            .cursors
+            .get(&kind)
+            .cloned()
+            .flatten())
     }
     /// Trusted egress response port for HTTP 429 on an already reserved read.
     /// Call after consuming its permit, before further dispatch. The reservation

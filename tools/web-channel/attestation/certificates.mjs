@@ -13,6 +13,13 @@ function positiveInteger(b, cap) {
   return b.length > 0 && b.length <= cap && !(b[0] & 128) && b.some(v => v !== 0)
     && !(b.length > 1 && b[0] === 0 && b[1] < 128);
 }
+// The fixed AWS path can use a full 160-bit positive serial. Its minimal DER
+// INTEGER then needs a leading sign octet. Bound the magnitude, not that pad;
+// this does not allow a 21-byte magnitude, negative/zero or nonminimal values.
+export function certificateSerial(b) {
+  return b instanceof Uint8Array && positiveInteger(b,21)
+    && b.length - Number(b[0] === 0) <= 20;
+}
 function signatureShape(cert) {
   const value = cert.signatureValue.valueBlock, b = value.valueHexView;
   if (value.unusedBits !== 0 || b.length > 104 || b[0] !== 0x30 || b[1] >= 128 || b[1] + 2 !== b.length) throw Error('certificate signature DER');
@@ -36,7 +43,7 @@ function certificate(der, at, ca) {
   // variant. This is a shape restriction, not a general-purpose DER validator.
   if (!equal(new Uint8Array(cert.toSchema(true).toBER(false)), der) || cert.version !== 2) throw Error('certificate encoding/version');
   const serial = cert.serialNumber.valueBlock.valueHexView;
-  if (!positiveInteger(serial,20)) throw Error('serial');
+  if (!certificateSerial(serial)) throw Error('serial');
   signatureShape(cert);
   for (const algorithm of [cert.signature, cert.signatureAlgorithm]) {
     if (algorithm.algorithmId !== ES384 || 'algorithmParams' in algorithm) throw Error('certificate signature algorithm');

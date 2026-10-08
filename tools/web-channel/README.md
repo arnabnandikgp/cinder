@@ -73,6 +73,45 @@ clock failure and stop/fencing. Parent tests cover fixed-target routing, private
 header/path refusal, malformed frames, flush/disposal and absolute delivery timeout.
 P19 Node TLS and its existing process regressions are unchanged.
 
+### C4 joined Runtime matrix
+
+`node tools/web-channel/check-runtime.mjs` (also invoked by `check.mjs`) runs the
+SAME actual Node/Chrome suite through the opaque relay into `Runtime`, the API and
+AEAD/replicated file journal—not `FixtureHandler`. After normal WASM/tool hydration,
+it needs the feature-gated `cinder-service-fixture` binary; `--node-only` is a
+focused iteration mode, never full browser qualification. `/usr/bin/time` supplies
+whole-process peak RSS (macOS `-l`, Linux `-v`); missing memory evidence fails.
+The runner copies and hashes one disposable executable for every cell; an
+independent build cannot replace the qualified artifact midway through a run.
+
+The fixed grid is initial accepted history 1/8/32/64, writer AND independent-read
+witness delays 0/50/400 ms, and one/two private watches: 24 cells per client.
+Each cell joins two simultaneous reads, one same-socket owner grant and inactive
+controller tick. History pads are 16 KiB encrypted non-economic evidence; no
+customer credit or economic risk is seeded. Counters report whole-run replica
+GET/PUT bytes, writer/fresh read calls, peak independent read I/O, clock calls and
+acceptance. Latency and peak RSS include the real Runtime, writer candidate,
+retained accepted history/index/view generations and carrier buffers for THIS
+declared workload. The 128-MiB local fixture ceiling is not production capacity,
+maximum-sized records/pages, NSM cost, independent AWS-witness qualification or an
+enclave SLO. Dependencies and root/time authority remain explicitly synthetic.
+
+Fixed fault groups cover agent revoke during I/O, queued expiry, known
+post-CAS/pre-publication races, sustained unrelated commits, exact encrypted reopen
+without mutation resend, continuous ingress/expiry, slow-consumer queue overflow,
+and witness/head/epoch/credential-port/lease/boot refusal. Credential failure here
+is a synthetic port error; exact STS margin/expiry checks remain cloud unit tests
+and the hardware gate. Journal tests separately retain four distinct generations,
+share the original records and test poison/panic/uncertain acceptance. Together
+these are bounded implementation tests, not a formal proof or audit.
+
+Controls are bounded private stdin only. The public test harness observes framing
+for notification timing; it cannot decrypt replies. Every run owns disposable
+keys/files/children and checks captured carrier, logs and ciphertext for private
+markers. Quiet-window recovery after unrelated writes is expected; a continuously
+changing global generation does not guarantee read progress. No timeout, cache,
+account-only freshness, financial gate or storage-repair contract is relaxed.
+
 ## Dependencies and release limits
 
 The isolated Rust policy freezes direct pins, lock checksums, 43 registry packages,

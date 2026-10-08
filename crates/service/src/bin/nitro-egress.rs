@@ -3,7 +3,7 @@ fn run() -> Result<(), cinder_service::Error> {
     use cinder_pacifica::execution::Origin;
     use cinder_service::{
         Error,
-        transport::{relay_egress, stop_on_stdin},
+        transport::{relay_chain, relay_egress, stop_on_stdin},
         vsock::{Target, VsockListener},
     };
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -16,13 +16,28 @@ fn run() -> Result<(), cinder_service::Error> {
     if cid <= 3 {
         return Err(Error);
     }
-    let origin = match args[2].as_str() {
-        "pacifica-testnet" => Origin::Testnet,
-        "pacifica-mainnet" => Origin::Mainnet,
+    let route = args[2].as_str();
+    // No URL/path or arbitrary hostname argument. Credentials are never given
+    // to this process and TLS authentication remains enclave-owned.
+    let origin = match route {
+        "pacifica-testnet" => Some(Origin::Testnet),
+        "pacifica-mainnet" => Some(Origin::Mainnet),
+        "solana-devnet" | "helius-devnet" => None,
         _ => return Err(Error),
     };
     let listener = VsockListener::bind(port, cid)?;
-    relay_egress(listener, origin, stop_on_stdin())
+    match origin {
+        Some(origin) => relay_egress(listener, origin, stop_on_stdin()),
+        None => relay_chain(
+            listener,
+            if route == "helius-devnet" {
+                "devnet.helius-rpc.com"
+            } else {
+                "api.devnet.solana.com"
+            },
+            stop_on_stdin(),
+        ),
+    }
 }
 fn main() {
     if run().is_err() {

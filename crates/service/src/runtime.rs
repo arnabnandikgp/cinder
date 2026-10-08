@@ -3,10 +3,11 @@
 use crate::{
     Error,
     boot::{Gates, Manifest, Role},
+    chain_funding,
     cloud::{Client, Credential, DynamoWitness, S3Replica},
     egress::{Egress, Trust},
     release::ApplicationContract,
-    transport::{Clock, Handler, Session},
+    transport::{Clock, Handler, Prepared, PreparedReply, Session},
     vsock::Target,
 };
 use cinder_api::{Admission, Contract, OwnerBinding, Service};
@@ -15,6 +16,7 @@ use cinder_journal::{
     encrypted::RecordCipher,
     model::*,
     orders,
+    read::{Binding as ReadBinding, Failure as ReadFailure, Reader, Witness as ReadWitness},
     replicated::{Replicated, Stream, Witness},
 };
 use cinder_kernel::{identity::*, ledger::Config};
@@ -32,6 +34,89 @@ use std::{
     },
 };
 use zeroize::Zeroizing;
+
+const REQUEST_WAIT: std::time::Duration = std::time::Duration::from_millis(250);
+// Budget from BEFORE the final signed clock sample through authorization and
+// metadata release. Not a clock source, freshness TTL or wire reply timeout.
+const READ_RELEASE: std::time::Duration = std::time::Duration::from_millis(250);
+/// Actual Runtime with explicit local file/witness/clock ports, never a shipping
+/// key-release or hardware entrypoint. Harness controls terminate on private stdin.
+#[cfg(feature = "local-fixture")]
+pub mod qualification;
+struct ReadRuntime {
+    reader: Reader,
+    witness: Arc<dyn ReadWitness>,
+}
+/// Private candidate retained under the global journal read-slot budget. Its
+/// witness check is not a release permit; queued delivery must consume the final
+/// current-generation/time/auth gate on the connection thread.
+pub(crate) struct ReadCandidate {
+    verified: cinder_journal::read::Verified,
+    request: PrivateBytes,
+    encoded: PrivateBytes,
+    evaluated_at: u64,
+    binding: [u8; 32],
+    periodic: bool,
+}
+struct PanicFence<'a> {
+    stop: &'a AtomicBool,
+    reads: Option<&'a ReadRuntime>,
+}
+impl Drop for PanicFence<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.stop.store(true, Ordering::SeqCst);
+            if let Some(reads) = self.reads {
+                reads.reader.close();
+            }
+        }
+    }
+}
+fn lock_bounded<T>(
+    mutex: &Mutex<T>,
+    timeout: std::time::Duration,
+) -> Result<Option<std::sync::MutexGuard<'_, T>>, Error> {
+    let start = std::time::Instant::now();
+    loop {
+        match mutex.try_lock() {
+            Ok(guard) => return Ok(Some(guard)),
+            Err(std::sync::TryLockError::Poisoned(_)) => return Err(Error),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                let Some(remaining) = timeout.checked_sub(start.elapsed()) else {
+                    return Ok(None);
+                };
+                if remaining.is_zero() {
+                    return Ok(None);
+                }
+                std::thread::sleep(remaining.min(std::time::Duration::from_millis(1)));
+                if start.elapsed() >= timeout {
+                    return Ok(None);
+                }
+            }
+        }
+    }
+}
+
+/// A rejected original deposit must not starve subsequent configured locators.
+/// Transport, freshness, current-account and journal failures still fence the worker.
+#[cfg(test)]
+pub(crate) fn poll_deposit<B: Backend, P: Protection, T: crate::chain_rpc::Transport>(
+    chain: &mut chain_funding::Port<T>,
+    store: &mut Journal<B, P>,
+    funding: &Controller,
+    index: &mut usize,
+) -> Result<(), Error> {
+    let count = chain.deposit_count();
+    if count != 0 {
+        match chain.observe_deposit(store, funding, *index)? {
+            chain_funding::Outcome::Pending
+            | chain_funding::Outcome::Rejected
+            | chain_funding::Outcome::Settled => *index = (*index + 1) % count,
+            _ => return Err(Error),
+        }
+    }
+    Ok(())
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -78,14 +163,35 @@ pub struct Configuration {
     pub perp_tag: u64,
     /// Loaded execution/credit contract; construction does not activate it.
     pub execution: Policy,
-    /// Loaded funds route; no chain signer is loaded in P20.
+    /// Loaded funds route; chain signing requires version 2's separate role.
     pub route: Route,
     /// Trading-agent epoch, distinct from witness/storage generation.
     pub trading_epoch: u64,
+    /// Version 2 private chain limits/path. Omitted in old five-role profiles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain: Option<chain_funding::Configuration>,
 }
 impl Configuration {
     /// Consume separated secrets into actual validated controllers and API policy.
     pub fn construct(self, mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>) -> Result<Loaded, Error> {
+        self.construct_using(&mut keys, None)
+    }
+    /// Load versioned public trust from the ACTUAL measured manifest. Secret
+    /// path/limits and separate funds identity contribute to the application hash.
+    pub fn construct_for(
+        self,
+        manifest: &Manifest,
+        mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
+    ) -> Result<Loaded, Error> {
+        manifest.validate()?;
+        self.construct_using(&mut keys, manifest.chain.as_ref())
+    }
+    fn construct_using(
+        self,
+        keys: &mut BTreeMap<Role, Zeroizing<Vec<u8>>>,
+        peer: Option<&chain_funding::Peer>,
+    ) -> Result<Loaded, Error> {
+        crate::boot::validate_keys(keys)?;
         let config = cinder_journal::wire::decode_config(&self.ledger).map_err(|_| Error)?;
         let source = config.sources.get(self.source).ok_or(Error)?.scope;
         let profile = Profile {
@@ -109,16 +215,16 @@ impl Configuration {
                 bytes.as_slice().try_into().map_err(|_| Error)?,
             ))
         };
-        let storage = take(&mut keys, Role::Storage)?;
+        let storage = take(keys, Role::Storage)?;
         let gateway = Gateway::new(
             profile.clone(),
             self.execution.clone(),
-            take(&mut keys, Role::Trading)?,
+            take(keys, Role::Trading)?,
             self.trading_epoch,
         )
         .map_err(|_| Error)?;
-        let funding = Controller::new(profile, self.route, take(&mut keys, Role::Broker)?)
-            .map_err(|_| Error)?;
+        let funding =
+            Controller::new(profile, self.route, take(keys, Role::Broker)?).map_err(|_| Error)?;
         let owners = self
             .owners
             .into_iter()
@@ -139,7 +245,28 @@ impl Configuration {
             RiskAdmission { enabled: false },
         )
         .map_err(|_| Error)?;
+        let chain = match (self.chain, peer) {
+            (None, None) => None,
+            (Some(policy), Some(peer)) => {
+                if self.execution.read_cost < cinder_pacifica::reads::MIN_READ_COST {
+                    return Err(Error);
+                }
+                Some(chain_funding::Loaded::new(
+                    policy,
+                    peer,
+                    take(keys, Role::Funds)?,
+                    &funding,
+                    config.domain.network.bytes(),
+                )?)
+            }
+            _ => return Err(Error),
+        };
         let application = ApplicationContract::derive(&config, &api, &gateway, &funding)?;
+        let application = if let Some(chain) = &chain {
+            application.with_chain(chain)
+        } else {
+            application
+        };
         let bytes = keys.remove(&Role::Witness).ok_or(Error)?;
         let witness = serde_cbor::from_slice(&bytes).map_err(|_| Error)?;
         if !keys.is_empty() {
@@ -154,6 +281,7 @@ impl Configuration {
             witness,
             application,
             origin: self.execution.origin,
+            chain,
         })
     }
 }
@@ -184,6 +312,7 @@ pub struct Loaded {
     witness: Credential,
     application: ApplicationContract,
     origin: cinder_pacifica::execution::Origin,
+    chain: Option<chain_funding::Loaded>,
 }
 /// Public health is deliberately coarse; no balances, customer counts or keys.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -197,16 +326,27 @@ struct Active<B: Backend, P: Protection> {
     store: Journal<B, P>,
     gateway: Gateway,
     funding: Controller,
+    poll_ms: Option<u64>,
+    next_poll: u64,
+    read_kind: usize,
+    deposit_index: usize,
+}
+struct NativeIo {
     egress: Egress,
+    chain: Option<chain_funding::Port<crate::chain_rpc::Https>>,
 }
 /// Bounded private API/scheduler composition over one journal and one writer.
 pub struct Runtime<B: Backend + Send, P: Protection + Send> {
     active: Mutex<Active<B, P>>,
+    // One bounded supervisor I/O owner, never acquired by customer commands or
+    // private reads. Its guard may span I/O; the journal mutation guard may not.
+    io: Mutex<NativeIo>,
     api: Service<RiskAdmission>,
     clock: Arc<dyn Clock>,
     stop: Arc<AtomicBool>,
     deadline: u64,
     gates: Gates,
+    reads: Option<ReadRuntime>,
 }
 impl Loaded {
     /// Actual application component for trusted provisioning before KMS Encrypt.
@@ -261,6 +401,7 @@ impl Loaded {
             stream,
         )?;
         let anchor = witness.read(stream).map_err(|_| Error)?;
+        let read_witness = witness.reader();
         if anchor.epoch != manifest.epoch {
             return Err(Error);
         }
@@ -280,27 +421,81 @@ impl Loaded {
         }
         self.api.initialize(&mut store, now).map_err(|_| Error)?;
         initialize_funding(&self.funding, &mut store, clock.as_ref())?;
+        let deadline = now
+            .checked_add(manifest.gates.maximum_boot_ms)
+            .ok_or(Error)?;
+        let private_clock: Arc<dyn Clock> = Arc::new(LeaseClock {
+            clock: clock.clone(),
+            deadline,
+            stop: stop.clone(),
+        });
+        let poll_ms = self.chain.as_ref().map(chain_funding::Loaded::poll_ms);
+        if let Some(chain) = &self.chain {
+            let peer = manifest.chain.as_ref().ok_or(Error)?;
+            if chain.peer() != (peer.host.as_str(), peer.port) {
+                return Err(Error);
+            }
+        }
+        if manifest.gates.native_reads {
+            self.gateway
+                .initialize_reads(&mut store, commit_id()?, private_clock.now()?)
+                .map_err(|_| Error)?;
+        }
+        let chain = self
+            .chain
+            .map(|chain| chain.open(private_clock.clone()))
+            .transpose()?;
         let egress = Egress::new(
             self.origin,
             Target::new(3, manifest.venue_port)?,
             Trust::from_der(&manifest.venue_root, manifest.venue_root_hash)?,
-            clock.clone(),
+            private_clock,
         )?;
+        let reader = store
+            .attach_reader(ReadBinding {
+                stream,
+                epoch: manifest.epoch,
+                api: self
+                    .api
+                    .release_commitment(store.configuration())
+                    .map_err(|_| Error)?,
+            })
+            .map_err(|_| Error)?;
         Ok(Runtime {
             active: Mutex::new(Active {
                 store,
                 gateway: self.gateway,
                 funding: self.funding,
-                egress,
+                poll_ms,
+                next_poll: now,
+                read_kind: 0,
+                deposit_index: 0,
             }),
+            io: Mutex::new(NativeIo { egress, chain }),
             api: self.api,
             clock,
             stop,
-            deadline: now
-                .checked_add(manifest.gates.maximum_boot_ms)
-                .ok_or(Error)?,
+            deadline,
             gates: manifest.gates.clone(),
+            reads: Some(ReadRuntime {
+                reader,
+                witness: Arc::new(read_witness),
+            }),
         })
+    }
+}
+struct LeaseClock {
+    clock: Arc<dyn Clock>,
+    deadline: u64,
+    stop: Arc<AtomicBool>,
+}
+impl Clock for LeaseClock {
+    fn now(&self) -> Result<u64, Error> {
+        let now = self.clock.now()?;
+        if self.stop.load(Ordering::SeqCst) || now >= self.deadline {
+            return Err(Error);
+        }
+        Ok(now)
     }
 }
 fn initialize_funding<B: Backend, P: Protection>(
@@ -323,7 +518,10 @@ fn commit_id() -> Result<CommitId, Error> {
 
 impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
     fn active_time(&self) -> Result<u64, Error> {
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.load(Ordering::SeqCst)
+            || self.reads.as_ref().is_some_and(|r| r.reader.fenced())
+        {
+            self.fence();
             return Err(Error);
         }
         let now = match self.clock.now() {
@@ -342,10 +540,15 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
     /// Stop new sessions and scheduling; shutdown drops loaded key material.
     pub fn fence(&self) {
         self.stop.store(true, Ordering::SeqCst);
+        if let Some(reads) = &self.reads {
+            reads.reader.close();
+        }
     }
     /// Coarse local status; never exposes customer state or secret errors.
     pub fn health(&self) -> Health {
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.load(Ordering::SeqCst)
+            || self.reads.as_ref().is_some_and(|r| r.reader.fenced())
+        {
             Health::Fenced
         } else {
             Health::Ready
@@ -354,14 +557,37 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
     /// One bounded scheduler cut. No new policy, automatic funding or synthetic
     /// native evidence. Restarts do not resend any possibly-exposed attempt.
     pub fn tick(&self) -> Result<(), Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
         let result = (|| {
             let now = self.active_time()?;
+            // An inactive scheduler owns no external work. Preserve fresh signed
+            // boot time and sticky publication fencing, without doing a complete
+            // remote history check merely to discover all three gates are off.
+            // Active actions/reads still perform their own fresh witness checks.
+            if !self.gates.native_reads && !self.gates.funding && !self.gates.trading {
+                return Ok(());
+            }
+            if self.gates.native_reads {
+                self.tick_observations(now)?;
+            }
+            if !self.gates.funding && !self.gates.trading {
+                return Ok(());
+            }
+            // Financial activation remains rejected by the measured Manifest.
+            // Preserve its existing controller composition; no new signing or
+            // live funding authority follows from read-only I/O remediation.
+            let mut io = self.io.lock().map_err(|_| Error)?;
+            let NativeIo { egress, chain } = &mut *io;
             let mut active = self.active.lock().map_err(|_| Error)?;
+            let now = self.active_time()?;
             let Active {
                 store,
                 gateway,
                 funding,
-                egress,
+                ..
             } = &mut *active;
             funding
                 .release_commitment(store.configuration())
@@ -370,10 +596,62 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
             if state.logical_time() > now {
                 return Err(Error);
             }
-            // Loaded fund/execution contracts stay bound during every cut; their
-            // existence is not activation. No chain signer is loaded in P20.
+            if self.gates.funding {
+                let next = store
+                    .verified_state()
+                    .map_err(|_| Error)?
+                    .funds()
+                    .iter()
+                    .find(|o| !o.terminal && o.attempt.is_some())
+                    .and_then(|o| o.attempt);
+                if let Some(attempt) = next {
+                    let exposed = store
+                        .state()
+                        .map_err(|_| Error)?
+                        .attempts()
+                        .iter()
+                        .find(|a| a.key == attempt)
+                        .ok_or(Error)?
+                        .possibly_exposed;
+                    let native = store
+                        .state()
+                        .map_err(|_| Error)?
+                        .funds()
+                        .iter()
+                        .find(|o| o.attempt == Some(attempt))
+                        .is_some_and(|o| o.intent.source == cinder_kernel::ledger::Location::Venue);
+                    if native {
+                        if !exposed {
+                            funding
+                                .withdraw(
+                                    store,
+                                    gateway,
+                                    cinder_pacifica::execution::Dispatch {
+                                        attempt,
+                                        commit: commit_id()?,
+                                        at: self.active_time()?,
+                                    },
+                                    egress,
+                                )
+                                .map_err(|_| Error)?;
+                        }
+                        // Native finality/causal provider remains explicitly gated.
+                    } else {
+                        let chain = chain.as_mut().ok_or(Error)?;
+                        if exposed {
+                            chain.reconcile(store, funding, attempt)?;
+                        } else {
+                            chain.issue(store, funding, attempt)?;
+                        }
+                    }
+                }
+            }
+            // Loaded contracts stay bound during every cut; their existence is
+            // not financial activation. The manifest still refuses live trading.
             if self.gates.trading {
-                let pending = state
+                let pending = store
+                    .verified_state()
+                    .map_err(|_| Error)?
                     .attempts()
                     .iter()
                     .find(|a| {
@@ -388,7 +666,7 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                             cinder_pacifica::execution::Dispatch {
                                 attempt,
                                 commit: commit_id()?,
-                                at: now,
+                                at: self.active_time()?,
                             },
                             egress,
                         )
@@ -402,20 +680,225 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
         }
         result
     }
-}
-impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
-    fn handle(
-        &self,
-        channel: &Session,
-        request: PrivateBytes,
-        now: u64,
-    ) -> Result<PrivateBytes, Error> {
-        let result = (|| {
+    fn tick_observations(&self, now: u64) -> Result<(), Error> {
+        let Some(mut io) = lock_bounded(&self.io, REQUEST_WAIT)? else {
+            // Another bounded supervisor job already owns these finite ports.
+            return Ok(());
+        };
+        let deposit = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
             let current = self.active_time()?;
             if current < now {
                 return Err(Error);
             }
-            let mut active = self.active.try_lock().map_err(|_| Error)?;
+            if current < active.next_poll {
+                return Ok(());
+            }
+            active
+                .funding
+                .release_commitment(active.store.configuration())
+                .map_err(|_| Error)?;
+            if active
+                .store
+                .verified_state()
+                .map_err(|_| Error)?
+                .logical_time()
+                > current
+            {
+                return Err(Error);
+            }
+            active.poll_ms.ok_or(Error)?;
+            match &io.chain {
+                Some(chain) if chain.deposit_count() != 0 => {
+                    let index = active.deposit_index;
+                    let count = chain.deposit_count();
+                    if crate::customer_deposit::recorded(
+                        &active.store,
+                        chain.deposit_locator(index)?,
+                    )? {
+                        active.deposit_index = (index + 1) % count;
+                        None
+                    } else {
+                        Some((index, count, active.funding.route().clone()))
+                    }
+                }
+                _ => None,
+            }
+        };
+        if let Some((index, count, route)) = deposit {
+            // Original signature/code/account RPC I/O has no journal guard.
+            let found = io
+                .chain
+                .as_mut()
+                .ok_or(Error)?
+                .collect_deposit(&route, index)?;
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            if active
+                .store
+                .verified_state()
+                .map_err(|_| Error)?
+                .logical_time()
+                > current
+                || active.funding.route() != &route
+            {
+                return Err(Error);
+            }
+            match found.complete(&mut active.store)? {
+                chain_funding::Outcome::Pending
+                | chain_funding::Outcome::Rejected
+                | chain_funding::Outcome::Settled => active.deposit_index = (index + 1) % count,
+                _ => return Err(Error),
+            }
+        }
+        self.poll_venue(&mut io.egress)
+    }
+    fn poll_venue<T: cinder_pacifica::reads::Transport>(
+        &self,
+        egress: &mut T,
+    ) -> Result<(), Error> {
+        use cinder_pacifica::{
+            observation::Kind,
+            reads::{self, Diagnostic, DiagnosticPoll, Poll},
+        };
+        let kinds = [
+            Kind::Trades,
+            Kind::Orders,
+            Kind::Positions,
+            Kind::Account,
+            Kind::Funding,
+        ];
+        let diagnostics = [
+            Diagnostic::Settings,
+            Diagnostic::Loan,
+            Diagnostic::BalanceHistory,
+            Diagnostic::WithdrawalPending,
+            Diagnostic::WithdrawalHistory,
+        ];
+        let prepared = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            let Active {
+                store,
+                gateway,
+                read_kind,
+                ..
+            } = &mut *active;
+            let state = store.verified_state().map_err(|_| Error)?;
+            if state.logical_time() > current {
+                return Err(Error);
+            }
+            let cleanup = state.frozen();
+            if gateway
+                .read_available(store, current, cleanup)
+                .map_err(|_| Error)?
+            {
+                let reservation = commit_id()?;
+                let evidence = commit_id()?;
+                Some(
+                    if *read_kind < kinds.len() {
+                        let kind = kinds[*read_kind];
+                        let cursor = gateway.read_cursor(store, kind).map_err(|_| Error)?;
+                        reads::prepare_poll(
+                            store,
+                            gateway,
+                            Poll {
+                                kind,
+                                cursor,
+                                reservation,
+                                evidence,
+                                at: self.active_time()?,
+                                cleanup,
+                            },
+                        )
+                    } else {
+                        reads::prepare_diagnostic(
+                            store,
+                            gateway,
+                            DiagnosticPoll {
+                                kind: *diagnostics.get(*read_kind - kinds.len()).ok_or(Error)?,
+                                reservation,
+                                evidence,
+                                at: self.active_time()?,
+                                cleanup,
+                            },
+                        )
+                    }
+                    .map_err(|_| Error)?,
+                )
+            } else {
+                None
+            }
+        };
+        if let Some((request, completion)) = prepared {
+            // One spent permit, one exchange, one completion. No head lease or
+            // signature authority is handed to the external I/O owner.
+            let reply = egress.get(request);
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            if active
+                .store
+                .verified_state()
+                .map_err(|_| Error)?
+                .logical_time()
+                > current
+            {
+                return Err(Error);
+            }
+            if matches!(&reply, cinder_pacifica::execution::Reply::Response { received_at, .. } if *received_at > current)
+            {
+                return Err(Error);
+            }
+            let Active {
+                store,
+                gateway,
+                read_kind,
+                ..
+            } = &mut *active;
+            reads::complete(store, gateway, completion, reply).map_err(|_| Error)?;
+            *read_kind = (*read_kind + 1) % (kinds.len() + diagnostics.len());
+        }
+        let mut active = self.active.lock().map_err(|_| Error)?;
+        active.next_poll = self
+            .active_time()?
+            .checked_add(active.poll_ms.ok_or(Error)?)
+            .ok_or(Error)?;
+        Ok(())
+    }
+}
+impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
+    fn handle_available(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        if let Some(reads) = &self.reads
+            && cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r| {
+                matches!(
+                    r.command,
+                    cinder_api::wire::Command::Read(_)
+                        | cinder_api::wire::Command::View
+                        | cinder_api::wire::Command::Operation(_)
+                )
+            })
+        {
+            return self.read_available(reads, channel, &request, now);
+        }
+        let result = (|| {
+            self.active_time()?;
+            let Some(mut active) = lock_bounded(&self.active, REQUEST_WAIT)? else {
+                return Ok(None);
+            };
+            // Waiting cannot reuse an expired lease or pre-wait authentication time.
+            let current = self.active_time()?;
+            if current < now {
+                return Err(Error);
+            }
             if active.store.verified_state().is_err() {
                 self.fence();
                 return Err(Error);
@@ -427,17 +910,255 @@ impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
                 Ok(r) => r.encode(),
                 Err(e) => e.encode_private(),
             }
+            .map(Some)
             .map_err(|_| Error)
         })();
         // Contention is not a permanent key revocation. Journal/clock failures
         // are caught by tick and private API already refuses stale state.
         result
     }
+    fn read_failure<T>(&self, failure: ReadFailure) -> Result<Option<T>, Error> {
+        match failure {
+            ReadFailure::Busy | ReadFailure::Raced => Ok(None),
+            ReadFailure::Fenced => {
+                self.fence();
+                Err(Error)
+            }
+        }
+    }
+    fn read_available(
+        &self,
+        reads: &ReadRuntime,
+        channel: &Session,
+        request: &PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        let Some(prepared) = self.prepare_read(reads, channel, request, now, false)? else {
+            return Ok(None);
+        };
+        self.release_read(channel, prepared)
+    }
+    fn prepare_read(
+        &self,
+        reads: &ReadRuntime,
+        channel: &Session,
+        request: &PrivateBytes,
+        now: u64,
+        periodic: bool,
+    ) -> Result<Option<PreparedReply>, Error> {
+        let initial = self.active_time()?;
+        if initial < now {
+            self.fence();
+            return Err(Error);
+        }
+        let ticket = match reads.reader.capture() {
+            Ok(t) => t,
+            Err(e) => return self.read_failure(e),
+        };
+        if let Err(e) =
+            self.api
+                .authenticate_read(ticket.configuration(), channel, request, initial)
+        {
+            return e
+                .encode_private()
+                .map(PreparedReply::immediate)
+                .map(Some)
+                .map_err(|_| Error);
+        }
+        let verified = match reads.reader.verify(ticket, reads.witness.as_ref()) {
+            Ok(v) => v,
+            Err(e) => return self.read_failure(e),
+        };
+        let current = self.active_time()?;
+        if current < initial {
+            self.fence();
+            return Err(Error);
+        }
+        let response = self.api.handle_read(&verified, channel, request, current);
+        let encoded = match response {
+            Ok(r) => r.encode(),
+            Err(e) => e.encode_private(),
+        }
+        .map_err(|_| Error)?;
+        Ok(Some(PreparedReply {
+            inner: Prepared::Accepted(ReadCandidate {
+                verified,
+                request: request.clone(),
+                encoded,
+                evaluated_at: current,
+                binding: cinder_api::ConfidentialChannel::binding(channel),
+                periodic,
+            }),
+        }))
+    }
+    fn release_read(
+        &self,
+        channel: &Session,
+        prepared: PreparedReply,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        let candidate = match prepared.inner {
+            Prepared::Immediate(reply) => {
+                self.active_time()?;
+                return Ok(Some(reply));
+            }
+            Prepared::Accepted(candidate) => candidate,
+        };
+        let ReadCandidate {
+            verified,
+            request,
+            encoded,
+            evaluated_at,
+            binding,
+            periodic,
+        } = candidate;
+        if binding != cinder_api::ConfidentialChannel::binding(channel)
+            || self
+                .reads
+                .as_ref()
+                .is_none_or(|r| !r.reader.owns(&verified))
+        {
+            return Err(Error);
+        }
+        let until = std::time::Instant::now() + READ_RELEASE;
+        let final_time = self.active_time()?;
+        if final_time < evaluated_at {
+            self.fence();
+            return Err(Error);
+        }
+        // Bound the maximum authorization time before release by a signed sample
+        // plus the ENTIRE budget (including sample/NSM and revalidation work).
+        let upper = final_time
+            .checked_add(READ_RELEASE.as_millis() as u64)
+            .ok_or(Error)?;
+        if upper >= self.deadline {
+            self.fence();
+            return Err(Error);
+        }
+        let revalidated = self
+            .api
+            .revalidate_read(&verified, channel, &request, upper);
+        let encoded = match revalidated {
+            Ok(()) => encoded,
+            Err(e) => e.encode_private().map_err(|_| Error)?,
+        };
+        match verified.release_if_running(until, &self.stop) {
+            Ok(()) => Ok(Some(encoded)),
+            Err(ReadFailure::Busy | ReadFailure::Raced) if !periodic => {
+                cinder_api::Error::Unavailable
+                    .encode_private()
+                    .map(Some)
+                    .map_err(|_| Error)
+            }
+            Err(e) => self.read_failure(e),
+        }
+    }
+}
+impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
+    fn handle(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<PrivateBytes, Error> {
+        match self.handle_available(channel, request, now)? {
+            Some(reply) => Ok(reply),
+            None => cinder_api::Error::Unavailable
+                .encode_private()
+                .map_err(|_| Error),
+        }
+    }
+    fn prepare_handle(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<PreparedReply, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        if let Some(reads) = &self.reads
+            && cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r| {
+                matches!(
+                    r.command,
+                    cinder_api::wire::Command::Read(_)
+                        | cinder_api::wire::Command::View
+                        | cinder_api::wire::Command::Operation(_)
+                )
+            })
+        {
+            match self.prepare_read(reads, channel, &request, now, false)? {
+                Some(prepared) => Ok(prepared),
+                None => cinder_api::Error::Unavailable
+                    .encode_private()
+                    .map(PreparedReply::immediate)
+                    .map_err(|_| Error),
+            }
+        } else {
+            self.handle_available(channel, request, now)?
+                .map(PreparedReply::immediate)
+                .ok_or(Error)
+        }
+    }
+    fn poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        if !cinder_api::wire::Request::decode(request.as_bytes())
+            .is_ok_and(|r| matches!(r.command, cinder_api::wire::Command::Read(_)))
+        {
+            return Err(Error);
+        }
+        match self.prepare_poll(channel, request, now)? {
+            Some(prepared) => self.release_reply(channel, prepared),
+            None => Ok(None),
+        }
+    }
+    fn prepare_poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PreparedReply>, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        if !cinder_api::wire::Request::decode(request.as_bytes())
+            .is_ok_and(|r| matches!(r.command, cinder_api::wire::Command::Read(_)))
+        {
+            return Err(Error);
+        }
+        match &self.reads {
+            Some(reads) => self.prepare_read(reads, channel, &request, now, true),
+            // Only the retained old-runtime diagnostic uses a missing reader.
+            None => self
+                .handle_available(channel, request, now)
+                .map(|r| r.map(PreparedReply::immediate)),
+        }
+    }
+    fn release_reply(
+        &self,
+        channel: &Session,
+        prepared: PreparedReply,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        self.release_read(channel, prepared)
+    }
 }
 
 #[cfg(test)]
 #[path = "../../journal/tests/support/mod.rs"]
-mod initialization_support;
+pub(crate) mod initialization_support;
+
+#[cfg(all(test, feature = "local-fixture"))]
+#[path = "runtime_contention_tests.rs"]
+mod contention_tests;
 
 #[cfg(test)]
 mod initialization_tests {
@@ -450,6 +1171,73 @@ mod initialization_tests {
     impl Clock for Fixed {
         fn now(&self) -> Result<u64, Error> {
             self.0
+        }
+    }
+    #[test]
+    fn request_wait_is_bounded_and_short_poll_contention_does_not_fail_immediately() {
+        use std::{sync::mpsc, time::Duration};
+        let mutex = Mutex::new(0);
+        std::thread::scope(|scope| {
+            let (ready_tx, ready_rx) = mpsc::channel();
+            let (release_tx, release_rx) = mpsc::channel();
+            let shared = &mutex;
+            scope.spawn(move || {
+                let mut guard = shared.lock().unwrap();
+                ready_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                *guard = 1;
+            });
+            ready_rx.recv().unwrap();
+            assert!(lock_bounded(&mutex, Duration::ZERO).unwrap().is_none());
+            scope.spawn(move || {
+                std::thread::sleep(Duration::from_millis(20));
+                release_tx.send(()).unwrap();
+            });
+            assert_eq!(
+                *lock_bounded(&mutex, Duration::from_secs(2))
+                    .unwrap()
+                    .unwrap(),
+                1
+            );
+        });
+        let held = mutex.lock().unwrap();
+        assert!(
+            lock_bounded(&mutex, Duration::from_millis(5))
+                .unwrap()
+                .is_none()
+        );
+        drop(held);
+        std::thread::scope(|scope| {
+            assert!(
+                scope
+                    .spawn(|| {
+                        let _held = mutex.lock().unwrap();
+                        panic!("synthetic poisoned controller");
+                    })
+                    .join()
+                    .is_err()
+            );
+        });
+        assert!(lock_bounded(&mutex, REQUEST_WAIT).is_err());
+    }
+    #[test]
+    fn every_egress_step_rechecks_the_finite_boot_lease_and_stop_flag() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let clock = LeaseClock {
+            clock: Arc::new(Fixed(Ok(100))),
+            deadline: 101,
+            stop: stop.clone(),
+        };
+        assert_eq!(clock.now().unwrap(), 100);
+        stop.store(true, Ordering::SeqCst);
+        assert!(clock.now().is_err());
+        for inner in [Ok(101), Ok(102), Err(Error)] {
+            let clock = LeaseClock {
+                clock: Arc::new(Fixed(inner)),
+                deadline: 101,
+                stop: Arc::new(AtomicBool::new(false)),
+            };
+            assert!(clock.now().is_err());
         }
     }
     #[test]

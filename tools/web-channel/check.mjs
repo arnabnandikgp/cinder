@@ -27,3 +27,4 @@ command(process.execPath, ['attestation/build.mjs']);
 command(process.execPath, ['build-sdk.mjs']);
 command(process.execPath, ['check-browser.mjs']);
 command(process.execPath, ['check-http.mjs']);
+command(process.execPath, ['check-runtime.mjs']);

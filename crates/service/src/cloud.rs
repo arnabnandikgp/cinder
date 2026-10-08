@@ -187,7 +187,7 @@ impl Client {
         &self.endpoint
     }
     fn call(
-        &mut self,
+        &self,
         method: &str,
         path: &str,
         headers: Vec<(&str, &str)>,
@@ -207,12 +207,10 @@ impl Client {
         let socket = VsockStream::connect(Target::new(3, self.endpoint.port)?)?;
         let response = exchange(socket, &self.trust, &self.endpoint.host()?, now, &wire)?;
         let end = self.clock.now()?;
-        if end < now || end - now > 10_000 || start.elapsed() > Duration::from_secs(10) {
-            return Err(Error);
-        }
+        completed(&self.credentials, start, now, end)?;
         Ok(response)
     }
-    pub(crate) fn json(&mut self, target: &str, body: Value) -> Result<Value, Error> {
+    pub(crate) fn json(&self, target: &str, body: Value) -> Result<Value, Error> {
         let b = Zeroizing::new(serde_json::to_vec(&body).map_err(|_| Error)?);
         let content_type = if self.endpoint.service == "dynamodb" {
             "application/x-amz-json-1.0"
@@ -230,6 +228,15 @@ impl Client {
         }
         serde_json::from_slice(&r.body).map_err(|_| Error)
     }
+}
+fn completed(credentials: &Credential, start: Instant, now: u64, end: u64) -> Result<(), Error> {
+    // A reply crossing the finite credential's safety boundary cannot establish
+    // present authority. Remote response authentication alone is insufficient.
+    credentials.identity(end)?;
+    if end < now || end - now > 10_000 || start.elapsed() > Duration::from_secs(10) {
+        return Err(Error);
+    }
+    Ok(())
 }
 fn signed(
     e: &Endpoint,
@@ -409,7 +416,7 @@ fn stream_key(s: Stream) -> String {
 /// Region-local strong read + exact conditional update. No global table,
 /// eventually-consistent read, implicit registration, epoch write or retries.
 pub struct DynamoWitness {
-    client: Client,
+    client: Arc<Client>,
     stream: Stream,
 }
 impl DynamoWitness {
@@ -418,7 +425,37 @@ impl DynamoWitness {
         if client.endpoint.service != "dynamodb" || stream.id == [0; 32] {
             return Err(Error);
         }
-        Ok(Self { client, stream })
+        Ok(Self {
+            client: Arc::new(client),
+            stream,
+        })
+    }
+    /// Independent strong-read port sharing only immutable, finite credentials.
+    /// The actual IAM authority is unchanged; this handle exposes no CAS method.
+    pub fn reader(&self) -> DynamoRead {
+        DynamoRead {
+            client: self.client.clone(),
+            stream: self.stream,
+        }
+    }
+}
+/// Concurrent one-shot witness reads, never a shared last-good freshness cache.
+pub struct DynamoRead {
+    client: Arc<Client>,
+    stream: Stream,
+}
+impl cinder_journal::read::Witness for DynamoRead {
+    fn read(&self, s: Stream) -> Result<Anchor, cinder_journal::Error> {
+        if s != self.stream {
+            return Err(cinder_journal::Error::Stale);
+        }
+        self.client
+            .json(
+                "DynamoDB_20120810.GetItem",
+                read_request(&self.client.endpoint.resource, s),
+            )
+            .and_then(|v| parse_anchor(&v, s))
+            .map_err(|_| cinder_journal::Error::Storage)
     }
 }
 fn read_request(table: &str, s: Stream) -> Value {
@@ -489,14 +526,7 @@ fn cas_request(table: &str, s: Stream, expected: Anchor, next: Head) -> Result<V
 }
 impl Witness for DynamoWitness {
     fn read(&mut self, s: Stream) -> Result<Anchor, cinder_journal::Error> {
-        if s != self.stream {
-            return Err(cinder_journal::Error::Stale);
-        }
-        let body = read_request(&self.client.endpoint.resource, s);
-        self.client
-            .json("DynamoDB_20120810.GetItem", body)
-            .and_then(|v| parse_anchor(&v, s))
-            .map_err(|_| cinder_journal::Error::Storage)
+        cinder_journal::read::Witness::read(&self.reader(), s)
     }
     fn accept(
         &mut self,
@@ -655,6 +685,23 @@ pub(crate) fn qualification_cas_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cloud_completion_rechecks_finite_credentials_and_both_time_bounds() {
+        let now = 1_700_000_000_000;
+        let mut c = Credential {
+            access: "TESTACCESS0000000000".into(),
+            secret: "disposable-test-secret-0000000000000000".into(),
+            token: "disposable-token".into(),
+            expires: now + 10_500,
+        };
+        let started = Instant::now();
+        assert!(completed(&c, started, now, now + 499).is_ok());
+        assert!(completed(&c, started, now, now + 500).is_err());
+        assert!(completed(&c, started, now, now - 1).is_err());
+        c.expires = now + 60_000;
+        assert!(completed(&c, started, now, now + 10_001).is_err());
+        assert!(completed(&c, started - Duration::from_secs(11), now, now).is_err());
+    }
     #[test]
     fn repeated_unconsumed_cloud_headers_are_bounded() {
         let response = b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\nSet-Cookie: a=1\r\nset-cookie: b=2\r\nVary: Origin\r\nvary: Accept-Encoding\r\n\r\nx";

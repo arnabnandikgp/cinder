@@ -60,4 +60,18 @@ impl ApplicationContract {
     pub fn digest(&self) -> [u8; 32] {
         self.digest
     }
+    /// Extend the old component with the actual purpose-separated chain policy.
+    /// Neither a caller-provided digest nor a parent assertion substitutes for it.
+    pub fn with_chain(self, chain: &crate::chain_funding::Loaded) -> Self {
+        Self {
+            digest: sha256(
+                &[
+                    b"CINDER-LOADED-APPLICATION-2\0".as_slice(),
+                    &self.digest,
+                    &chain.commitment(),
+                ]
+                .concat(),
+            ),
+        }
+    }
 }

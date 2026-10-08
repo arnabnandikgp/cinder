@@ -4,6 +4,8 @@ pub mod funding;
 mod native;
 pub mod observation;
 pub mod profile;
+/// Budgeted, account-bound observation requests; no terminal-coverage inference.
+pub mod reads;
 use cinder_kernel::{codec::Canonical, identity::AttemptKey};
 use sha2::{Digest, Sha256};
 

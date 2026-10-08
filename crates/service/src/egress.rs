@@ -9,6 +9,7 @@ use cinder_journal::model::PrivateBytes;
 use cinder_pacifica::{
     execution::{Origin, Outbound, Reply, Transport},
     observation::MAX_BODY,
+    reads,
 };
 use openssl::{
     sha::sha256,
@@ -119,8 +120,21 @@ impl Egress {
         let start = Instant::now();
         let now = self.clock.now()?;
         let wire = encode(host(self.origin), request.path(), request.body())?;
+        self.deliver(&wire, now, start)
+    }
+    fn read_once(&self, request: reads::Request) -> Result<Reply, Error> {
+        let start = Instant::now();
+        let now = self.clock.now()?;
+        let query = request.consume(now).map_err(|_| Error)?;
+        if query.origin() != self.origin {
+            return Err(Error);
+        }
+        let wire = encode_read(host(self.origin), query.target())?;
+        self.deliver(&wire, now, start)
+    }
+    fn deliver(&self, wire: &[u8], now: u64, start: Instant) -> Result<Reply, Error> {
         let socket = VsockStream::connect(self.target)?;
-        let result = exchange(socket, &self.trust, host(self.origin), now, &wire, start)?;
+        let result = exchange(socket, &self.trust, host(self.origin), now, wire, start)?;
         let received_at = self.clock.now()?;
         if received_at < now
             || received_at - now > DEADLINE.as_millis() as u64
@@ -139,6 +153,11 @@ impl Egress {
 impl Transport for Egress {
     fn post(&mut self, request: Outbound) -> Reply {
         self.once(request).unwrap_or(Reply::Unknown)
+    }
+}
+impl reads::Transport for Egress {
+    fn get(&mut self, request: reads::Request) -> Reply {
+        self.read_once(request).unwrap_or(Reply::Unknown)
     }
 }
 pub(crate) fn host(origin: Origin) -> &'static str {
@@ -162,6 +181,31 @@ fn encode(host: &str, path: &str, body: &[u8]) -> Result<Zeroizing<Vec<u8>>, Err
     wire.extend_from_slice(body);
     Ok(wire)
 }
+fn encode_read(host: &str, target: &str) -> Result<Zeroizing<Vec<u8>>, Error> {
+    let (path, query) = target.split_once('?').ok_or(Error)?;
+    if !matches!(host, "test-api.pacifica.fi" | "api.pacifica.fi")
+        || !matches!(
+            path,
+            "/api/v1/trades/history"
+                | "/api/v1/funding/history"
+                | "/api/v1/orders/history"
+                | "/api/v1/positions"
+                | "/api/v1/account"
+                | "/api/v1/account/settings"
+                | "/api/v1/account/loan"
+                | "/api/v1/account/balance/history"
+                | "/api/v1/account/withdraw/pending"
+                | "/api/v1/account/withdraw/history"
+        )
+        || !query.starts_with("account=")
+        || query.len() > 1024
+        || !target.bytes().all(|b| (33..=126).contains(&b))
+        || target.contains('#')
+    {
+        return Err(Error);
+    }
+    Ok(Zeroizing::new(format!("GET {target} HTTP/1.1\r\nHost: {host}\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n").into_bytes()))
+}
 fn exchange<S: Socket>(
     socket: S,
     trust: &Trust,
@@ -170,6 +214,20 @@ fn exchange<S: Socket>(
     wire: &[u8],
     start: Instant,
 ) -> Result<Response, Error> {
+    exchange_bounded(socket, trust, hostname, now, wire, start, MAX_BODY)
+}
+pub(crate) fn exchange_bounded<S: Socket>(
+    socket: S,
+    trust: &Trust,
+    hostname: &str,
+    now: u64,
+    wire: &[u8],
+    start: Instant,
+    maximum_body: usize,
+) -> Result<Response, Error> {
+    if maximum_body == 0 || maximum_body > cinder_journal::wire::MAX_RECORD {
+        return Err(Error);
+    }
     if now == 0 || start.elapsed() > DEADLINE {
         return Err(Error);
     }
@@ -194,18 +252,26 @@ fn exchange<S: Socket>(
     }
     tls.write_all(wire)?;
     tls.flush()?;
-    let result = response(&mut tls, start)?;
+    let result = response_bounded(&mut tls, start, maximum_body)?;
     if start.elapsed() > DEADLINE {
         return Err(Error);
     }
     Ok(result)
 }
-struct Response {
-    status: u16,
-    body: PrivateBytes,
-    retry_after_ms: Option<u64>,
+pub(crate) struct Response {
+    pub(crate) status: u16,
+    pub(crate) body: PrivateBytes,
+    pub(crate) retry_after_ms: Option<u64>,
 }
+#[cfg(test)]
 fn response(reader: &mut impl Read, start: Instant) -> Result<Response, Error> {
+    response_bounded(reader, start, MAX_BODY)
+}
+fn response_bounded(
+    reader: &mut impl Read,
+    start: Instant,
+    maximum_body: usize,
+) -> Result<Response, Error> {
     let mut header = Zeroizing::new(Vec::new());
     while !header.ends_with(b"\r\n\r\n") {
         if header.len() >= MAX_HEADERS || start.elapsed() > DEADLINE {
@@ -268,7 +334,7 @@ fn response(reader: &mut impl Read, start: Instant) -> Result<Response, Error> {
                     return Err(Error);
                 }
                 let n: usize = value.parse().map_err(|_| Error)?;
-                if n == 0 || n > MAX_BODY {
+                if n == 0 || n > maximum_body {
                     return Err(Error);
                 }
                 length = Some(n);
@@ -317,6 +383,39 @@ fn response(reader: &mut impl Read, start: Instant) -> Result<Response, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn read_http_targets_are_allowlisted_bounded_and_have_no_signing_headers() {
+        let target = "/api/v1/trades/history?account=fixture&limit=32&cursor=a%26b";
+        let wire = encode_read("test-api.pacifica.fi", target).unwrap();
+        assert_eq!(wire.as_slice(), format!("GET {target} HTTP/1.1\r\nHost: test-api.pacifica.fi\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n").as_bytes());
+        for (host, target) in [
+            ("evil.example", target),
+            (
+                "test-api.pacifica.fi",
+                "/api/v1/account/withdraw?account=fixture",
+            ),
+            (
+                "test-api.pacifica.fi",
+                "/api/v1/orders/create?account=fixture",
+            ),
+            ("test-api.pacifica.fi", "/api/v1/positions"),
+            ("test-api.pacifica.fi", "/api/v1/positions?symbol=BTC"),
+            ("test-api.pacifica.fi", "/api/v1/account?account=x#fragment"),
+            (
+                "test-api.pacifica.fi",
+                "/api/v1/account?account=x\r\nInjected: true",
+            ),
+        ] {
+            assert!(encode_read(host, target).is_err());
+        }
+        assert!(
+            encode_read(
+                "test-api.pacifica.fi",
+                &format!("/api/v1/account?account={}", "a".repeat(1024))
+            )
+            .is_err()
+        );
+    }
     fn parse(mut wire: &[u8]) -> Result<Response, Error> {
         response(&mut wire, Instant::now())
     }
@@ -518,7 +617,7 @@ mod tests {
         let mut trailing = der.clone();
         trailing.push(0);
         assert!(Trust::from_der(&trailing, sha256(&trailing)).is_err());
-        for (hostname, now, selected_root, succeeds) in [
+        for ((hostname, now, selected_root, succeeds), read) in [
             ("test-api.pacifica.fi", 1_700_000_500_000, &root, true),
             ("api.pacifica.fi", 1_700_000_500_000, &root, false),
             (
@@ -529,7 +628,10 @@ mod tests {
             ),
             ("test-api.pacifica.fi", 1_700_001_500_000, &root, false),
             ("test-api.pacifica.fi", 1_699_999_500_000, &root, false),
-        ] {
+        ]
+        .into_iter()
+        .flat_map(|case| [(case, false), (case, true)])
+        {
             let mut builder =
                 SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server()).unwrap();
             builder
@@ -541,7 +643,11 @@ mod tests {
             builder.set_certificate(&leaf).unwrap();
             builder.set_private_key(&leaf_key).unwrap();
             let acceptor = builder.build();
-            let wire = encode("test-api.pacifica.fi", "/api/v1/orders/cancel", b"{}").unwrap();
+            let wire = if read {
+                encode_read("test-api.pacifica.fi", "/api/v1/account?account=fixture").unwrap()
+            } else {
+                encode("test-api.pacifica.fi", "/api/v1/orders/cancel", b"{}").unwrap()
+            };
             let expected = wire.to_vec();
             let listener = TcpListener::bind("127.0.0.1:0").unwrap();
             let address = listener.local_addr().unwrap();

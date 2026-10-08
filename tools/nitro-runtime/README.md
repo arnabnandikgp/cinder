@@ -1,7 +1,8 @@
 # Pre-hardware release package
 
 This is a **qualification build**, not a live brokerage deployment. The measured
-manifest rejects trading, funding and native-read activation. Private SDK auth,
+version-1 manifest rejects all native activation; version 2 permits bounded
+read-only qualification but still rejects trading and funding. Private SDK auth,
 grants and views use the actual API and journal. No fixture funds, synthetic fill
 or fake exposure is injected. P22 owns integrated offline financial scenarios;
 P23 owns qualified venue/chain workflows. P20 hardware must still prove actual
@@ -10,6 +11,10 @@ NSM, vsock, KMS, cloud restore and fencing; an ELF/OCI build is not that proof.
 The [runbook](../../docs/operations/nitro-qualification.md) specifies preparation,
 permissions, evidence, cost and cleanup. The [ADR](../../docs/architecture/0020-nitro-runtime.md)
 defines the current limitations and topology approval boundary.
+P23's [chain-port ADR](../../docs/architecture/0024-confidential-chain-ports.md)
+specifies the sixth key purpose, versioned preparation, private RPC and fixed
+read-only handoff. Its [runbook](../../docs/operations/live-qualification.md)
+governs the new live session; P20 permission/measurements cannot be reused.
 
 ## Build inputs and separation
 
@@ -70,7 +75,7 @@ manifest digest, actual approved PCRs) independently of the parent/quote.
 | Enclave | `cinder-enclave` | NSM clock/recipient, KMS release, actual private API, encrypted replicated journal and bounded fresh-state supervisor |
 | Parent | `cinder-nitro-relay` | Loopback TCP to fixed enclave CID/port; opaque TLS only |
 | Parent | `cinder-cloud-relay` | Fixed manifest AWS endpoint on port 443; opaque TLS only |
-| Parent | `cinder-nitro-egress` | Fixed native HTTPS origin; not started while native gates are off |
+| Parent | `cinder-nitro-egress` | Fixed native origin or explicit `solana-devnet`/`helius-devnet` HTTPS route; opaque TLS only, fixed manifest port |
 | Parent | `cinder-bootstrap` | One-shot KMS ciphertext + already-parent-known temporary KMS/S3 credential, 60-second bound |
 | Independent client | `cinder-verify-quote` | Production AWS-root verifier; independently expected SDK release policy |
 | Trusted operator only | `cinder-prepare-release` | Validate actual private configuration/key roles; create 0700/0600 local provisioning files; no AWS calls |

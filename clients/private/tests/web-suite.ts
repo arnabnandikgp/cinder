@@ -37,6 +37,9 @@ export async function runHttp(core: WebCore, signer: MessageSigner, harness: Har
     let ch = await connect(), api = client(ch);
     const context = ch.context(); context.binding.fill(0); check(ch.context().binding.some(b=>b),'mutable session alias');
     let reply = await api.request(request(30,{kind:'view'})); check(reply.kind==='view' && reply.cash===1000n,'seeded actual account view');
+    await harness.control('delay-reply');
+    reply=await api.request(request(29,{kind:'view'}));check(reply.kind==='view'&&reply.cash===1000n,'slow private reply lost');
+    checks.push('bounded application reply survives slow delivery without reauthentication or resend');
     reply = await client(ch,2).request(request(31,{kind:'view'})); check(reply.kind==='error' && reply.code==='unauthorized','cross account');
     const placed = await api.request(request(40,order)); check(placed.kind==='receipt' && placed.outcome==='dispatched' && placed.possiblyExposed,'real handler retained dispatch');
     const queried = await api.request(request(41,{kind:'operation',target:id(40)})); check(queried.kind==='receipt' && queried.outcome==='dispatched','operation query');

@@ -89,6 +89,24 @@ pub trait Attester: Send + Sync {
     /// No host boolean or caller-supplied quote substitutes for real NSM.
     fn quote(&self, policy: &Policy, context: &Context<'_>) -> Result<Vec<u8>, Error>;
 }
+/// Opaque, unreleased private read (or a checked command/error response).
+/// A preparation worker cannot turn it into wire bytes;
+/// the connection must return it to its handler immediately before delivery.
+/// Dropping it releases any retained journal ticket and private candidate.
+pub struct PreparedReply {
+    pub(crate) inner: Prepared,
+}
+pub(crate) enum Prepared {
+    Immediate(PrivateBytes),
+    Accepted(crate::runtime::ReadCandidate),
+}
+impl PreparedReply {
+    pub(crate) fn immediate(bytes: PrivateBytes) -> Self {
+        Self {
+            inner: Prepared::Immediate(bytes),
+        }
+    }
+}
 /// Synchronous bounded application handler. It owns the one protected journal;
 /// all successes/errors return over the same TLS connection. Never logs inputs.
 pub trait Handler: Send + Sync {
@@ -99,6 +117,58 @@ pub trait Handler: Send + Sync {
         request: PrivateBytes,
         now: u64,
     ) -> Result<PrivateBytes, Error>;
+    /// Prepare an ordinary reply without prematurely releasing an immutable
+    /// read. The carrier performs its clock checks before consuming the final
+    /// release gate, immediately before encrypting/writing the response.
+    fn prepare_handle(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<PreparedReply, Error> {
+        self.handle(channel, request, now)
+            .map(PreparedReply::immediate)
+    }
+    /// Periodic signed Read only. `None` means temporary lock contention: emit
+    /// nothing, never cached private state. Failures remain fatal to the stream.
+    /// Implementations without a busy controller use the ordinary handler.
+    fn poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        if !cinder_api::wire::Request::decode(request.as_bytes())
+            .is_ok_and(|r| matches!(r.command, cinder_api::wire::Command::Read(_)))
+        {
+            return Err(Error);
+        }
+        self.handle(channel, request, now).map(Some)
+    }
+    /// Prepare one signed Read without touching the connection's cipher. The
+    /// shipping Runtime retains its witnessed ticket, not an already-released
+    /// response. Default fixture handlers have no journal publication to retain.
+    fn prepare_poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PreparedReply>, Error> {
+        self.poll(channel, request, now)
+            .map(|r| r.map(PreparedReply::immediate))
+    }
+    /// Consume once on the cipher-owning connection. Call immediately before
+    /// encryption, not before placing an output in a queue. No automatic retry.
+    fn release_reply(
+        &self,
+        _channel: &Session,
+        prepared: PreparedReply,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        match prepared.inner {
+            Prepared::Immediate(reply) => Ok(Some(reply)),
+            Prepared::Accepted(_) => Err(Error),
+        }
+    }
 }
 /// Live established session, constructed only by the TLS server handshake.
 pub struct Session {
@@ -452,10 +522,14 @@ impl Server {
                 return Err(Error);
             }
             let request = PrivateBytes::new(request.to_vec()).map_err(|_| Error)?;
-            let reply = self.handler.handle(&session, request, now)?;
+            let prepared = self.handler.prepare_handle(&session, request, now)?;
             if self.clock.now()? >= expires {
                 return Err(Error);
             }
+            let reply = self
+                .handler
+                .release_reply(&session, prepared)?
+                .ok_or(Error)?;
             write_frame(&mut tls, reply.as_bytes(), MAX_RESPONSE)?;
         }
         Ok(())
@@ -476,6 +550,7 @@ pub fn relay(
         listener,
         || TcpStream::connect_timeout(&target, IO_TIMEOUT).map_err(|_| Error),
         stop,
+        RelayKind::Ingress,
     )
 }
 /// Parent ingress to one fixed enclave CID/port. The TCP listener is loopback
@@ -493,6 +568,7 @@ pub fn relay_vsock(
         listener,
         || crate::vsock::VsockStream::connect(target),
         stop,
+        RelayKind::Ingress,
     )
 }
 /// Parent egress to one native origin's HTTPS port, not a general-purpose proxy.
@@ -506,7 +582,20 @@ pub fn relay_egress(
     let host = crate::egress::host(origin);
     // Fail fast at startup, but do not retain an address beyond that check.
     first_ipv4((host, 443).to_socket_addrs()?)?;
-    relay_socket(listener, || connect_https(host), stop)
+    relay_socket(listener, || connect_https(host), stop, RelayKind::Egress)
+}
+/// Fixed devnet RPC relay. Only opaque TLS is copied; RPC credentials, methods,
+/// signed transactions and responses remain inside the enclave TLS channel.
+pub fn relay_chain(
+    listener: crate::vsock::VsockListener,
+    host: &str,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    if !matches!(host, "devnet.helius-rpc.com" | "api.devnet.solana.com") {
+        return Err(Error);
+    }
+    first_ipv4((host, 443).to_socket_addrs()?)?;
+    relay_socket(listener, || connect_https(host), stop, RelayKind::Egress)
 }
 /// Measured cloud endpoint only. TLS/SigV4 terminate in the enclave, never here.
 pub fn relay_cloud(
@@ -516,7 +605,7 @@ pub fn relay_cloud(
 ) -> Result<(), Error> {
     let host = endpoint.host()?;
     first_ipv4((host.as_str(), 443).to_socket_addrs()?)?;
-    relay_socket(listener, || connect_https(&host), stop)
+    relay_socket(listener, || connect_https(&host), stop, RelayKind::Egress)
 }
 fn first_ipv4(mut addresses: impl Iterator<Item = SocketAddr>) -> Result<SocketAddr, Error> {
     addresses.find(SocketAddr::is_ipv4).ok_or(Error)
@@ -533,10 +622,16 @@ fn connect_https_with<I: Iterator<Item = SocketAddr>, S>(
 ) -> Result<S, Error> {
     connect(first_ipv4(resolve()?)?)
 }
+#[derive(Clone, Copy)]
+enum RelayKind {
+    Ingress,
+    Egress,
+}
 fn relay_socket<L: Listener, S: Socket>(
     listener: L,
     connect: impl Fn() -> Result<S, Error>,
     stop: Arc<AtomicBool>,
+    kind: RelayKind,
 ) -> Result<(), Error> {
     listener.nonblocking()?;
     let active = Arc::new(AtomicUsize::new(0));
@@ -558,6 +653,18 @@ fn relay_socket<L: Listener, S: Socket>(
                     continue;
                 };
                 if upstream.prepare().is_err() {
+                    let _ = client.shutdown(Shutdown::Both);
+                    let _ = upstream.shutdown(Shutdown::Both);
+                    continue;
+                }
+                // Private streams emit only when state changes, so silence is
+                // not a failed request. The enclave enforces handshake/frame
+                // deadlines; this opaque ingress retains the absolute session
+                // lifetime, byte/connection caps and bounded writes. One-shot
+                // native/cloud RPC egress keeps its short read timeout.
+                if matches!(kind, RelayKind::Ingress)
+                    && (client.idle().is_err() || upstream.idle().is_err())
+                {
                     let _ = client.shutdown(Shutdown::Both);
                     let _ = upstream.shutdown(Shutdown::Both);
                     continue;
@@ -641,6 +748,69 @@ pub fn stop_on_stdin() -> Arc<AtomicBool> {
 #[cfg(test)]
 mod identity_tests {
     use super::*;
+    #[test]
+    fn opaque_ingress_survives_idle_but_one_shot_egress_keeps_short_timeout() {
+        let pair = |kind| {
+            let upstream = TcpListener::bind("127.0.0.1:0").unwrap();
+            let target = upstream.local_addr().unwrap();
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let stop = Arc::new(AtomicBool::new(false));
+            let flag = stop.clone();
+            let relay = thread::spawn(move || {
+                relay_socket(
+                    listener,
+                    || TcpStream::connect_timeout(&target, IO_TIMEOUT).map_err(|_| Error),
+                    flag,
+                    kind,
+                )
+            });
+            let echo = thread::spawn(move || {
+                let (mut socket, _) = upstream.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(10)))
+                    .unwrap();
+                let mut byte = [0];
+                while socket.read_exact(&mut byte).is_ok() {
+                    if socket.write_all(&byte).is_err() {
+                        break;
+                    }
+                }
+            });
+            let mut client = TcpStream::connect(address).unwrap();
+            client.set_read_timeout(Some(IO_TIMEOUT)).unwrap();
+            client.set_write_timeout(Some(IO_TIMEOUT)).unwrap();
+            client.write_all(&[7]).unwrap();
+            let mut byte = [0];
+            client.read_exact(&mut byte).unwrap();
+            assert_eq!(byte, [7]);
+            (client, stop, relay, echo)
+        };
+        let (mut ingress, ingress_stop, ingress_relay, ingress_echo) = pair(RelayKind::Ingress);
+        let (mut egress, egress_stop, egress_relay, egress_echo) = pair(RelayKind::Egress);
+        thread::sleep(IO_TIMEOUT + Duration::from_millis(500));
+        let mut byte = [0];
+        let ingress_alive = ingress
+            .write_all(&[9])
+            .and_then(|()| ingress.read_exact(&mut byte));
+        let egress_closed = match egress.read(&mut [0]) {
+            Ok(0) => true,
+            Err(e) => matches!(e.kind(), std::io::ErrorKind::ConnectionReset),
+            _ => false,
+        };
+        for (client, stop, relay, echo) in [
+            (ingress, ingress_stop, ingress_relay, ingress_echo),
+            (egress, egress_stop, egress_relay, egress_echo),
+        ] {
+            stop.store(true, Ordering::SeqCst);
+            let _ = client.shutdown(Shutdown::Both);
+            relay.join().unwrap().unwrap();
+            echo.join().unwrap();
+        }
+        assert!(ingress_alive.is_ok());
+        assert_eq!(byte, [9]);
+        assert!(egress_closed);
+    }
     #[test]
     fn https_connections_resolve_fresh_ipv4_once_without_address_retry() {
         let ipv6: SocketAddr = "[::1]:443".parse().unwrap();

@@ -45,6 +45,8 @@ pub enum Role {
     Broker,
     /// Parent-unknown scoped witness STS credentials.
     Witness,
+    /// Solana funds authority for vault release/payout; distinct sixth purpose.
+    Funds,
 }
 impl Role {
     /// Stable encryption-context label, not a Rust debug representation.
@@ -55,6 +57,7 @@ impl Role {
             Self::Trading => "trading",
             Self::Broker => "broker",
             Self::Witness => "witness",
+            Self::Funds => "funds",
         }
     }
     fn code(self) -> u8 {
@@ -64,6 +67,7 @@ impl Role {
             Self::Trading => 3,
             Self::Broker => 4,
             Self::Witness => 5,
+            Self::Funds => 6,
         }
     }
 }
@@ -82,7 +86,7 @@ pub struct Slot {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
-    /// Closed schema version (1).
+    /// Closed schema: 1 (five-role P20) or 2 (purpose-separated chain preparation).
     pub version: u32,
     /// Exact 64-byte network/deployment namespace.
     pub domain: Vec<u8>,
@@ -110,21 +114,24 @@ pub struct Manifest {
     pub second: Endpoint,
     /// Authenticated fresh region-local witness contract.
     pub witness: Endpoint,
-    /// Complete five-role release policy, without plaintext secrets.
+    /// Complete versioned purpose-separated release, without plaintext secrets.
     pub slots: Vec<Slot>,
     /// Capability decisions and finite boot lease.
     pub gates: Gates,
+    /// Version 2's public chain routing/trust. Omitted in version 1 encoding.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain: Option<crate::chain_funding::Peer>,
 }
 impl Manifest {
     /// Refuse ambiguous routes, key-role reuse, missing trust or live activation.
     pub fn validate(&self) -> Result<(), Error> {
-        if self.version!=1 || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
+        if !matches!(self.version,1|2) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
             || self.application==[0;32] || self.stream==[0;32] || self.generation==0 || self.epoch==0
-            || self.slots.len()!=5 || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
+            || self.slots.len()!=if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
             || (self.first.resource==self.second.resource) || self.gates.maximum_boot_ms==0 || self.gates.maximum_boot_ms>3_600_000
             // P20 packages/test-gates only. Live reads/money movement need P23's
             // qualified chain/read ports and separately authorized manifest.
-            || self.gates.trading || self.gates.funding || self.gates.native_reads
+            || self.gates.trading || self.gates.funding || (self.version==1 && self.gates.native_reads)
         {
             return Err(Error);
         }
@@ -136,6 +143,17 @@ impl Manifest {
             self.second.port,
             self.witness.port,
         ];
+        match (self.version, &self.chain) {
+            (1, None) => {}
+            (2, Some(peer)) => {
+                peer.validate()?;
+                if peer.network.as_slice() != &self.domain[..32] {
+                    return Err(Error);
+                }
+                ports.push(peer.port);
+            }
+            _ => return Err(Error),
+        }
         for e in [&self.first, &self.second, &self.witness] {
             e.commitment()?;
         }
@@ -165,6 +183,7 @@ impl Manifest {
         ]
         .iter()
         .any(|r| !self.slots.iter().any(|s| s.role == *r))
+            || (self.version == 2 && !self.slots.iter().any(|s| s.role == Role::Funds))
         {
             return Err(Error);
         }
@@ -194,7 +213,11 @@ impl Manifest {
         self.validate()?;
         Ok(sha256(
             &[
-                b"CINDER-RUNTIME-MANIFEST-1\0".as_slice(),
+                if self.version == 1 {
+                    b"CINDER-RUNTIME-MANIFEST-1\0".as_slice()
+                } else {
+                    b"CINDER-RUNTIME-MANIFEST-2\0".as_slice()
+                },
                 &serde_cbor::to_vec(self).map_err(|_| Error)?,
             ]
             .concat(),
@@ -210,8 +233,15 @@ impl Manifest {
         ]))
     }
     fn prefix(&self, role: Role) -> Result<Vec<u8>, Error> {
+        if !self.slots.iter().any(|s| s.role == role) {
+            return Err(Error);
+        }
         Ok([
-            b"CKR1".as_slice(),
+            if self.version == 1 {
+                b"CKR1".as_slice()
+            } else {
+                b"CKR2".as_slice()
+            },
             &[role.code()],
             &self.generation.to_be_bytes(),
             &self.domain,
@@ -416,8 +446,22 @@ fn cms_frame(bytes: &[u8]) -> Result<(), Error> {
     }
     Ok(())
 }
-/// Release each role once to its own fresh recipient inside this measured boot.
-/// Any error discards accumulated material; no cached key or plaintext fallback.
+/// Check exact measured role coverage before any recipient-KMS release.
+fn validate_capsules(manifest: &Manifest, capsules: &[Capsule]) -> Result<(), Error> {
+    if capsules.len() != manifest.slots.len()
+        || capsules.iter().enumerate().any(|(i, c)| {
+            c.ciphertext.is_empty()
+                || c.ciphertext.len() > 6144
+                || capsules[..i].iter().any(|o| o.role == c.role)
+                || !manifest.slots.iter().any(|s| s.role == c.role)
+        })
+    {
+        return Err(Error);
+    }
+    Ok(())
+}
+/// Release each measured role once to its own fresh recipient. Any error discards
+/// accumulated material; no cached key or plaintext fallback.
 pub fn release(
     manifest: &Manifest,
     nsm: Arc<Nsm>,
@@ -429,15 +473,7 @@ pub fn release(
     {
         return Err(Error);
     }
-    if boot.capsules.len() != 5
-        || boot.capsules.iter().enumerate().any(|(i, c)| {
-            c.ciphertext.is_empty()
-                || c.ciphertext.len() > 6144
-                || boot.capsules[..i].iter().any(|o| o.role == c.role)
-        })
-    {
-        return Err(Error);
-    }
+    validate_capsules(manifest, &boot.capsules)?;
     let mut keys = BTreeMap::new();
     for capsule in boot.capsules {
         let slot = manifest
@@ -466,15 +502,26 @@ pub fn release(
             token: boot.parent.token.clone(),
             expires: boot.parent.expires,
         };
-        let mut client = Client::new(slot.endpoint.clone(), credentials, nsm.clone())?;
+        let client = Client::new(slot.endpoint.clone(), credentials, nsm.clone())?;
         let response=client.json("TrentService.Decrypt",json!({"KeyId":slot.endpoint.resource,"EncryptionAlgorithm":"SYMMETRIC_DEFAULT","CiphertextBlob":STANDARD.encode(capsule.ciphertext),"EncryptionContext":context,"Recipient":{"KeyEncryptionAlgorithm":"RSAES_OAEP_SHA_256","AttestationDocument":STANDARD.encode(document)}}))?;
         let plain = recipient.decrypt(&response, &slot.endpoint.resource)?;
         keys.insert(capsule.role, manifest.unwrap(capsule.role, plain)?);
     }
-    // Checked high-entropy secrets never alias across key roles.
+    validate_keys(&keys)?;
+    nsm.now()?;
+    Ok(keys)
+}
+/// The same key-purpose check is used by recipient release and private runtime
+/// construction. Test injection must not bypass production key separation.
+pub(crate) fn validate_keys(keys: &BTreeMap<Role, Zeroizing<Vec<u8>>>) -> Result<(), Error> {
     let secrets: Vec<_> = keys
         .iter()
-        .filter(|(r, _)| matches!(r, Role::Storage | Role::Trading | Role::Broker))
+        .filter(|(r, _)| {
+            matches!(
+                r,
+                Role::Storage | Role::Trading | Role::Broker | Role::Funds
+            )
+        })
         .map(|(_, k)| k)
         .collect();
     if secrets
@@ -488,8 +535,7 @@ pub fn release(
     {
         return Err(Error);
     }
-    nsm.now()?;
-    Ok(keys)
+    Ok(())
 }
 
 #[cfg(all(test, feature = "local-fixture"))]
@@ -550,12 +596,130 @@ pub(crate) fn qualification_manifest() -> Manifest {
             native_reads: false,
             maximum_boot_ms: 60000,
         },
+        chain: None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn funds_storage_trading_and_broker_seeds_are_nonzero_distinct_exact_seeds() {
+        let roles = [Role::Storage, Role::Trading, Role::Broker, Role::Funds];
+        let keys: BTreeMap<_, _> = roles
+            .into_iter()
+            .enumerate()
+            .map(|(i, r)| (r, Zeroizing::new(vec![i as u8 + 1; 32])))
+            .collect();
+        validate_keys(&keys).unwrap();
+        for role in roles {
+            for invalid in [vec![0; 32], vec![1; 31], vec![1; 33]] {
+                let mut changed = keys.clone();
+                changed.insert(role, Zeroizing::new(invalid));
+                assert!(validate_keys(&changed).is_err());
+            }
+            for other in roles {
+                if role == other {
+                    continue;
+                }
+                let mut changed = keys.clone();
+                changed.insert(role, keys[&other].clone());
+                assert!(validate_keys(&changed).is_err());
+            }
+        }
+    }
+    #[cfg(feature = "local-fixture")]
+    #[test]
+    fn version_two_binds_chain_trust_and_sixth_role_without_enabling_money_movement() {
+        let old = qualification_manifest();
+        old.validate().unwrap();
+        let encoded = serde_cbor::to_vec(&old).unwrap();
+        assert!(!encoded.windows(5).any(|x| x == b"chain"));
+        let mut m = old.clone();
+        m.version = 2;
+        let mut funds = m.slots[0].clone();
+        funds.role = Role::Funds;
+        funds.endpoint.resource =
+            "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000006".into();
+        m.slots.push(funds);
+        m.chain = Some(crate::chain_funding::Peer {
+            host: "devnet.helius-rpc.com".into(),
+            port: 9007,
+            root: m.venue_root.clone(),
+            root_hash: m.venue_root_hash,
+            network: [1; 32],
+        });
+        m.gates.native_reads = true;
+        m.validate().unwrap();
+        // This is the exact pre-KMS guard used by release, not only manifest validation.
+        for manifest in [&old, &m] {
+            let capsules = || {
+                manifest
+                    .slots
+                    .iter()
+                    .map(|s| Capsule {
+                        role: s.role,
+                        ciphertext: vec![1],
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let mut valid = capsules();
+            valid.reverse();
+            validate_capsules(manifest, &valid).unwrap();
+            valid.pop();
+            assert!(validate_capsules(manifest, &valid).is_err());
+            let mut duplicate = capsules();
+            duplicate[1].role = duplicate[0].role;
+            assert!(validate_capsules(manifest, &duplicate).is_err());
+            for bytes in [vec![], vec![1; 6145]] {
+                let mut invalid = capsules();
+                invalid[0].ciphertext = bytes;
+                assert!(validate_capsules(manifest, &invalid).is_err());
+            }
+        }
+        let mut foreign = old
+            .slots
+            .iter()
+            .map(|s| Capsule {
+                role: s.role,
+                ciphertext: vec![1],
+            })
+            .collect::<Vec<_>>();
+        foreign[0].role = Role::Funds;
+        assert!(validate_capsules(&old, &foreign).is_err());
+        assert_ne!(m.digest().unwrap(), old.digest().unwrap());
+        assert!(m.wrap(Role::Funds, &[6; 32]).unwrap().starts_with(b"CKR2"));
+        assert!(old.wrap(Role::Funds, &[6; 32]).is_err());
+        let role = m.slots.iter_mut().find(|s| s.role == Role::Funds).unwrap();
+        role.plaintext_hash = sha256(&[6; 32]);
+        let own = m.wrap(Role::Funds, &[6; 32]).unwrap();
+        m.unwrap(Role::Funds, own).unwrap();
+        assert!(
+            m.unwrap(Role::Funds, m.wrap(Role::Broker, &[6; 32]).unwrap())
+                .is_err()
+        );
+        assert!(
+            m.unwrap(Role::Broker, old.wrap(Role::Broker, &[4; 32]).unwrap())
+                .is_err()
+        );
+        for case in 0..9 {
+            let mut changed = m.clone();
+            match case {
+                0 => changed.gates.funding = true,
+                1 => changed.gates.trading = true,
+                2 => changed.chain = None,
+                3 => changed.chain.as_mut().unwrap().port = changed.ingress,
+                4 => changed.chain.as_mut().unwrap().network = [2; 32],
+                5 => changed.chain.as_mut().unwrap().host = "mainnet.helius-rpc.com".into(),
+                6 => changed.chain.as_mut().unwrap().root_hash = [2; 32],
+                7 => {
+                    changed.slots.pop();
+                }
+                _ => changed.version = 1,
+            }
+            assert!(changed.validate().is_err(), "case {case}");
+        }
+    }
     #[test]
     fn recipient_rejects_plaintext_and_wrong_key() {
         let r = Recipient::new().unwrap();

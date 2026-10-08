@@ -1,6 +1,6 @@
 # Implementation plan
 
-Updated 2026-10-03. Canonical scope and acceptance criteria; actual progress lives in
+Updated 2026-10-07. Canonical scope and acceptance criteria; actual progress lives in
 [TRACKER](TRACKER.md). Read [BASELINE](BASELINE.md) for approved policy and
 [EVIDENCE](EVIDENCE.md) for research/prototype provenance and regression obligations.
 P00 establishes this foundation; it does not implement or deploy the broker.
@@ -726,6 +726,62 @@ verify implementation receipts and current native authority/precision/completene
 not a replay labeled as live integration. Use bounded scenarios and preconfigured
 test accounts; an unavailable capability is a named blocker, not a simulated pass.
 Evidence: W03–W08; sanitized receipts and failure/cleanup reports linked to commit.
+
+Execution handoff: [live qualification runbook](../operations/live-qualification.md)
+tracks the audited production connections and G05 checklist. The first offline
+slice added account-bound, durably budgeted native observation transport. The
+continuation connects confidential chain signing/RPC, streamed executable checks,
+finalized receipts, owner-deposit recognition and finite read-only scheduling;
+[ADR 0024](../architecture/0024-confidential-chain-ports.md) defines the six-role
+release and trust boundaries. Run the fixed local checklist before the fresh live
+manifest. Trading/funding admission, authentic native setup/credit/payment/cut
+and precise funding remain independently gated; diagnostics do not qualify them.
+First hardware step is changed-image transport/key/read qualification, not a
+claim of a complete financial live workflow.
+After the first read-only hardware run exposed concurrent initial-read/stream
+refusals, local diagnosis and one user-authorized independent architecture review
+identified composed runtime, NSM, cloud, API-history, storage and per-connection
+serialization. The user approved the bounded remediation direction in
+[ADR 0025](../architecture/0025-concurrent-private-reads.md); the
+[C1–C5 remediation plan](P23-REMEDIATION.md) records implementation gates, not
+completed qualification. Keep today's durability/repair checks for the bounded
+dev/test workload. Production segment/checkpoint/retention remains a separate
+security decision. Before another measured run, satisfy the fresh-authority,
+publication, time, resource and joined-client gates. Preserve finance, custody,
+wire and durable
+acceptance guarantees; increasing timeouts is not this architectural qualification.
+C1–C3 and C4 are published on #55; their reviewed source/check/package receipts
+are in TRACKER. C3 implements bounded unreleased connection replies and
+observation prepare/I/O/completion; C4 joins
+actual Node/Chrome clients to the real Runtime in the fixed history/delay/watch
+and fault/resource matrix. Local check and measurement receipts are in TRACKER;
+cheap handler fixtures and prior hardware receipts are not that evidence. Global
+commit pressure may refuse reads until a quiet window; the authority gate remains
+unchanged. Whole-process fixture memory is not production capacity calibration.
+C5 requires a fresh exact-source measured build and separately reviewed manifest.
+The approved 2026-10-07 read-only run uses that build: actual Node/Chrome reads
+at the minimal initialized head 2 and exact heads 8/32 pass, as do non-economic
+agent lifecycle, encrypted restart and replica/witness/epoch fencing. The
+64-record growth cut is unpassed: its unavailable original grant reconciles as
+accepted head 51 without resend. Natural application-lease expiry passes with
+parent and witness credentials still valid. The separate real 900-second witness
+STS-expiry case also refuses private reads with the parent alive and longer
+application lease; no clock/credential manipulation or captured AWS ExpiredToken
+response is claimed. The bounded ciphertext/head archive and independent owned
+teardown pass; six test KMS keys are PendingDeletion and setup policies are
+preserved. This hardware invocation is closed, but cut 64 remains unpassed and
+C5/P23 financial/production acceptance does not follow. Next is focused local
+growth diagnosis and a separately reviewed remediation, not further cases in the
+closed invocation.
+Inactive ticks check signed lease/sticky fence without proactive cloud polling;
+actual operations retain independent current checks. Manifest-forbidden financial
+activation and the existing durable storage/repair contract are unchanged.
+Review corrections also belong to this fixed checklist: release exactly the
+measured role set, continue after ineligible original deposits without hiding
+port/storage failures, close expired unsent physical plans only on verified
+no-wire/no-effect history, and never infer complete source coverage from a
+single transaction lookup. Runtime request waiting and post-I/O poll cadence
+remain bounded. Retained/uncertain sends still require original reconciliation.
 
 - [ ] Deposit, trade lifecycle, funding observations, ordinary return/payout and recovery execute or expose a named blocking capability.
 - [ ] Real process/network faults and credit exhaustion reconcile safely; replay is not reported as a newly observed venue event.

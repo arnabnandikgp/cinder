@@ -39,6 +39,52 @@ open; passing this candidate must not close them.
 
 ## How to reuse the research
 
+P23 additionally promotes [confidential chain ports](../architecture/0024-confidential-chain-ports.md):
+controller-bound signing/finality, purpose-separated release, original owner
+deposits and bounded diagnostic scheduling. Deterministic **unfunded** public
+codec fixtures are in `crates/pacifica/tests/fixtures/funding-codec-public.json`
+and `customer-deposit-public.json`; `scripts/generate-funding-codec-fixtures.mjs`
+reproduces them using the locked Anchor/web3.js client. Independent Rust/Anchor
+checks cover large u64s and exact signatures/ABI. These are not the historical
+M1 wallets, live wire artifacts or a native-credit provider. The existing journal,
+funds controller and P22 lifecycle assertions are reused, not the experiments'
+plaintext state or injected completion certificates. Current primary diagnostic
+sources and remaining causal/funding/cut gates live in the
+[runbook](../operations/live-qualification.md). Exact final local/hardware results
+are recorded in TRACKER, not inferred from this promotion register.
+
+Pre-review local application checkpoint `33dae28b2c3846d9956a7e906f5663d78d93cd76`
+passes the fixed host and exact-source ARM64 shipping gates; the unchanged
+program/browser owning sources retain the 59/59 SBF and actual Node/Chrome/WASM
+receipts. Completed original receipts survive a later one-way freeze, while new
+old-epoch actions stay fenced. See [the P23 receipt](TRACKER.md#p23--live-integration-qualification)
+for commands, logs, exact artifacts, counterexamples and current live blockers.
+No historical experiment authority or injected native completion was promoted.
+Subsequent PR #55 corrections qualify exact role coverage, rejected-deposit
+progress, verified expired no-wire closure, absence of unsupported source cuts
+and bounded lock backpressure. They require new host/ARM application evidence;
+the old ELF is not the current image. TRACKER records their exact gate receipt.
+Correction source `5acf79bd2f931e85325841a06bd87b038cb1cf28` passes the full
+pinned host runner and isolated exact-source ARM package/rebuild/refusal checks.
+Its new enclave ELF hash is
+`0f5da0b061380ad16d1e139765b505ee3d6e3cdf94fc9195b5dc50975d8a1ff1`;
+this is not an EIF/PCR or changed-image hardware qualification.
+
+The 2026-10-06 read-only hardware session additionally promotes a **public
+certificate-only** AWS path capture in
+`tools/web-channel/attestation/aws-serial-padding-capture.json`. It exercises the
+observed positive 20-byte serial magnitude plus minimal sign padding without
+changing fixed-root, certificate-signature/path, PCR/context or freshness checks.
+Negative/nonminimal/oversized serials, expiry and signature corruption reject.
+No quote context, customer data, signed command, credential or private key is in
+the capture. The same session's transport regressions cover bounded opaque idle
+ingress, skipped busy Read polls and post-I/O cadence, plus a separately bounded
+15-second application reply with five-second handshake/frame limits unchanged.
+Actual grant delivery/update progressed, but full live concurrent stream handling
+is **not qualified**: cloud history verification under the shared journal lock
+causes long commits and bounded read refusals. Detailed artifact/fault/cleanup
+receipts and this limitation belong in TRACKER, not a fabricated live pass.
+
 P22's [tracked acceptance manifest](acceptance-manifest.json) maps W01–W09 and
 V01–V10 to named executable owning-layer/joined tests. Its
 [acceptance contract](../architecture/0022-offline-acceptance.md) distinguishes
@@ -452,6 +498,62 @@ native settlement and authenticated chain finality remain qualified ports; codec
 and fake-observation tests do not upgrade them into live G01/P23 evidence.
 
 ## Requirement-to-phase traceability
+
+P23 remediation promotion (2026-10-07):
+Review follow-up at published `e50dc9d`: both bots' current findings are verified
+against actual code, with pre-fix failing regressions. Nonfatal ordinary read
+refusal is distinct from periodic skip and fatal fence; boot-local immutable
+deposit rejections avoid RPC-budget depletion without creating credit; opaque
+reply waiting and absolute frame/body assembly have separate bounds. Tests and
+new-source/package receipts at `d2bf4b6` are in TRACKER. Old ARM/EIF identities cannot
+qualify these changes. The user approved the bounded C5 proposal and renewed
+AWS login. Exact fresh-policy/identity, current AMI/price/quota/network and owned
+termination checks pass, and one fresh C5 host launched 2026-10-07 03:13:48 UTC.
+Its public-only image is independently downloaded/inspected before six exact
+PCR/context key policies; parent plaintext-decrypt and witness-access denials
+pass. Initial actual Node/Chrome concurrent reads, same-socket grant/two watches,
+agent revocation and natural expiry pass with zero financial/native/RPC activity.
+The strong initialized head is sequence 2, explicitly not a sequence-1 pass;
+exact sequence-8/32 reads pass too. Cut 64 is unpassed; its unavailable original
+grant reconciles as accepted head 51 with no resend. Actual encrypted restart
+preserves all 49 operations/digests and authority epoch 3; replica loss refuses
+the one retained revoke, proved not accepted after restart. Independent witness
+loss and epoch 1→2 fence stop private reads while preserving head/hash. The
+90-second lease naturally stops the enclave while parent/credentials remain
+valid. Separate real 900-second witness STS expiry also refuses private reads
+with parent alive, longer application lease and no clock change/renewal. This
+is expiry/freshness refusal, not a captured AWS ExpiredToken response. Six boots;
+final runtime connection counts are S3 2,936/1,500, DDB 778, KMS 36, native/RPC
+0/0. The 116-object/93,238-byte ciphertext archive and all three strong heads
+verify locally. Independent teardown confirms terminated host, absent tagged EBS/
+buckets/table/roles/SG/SSH, six seven-day PendingDeletion keys and preserved
+administrator policies. Combined operator/runtime calls: KMS 147, S3 4,690, DDB
+813, within approved caps; billing is delayed, not a final invoice observation.
+The invocation is closed; the 64-record gate is still unpassed. Actual final source,
+image/client receipts and limitations belong in TRACKER; this evidence does not
+close P23 or any financial/production gate.
+
+[ADR 0025](../architecture/0025-concurrent-private-reads.md) and the
+[C1–C5 contract](P23-REMEDIATION.md) record the approved single-journal accepted
+read/publication and scheduling boundaries. Tracked journal/API/Runtime races,
+the actual Node/Chrome joined grid and default-feature ARM package qualify the
+bounded local slice at source `b38849cf93761f380e195a2731698d862ea84f4d`.
+Exact commands, artifacts, measurements and limitations are in TRACKER. Synthetic
+clock/witness/fault ports are not AWS/STS authority; quiet-window read recovery,
+small fixture memory and full-history repair do not establish production liveness
+or capacity. No historical EIF/PCR or native financial receipt qualifies this
+changed application. Fresh hardware and G01–G05 evidence remain separate.
+
+P23 initial promotion (2026-10-06):
+[ADR 0023](../architecture/0023-live-observation-ports.md) connects current primary
+account/position/history GET schemas to the existing private observation journal
+and pooled request budget. Tracked tests use fake delivery and authenticated
+loopback TLS, not live venue accounts or old experimental signers. W03/W04's
+precision, broader-agent-power, original-withdrawal and actual-fee findings remain
+qualification inputs, not shipping permission. The
+[live runbook](../operations/live-qualification.md) separates prepared components,
+missing ports, current documented limits and fresh G05 authority. No raw research,
+key, RPC secret, signed wire, complete-cut assertion or hardware receipt is promoted.
 
 | Contract | Owning implementation | Mandatory evidence |
 | --- | --- | --- |
