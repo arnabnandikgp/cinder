@@ -4,14 +4,104 @@ import { WebChannel,type WebCore } from '../src/web-channel-core.ts';
 import { verifyWithRoot } from '../../../tools/web-channel/attestation/verifier.mjs';
 import { expectStreamClosed } from './stream-assertions.ts';
 import { id,policy } from './web-suite.ts';
-type Metrics={gets:number;puts:number;replica_bytes:number;writer_reads:number;accepts:number;read_calls:number;live_read_io:number;peak_read_io:number;clocks:number;post_cas:boolean};
+type Metrics={gets:number;puts:number;replica_bytes:number;writer_reads:number;accepts:number;read_calls:number;live_read_io:number;peak_read_io:number;clocks:number;post_cas:boolean;head:number};
 export interface RuntimeHarness {
-  setup(options:{history:number;delay_ms:number}):Promise<void>;
+  setup(options:{history:number;delay_ms:number;packed?:boolean}):Promise<void>;
   current():{baseUrl:string;root:number[]};
   control(command:Record<string,unknown>):Promise<Metrics>;
   restart():Promise<void>;
   finish():Promise<{peakRssBytes:number}>;
   record(receipt:Record<string,unknown>):void;
+}
+
+// Candidate-only actual carrier growth. Never selects the shipping cloud store.
+export async function runPackedGrowth(core:WebCore,signer:MessageSigner,h:RuntimeHarness):Promise<string[]> {
+  const checks:string[]=[],channels:WebChannel[]=[];
+  const connect=async(transport:'http'|'websocket')=>{
+    const ch=await WebChannel.connect({baseUrl:h.current().baseUrl,policy,core,transport},
+      (q,p,c)=>verifyWithRoot(q,p,c,Uint8Array.from(h.current().root)));channels.push(ch);return ch;
+  };
+  const client=(ch:WebChannel,s=signer)=>new PrivateClient(ch,s,{domain:policy,account:id(1),policy:1});
+  const req=(n:number,command:Command,epoch=1n)=>({id:id(n),epoch,expiresAt:BigInt(Date.now()+60000),command});
+  const close=()=>{for(const ch of channels.splice(0))ch.close();};
+  const metrics=()=>h.control({op:'metrics'});
+  const next=async(it:AsyncIterator<ReadPage>)=>{
+    const r=await bounded(it.next(),'Packed Runtime update missing');check(!r.done,'Packed Runtime stream ended');return r.value;
+  };
+  try {
+    for(const carrier of ['http','websocket'] as const) {
+      await h.setup({history:1,delay_ms:0,packed:true});
+      await h.control({op:'replica-delay',milliseconds:100});
+      const started=performance.now(),cuts:Record<string,unknown>[]=[],durations:number[]=[];
+      let agent:MessageSigner|undefined,grant:Command|undefined;
+      for(let head=2;head<=64;head++) {
+        const keys=await crypto.subtle.generateKey('Ed25519',false,['sign','verify']);
+        agent={publicKey:new Uint8Array(await crypto.subtle.exportKey('raw',keys.publicKey)),
+          signMessage:async b=>new Uint8Array(await crypto.subtle.sign('Ed25519',keys.privateKey,Uint8Array.from(b).buffer))};
+        grant={kind:'grant',grant:{key:agent.publicKey,methods:1,market:id(7),maximumLots:1n,maximumFee:1n,maximumOrders:1n,expiresAt:BigInt(Date.now()+3600000)}};
+        const ch=await connect(carrier),before=await metrics(),t=performance.now();
+        const reply=await client(ch).request(req(head-1,grant));
+        const elapsedMs=performance.now()-t,after=await metrics();durations.push(elapsedMs);ch.close();channels.pop();
+        check(reply.kind==='receipt'&&reply.outcome==='complete',`Packed grant at head ${head}: ${reply.kind}`);
+        check(after.head===head&&after.accepts===before.accepts+1,'Packed growth was retried or skipped');
+        check(after.gets-before.gets===3*Math.ceil(head/16)+2&&after.puts-before.puts===2,'Packed append I/O contract');
+        check(elapsedMs<15000,'Packed grant exceeded unchanged reply budget');
+        if([2,8,32,64].includes(head)) {
+          const http=await connect('http'),ws=await connect('websocket'),readsBefore=await metrics();
+          const replies=await Promise.all([client(http).request(req(100+head,{kind:'view'})),
+            client(ws).request(req(101+head,{kind:'read',query:{family:'operations',limit:64}}))]);
+          check(replies[0].kind==='view'&&replies[0].cash===0n&&replies[0].funding===0n&&replies[0].held===0n&&replies[0].positions.every(p=>p.lots===0n&&p.basis===0n)&&replies[1].kind==='page'&&replies[1].rows.length===head-1,'Packed cut read/financial state');
+          const afterReads=await metrics();check(afterReads.gets===readsBefore.gets&&afterReads.writer_reads===readsBefore.writer_reads,'Packed read used writer storage');
+          close();cuts.push({head,elapsedMs,gets:after.gets-before.gets,puts:after.puts-before.puts});
+        }
+      }
+      check(agent&&grant&&grant.kind==='grant','Missing packed growth grant');
+      await h.control({op:'writer-delay',milliseconds:50});
+      await h.control({op:'delay',milliseconds:50});
+      const delegated=client(await connect('websocket'),agent);
+      check((await delegated.request(req(190,{kind:'view'}))).kind==='view','Packed READ grant missing');
+      const watched=client(await connect('websocket'));
+      const it=(await watched.subscribe({id:id(191),epoch:1n,expiresAt:BigInt(Date.now()+60000),query:{family:'operations',limit:64}}))[Symbol.asyncIterator]();
+      check((await next(it)).rows.length===63,'Packed head64 watch missing operations');
+      const secondWatch=client(await connect('websocket'));
+      const secondIt=(await secondWatch.subscribe({id:id(192),epoch:1n,expiresAt:BigInt(Date.now()+60000),query:{family:'operations',limit:64}}))[Symbol.asyncIterator]();
+      check((await next(secondIt)).rows.length===63,'Packed second watch missing operations');
+      // A new key is required: granting an already authorized key is invalid,
+      // not a mutation whose response can be deliberately abandoned after CAS.
+      const newKeys=await crypto.subtle.generateKey('Ed25519',false,['sign','verify']);
+      const lostGrant:Command={kind:'grant',grant:{...grant.grant,key:new Uint8Array(await crypto.subtle.exportKey('raw',newKeys.publicKey)),expiresAt:BigInt(Date.now()+3600000)}};
+      const lostChannel=await connect(carrier),beforeLost=await metrics();
+      await h.control({op:'post-cas',milliseconds:1000});
+      const lost=client(lostChannel).request(req(200,lostGrant)).then(()=>false,()=>true);
+      const until=performance.now()+10000;
+      while(!(await metrics()).post_cas) {check(performance.now()<until,'Lost reply did not reach CAS');await new Promise(r=>setTimeout(r,20));}
+      lostChannel.close();check(await lost,'Deliberately abandoned reply unexpectedly completed');
+      const update=await next(it);check(update.rows.length===64,'Accepted lost reply not published');
+      check((await next(secondIt)).rows.length===64,'Second watch missed accepted lost reply');
+      const owner=client(await connect('http')),receipt=await owner.request(req(202,{kind:'operation',target:id(200)}));
+      check(receipt.kind==='receipt'&&receipt.outcome==='complete','Original-ID packed reconciliation');
+      const grown=await metrics();close();
+      const growthMemory=await h.finish();await h.restart();
+      check(grown.accepts===beforeLost.accepts+1&&grown.head===65,'Lost reply was resent');
+      check(grown.gets-beforeLost.gets===17&&grown.puts-beforeLost.puts===2,'Head64 writer pack cost');
+      const reopened=await metrics(),fresh=client(await connect('http'));
+      const replayed=await fresh.request(req(203,{kind:'operation',target:id(200)}));
+      check(replayed.kind==='receipt'&&replayed.outcome==='complete'&&reopened.head===65&&reopened.accepts===0,'Packed process reopen lost original receipt');
+      check(replayed.id.every((b,n)=>b===receipt.id[n])&&replayed.digest.every((b,n)=>b===receipt.digest[n]),'Packed reopen changed original ID/digest');
+      const operations=await fresh.request(req(204,{kind:'read',query:{family:'operations',limit:64}}));
+      check(operations.kind==='page'&&operations.rows.length===64,'Packed reopen lost operation history');
+      const old=client(await connect('websocket'),agent),oldIt=(await old.subscribe({id:id(205),epoch:1n,expiresAt:BigInt(Date.now()+60000),query:{family:'operations',limit:64}}))[Symbol.asyncIterator]();await next(oldIt);
+      check((await fresh.request(req(206,{kind:'revoke'}))).kind==='receipt','Packed revoke failed');
+      await expectStreamClosed(oldIt,'Packed revoke leaked old generation');
+      check((await fresh.request(req(207,{kind:'view'},2n))).kind==='view','Packed current-epoch owner read');
+      close();const replayMemory=await h.finish();
+      const memory={peakRssBytes:Math.max(growthMemory.peakRssBytes,replayMemory.peakRssBytes)};
+      check(memory.peakRssBytes>0&&memory.peakRssBytes<128*1024*1024&&grown.peak_read_io<=4,'Packed small-record Runtime resource envelope');
+      h.record({kind:'packed-growth',carrier,replicaDelayMs:100,witnessDelayMs:50,cuts,growthMs:performance.now()-started,maxGrantMs:Math.max(...durations),acceptedHead:grown.head,metrics:grown,...memory});
+      checks.push(`${carrier}: growth to64, independent reads/watch, original-ID lost-reply replay and revocation`);
+    }
+    return checks;
+  }finally{close();}
 }
 function check(ok:unknown,label:string):asserts ok {if(!ok)throw Error(label);}
 async function bounded<T>(promise:Promise<T>,label:string,milliseconds=15000):Promise<T> {

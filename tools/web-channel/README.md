@@ -37,6 +37,13 @@ All carrier traffic is loopback. Owned children/browser profiles and uniquely
 named temporary encrypted journals are cleaned up; no existing browser profile,
 configured wallet, AWS account, RPC or venue endpoint is used.
 
+The default runner includes the [retained-history pack candidate](../../docs/architecture/0026-retained-history-packs.md).
+CI selects `--standard-only` for existing channel/C4 checks and `--packed-only`
+for a separate cached growth job, each retaining the fifteen-minute job limit.
+The pack job builds the same pinned native/WASM/verifier prerequisites, then
+runs actual Node/Chrome HTTP/WebSocket growth and original-ID replay. Candidate
+storage is selected only in local-fixture mode, never in shipping Nitro.
+
 Generated ignored artifacts: `pkg/channel.js`, `pkg/channel_bg.wasm` and AWS-only
 `pkg/sdk.js`. `pkg/http-fixture.js` and `pkg/attestation.js` are TEST bundles, not
 client release artifacts. Distribute reviewed application artifacts/policy; never

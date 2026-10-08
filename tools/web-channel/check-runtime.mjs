@@ -10,16 +10,18 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { runtimeFixture } from './runtime-fixture.mjs';
-import { runRuntime } from '../../clients/private/tests/runtime-suite.ts';
+import { runRuntime,runPackedGrowth } from '../../clients/private/tests/runtime-suite.ts';
 import { stopChild } from './stop-child.mjs';
 
 let frozenRoot;
 async function main() {
 const dir=fileURLToPath(new URL('.',import.meta.url)),args=process.argv.slice(2);
-if(args.length>1||(args.length&&args[0]!=='--node-only'))throw Error('Usage: check-runtime.mjs [--node-only]');
+if(new Set(args).size!==args.length||args.some(a=>!['--node-only','--packed-only'].includes(a)))throw Error('Usage: check-runtime.mjs [--node-only] [--packed-only]');
+const nodeOnly=args.includes('--node-only'),packed=args.includes('--packed-only');
+const suite=packed?runPackedGrowth:runRuntime,groups=packed?2:9,cells=packed?2:24;
 if(process.versions.node!==(await readFile(new URL('../../.node-version',import.meta.url),'utf8')).trim())throw Error('Use pinned Node');
 const chrome=process.env.CINDER_TEST_CHROME??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/google-chrome');
-if(!args.length&&!existsSync(chrome))throw Error('Actual Chrome is required');
+if(!nodeOnly&&!existsSync(chrome))throw Error('Actual Chrome is required');
 // Freeze one exact executable for ALL cells, even if an independent Cargo check
 // replaces its target output while this longer process suite is running.
 frozenRoot=await mkdtemp(join(tmpdir(),'cinder-runtime-artifact-'));
@@ -38,23 +40,23 @@ const h={setup:async options=>{
 finish:async()=>{await node.assertPrivate();const memory=await node.finish();console.log(JSON.stringify({client:'Node',kind:'process-memory',...nodeOptions,...memory}));return memory;},
 record:receipt=>{receipts.push(receipt);console.log(JSON.stringify({client:'Node',...receipt}));}};
 let nodeChecks;
-try{nodeChecks=await runRuntime(core,{publicKey,signMessage:async bytes=>sign(null,bytes,keys.privateKey)},h);}
+try{nodeChecks=await suite(core,{publicKey,signMessage:async bytes=>sign(null,bytes,keys.privateKey)},h);}
 finally{await node?.close();}
-if(receipts.length!==24||nodeChecks.length!==9)throw Error('Incomplete Node runtime matrix');
+if(receipts.length!==cells||nodeChecks.length!==groups)throw Error('Incomplete Node runtime matrix');
 console.log(`Node ${process.version}: ${nodeChecks.length} joined Runtime qualification groups passed`);
-if(args.length)return;
+if(nodeOnly)return;
 
 const profile=await mkdtemp(join(tmpdir(),'cinder-runtime-chrome-'));
 let browserHarness,browser,currentOptions,resultResolve,timer;
 const result=new Promise(resolve=>{resultResolve=resolve;});
 const html=`<!doctype html><meta charset="utf-8"><title>Local real Runtime qualification</title><pre id="result">Running C4 synthetic-dependency matrix</pre><script type="module">
-import init,* as core from '/channel.js';import {runRuntime} from '/runtime-fixture.js';let result;
+import init,* as core from '/channel.js';import {${packed?'runPackedGrowth':'runRuntime'} as runSuite} from '/runtime-fixture.js';let result;
 try{await init();const keys=await crypto.subtle.generateKey('Ed25519',false,['sign','verify']);const publicKey=new Uint8Array(await crypto.subtle.exportKey('raw',keys.publicKey));
 let current;const receipts=[];async function post(path,input){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});if(!r.ok)throw Error('Browser runtime harness '+path);return r.json();}
 const h={setup:async options=>{current=await post('/test/setup',{publicKey:[...publicKey],options});},current:()=>current,
 control:c=>post('/test/control',c),restart:async()=>{current=await post('/test/restart',{});},finish:()=>post('/test/finish',{}),record:r=>receipts.push(r)};
 const signer={publicKey,signMessage:async b=>new Uint8Array(await crypto.subtle.sign('Ed25519',keys.privateKey,b))};
-result={ok:true,checks:await runRuntime(core,signer,h),receipts};}catch(error){result={ok:false,error:String(error).slice(0,512)};}
+result={ok:true,checks:await runSuite(core,signer,h),receipts};}catch(error){result={ok:false,error:String(error).slice(0,512)};}
 document.querySelector('#result').textContent=JSON.stringify(result);await fetch('/test/result',{method:'POST',body:JSON.stringify(result)});
 </script>`;
 const files=new Map([['/channel.js',['pkg/channel.js','text/javascript']],['/channel_bg.wasm',['pkg/channel_bg.wasm','application/wasm']],['/runtime-fixture.js',['pkg/runtime-fixture.js','text/javascript']]]);
@@ -83,10 +85,10 @@ try{
   browser=spawn(chrome,['--headless','--no-first-run','--disable-background-networking','--disable-component-update','--disable-sync','--disable-default-apps','--no-proxy-server',`--user-data-dir=${profile}`,`http://127.0.0.1:${server.address().port}`],{stdio:'ignore',detached:true});
   browser.on('error',()=>resultResolve({ok:false,error:'Chrome launch failed'}));browser.on('exit',()=>resultResolve({ok:false,error:'Chrome exited before result'}));
   const r=await Promise.race([result,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Runtime browser matrix timeout')),900000);})]);
-  if(!r.ok||r.checks?.length!==nodeChecks.length||r.receipts?.length!==24)throw Error(r.error??'Incomplete Chrome runtime matrix');
+  if(!r.ok||r.checks?.length!==nodeChecks.length||r.receipts?.length!==cells)throw Error(r.error??'Incomplete Chrome runtime matrix');
   for(const receipt of r.receipts)console.log(JSON.stringify({client:'Chrome',...receipt}));
   console.log(`${execFileSync(chrome,['--version'],{encoding:'utf8'}).trim()}: ${r.checks.length} joined Runtime qualification groups passed`);
-  console.log('C4 synthetic dependencies and local OS clock/root; not Nitro, independent AWS witness, STS, native financial qualification or production memory calibration.');
+  console.log(`${packed?'Retained pack candidate':'C4'}: synthetic dependencies and local OS clock/root; not Nitro, independent AWS witness, STS, native financial qualification or production memory calibration.`);
 }finally{
   clearTimeout(timer);await stopChild(browser,{group:true});await browserHarness?.close();server.closeAllConnections();
   if(server.listening)await new Promise(resolve=>server.close(resolve));await rm(profile,{recursive:true,force:true,maxRetries:4,retryDelay:100});

@@ -67,6 +67,12 @@ run-2 accounts/keys or establish its exact latency cause. The
 [financial gate map](P23-FINANCIAL-GATES.md) links remaining native provider
 contracts without upgrading diagnostic bodies to setup, credit, payment or
 complete-cut certificates. Shipping storage and financial permissions are unchanged.
+The approved [local pack prototype](../architecture/0026-retained-history-packs.md)
+preserves full frames, original AEAD/head/archive and the later both-copy repair
+boundary. Canonical grouping reduces object calls; all history bytes remain.
+Its journal/file/Runtime and actual Node/Chrome growth receipts are local evidence
+only. Shipping S3, manifest binding, full-size memory/capacity, explicit deployed
+migration and changed-image hardware qualification remain separate gates.
 Subsequent PR #55 corrections qualify exact role coverage, rejected-deposit
 progress, verified expired no-wire closure, absence of unsupported source cuts
 and bounded lock backpressure. They require new host/ARM application evidence;

@@ -38,9 +38,10 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ## Current handoff
 
 P23 is in progress. The published live-qualification work is on
-`tee/p23-live-qualification`; the user-approved offline continuation is now on
-`tee/p23-growth-diagnosis`, stacked above #55 at
-`eac1f57c16367d97ad5f32931880c979de522227`. Both derive from
+`tee/p23-live-qualification`; the user-approved offline pack prototype is now on
+`tee/p23-packed-history`, stacked above #56 (`tee/p23-growth-diagnosis`) at
+`60eee0c558d800d6613bd1ae72e43bddadd51e13`, above #55 at
+`eac1f57c16367d97ad5f32931880c979de522227`. All derive from
 merged product trunk `833955f8a4ead02a71eb5ae69a6aebd92bb85091` in `cinder-tee`.
 [Live qualification](../operations/live-qualification.md) and
 [ADR 0024](../architecture/0024-confidential-chain-ports.md) define the fixed
@@ -69,9 +70,10 @@ native credit/payment, terminal execution cuts, exact funding and recovery gaps
 to current code and refusal behavior. It does not reopen approved economics,
 import M1/M2 authority, flip activation booleans or add implementation phases.
 
-Next required user review: the recommended byte-bounded encrypted-history pack
-design/prototype, preserving all frames, repair, freshness and original receipts.
-No pack/checkpoint/retention replacement is approved or implemented. An earlier
+At diagnosis publication, the next user review was the byte-bounded encrypted
+history pack design/prototype. The user has now approved its **local** development;
+the candidate and remaining promotion gates are recorded below. No shipping
+pack/checkpoint/retention replacement is approved. An earlier
 GET cannot silently substitute for the later repair check. Specify format/head
 binding, bounds, interrupted writes, archive/replay and copy-repair behavior
 before shipping a storage change; then test locally and propose a fresh bounded
@@ -91,10 +93,97 @@ not claimed as new runs. Diagnostic source
 Native GitHub stack #57 contains #55 → #56. Parent #55's hosted checks
 are green at the unchanged parent head; #56's hosted
 CI/review is new/pending, not inherited from that result. This publication receipt
-changes only TRACKER. Neither PR is merged; the next action remains user review
-of the storage proposal, not another AWS or financial run.
+changes only TRACKER. Neither PR is merged; the subsequent user-approved local
+prototype does not authorize another AWS or financial run.
+
+### Retained-pack local prototype — 2026-10-07
+
+Scope: [ADR 0026](../architecture/0026-retained-history-packs.md), explicit local
+candidate only. Canonical groups of 16 preserve every original frame, AEAD,
+witness head, configuration and operation identity. New-tail replication and
+later both-copy checks/repair of ALL old required packs precede CAS. Historical
+copy loss during new writes is tested; failed repair leaves the old head accepted.
+No checkpoint/pruning, old-GET reuse, timeout change, retry, native calls, AWS
+resources or economic activation. Shipping Loaded::open still selects Replicated.
+
+Healthy existing head 50: 14 GETs/two PUTs instead of 155/two; existing head 64:
+17/two instead of 197/two. Full history bytes still grow. Largest legal pack is
+approximately 16 MiB, beyond shipping S3's frame-body limit. Immutable tail
+versions duplicate prefixes; full-size memory, storage quota/orphans, cloud
+transport and manifest/migration qualification are explicitly NOT closed.
+
+Local fixture selection persists a format marker and refuses switching layout
+on reopen. Full archive import requires the exact independent current head and
+does not CAS/reset it. Real AEAD migration/reopen tests retain original receipts;
+old-epoch writers and wrong-key/layout/owner reopens refuse.
+Sharing the unchanged archive codec exposed an inherited one-byte header-limit
+error; its bound now derives from actual format length (118, not literal 117),
+with a maximum legal 4,096-frame/64-MiB archive regression. Actual Node/Chrome
+HTTP/WS candidate suite is independently wired into the browser CI runner.
+
+Local verification passes:
+
+- Full pinned `node scripts/check.mjs`: contracts/plan/workspace, strict default
+  and all-feature lint/build, all-feature debug/release and default Rust profiles,
+  SDK/relay checks. After the isolated archive-bound correction, the full journal
+  debug/release suites and maximum legal archive regression were repeated.
+  Nine pack unit cases and three real AEAD/file/archive integration cases pass;
+  final strict owning-layer Clippy, Rustfmt, TypeScript and whitespace checks pass.
+- Contracts group passes all 42 guards after the CI/docs changes.
+- Existing actual Node/Chrome C4 matrix passes 24 cells/nine groups per client.
+  This earlier regression artifact predates the isolated archive-bound correction;
+  its Runtime/core/carrier sources were not changed by that correction.
+- Final `node tools/web-channel/check.mjs --packed-only` builds locked native
+  fixture/verifier and WASM prerequisites and passes all four actual Node/Chrome
+  HTTP/WS cells. Frozen final fixture SHA256:
+  `faf74f6a203fa0ddb333fc2db9d222f4790b5c6d738b5679e04c54e5b7eb25ff`.
+  Each grows from initialized head1 to64 with 100-ms replica calls, reads at
+  2/8/32/64, then two watches plus 50-ms witness delay at the deliberately lost
+  reply. Original-ID/digest lookup and fresh process replay retain COMPLETE at65;
+  no resend, zero customer credit/positions, current-epoch revocation passes.
+
+| Final client / grant carrier | Grant reaching head64 | Largest grant in growth | Peak Runtime RSS across growth and replay |
+| --- | --- | --- | --- |
+| Node 24.21.0 / HTTP | 1,701 ms | 1,733 ms | 12,615,680 bytes |
+| Node 24.21.0 / WebSocket | 1,698 ms | 1,730 ms | 12,484,608 bytes |
+| Chrome 154.0.8037.98 / HTTP | 1,704 ms | 1,738 ms | 12,632,064 bytes |
+| Chrome 154.0.8037.98 / WebSocket | 1,694 ms | 1,729 ms | 12,664,832 bytes |
+
+All are small-record synthetic loopback measurements, below unchanged 15-second
+reply and 128-MiB fixture RSS limits; not full-size pack/cloud/Nitro capacity
+calibration. Both before/after-restart boots are measured. The added CI growth
+job has its own cached dependencies and unchanged fifteen-minute job limit;
+the standard browser/C4 job retains its name and coverage. Default local browser
+runner executes both. Test/harness sources are tracked; local raw logs remain
+temporary, not a dependency on ignored `work/`.
+
+This does not qualify the unpassed hardware cut or financial gates. Next is
+review of the candidate safety/resource/migration contract, then bounded shipping
+port work and a separately proposed exact-source hardware run. No automatic merge.
+
+Publication: implementation source `0f66ed83b901a03914c41136f97c17b3dd414523`
+is ready for review as [#58](https://github.com/arnabnandikgp/cinder/pull/58),
+base `tee/p23-growth-diagnosis` at `60eee0c558d800d6613bd1ae72e43bddadd51e13`.
+Native stack #57 is #55 → #56 → #58; both parent heads are unchanged.
+A clean index source export without ignored research/user files independently
+passes all 42 contracts and plan/workspace guards. Hosted CI/review are newly
+pending on the publication/bookkeeping head, not inherited from local or parent
+receipts. This successor changes only this publication record. Nothing is merged;
+no AWS/native activity or shipping-storage selection follows from publication.
 
 ### Latest remediation implementation — 2026-10-07
+
+Pack review continuation: the #58 same-epoch competing-writer finding is valid.
+Append now compares the freshly loaded tail with the original expected head
+before any pack writes. A focused same-frame race at heads 14/15/49 fails on
+the old implementation (two unwanted writes) and passes after the fix, retaining
+both accepted replicas and the original full replay. The full journal unit
+suite and release-mode race test pass; all 42 contracts and plan/workspace
+checks pass. The #56 wording finding is also valid: its continuation now states
+that existing Node/browser SDK qualification is in scope, while a product
+terminal, market-data UI and self-service UX are separate follow-ups. No storage
+format, deadline, financial capability or AWS authority changes in this review
+correction. Fresh-head hosted checks remain separate; nothing is merged.
 
 Review continuation after published `e50dc9d84012711d825a3a9b9821b540611696a4`:
 the user authorized both CodeRabbit and Codex addressal and approved the fresh

@@ -130,62 +130,13 @@ impl<A: Replica, B: Replica, W: Witness> Replicated<A, B, W> {
     /// losing consumption/attempt evidence. No compaction or pruning is implied.
     pub fn snapshot(&mut self) -> Result<Vec<u8>, Error> {
         let frames = self.load()?;
-        let mut bytes = b"CINDER-SNAPSHOT-1\0".to_vec();
-        bytes.extend_from_slice(&self.stream.domain.network.bytes());
-        bytes.extend_from_slice(&self.stream.domain.deployment.bytes());
-        bytes.extend_from_slice(&self.stream.id);
-        bytes.extend_from_slice(&(frames.len() as u32).to_be_bytes());
-        for frame in frames {
-            let encoded = encode_frame(&frame)?;
-            bytes.extend_from_slice(&(encoded.len() as u32).to_be_bytes());
-            bytes.extend_from_slice(&encoded);
-        }
-        Ok(bytes)
+        encode_snapshot(self.stream, &frames)
     }
     /// Rehydrate replicas only if the complete snapshot matches the independent
     /// current accepted head and stream. Does not advance/reset any witness. The
     /// caller must subsequently Journal::open to authenticate and replay AEAD.
     pub fn restore_snapshot(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        if bytes.len() > MAX_HISTORY_BYTES + MAX_RECORDS * 80 + 117 {
-            return Err(Error::Limit);
-        }
-        let prefix = [
-            b"CINDER-SNAPSHOT-1\0".as_slice(),
-            &self.stream.domain.network.bytes(),
-            &self.stream.domain.deployment.bytes(),
-            &self.stream.id,
-        ]
-        .concat();
-        let mut rest = bytes.strip_prefix(prefix.as_slice()).ok_or(Error::Codec)?;
-        let count = take_u32(&mut rest)? as usize;
-        if count == 0 || count > MAX_RECORDS {
-            return Err(Error::Limit);
-        }
-        let mut frames = Vec::with_capacity(count);
-        let mut prior = [0; 32];
-        let mut total = 0_usize;
-        for n in 0..count {
-            let len = take_u32(&mut rest)? as usize;
-            if len > MAX_RECORD + 76 || len > rest.len() {
-                return Err(Error::Codec);
-            }
-            let frame = decode_frame(&rest[..len])?;
-            rest = &rest[len..];
-            if frame.head.sequence != n as u64 || frame.previous != prior {
-                return Err(Error::Codec);
-            }
-            total = total
-                .checked_add(frame.opaque.as_bytes().len())
-                .ok_or(Error::Limit)?;
-            if total > MAX_HISTORY_BYTES {
-                return Err(Error::Limit);
-            }
-            prior = frame.head.hash;
-            frames.push(frame);
-        }
-        if !rest.is_empty() {
-            return Err(Error::Codec);
-        }
+        let frames = decode_snapshot(self.stream, bytes)?;
         let anchor = self.anchor()?;
         if frames.last().map(|f| f.head) != anchor.head {
             return Err(Error::Stale);
@@ -305,7 +256,7 @@ impl<A: Replica, B: Replica, W: Witness> Backend for Replicated<A, B, W> {
     }
 }
 
-fn take_u32(bytes: &mut &[u8]) -> Result<u32, Error> {
+pub(crate) fn take_u32(bytes: &mut &[u8]) -> Result<u32, Error> {
     let n = bytes
         .get(..4)
         .ok_or(Error::Codec)?
@@ -314,7 +265,7 @@ fn take_u32(bytes: &mut &[u8]) -> Result<u32, Error> {
     *bytes = &bytes[4..];
     Ok(u32::from_be_bytes(n))
 }
-fn encode_frame(f: &Frame) -> Result<Vec<u8>, Error> {
+pub(crate) fn encode_frame(f: &Frame) -> Result<Vec<u8>, Error> {
     f.validate()?;
     Ok([
         &f.head.sequence.to_be_bytes()[..],
@@ -325,7 +276,7 @@ fn encode_frame(f: &Frame) -> Result<Vec<u8>, Error> {
     ]
     .concat())
 }
-fn decode_frame(bytes: &[u8]) -> Result<Frame, Error> {
+pub(crate) fn decode_frame(bytes: &[u8]) -> Result<Frame, Error> {
     if bytes.len() < 76 || bytes.len() > MAX_RECORD + 76 {
         return Err(Error::Codec);
     }
@@ -346,6 +297,66 @@ fn decode_frame(bytes: &[u8]) -> Result<Frame, Error> {
 }
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+const SNAPSHOT_MAGIC: &[u8] = b"CINDER-SNAPSHOT-1\0";
+pub(crate) fn encode_snapshot(stream: Stream, frames: &[Frame]) -> Result<Vec<u8>, Error> {
+    let mut bytes = SNAPSHOT_MAGIC.to_vec();
+    bytes.extend_from_slice(&stream.domain.network.bytes());
+    bytes.extend_from_slice(&stream.domain.deployment.bytes());
+    bytes.extend_from_slice(&stream.id);
+    bytes.extend_from_slice(&(frames.len() as u32).to_be_bytes());
+    for frame in frames {
+        let encoded = encode_frame(frame)?;
+        bytes.extend_from_slice(&(encoded.len() as u32).to_be_bytes());
+        bytes.extend_from_slice(&encoded);
+    }
+    Ok(bytes)
+}
+pub(crate) fn decode_snapshot(stream: Stream, bytes: &[u8]) -> Result<Vec<Frame>, Error> {
+    // The old literal 117 omitted one header byte. Derive the bound from the
+    // unchanged format so legal maximum-length archives can still be imported.
+    if bytes.len() > MAX_HISTORY_BYTES + MAX_RECORDS * 80 + SNAPSHOT_MAGIC.len() + 100 {
+        return Err(Error::Limit);
+    }
+    let prefix = [
+        SNAPSHOT_MAGIC,
+        &stream.domain.network.bytes(),
+        &stream.domain.deployment.bytes(),
+        &stream.id,
+    ]
+    .concat();
+    let mut rest = bytes.strip_prefix(prefix.as_slice()).ok_or(Error::Codec)?;
+    let count = take_u32(&mut rest)? as usize;
+    if count == 0 || count > MAX_RECORDS {
+        return Err(Error::Limit);
+    }
+    let mut frames = Vec::with_capacity(count);
+    let mut prior = [0; 32];
+    let mut total = 0_usize;
+    for n in 0..count {
+        let len = take_u32(&mut rest)? as usize;
+        if len > MAX_RECORD + 76 || len > rest.len() {
+            return Err(Error::Codec);
+        }
+        let frame = decode_frame(&rest[..len])?;
+        rest = &rest[len..];
+        if frame.head.sequence != n as u64 || frame.previous != prior {
+            return Err(Error::Codec);
+        }
+        total = total
+            .checked_add(frame.opaque.as_bytes().len())
+            .ok_or(Error::Limit)?;
+        if total > MAX_HISTORY_BYTES {
+            return Err(Error::Limit);
+        }
+        prior = frame.head.hash;
+        frames.push(frame);
+    }
+    if !rest.is_empty() {
+        return Err(Error::Codec);
+    }
+    Ok(frames)
 }
 
 /// Durable local ciphertext object adapter. Two directories on one machine are
