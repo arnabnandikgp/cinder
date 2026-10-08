@@ -1,13 +1,29 @@
 // Offline codec/layout tests. No ignored research, RPC or live identity.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, createPublicKey, verify } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { Keypair, PublicKey } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 const require=createRequire(import.meta.url);
-const { ROUTE,nativeInstruction,verifyDeployment,verifyMint,verifyToken }=require('../../../tools/native-qualification/bindings.mjs');
+const { ROUTE,decodeSigner,signNative,nativeInstruction,verifyDeployment,verifyMint,verifyToken }=require('../../../tools/native-qualification/bindings.mjs');
 const owner=Keypair.fromSeed(Buffer.alloc(32,77)).publicKey;
+test('native diagnostic owns signer bytes after clearing parse input; signatures bind the expected public identity',()=>{
+  const fixture=Keypair.fromSeed(Buffer.alloc(32,79)),raw=Array.from(fixture.secretKey);
+  const key=decodeSigner(raw,fixture.publicKey.toBase58());assert(raw.every(n=>n===0));
+  const expected=createPublicKey({key:Buffer.concat([Buffer.from('302a300506032b6570032100','hex'),fixture.publicKey.toBuffer()]),format:'der',type:'spki'});
+  const message=Buffer.from('{"data":{"disabled":true},"expiry_window":30000,"timestamp":1748970123456,"type":"set_auto_lend_disabled"}');
+  assert(verify(null,message,expected,signNative(message,key)));
+  const tx=new Transaction({feePayer:key.publicKey,recentBlockhash:PublicKey.default.toBase58()});
+  tx.add(SystemProgram.transfer({fromPubkey:key.publicKey,toPubkey:owner,lamports:1}));tx.sign(key);assert(tx.verifySignatures());
+  assert.throws(()=>decodeSigner(Array.from(fixture.secretKey),owner.toBase58()),/identity/);
+  for(const value of [[],Array(64).fill(-1),Array(64).fill(256),Array(64).fill(1.5)])assert.throws(()=>decodeSigner(value,fixture.publicKey.toBase58()),/shape/);
+  // Reproduce the old aliasing defect independently. A stored public address
+  // survives, but the erased retained seed must fail expected-public verification.
+  const borrowed=Uint8Array.from(fixture.secretKey),broken=Keypair.fromSecretKey(borrowed);borrowed.fill(0);
+  assert(broken.publicKey.equals(fixture.publicKey));
+  assert.throws(()=>signNative(message,broken),/identity\/signature/);
+});
 test('native qualification reproduces the official deposit/faucet discriminators, u64 and account privileges',()=>{
   for(const name of ['deposit','mint_test_usdc']) {
     const ix=nativeInstruction(name,owner.toBase58());

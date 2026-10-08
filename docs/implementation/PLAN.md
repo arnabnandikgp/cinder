@@ -816,10 +816,15 @@ now implements exact-seal approval, fresh identities, the one-deposit/one-withdr
 scenario, original-wire persistence, explicit lost-reply audit separation and
 independent finalized payment checks. Its scope/bootstrap exception was approved
 2026-10-08. Approved invocations stopped at a malformed sponsor locator and a
-malformed loader constant; the [receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) records
-three read-only RPC calls, zero financial activity, independent route regressions
-and corrected diagnostic observation mappings. A fresh replacement is unapproved. Offline tests
-cannot supply a complete native cut, UUID recovery capability or funding provider.
+malformed loader constant and a signer-buffer aliasing defect. The
+[receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) preserves those unfunded failures and
+records the corrected actual 20-USDP deposit / 19-USDP finalized payment and
+return with 1-USDP fee. The original bootstrap remains unresolved; a bounded late
+empty-account lending-disable/readback check passes with no further economic
+activity. Standing authority covers small test-only corrections within unchanged
+limits, not economic retries or financial-policy changes. Actual observations and
+offline tests cannot supply a complete native cut, UUID recovery capability or
+shipping funding provider.
 Any unsupported requirement returns as a named G01/policy question; the following
 measured financial run remains separately scoped, not automatically authorized.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;

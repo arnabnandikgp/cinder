@@ -4,6 +4,7 @@
 // The already locked vault SDK is an explicit legacy transaction-codec boundary;
 // it is not a new client dependency, RPC default or shipping provider.
 import { createRequire } from 'node:module';
+import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 const require=createRequire(new URL('../../clients/vault/package.json',import.meta.url));
 export const web3=require('@solana/web3.js'), token=require('@solana/spl-token'), base58=require('bs58');
 export const ROUTE=Object.freeze({program:'peRPsYCcB1J9jvrs29jiGdjkytxs8uHLmSPLKKP9ptm',
@@ -20,6 +21,25 @@ for(const field of ['program','mint','central','vault','program_data','loader','
 }
 export const pub=s=>new PublicKey(s),pda=(seeds)=>PublicKey.findProgramAddressSync(seeds,pub(ROUTE.program))[0];
 export const ata=owner=>token.getAssociatedTokenAddressSync(pub(ROUTE.mint),pub(owner),true);
+export function decodeSigner(raw,expected) {
+  if(!Array.isArray(raw)||raw.length!==64||raw.some(n=>!Number.isInteger(n)||n<0||n>255))throw Error('Signer file shape');
+  const temporary=Uint8Array.from(raw),owned=Uint8Array.from(temporary);raw.fill(0);let retained=false;
+  try {
+    // web3 Keypair retains the input array. It must own a separate copy before
+    // clearing the parse buffer; clearing a borrowed array destroys its signer.
+    const key=web3.Keypair.fromSecretKey(owned);
+    if(key.publicKey.toBase58()!==expected)throw Error('Signer identity');
+    retained=true;return key;
+  } finally {temporary.fill(0);if(!retained)owned.fill(0);}
+}
+export function signNative(message,key) {
+  const secret=createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.from(key.secretKey.subarray(0,32))]),format:'der',type:'pkcs8'});
+  const publicKey=createPublicKey({key:Buffer.concat([Buffer.from('302a300506032b6570032100','hex'),key.publicKey.toBuffer()]),format:'der',type:'spki'});
+  const signature=sign(null,message,secret);
+  // Verify against the configured identity, not the private key used to sign.
+  if(!verify(null,message,publicKey,signature))throw Error('Native signer identity/signature');
+  return signature;
+}
 export function nativeInstruction(kind,owner,amount=20000000n) {
   if(!['deposit','mint_test_usdc'].includes(kind)||amount!==20000000n)throw Error('Native instruction scope');
   const who=pub(owner),central=pda([Buffer.from('central_state')]);

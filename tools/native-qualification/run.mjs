@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // One-shot local native-semantics probe. Never enables shipping financial gates.
-import { createPrivateKey, createHash, sign, verify } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -39,14 +39,13 @@ export async function main(directory) {
   checkEnvironment();const dir=runDirectory(directory),m=JSON.parse(privateRead(join(dir,'manifest.json'))),
     config=JSON.parse(privateRead(join(dir,'config.json'))),approval=JSON.parse(privateRead(join(dir,'approval.json')));
   const seal=validateManifest(m);assertApproval(m,approval,Date.now());
-  const {web3,token,base58,ROUTE,ata,pub,nativeInstruction,verifyDeployment,verifyMint,verifyToken}=await import('./bindings.mjs');
-  const {Transaction,SystemProgram,Keypair}=web3;
+  const {web3,token,base58,ROUTE,ata,pub,decodeSigner,signNative,nativeInstruction,verifyDeployment,verifyMint,verifyToken}=await import('./bindings.mjs');
+  const {Transaction,SystemProgram}=web3;
   if(canonical(m.route)!==canonical(ROUTE)||canonical(m.sponsor_transfers)!==canonical({owner:'35000000',broker:'25000000'})
     ||m.sources!==sources()||m.tls_roots!==tlsRoots()||m.rpc_config_hash!==sha(config.rpc)||m.sponsor_locator_hash!==sha(config.wallet)
     ||new URL(config.rpc).origin!==m.rpc_origin||m.owner_tokens!==ata(m.owner).toBase58()||m.broker_tokens!==ata(m.broker).toBase58())throw Error('Execution record changed');
   const load=(path,expected)=>{
-    const raw=JSON.parse(privateRead(path,8192));if(!Array.isArray(raw)||raw.length!==64||raw.some(n=>!Number.isInteger(n)||n<0||n>255))throw Error('Signer file shape');
-    const bytes=Uint8Array.from(raw);raw.fill(0);try{const key=Keypair.fromSecretKey(bytes);if(key.publicKey.toBase58()!==expected)throw Error('Signer identity');return key;}finally{bytes.fill(0);}
+    return decodeSigner(JSON.parse(privateRead(path,8192)),expected);
   };
   // A fresh lock is never removed automatically, even on a clean result. Read-only
   // analysis does not clear it; an interrupted live invocation cannot restart.
@@ -148,10 +147,8 @@ export async function main(directory) {
   };
   const post=async(type,identity,data,cleanup=false,lose=false)=>{
     const timestamp=Date.now(),header={timestamp,expiry_window:30000,type},message=Buffer.from(canonical({...header,data}));
-    const secret=createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.from(broker.secretKey.subarray(0,32))]),format:'der',type:'pkcs8'});
     j.append('native-intent',{identity,type,message_hash:sha(message)});
-    const signature=sign(null,message,secret),body={account:m.broker,...header,...data,signature:base58.encode(signature)};delete body.type;
-    if(!verify(null,message,secret,signature))throw Error('Native signature');
+    const signature=signNative(message,broker),body={account:m.broker,...header,...data,signature:base58.encode(signature)};delete body.type;
     exclusive(join(dir,`native-${identity}.json`),{message:message.toString(),body});
     const path=type==='withdraw'?'/api/v1/account/withdraw':'/api/v1/account/settings/auto_lend_disabled';
     // Rate waiting precedes signature exposure; old signed requests are never

@@ -82,8 +82,12 @@ all money-movement and complete-cut gates below remain open.
 
 [The next native-semantics proposal](P23-NATIVE-QUALIFICATION.md) scopes fresh
 setup/deposit/withdrawal/lost-native-reply qualification without an exploratory
-AWS session. Its proposed faucet/devnet and bootstrap bounds are unapproved;
-the exact runner/identity/source G05 record is still required before execution.
+AWS session. Its faucet/devnet and diagnostic bootstrap bounds were approved
+2026-10-08. The [native-semantics receipt](P23-NATIVE-SEMANTICS-RECEIPT.md)
+records the actual original deposit/payment round trip and late setting readback,
+not shipping completeness, lost-ACK recovery or a measured funding pass.
+Further financial/native/AWS activity still needs its applicable exact G05 record;
+standing minor-correction authority never permits uncertain economic retries.
 
 Record the bound environment/account/profile and source version/date, request and
 response schema, authenticated channel, exact native/chain identity correlation,

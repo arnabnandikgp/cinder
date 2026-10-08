@@ -48,10 +48,15 @@ local/plaintext, not enclave protection or secure erasure. Scope approval and
 exact execution approval remain distinct. No native/chain receipt or financial
 certificate is established by its offline tests; source cuts and lost-native-ACK
 recovery remain unqualified. The [invocation receipts](P23-NATIVE-SEMANTICS-RECEIPT.md)
-record signer-locator/loader defects, three read-only RPC calls and zero financial
-activity. Independent canonical-route checks and primary-doc observation mappings
-are offline corrections, not native qualification; a fresh replacement remains
-unapproved. TRACKER owns publication.
+record signer-locator/loader/signer-buffer defects and zero financial activity
+in those stopped invocations. Independent route, observation and expected-public
+signing checks are offline corrections, not native qualification. The corrected
+fourth invocation establishes an actual original 20-USDP deposit and 19-USDP
+payment/return with 1-USDP fee. Its original bootstrap is unresolved; a separate
+empty-account setting/readback check passes without further economic activity.
+Complete native cuts and genuinely lost-ACK recovery remain unqualified. Standing
+authority does not permit economic retries or financial-policy changes. TRACKER
+owns publication.
 
 P23 additionally promotes [confidential chain ports](../architecture/0024-confidential-chain-ports.md):
 controller-bound signing/finality, purpose-separated release, original owner

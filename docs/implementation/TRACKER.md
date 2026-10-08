@@ -37,7 +37,66 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### Native-semantics loader preflight refusal — 2026-10-08
+### Native-semantics corrected signer boundary — 2026-10-08
+
+Explicitly approved `run-final-03` at source `19a6953181695371a97ce7880c710bf6151a9d01`
+passed deployment/fresh-account checks, then received an explicit signature
+rejection on the pre-funding lending-setting request. Its original journal
+records 19 RPC / three native HTTP / zero WSS, simulations or financial
+submissions: no funds moved and no fees. Offline expected-public verification
+identifies our SDK buffer-aliasing defect, not a venue signing-policy failure.
+The [invocation receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) owns the exact evidence.
+
+The diagnostic now retains separately owned signer bytes and verifies native
+signatures against the configured public identity. A deterministic unfunded test
+reproduces/refuses the old defect and validates corrected native/chain signing.
+All 17 core/driver, 60 contract/inventory and ten vault funding/ABI/signer tests
+pass; vault type checking passes. No Rust/SBF/Nitro rerun is claimed.
+The SDK's opaque objects still offer no secure-erasure guarantee.
+
+The user granted standing authority for small test-only source/configuration
+corrections and reseals within unchanged devnet/testnet limits, without another
+permission question. Record that authority on every permitted new seal. It does
+not cover restarting used records, uncertain economic replacements, increased
+exposure, AWS/mainnet/customer assets, custody/security-policy changes or
+shipping financial activation.
+
+Under that authority, the fresh corrected `run-final-04` completed once at seal
+`77421841139e81672e3ea6f4eeeaa8b2adf8be7e695b4c804148c16b70990b6a`.
+Its exact `REVIEW.md`/`MAPPINGS.md` are in the ignored experiment directory.
+Prior locks/journals/approvals remain untouched. The 253,308-ms invocation proves
+an actual 20-USDP deposit, one original withdrawal with 1-USDP fee, independently
+finalized 19-USDP payment and exact return to the fresh owner. Six original chain
+sends simulated/finalized; sponsor debit was 0.06001 devnet SOL. Venue/broker
+balances and observed pending balance, orders, positions, debt and interest are
+zero. Deposit joins its original signature; the private audit ACK is not controller
+recovery or a complete native cut.
+
+Original status remains `closeout-unresolved`: pre/post-deposit setting requests
+returned exact 422 rejections and final lending setting was null. A separately
+recorded, one-shot settings-only follow-up on the empty original broker then
+passes actual lending-disabled/no-debt readback, without economic or chain actions.
+Combined counts are 96 RPC / 20 HTTP / four finite WSS and three setting attempts,
+within original budgets. The helper is retained privately for reproducibility.
+Late setup success does not qualify the original bootstrap; no historical result
+is overwritten. The receipt owns the detailed outcome and limitations.
+
+Next: qualify staged initialized-account readiness and resolve the named native
+causal-completeness / genuinely lost-ACK recovery contract before shipping
+financial activation; then separately scoped measured workflows. No additional
+financial run, AWS, current hosted-CI success or stack merge is claimed. P23 stays
+in progress; these local-process native facts are not an enclave workflow pass.
+
+Publication remains the same ready/open [#63](https://github.com/arnabnandikgp/cinder/pull/63)
+on `tee/p23-native-qualification`, directly above #62 / `tee/p23-capture-runtime`
+at `b1b8235457c26c41c50ab4a8a5bc0183a10ce6b6`. The actual executed source bundle
+is `be4fdf99ca24059d44fc96128becea2578c48fec941d2c1b7fb57b6339f1d5da`;
+only public code/tests and sanitized handoff evidence are published. Seven
+hosted jobs succeeded at prior head `19a6953`; the Anchor job was cancelled, not
+passed. New publication needs its own CI/review. Preserve unrelated untracked
+examples, user-journey docs, `stays/`, stashes and ignored private research.
+
+### Native-semantics loader preflight refusal (historical) — 2026-10-08
 
 The user approved exact `run-final-02`; source `90b0e00a46fec8cd27da9fdbc997983de12d105d`
 performed three read-only devnet RPC requests, then refused the loader owner.

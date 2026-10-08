@@ -1,9 +1,11 @@
 # Next P23 financial-evidence qualification
 
 Prepared 2026-10-07; scope approved 2026-10-08. **The test bounds and bootstrap
-exception are approved. Two approved exact invocations stopped before financial
-activity: a signer-locator defect, then a malformed loader constant. The corrected
-replacement requires fresh exact approval.** See the
+exception are approved. Three exact invocations stopped before financial
+activity: signer-locator, loader-constant and signer-buffer defects. The corrected
+fourth invocation establishes the original 20-USDP deposit / 19-USDP payment
+round trip with 1-USDP fee. A later empty-account setting check passes; original
+bootstrap, native completeness and lost-ACK recovery remain unqualified.** See the
 [invocation receipt](P23-NATIVE-SEMANTICS-RECEIPT.md). This scopes
 the existing G01/G05 gates; it adds no phase or product
 promise. [Financial map](P23-FINANCIAL-GATES.md),
@@ -50,6 +52,12 @@ inherited from M1 and not adopted as the shipping deposit policy. The source-bou
 [one-shot tool](../../tools/native-qualification/README.md) still refuses live
 requests without approval of its exact run seal.
 
+On 2026-10-08 the user granted standing authority for small test-only source/
+configuration corrections and new seals within these unchanged limits. Record
+that authority on the corrected seal rather than asking again for a minor fix.
+It does not permit restarting used records, resending uncertain economic actions,
+increased exposure, AWS/mainnet/customer assets, or custody/security-policy changes.
+
 ## Before execution
 
 1. Review the relevant existing experimental runner and replace historical
@@ -59,8 +67,9 @@ requests without approval of its exact run seal.
    origins/CA, devnet genesis/RPC, quote mint/precision/program/vault, sponsor and
    budgets in the G05 execution record. Keep keys, signed wires and private traces
    out of Git. A fresh namespace alone is not approval.
-3. Obtain approval of that exact execution record, including the bootstrap
-   exception. Stop if a prerequisite fails or a cap/assumption changes.
+3. Bind applicable explicit approval or standing minor-correction authority to
+   that exact execution record, including the bootstrap exception. Stop for an
+   uncertain economic outcome or material cap/policy/assumption change.
 4. Publish the sanitized native-semantics receipt and disposition of each gate.
    Implement only justified trusted providers, then their prepared-I/O-completion
    wiring and narrow measured financial policy. The current manifest still
@@ -71,7 +80,8 @@ requests without approval of its exact run seal.
 
 The local probe narrows uncertainty without paying for another exploratory AWS
 session. It does **not** replace P23's actual measured workflow acceptance. No
-native request, new program deployment or funds transfer has occurred in either
-stopped invocation; the second made three read-only devnet RPC calls. Preparing
-the replacement and passing offline tests do not
-establish native finality, lost-reply recovery or a changed-image hardware pass.
+financial submission or program deployment occurred in the three stopped
+invocations; the third reached one explicitly rejected setting POST. The fourth
+invocation's original chain/event/payment facts and late settings check are
+recorded separately in the receipt. They do not establish complete native causal
+coverage, lost-reply recovery or a changed-image hardware pass.

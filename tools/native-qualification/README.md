@@ -63,7 +63,12 @@ The probe does not assume undocumented perp withdrawal-history/pending routes or
 substitute unrelated spot endpoints.
 
 Changing source/configuration requires a new reviewed seal, not reuse of an old
-approval. Once started, the owned lock remains and a second invocation refuses.
+approval. On 2026-10-08 the user authorized small test-only corrections/reseals
+within unchanged approved devnet/testnet limits without another permission
+request. Record that authority on each new seal; it does not authorize economic
+retries, uncertain replacements, increased exposure, AWS/mainnet/customer assets,
+or custody/security-policy changes. Once started, the owned lock remains and a
+second invocation refuses.
 Counter/head history survives restart; a torn journal requires manual analysis.
 Private files are exclusive, owner-only and fsynced before exposure. They are
 **not** Nitro-protected or rollback-proof; this tool must never handle customers.
