@@ -185,16 +185,6 @@ fn diagnostic_settings_debt_and_funding_history_are_private_evidence_not_financi
             "/api/v1/account/balance/history",
             200,
         ),
-        (
-            Diagnostic::WithdrawalPending,
-            "/api/v1/account/withdraw/pending",
-            404,
-        ),
-        (
-            Diagnostic::WithdrawalHistory,
-            "/api/v1/account/withdraw/history",
-            200,
-        ),
     ] {
         let temp = Temp::new();
         let mut j = activated(&temp);
@@ -225,6 +215,37 @@ fn diagnostic_settings_debt_and_funding_history_are_private_evidence_not_financi
         assert_eq!(v["status"], status);
         assert!(reads::diagnostic(&mut j, &gateway(), poll(), &mut f).is_err());
         assert_eq!(f.targets.len(), 1);
+    }
+}
+
+#[test]
+fn unqualified_legacy_withdrawal_routes_refuse_before_budget_or_egress() {
+    for kind in [
+        reads::Diagnostic::WithdrawalPending,
+        reads::Diagnostic::WithdrawalHistory,
+    ] {
+        let temp = Temp::new();
+        let mut j = activated(&temp);
+        let head = j.head();
+        let mut f = Fake::new(response(200, json!({"success":true,"data":[]})));
+        assert!(
+            reads::diagnostic(
+                &mut j,
+                &gateway(),
+                reads::DiagnosticPoll {
+                    kind,
+                    reservation: id(1),
+                    evidence: id(101),
+                    at: 100,
+                    cleanup: false,
+                },
+                &mut f
+            )
+            .is_err()
+        );
+        assert_eq!(j.head(), head);
+        assert!(f.targets.is_empty());
+        assert!(j.transaction(id(1)).is_none());
     }
 }
 

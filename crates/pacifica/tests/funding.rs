@@ -962,6 +962,75 @@ fn route() -> Route {
 fn controller() -> Controller {
     Controller::new(profile(), route(), Zeroizing::new([9; 32])).unwrap()
 }
+
+#[test]
+fn demo_ingress_keeps_withdrawal_unknown_and_cannot_obtain_strong_readiness() {
+    let mut p = profile();
+    p.fills = Level::Unknown;
+    let mut r = route();
+    r.withdrawal = Level::Unknown;
+    r.settings = Level::Observed;
+    assert!(Controller::new(p.clone(), r.clone(), Zeroizing::new([9; 32])).is_err());
+    let c = Controller::new_demo_ingress(p.clone(), r.clone(), Zeroizing::new([9; 32])).unwrap();
+    let t = Temp::new();
+    let mut j = Journal::create(
+        SqliteBackend::create(&t.db).unwrap(),
+        FixtureProtection,
+        config(),
+    )
+    .unwrap();
+    c.bind(&mut j, id(80), 100).unwrap();
+    assert!(
+        !c.observe_setup(
+            &mut j,
+            id(81),
+            101,
+            Setup {
+                account: r.broker,
+                observed_at: 101,
+                lending_disabled: true,
+                borrowed: "0".into(),
+                interest: "0".into(),
+                complete: true,
+            }
+        )
+        .unwrap()
+    );
+    assert!(!j.state().unwrap().native_funding_ready());
+    for rail in [Rail::Release, Rail::Deposit, Rail::Return, Rail::Payout] {
+        let head = j.head();
+        assert!(
+            c.expose_chain(
+                &mut j,
+                Dispatch {
+                    attempt: a(10),
+                    commit: id(82),
+                    at: 102
+                },
+                rail,
+                Counters {
+                    sequence: 0,
+                    paid: 0,
+                    recipient_tokens: [0; 32],
+                    expires_at_slot: 1000
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(j.head(), head);
+    }
+    for field in 0..4 {
+        let mut p = p.clone();
+        let mut r = r.clone();
+        match field {
+            0 => r.withdrawal = Level::Qualified,
+            1 => r.settings = Level::Qualified,
+            2 => r.chain = Level::Unknown,
+            _ => p.environment = Origin::Mainnet.url().into(),
+        }
+        assert!(Controller::new_demo_ingress(p, r, Zeroizing::new([9; 32])).is_err());
+    }
+}
 fn gateway() -> Gateway {
     Gateway::new(
         profile(),
@@ -1046,6 +1115,9 @@ fn open(t: &Temp) -> Store {
     .unwrap()
 }
 fn setup(t: &Temp, native: bool) -> (Store, Controller, Gateway) {
+    setup_with_gateway(t, native, gateway())
+}
+fn setup_with_gateway(t: &Temp, native: bool, g: Gateway) -> (Store, Controller, Gateway) {
     let mut j = Journal::create(
         SqliteBackend::create(&t.db).unwrap(),
         FixtureProtection,
@@ -1053,7 +1125,6 @@ fn setup(t: &Temp, native: bool) -> (Store, Controller, Gateway) {
     )
     .unwrap();
     let c = controller();
-    let g = gateway();
     let customer_location = if native {
         Location::Venue
     } else {
@@ -1471,6 +1542,104 @@ fn retained_withdrawal_ack_rebuilds_original_batch_after_restart_without_cash_or
         assert!(!linked_transfer(&c, &mut j, 10, &v), "accepted {field}");
     }
     assert!(c.withdrawal_acknowledgment(&mut j, a(11), 101).is_err());
+}
+#[test]
+fn split_withdrawal_retains_original_ack_after_later_writer_and_key_revocation() {
+    let t = Temp::new();
+    let (mut j, c, g) = setup(&t, true);
+    prepare(&mut j, 10, Rail::Withdraw, 19, 1);
+    let dispatch = Dispatch {
+        attempt: a(10),
+        commit: id(40),
+        at: 100,
+    };
+    let (request, completion) = c.prepare_withdrawal(&mut j, &g, dispatch).unwrap();
+    assert_eq!(request.expires_at(), 10_000);
+    let before = j.state().unwrap().ledger().clone();
+    g.deactivate(&mut j, id(41), 150).unwrap();
+    let mut update = tx(&j, 42, vec![], vec![]);
+    update.at = 160;
+    j.commit(update).unwrap();
+    let mut f = Fake {
+        status: Some(200),
+        received_at: Some(120),
+        ..Fake::default()
+    };
+    let reply = f.post(request);
+    c.complete_withdrawal(&mut j, &g, completion, reply, 170)
+        .unwrap();
+    assert_eq!(f.calls, 1);
+    assert_eq!(j.transactions().last().unwrap().at, 170);
+    assert_eq!(j.state().unwrap().ledger(), &before);
+    assert_eq!(
+        c.withdrawal_acknowledgment(&mut j, a(10), 170)
+            .unwrap()
+            .unwrap()
+            .batch,
+        42
+    );
+    assert!(c.prepare_withdrawal(&mut j, &g, dispatch).is_err());
+    let expected = j.state().unwrap().clone();
+    drop(j);
+    let mut j = open(&t);
+    assert_eq!(j.state().unwrap(), &expected);
+    assert_eq!(
+        c.withdrawal_acknowledgment(&mut j, a(10), 170)
+            .unwrap()
+            .unwrap()
+            .requested,
+        20
+    );
+}
+#[test]
+fn split_withdrawal_rejects_future_reply_and_different_journal_before_retention() {
+    let t = Temp::new();
+    let (mut j, c, g) = setup(&t, true);
+    prepare(&mut j, 10, Rail::Withdraw, 19, 1);
+    let (request, completion) = c
+        .prepare_withdrawal(
+            &mut j,
+            &g,
+            Dispatch {
+                attempt: a(10),
+                commit: id(40),
+                at: 100,
+            },
+        )
+        .unwrap();
+    let reply = Fake {
+        status: Some(200),
+        received_at: Some(200),
+        ..Fake::default()
+    }
+    .post(request);
+    c.complete_withdrawal(&mut j, &g, completion, reply, 150)
+        .unwrap();
+    assert!(
+        c.withdrawal_acknowledgment(&mut j, a(10), 150)
+            .unwrap()
+            .is_none()
+    );
+    let other = Temp::new();
+    let (mut wrong, _, _) = setup(&other, true);
+    prepare(&mut wrong, 11, Rail::Withdraw, 19, 1);
+    let (_, completion) = c
+        .prepare_withdrawal(
+            &mut wrong,
+            &g,
+            Dispatch {
+                attempt: a(11),
+                commit: id(41),
+                at: 100,
+            },
+        )
+        .unwrap();
+    let head = j.head();
+    assert!(
+        c.complete_withdrawal(&mut j, &g, completion, Reply::Unknown, 150)
+            .is_err()
+    );
+    assert_eq!(j.head(), head);
 }
 #[test]
 fn deposit_link_requires_original_finalized_chain_signature_and_never_mints_credit() {
@@ -2134,4 +2303,1745 @@ fn broker_source_is_nonnegative_and_not_venue_or_vault_payout_capacity() {
         Some(ControlError::Capacity)
     );
     bridge(&j);
+}
+
+mod demo_tests {
+    use super::*;
+    use cinder_pacifica::{funding::demo, reads};
+
+    pub(super) fn gateway_for(origin: Origin) -> Gateway {
+        let mut profile = profile();
+        profile.environment = origin.url().into();
+        Gateway::new(
+            profile,
+            Policy {
+                revision: 1,
+                evidence: "offline demo GET fixture".into(),
+                execution: Level::Qualified,
+                origin,
+                expiry_ms: 30_000,
+                credits: 12_000,
+                cleanup_reserve: 120,
+                read_cost: reads::MIN_READ_COST,
+            },
+            Zeroizing::new([7; 32]),
+            1,
+        )
+        .unwrap()
+    }
+    pub(super) fn policy() -> demo::Policy {
+        demo::Policy {
+            revision: 1,
+            maximum_reads: 8,
+            maximum_pages: 4,
+            interval_ms: 1_000,
+            maximum_backoff_ms: 4_000,
+            lifetime_ms: 9_000,
+            initial_setup: None,
+        }
+    }
+    fn deposited(t: &Temp) -> (Store, Controller, Gateway) {
+        let (mut j, c, g) = setup_with_gateway(t, false, gateway_for(Origin::Testnet));
+        prepare(&mut j, 10, Rail::Release, 20, 0);
+        let p = expose(&mut j, &c, 10, Rail::Release, 60);
+        c.observe_chain(&mut j, id(60), 100, chain(&p, 60)).unwrap();
+        prepare(&mut j, 11, Rail::Deposit, 20, 0);
+        let p = expose(&mut j, &c, 11, Rail::Deposit, 61);
+        c.observe_chain(&mut j, id(61), 100, chain(&p, 61)).unwrap();
+        (j, c, g)
+    }
+    fn poll(n: u8, at: u64) -> demo::Poll {
+        demo::Poll {
+            attempt: a(11),
+            reservation: id(n),
+            evidence: id(n + 50),
+            at,
+        }
+    }
+    fn deposit(amount: &str, signature: u8) -> Value {
+        json!({"amount":amount,"transaction_id":bs58::encode([signature;64]).into_string(),"created_at":100})
+    }
+    fn page(rows: Value) -> Value {
+        json!({"success":true,"data":rows,"has_more":false})
+    }
+    fn balance(pending: &str) -> Value {
+        page(
+            json!([{"amount":"20","balance":"20","pending_balance":pending,"event_type":"deposit_release","created_at":100}]),
+        )
+    }
+    fn deliver(
+        j: &mut Store,
+        c: &Controller,
+        g: &Gateway,
+        p: &demo::Policy,
+        n: u8,
+        at: u64,
+        body: Value,
+    ) -> String {
+        let demo::Step::Request(request, completion) =
+            c.prepare_demo_deposit_poll(j, g, p, poll(n, at)).unwrap()
+        else {
+            panic!("expected one GET");
+        };
+        let query = request.consume(at).unwrap();
+        assert_eq!(query.origin(), Origin::Testnet);
+        let target = query.target().to_owned();
+        let outcome = reads::complete(
+            j,
+            g,
+            *completion,
+            Reply::Response {
+                status: 200,
+                body: raw(body.to_string().as_bytes()),
+                received_at: at,
+                retry_after_ms: None,
+            },
+        )
+        .unwrap();
+        assert!(matches!(outcome, reads::Outcome::Ingested(_)));
+        target
+    }
+    fn observed(j: &mut Store, c: &Controller, g: &Gateway, p: &demo::Policy) {
+        assert!(
+            deliver(j, c, g, p, 70, 100, page(json!([deposit("20", 61)])))
+                .starts_with("/api/v1/account/deposit/history?")
+        );
+        assert!(deliver(j, c, g, p, 71, 1100, balance("0")).contains("include_trades=true"));
+    }
+    fn pending(j: &Store) {
+        let s = j.state().unwrap();
+        assert_eq!(s.ledger().venue().cash(), atoms(0));
+        assert_eq!(s.ledger().in_transit().unwrap(), atoms(20));
+        assert!(
+            !s.funds()
+                .iter()
+                .find(|o| o.attempt == Some(a(11)))
+                .unwrap()
+                .terminal
+        );
+        assert!(!s.native_funding_ready());
+        bridge(j);
+    }
+
+    #[test]
+    fn demo_observed_testnet_history_shapes_do_not_recredit_a_withdrawn_deposit() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("fixtures/demo-native-shapes.json")).unwrap();
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        let p = policy();
+        let mut history = fixture["deposit"].clone();
+        history["data"][0]["transaction_id"] = json!(bs58::encode([61; 64]).into_string());
+        deliver(&mut j, &c, &g, &p, 70, 100, history);
+        deliver(
+            &mut j,
+            &c,
+            &g,
+            &p,
+            71,
+            1100,
+            fixture["balance_after_withdrawal"].clone(),
+        );
+        assert!(
+            !c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(80), 1100)
+                .unwrap()
+        );
+        pending(&j);
+    }
+
+    #[test]
+    fn demo_synthetic_first_credit_projection_accepts_observed_omitted_cursor_shape() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("fixtures/demo-native-shapes.json")).unwrap();
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        let p = policy();
+        let mut history = fixture["deposit"].clone();
+        history["data"][0]["transaction_id"] = json!(bs58::encode([61; 64]).into_string());
+        deliver(&mut j, &c, &g, &p, 70, 100, history);
+        // Removing the later withdrawal is an explicit synthetic prefix, not a
+        // new actual deposit or a complete history certificate.
+        let mut balance = fixture["balance_after_withdrawal"].clone();
+        balance["data"].as_array_mut().unwrap().remove(0);
+        deliver(&mut j, &c, &g, &p, 71, 1100, balance);
+        assert!(
+            c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(80), 1100)
+                .unwrap()
+        );
+        assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(20));
+        assert!(!j.state().unwrap().native_funding_ready());
+    }
+
+    #[test]
+    fn demo_original_credit_posts_once_and_replays_without_strong_cut_or_new_risk_grant() {
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        let p = policy();
+        assert_eq!(
+            c.demo_deposit_candidate(&mut j, &g, &p, 100).unwrap(),
+            Some(a(11))
+        );
+        observed(&mut j, &c, &g, &p);
+        assert!(
+            c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(80), 1100)
+                .unwrap()
+        );
+        let s = j.state().unwrap();
+        let o = s.funds().iter().find(|o| o.attempt == Some(a(11))).unwrap();
+        assert!(o.terminal && !o.faulted && o.demo.is_some() && o.proof.is_none());
+        assert_eq!(s.ledger().venue().cash(), atoms(20));
+        assert_eq!(s.ledger().in_transit().unwrap(), atoms(0));
+        assert_eq!(
+            s.ledger().book(Owner::Customer(user(1))).unwrap().cash(),
+            atoms(20)
+        );
+        assert!(!s.native_funding_ready());
+        assert_eq!(s.unresolved_raw(), 0); // GET provenance is not fake unresolved economics.
+        assert_eq!(j.transaction(id(80)).unwrap().inputs[0].source_cut, None);
+        assert!(j.transaction(id(80)).unwrap().funds_observations.is_empty());
+        bridge(&j);
+        let head = j.head();
+        let expected = j.state().unwrap().clone();
+        drop(j);
+        let mut j = open(&t);
+        assert_eq!(j.state().unwrap(), &expected);
+        assert_eq!(
+            c.demo_deposit_candidate(&mut j, &g, &p, 2100).unwrap(),
+            None
+        );
+        assert!(
+            c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(81), 2100)
+                .unwrap()
+        );
+        assert!(matches!(
+            c.prepare_demo_deposit_poll(&mut j, &g, &p, poll(72, 2100))
+                .unwrap(),
+            demo::Step::Confirmed
+        ));
+        assert_eq!(j.head(), head);
+        let frozen = Transaction {
+            at: 2100,
+            ..tx(
+                &j,
+                82,
+                vec![],
+                vec![Control::Funds(lifecycle::Action::Freeze)],
+            )
+        };
+        assert_eq!(j.commit(frozen).unwrap().receipt.controls, None);
+        assert!(matches!(
+            j.recovery_cut(j.head(), key(211, Location::Venue)),
+            Err(cinder_journal::recovery::CutError::OpenCommitments)
+        ));
+    }
+    #[test]
+    fn demo_balance_only_wrong_signature_partial_or_conflicting_credit_never_settles() {
+        for rows in [
+            json!([]),
+            json!([deposit("20", 99)]),
+            json!([deposit("8", 61)]),
+            json!([deposit("20", 61), deposit("21", 61)]),
+        ] {
+            let t = Temp::new();
+            let (mut j, c, g) = deposited(&t);
+            let p = policy();
+            deliver(&mut j, &c, &g, &p, 70, 100, page(rows));
+            assert!(!matches!(
+                c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(80), 100),
+                Ok(true)
+            ));
+            pending(&j);
+        }
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        deliver(&mut j, &c, &g, &policy(), 70, 100, balance("0")); // Not a deposit-history record.
+        assert!(
+            !c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(80), 100)
+                .unwrap()
+        );
+        pending(&j);
+    }
+    #[test]
+    fn demo_duplicate_deposit_rows_are_idempotent_but_pending_or_ambiguous_balances_wait() {
+        for pending_amount in ["1", "0"] {
+            let t = Temp::new();
+            let (mut j, c, g) = deposited(&t);
+            let p = policy();
+            deliver(
+                &mut j,
+                &c,
+                &g,
+                &p,
+                70,
+                100,
+                page(json!([deposit("20", 61), deposit("20", 61)])),
+            );
+            let mut b = balance(pending_amount);
+            if pending_amount == "0" {
+                let duplicate = b["data"][0].clone();
+                b["data"].as_array_mut().unwrap().push(duplicate);
+            }
+            deliver(&mut j, &c, &g, &p, 71, 1100, b);
+            assert!(
+                !c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(80), 1100)
+                    .unwrap()
+            );
+            pending(&j);
+        }
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        let p = policy();
+        deliver(
+            &mut j,
+            &c,
+            &g,
+            &p,
+            70,
+            100,
+            page(json!([deposit("20", 61), deposit("20", 61)])),
+        );
+        deliver(&mut j, &c, &g, &p, 71, 1100, balance("0"));
+        assert!(
+            c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(80), 1100)
+                .unwrap()
+        );
+        assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(20));
+    }
+    #[test]
+    fn demo_missing_response_budget_and_backoff_survive_restart_without_resend() {
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        let p = demo::Policy {
+            maximum_reads: 2,
+            ..policy()
+        };
+        let demo::Step::Request(request, _) = c
+            .prepare_demo_deposit_poll(&mut j, &g, &p, poll(70, 100))
+            .unwrap()
+        else {
+            panic!("GET");
+        };
+        assert!(
+            request
+                .consume(100)
+                .unwrap()
+                .target()
+                .starts_with("/api/v1/account/deposit/history?")
+        );
+        let head = j.head();
+        drop(j);
+        let mut j = open(&t);
+        assert!(matches!(
+            c.prepare_demo_deposit_poll(&mut j, &g, &p, poll(71, 1100))
+                .unwrap(),
+            demo::Step::Waiting
+        ));
+        assert_eq!(j.head(), head);
+        assert!(matches!(
+            c.prepare_demo_deposit_poll(&mut j, &g, &p, poll(71, 2100))
+                .unwrap(),
+            demo::Step::Request(_, _)
+        ));
+        assert!(matches!(
+            c.prepare_demo_deposit_poll(&mut j, &g, &p, poll(72, 6100))
+                .unwrap(),
+            demo::Step::Exhausted
+        ));
+        pending(&j);
+    }
+    #[test]
+    fn demo_pages_use_retained_escaped_cursor_and_refuse_loops_or_truncation() {
+        for limit in [1, 4] {
+            let t = Temp::new();
+            let (mut j, c, g) = deposited(&t);
+            let p = demo::Policy {
+                maximum_pages: limit,
+                ..policy()
+            };
+            deliver(
+                &mut j,
+                &c,
+                &g,
+                &p,
+                70,
+                100,
+                json!({"success":true,"data":[],"has_more":true,"next_cursor":"a/b?c"}),
+            );
+            if limit == 1 {
+                assert!(matches!(
+                    c.prepare_demo_deposit_poll(&mut j, &g, &p, poll(71, 1100))
+                        .unwrap(),
+                    demo::Step::Exhausted
+                ));
+            } else {
+                let target = deliver(
+                    &mut j,
+                    &c,
+                    &g,
+                    &p,
+                    71,
+                    1100,
+                    json!({"success":true,"data":[],"has_more":true,"next_cursor":"a/b?c"}),
+                );
+                assert!(target.contains("cursor=a%2Fb%3Fc"));
+                assert!(
+                    c.prepare_demo_deposit_poll(&mut j, &g, &p, poll(72, 2100))
+                        .is_err()
+                );
+            }
+            pending(&j);
+        }
+    }
+    #[test]
+    fn demo_policy_mainnet_rebinding_and_missing_original_refuse_before_get_spend() {
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        let p = policy();
+        let head = j.head();
+        assert!(
+            c.prepare_demo_deposit_poll(&mut j, &gateway_for(Origin::Mainnet), &p, poll(70, 100))
+                .is_err()
+        );
+        assert_eq!(j.head(), head);
+        deliver(&mut j, &c, &g, &p, 70, 100, page(json!([])));
+        let head = j.head();
+        assert!(
+            c.prepare_demo_deposit_poll(
+                &mut j,
+                &g,
+                &demo::Policy { revision: 2, ..p },
+                poll(71, 1100)
+            )
+            .is_err()
+        );
+        assert_eq!(j.head(), head);
+        let t = Temp::new();
+        let (mut j, c, g) = setup_with_gateway(&t, false, gateway_for(Origin::Testnet));
+        let head = j.head();
+        assert!(
+            c.prepare_demo_deposit_poll(&mut j, &g, &policy(), poll(70, 100))
+                .is_err()
+        );
+        assert_eq!(j.head(), head);
+    }
+    #[test]
+    fn demo_expiry_stale_future_or_unrelated_balance_events_preserve_original_hold() {
+        for timestamp in [99, 101] {
+            let t = Temp::new();
+            let (mut j, c, g) = deposited(&t);
+            let mut row = deposit("20", 61);
+            row["created_at"] = json!(timestamp);
+            deliver(&mut j, &c, &g, &policy(), 70, 100, page(json!([row])));
+            assert!(
+                c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(80), 100)
+                    .is_err()
+            );
+            pending(&j);
+        }
+        for timestamp in [99, 1101] {
+            let t = Temp::new();
+            let (mut j, c, g) = deposited(&t);
+            deliver(
+                &mut j,
+                &c,
+                &g,
+                &policy(),
+                70,
+                100,
+                page(json!([deposit("20", 61)])),
+            );
+            let mut body = balance("0");
+            body["data"][0]["created_at"] = json!(timestamp);
+            deliver(&mut j, &c, &g, &policy(), 71, 1100, body);
+            assert!(
+                !c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(80), 1100)
+                    .unwrap()
+            );
+            pending(&j);
+        }
+        for kind in ["withdraw", "funding", "trade", "adl_liquidation"] {
+            let t = Temp::new();
+            let (mut j, c, g) = deposited(&t);
+            let p = policy();
+            deliver(
+                &mut j,
+                &c,
+                &g,
+                &p,
+                70,
+                100,
+                page(json!([deposit("20", 61)])),
+            );
+            let mut b = balance("0");
+            b["data"][0]["event_type"] = json!(kind);
+            deliver(&mut j, &c, &g, &p, 71, 1100, b);
+            assert!(
+                !c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(80), 1100)
+                    .unwrap()
+            );
+            pending(&j);
+        }
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        observed(&mut j, &c, &g, &policy());
+        assert!(
+            !c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(80), 9100)
+                .unwrap()
+        );
+        assert!(matches!(
+            c.prepare_demo_deposit_poll(&mut j, &g, &policy(), poll(72, 9100))
+                .unwrap(),
+            demo::Step::Exhausted
+        ));
+        pending(&j);
+    }
+    #[test]
+    fn demo_malformed_or_empty_success_replies_back_off_without_cash_or_refund() {
+        for body in [
+            page(json!([])),
+            json!({"success":true,"data":[{"amount":"20","created_at":100}],"has_more":false}),
+            json!({"success":true,"data":[],"has_more":false,"unexpected":1}),
+        ] {
+            let t = Temp::new();
+            let (mut j, c, g) = deposited(&t);
+            deliver(&mut j, &c, &g, &policy(), 70, 100, body);
+            assert!(
+                !c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(80), 100)
+                    .unwrap()
+            );
+            let head = j.head();
+            assert!(matches!(
+                c.prepare_demo_deposit_poll(&mut j, &g, &policy(), poll(71, 1100))
+                    .unwrap(),
+                demo::Step::Waiting
+            ));
+            assert_eq!(j.head(), head);
+            drop(j);
+            let mut j = open(&t);
+            assert!(matches!(
+                c.prepare_demo_deposit_poll(&mut j, &g, &policy(), poll(71, 2100))
+                    .unwrap(),
+                demo::Step::Request(..)
+            ));
+            pending(&j);
+        }
+    }
+    #[test]
+    fn demo_rate_limit_survives_restart_and_uses_shared_gateway_cooldown() {
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        let demo::Step::Request(request, completion) = c
+            .prepare_demo_deposit_poll(&mut j, &g, &policy(), poll(70, 100))
+            .unwrap()
+        else {
+            panic!("expected GET");
+        };
+        request.consume(100).unwrap();
+        assert!(matches!(
+            reads::complete(
+                &mut j,
+                &g,
+                *completion,
+                Reply::Response {
+                    status: 429,
+                    body: raw(b"rate limited"),
+                    received_at: 100,
+                    retry_after_ms: Some(5000)
+                }
+            )
+            .unwrap(),
+            reads::Outcome::Limited
+        ));
+        let head = j.head();
+        drop(j);
+        let mut j = open(&t);
+        assert!(matches!(
+            c.prepare_demo_deposit_poll(&mut j, &g, &policy(), poll(71, 1100))
+                .unwrap(),
+            demo::Step::Waiting
+        ));
+        assert!(
+            c.prepare_demo_deposit_poll(&mut j, &g, &policy(), poll(71, 2100))
+                .is_err()
+        );
+        assert_eq!(j.head(), head);
+        pending(&j);
+    }
+    #[test]
+    fn demo_late_response_is_retained_but_cannot_confirm_after_policy_deadline() {
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        deliver(
+            &mut j,
+            &c,
+            &g,
+            &policy(),
+            70,
+            100,
+            page(json!([deposit("20", 61)])),
+        );
+        let demo::Step::Request(request, completion) = c
+            .prepare_demo_deposit_poll(&mut j, &g, &policy(), poll(71, 1100))
+            .unwrap()
+        else {
+            panic!("expected GET");
+        };
+        request.consume(1100).unwrap();
+        reads::complete(
+            &mut j,
+            &g,
+            *completion,
+            Reply::Response {
+                status: 200,
+                body: raw(balance("0").to_string().as_bytes()),
+                received_at: 9100,
+                retry_after_ms: None,
+            },
+        )
+        .unwrap();
+        assert!(j.transaction(id(121)).is_some());
+        assert!(
+            !c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(80), 9100)
+                .unwrap()
+        );
+        pending(&j);
+    }
+    #[test]
+    fn demo_marker_cannot_be_upgraded_to_a_strong_completion_observation() {
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        observed(&mut j, &c, &g, &policy());
+        c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(80), 1100)
+            .unwrap();
+        let demo = j
+            .state()
+            .unwrap()
+            .funds()
+            .iter()
+            .find(|o| o.attempt == Some(a(11)))
+            .unwrap()
+            .demo
+            .as_ref()
+            .unwrap()
+            .clone();
+        let head = j.head();
+        assert!(
+            c.observe_credit(
+                &mut j,
+                id(81),
+                2100,
+                Credit {
+                    attempt: a(11),
+                    account: account(),
+                    deposit_signature: [61; 64],
+                    event: demo.credit.event.clone(),
+                    cut: 999,
+                    amount: 20,
+                    fee: 0,
+                    final_credit: true,
+                    raw: raw(b"attempted demo-to-strong upgrade")
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(j.head(), head);
+        assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(20));
+        assert!(!j.state().unwrap().native_funding_ready());
+        let mut transaction = tx(&j, 81, vec![], vec![]);
+        transaction.at = 2100;
+        transaction.funds_observations.push(lifecycle::Observation {
+            key: key(212, Location::Venue),
+            authority_epoch: 1,
+            observed_at: 2100,
+            raw: raw(b"invented strong completion"),
+            terminal: lifecycle::Terminal {
+                attempt: a(11),
+                debit: atoms(20),
+                settled: atoms(20),
+                receipts: vec![demo.debit, demo.credit],
+                coverage: config()
+                    .sources
+                    .iter()
+                    .map(|s| lifecycle::Coverage {
+                        source: s.scope,
+                        through: 999,
+                    })
+                    .collect(),
+                no_later_execution: [1; 32],
+            },
+        });
+        j.commit(transaction).unwrap();
+        let o = j
+            .state()
+            .unwrap()
+            .funds()
+            .iter()
+            .find(|o| o.attempt == Some(a(11)))
+            .unwrap();
+        assert!(o.demo.is_some() && o.proof.is_none() && o.faulted);
+        assert!(!j.state().unwrap().native_funding_ready());
+    }
+    #[test]
+    fn demo_late_economic_conflict_faults_instead_of_remaining_terminally_healthy() {
+        let t = Temp::new();
+        let (mut j, c, g) = deposited(&t);
+        observed(&mut j, &c, &g, &policy());
+        assert!(
+            c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(80), 1100)
+                .unwrap()
+        );
+        let late = Transaction {
+            at: 2100,
+            ..tx(
+                &j,
+                81,
+                vec![(
+                    Location::Venue,
+                    Change::Funds(FundsChange::Observe {
+                        attempt: a(11),
+                        leg: Leg::Arrive(Destination::Location(Location::Venue)),
+                        amount: atoms(1),
+                        fee: atoms(0),
+                    }),
+                )],
+                vec![],
+            )
+        };
+        j.commit(late).unwrap();
+        assert!(
+            j.state()
+                .unwrap()
+                .funds()
+                .iter()
+                .find(|o| o.attempt == Some(a(11)))
+                .unwrap()
+                .faulted
+        );
+        assert!(
+            c.confirm_demo_deposit(&mut j, &g, &policy(), a(11), id(82), 2100)
+                .is_err()
+        );
+    }
+}
+
+mod setup_read_tests {
+    use super::*;
+    use cinder_pacifica::{funding::setup, reads};
+    use serde_json::{Value, json};
+
+    fn unqualified(t: &Temp) -> (Store, Controller, Gateway) {
+        let (mut j, c, g) = setup_with_gateway(t, false, demo_tests::gateway_for(Origin::Testnet));
+        let mut s = good_setup();
+        s.complete = false;
+        s.lending_disabled = false;
+        assert!(!c.observe_setup(&mut j, id(6), 100, s).unwrap());
+        (j, c, g)
+    }
+    fn bodies() -> [Value; 3] {
+        [
+            json!({"success":true,"data":{"auto_lend_disabled":true,"margin_settings":[],"spot_settings":[]}}),
+            json!({"success":true,"data":{"borrowed":"0","pending_interest":"0","spot_balances":[],"updated_at":100}}),
+            json!({"success":true,"data":{
+                "balance":"0","account_equity":"0","available_to_spend":"0","available_to_withdraw":"0",
+                "pending_balance":"0","pending_interest":"0","total_margin_used":"0","cross_mmr":"0",
+                "spot_collateral":"0","spot_market_value":"0","cross_account_equity":null,
+                "positions_count":0,"orders_count":0,"stop_orders_count":0,"spot_balances":[],"updated_at":100
+            }}),
+        ]
+    }
+    fn poll(n: u8, at: u64) -> setup::Poll {
+        setup::Poll {
+            reservation: id(n),
+            evidence: id(n + 1),
+            at,
+        }
+    }
+    fn read(j: &mut Store, c: &Controller, g: &Gateway, n: u8, at: u64, status: u16, body: Value) {
+        read_policy(j, c, g, &demo_tests::policy(), (n, at), (status, body));
+    }
+    fn read_policy(
+        j: &mut Store,
+        c: &Controller,
+        g: &Gateway,
+        policy: &demo::Policy,
+        (n, at): (u8, u64),
+        (status, body): (u16, Value),
+    ) {
+        let setup::Step::Request(request, completion) =
+            c.prepare_setup_poll(j, g, policy, poll(n, at)).unwrap()
+        else {
+            panic!("expected one setup GET")
+        };
+        let query = request.consume(at).unwrap();
+        assert_eq!(query.origin(), Origin::Testnet);
+        let expected = ["settings", "loan", ""][(usize::from(n) - 30) / 2 % 3];
+        let path = if expected.is_empty() {
+            "/api/v1/account".to_owned()
+        } else {
+            format!("/api/v1/account/{expected}")
+        };
+        assert_eq!(
+            query.target(),
+            format!("{path}?account={}", profile().account)
+        );
+        reads::complete(
+            j,
+            g,
+            *completion,
+            Reply::Response {
+                status,
+                body: raw(&serde_json::to_vec(&body).unwrap()),
+                received_at: at,
+                retry_after_ms: None,
+            },
+        )
+        .unwrap();
+    }
+    fn initial_policy() -> demo::Policy {
+        demo::Policy {
+            initial_setup: Some(demo::InitialSetup {
+                revision: 1,
+                exclusive_control: true,
+            }),
+            ..demo_tests::policy()
+        }
+    }
+    fn observed_round(
+        j: &mut Store,
+        c: &Controller,
+        g: &Gateway,
+        p: &demo::Policy,
+        values: [Value; 3],
+    ) {
+        for (i, body) in values.into_iter().enumerate() {
+            read_policy(
+                j,
+                c,
+                g,
+                p,
+                (30 + 2 * i as u8, 100 + 1000 * i as u64),
+                (200, body),
+            );
+        }
+        c.observe_setup_reads(j, g, p, id(41), 2100).unwrap();
+    }
+    fn accept_initial(j: &mut Store, n: u8, rail: Rail) {
+        let (source, destination) = match rail {
+            Rail::Release => (Location::Vault, Destination::Location(Location::Broker)),
+            Rail::Deposit => (Location::Broker, Destination::Location(Location::Venue)),
+            _ => panic!("initial ingress only"),
+        };
+        let intent = lifecycle::Intent {
+            request: a(n).request,
+            source,
+            destination,
+            net: atoms(20),
+            maximum_fee: atoms(0),
+            fee_payer: Owner::House,
+            allow_partial: false,
+            policy: config().policy,
+            authority_epoch: 1,
+            expires_at: 10000,
+        };
+        let approval = orders::Approval {
+            account: user(1),
+            authority_epoch: 1,
+            intent_hash: intent.digest().unwrap(),
+        };
+        let mut transaction = tx(
+            j,
+            n,
+            vec![],
+            vec![Control::Funds(lifecycle::Action::Accept {
+                intent: Box::new(intent),
+                approval,
+            })],
+        );
+        transaction.at = 2100;
+        assert_eq!(j.commit(transaction).unwrap().receipt.controls, None);
+    }
+    fn original_initial(
+        j: &mut Store,
+        c: &Controller,
+        g: &Gateway,
+        p: &demo::Policy,
+        n: u8,
+        base: u8,
+    ) -> Plan {
+        c.prepare_demo_ingress(
+            j,
+            g,
+            p,
+            Dispatch {
+                attempt: a(n),
+                commit: id(base),
+                at: 2100,
+            },
+        )
+        .unwrap();
+        let action = c
+            .expose_demo_ingress(
+                j,
+                g,
+                p,
+                Dispatch {
+                    attempt: a(n),
+                    commit: id(base + 1),
+                    at: 2100,
+                },
+                counters(
+                    if n == 10 {
+                        Rail::Release
+                    } else {
+                        Rail::Deposit
+                    },
+                    0,
+                    0,
+                ),
+            )
+            .unwrap();
+        let plan = action.plan().clone();
+        let wire = VerifiedWire {
+            attempt: a(n),
+            binding: Sha256::digest(action.encode().unwrap().as_bytes()).into(),
+            signature: [base + 2; 64],
+            wire: raw(b"synthetic codec verified wire, not a live signature"),
+        };
+        c.persist_wire(j, id(base + 2), 2100, action, wire).unwrap();
+        c.observe_chain(j, id(base + 3), 2100, chain(&plan, base + 2))
+            .unwrap();
+        plan
+    }
+    #[test]
+    fn approved_initial_setup_is_separate_durable_and_never_strong_readiness() {
+        let t = Temp::new();
+        let (mut j, c, g) = unqualified(&t);
+        let p = initial_policy();
+        observed_round(&mut j, &c, &g, &p, bodies());
+        assert!(matches!(
+            c.prepare_setup_poll(&mut j, &g, &p, poll(42, 2100))
+                .unwrap(),
+            setup::Step::DemoQualified
+        ));
+        assert!(!j.state().unwrap().native_funding_ready());
+        assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(0));
+        let head = j.head();
+        drop(j);
+        let mut j = open(&t);
+        assert!(!c.observe_setup_reads(&mut j, &g, &p, id(42), 2100).unwrap());
+        assert_eq!(j.head(), head);
+        accept_initial(&mut j, 10, Rail::Release);
+        let dispatch = Dispatch {
+            attempt: a(10),
+            commit: id(70),
+            at: 2100,
+        };
+        assert!(c.prepare_ingress(&mut j, dispatch).is_err());
+        assert!(
+            c.prepare_demo_ingress(&mut j, &g, &demo_tests::policy(), dispatch)
+                .is_err()
+        );
+        assert!(
+            c.prepare_demo_ingress(
+                &mut j,
+                &demo_tests::gateway_for(Origin::Mainnet),
+                &p,
+                dispatch
+            )
+            .is_err()
+        );
+        c.prepare_demo_ingress(&mut j, &g, &p, dispatch).unwrap();
+        assert!(
+            j.state()
+                .unwrap()
+                .attempts()
+                .iter()
+                .all(|a| !a.possibly_exposed)
+        );
+        assert!(
+            c.expose_chain(
+                &mut j,
+                Dispatch {
+                    commit: id(71),
+                    ..dispatch
+                },
+                Rail::Release,
+                counters(Rail::Release, 0, 0)
+            )
+            .is_err()
+        );
+        assert!(!j.state().unwrap().native_funding_ready());
+    }
+    #[test]
+    fn initial_setup_policy_is_explicit_and_legacy_bytes_are_unchanged() {
+        let p = demo_tests::policy();
+        let value = serde_json::to_value(&p).unwrap();
+        assert!(value.get("initial_setup").is_none());
+        assert_eq!(serde_json::from_value::<demo::Policy>(value).unwrap(), p);
+        let c = controller();
+        let g = demo_tests::gateway_for(Origin::Testnet);
+        assert_ne!(
+            p.release_commitment(&c, &g).unwrap(),
+            initial_policy().release_commitment(&c, &g).unwrap()
+        );
+        for case in 0..3 {
+            let mut p = initial_policy();
+            match case {
+                0 => p.initial_setup.as_mut().unwrap().revision = 0,
+                1 => p.initial_setup.as_mut().unwrap().exclusive_control = false,
+                _ => p.maximum_reads = 2,
+            }
+            assert!(p.validate().is_err());
+        }
+    }
+    #[test]
+    fn demo_setup_expiry_and_new_authority_block_original_wire_without_refunding_holds() {
+        for case in 0..4 {
+            let t = Temp::new();
+            let (mut j, c, g) = unqualified(&t);
+            let p = initial_policy();
+            observed_round(&mut j, &c, &g, &p, bodies());
+            accept_initial(&mut j, 10, Rail::Release);
+            c.prepare_demo_ingress(
+                &mut j,
+                &g,
+                &p,
+                Dispatch {
+                    attempt: a(10),
+                    commit: id(70),
+                    at: 2100,
+                },
+            )
+            .unwrap();
+            let action = c
+                .expose_demo_ingress(
+                    &mut j,
+                    &g,
+                    &p,
+                    Dispatch {
+                        attempt: a(10),
+                        commit: id(71),
+                        at: 2100,
+                    },
+                    counters(Rail::Release, 0, 0),
+                )
+                .unwrap();
+            let wire = VerifiedWire {
+                attempt: a(10),
+                binding: Sha256::digest(action.encode().unwrap().as_bytes()).into(),
+                signature: [72; 64],
+                wire: raw(b"synthetic not live"),
+            };
+            let mut at = 2100;
+            match case {
+                0 => at = 9100, // Original setup lifetime, not refreshed on restart.
+                1 => {
+                    let mut t = tx(
+                        &j,
+                        60,
+                        vec![],
+                        vec![Control::Order(orders::Action::AdvanceAuthority {
+                            account: user(1),
+                            epoch: 2,
+                        })],
+                    );
+                    t.at = at;
+                    assert!(j.commit(t).unwrap().receipt.controls.is_none());
+                }
+                2 => {
+                    let mut t = tx(
+                        &j,
+                        60,
+                        vec![],
+                        vec![Control::Funds(lifecycle::Action::Freeze)],
+                    );
+                    t.at = at;
+                    assert!(j.commit(t).unwrap().receipt.controls.is_none());
+                }
+                _ => {
+                    let mut setup = good_setup();
+                    setup.observed_at = at;
+                    setup.complete = false;
+                    setup.borrowed = "1".into();
+                    assert!(!c.observe_setup(&mut j, id(60), at, setup).unwrap());
+                }
+            }
+            drop(j);
+            let mut j = open(&t);
+            let head = j.head();
+            assert!(
+                c.persist_wire(&mut j, id(72), at, action, wire).is_err(),
+                "case {case}"
+            );
+            assert_eq!(j.head(), head);
+            assert!(
+                j.state()
+                    .unwrap()
+                    .holds()
+                    .iter()
+                    .any(|h| h.request == a(10).request && h.active)
+            );
+            assert!(
+                j.state()
+                    .unwrap()
+                    .attempts()
+                    .iter()
+                    .any(|a| a.key == super::a(10) && a.possibly_exposed)
+            );
+            assert_eq!(j.state().unwrap().ledger().vault(), atoms(120));
+        }
+    }
+    #[test]
+    fn an_original_demo_deposit_can_reconcile_after_preflight_age_without_reauthorizing_ingress() {
+        let t = Temp::new();
+        let (mut j, c, g) = unqualified(&t);
+        let p = demo::Policy {
+            lifetime_ms: 60000,
+            ..initial_policy()
+        };
+        observed_round(&mut j, &c, &g, &p, bodies());
+        accept_initial(&mut j, 10, Rail::Release);
+        original_initial(&mut j, &c, &g, &p, 10, 70);
+        accept_initial(&mut j, 11, Rail::Deposit);
+        original_initial(&mut j, &c, &g, &p, 11, 74);
+        drop(j);
+        let mut j = open(&t);
+        assert!(matches!(
+            c.prepare_setup_poll(&mut j, &g, &p, poll(78, 12100))
+                .unwrap(),
+            setup::Step::DemoQualified
+        ));
+        assert_eq!(
+            c.demo_deposit_candidate(&mut j, &g, &p, 12100).unwrap(),
+            Some(a(11))
+        );
+        let demo::Step::Request(request, completion) = c
+            .prepare_demo_deposit_poll(
+                &mut j,
+                &g,
+                &p,
+                demo::Poll {
+                    attempt: a(11),
+                    reservation: id(80),
+                    evidence: id(81),
+                    at: 12100,
+                },
+            )
+            .unwrap()
+        else {
+            panic!("reconcile original only");
+        };
+        request.consume(12100).unwrap();
+        reads::complete(&mut j, &g, *completion, Reply::Unknown).unwrap();
+        assert!(
+            j.state()
+                .unwrap()
+                .holds()
+                .iter()
+                .any(|h| h.request == a(11).request && h.active)
+        );
+        assert!(
+            c.expose_demo_ingress(
+                &mut j,
+                &g,
+                &p,
+                Dispatch {
+                    attempt: a(11),
+                    commit: id(82),
+                    at: 12100
+                },
+                counters(Rail::Deposit, 0, 0)
+            )
+            .is_err()
+        );
+        assert_eq!(j.state().unwrap().ledger().in_transit().unwrap(), atoms(20));
+        assert!(!j.state().unwrap().native_funding_ready());
+    }
+    #[test]
+    fn adverse_or_stale_initial_reads_do_not_qualify_a_demo() {
+        for case in 0..18 {
+            let t = Temp::new();
+            let (mut j, c, g) = unqualified(&t);
+            let p = initial_policy();
+            let mut replies = bodies();
+            match case {
+                0 => replies[0]["data"]["auto_lend_disabled"] = json!(false),
+                1 => {
+                    replies[0]["data"]["margin_settings"] =
+                        json!([{"symbol":"BTC","isolated":true,"leverage":20}])
+                }
+                2 => replies[1]["data"]["borrowed"] = json!("1"),
+                3 => replies[1]["data"]["pending_interest"] = json!("1"),
+                4 => replies[2]["data"]["orders_count"] = json!(1),
+                5 => replies[2]["data"]["positions_count"] = json!(1),
+                6 => replies[2]["data"]["stop_orders_count"] = json!(1),
+                7 => replies[2]["data"]["pending_balance"] = json!("1"),
+                8 => replies[2]["data"]["spot_balances"] = json!([{"balance":"1"}]),
+                9 => replies[1] = json!({"success":false,"error":"Account loan cache not found"}),
+                10 => {
+                    replies[2]["data"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("account_equity");
+                }
+                11 => replies[1]["data"]["updated_at"] = json!(1200),
+                12 => replies[1]["data"]["spot_balances"] = json!([{"borrowed":"1"}]),
+                13 => {
+                    replies[0]["data"]["spot_settings"] =
+                        json!([{"symbol":"SOL","auto_borrow":true}])
+                }
+                14 => replies[1]["data"]["error"] = json!("partial loan view"),
+                15 => replies[2]["data"]["code"] = json!(400),
+                16 => {
+                    replies[1]["data"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("spot_balances");
+                }
+                _ => {
+                    replies[0]["data"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("spot_settings");
+                }
+            }
+            observed_round(&mut j, &c, &g, &p, replies);
+            assert!(
+                !matches!(
+                    c.prepare_setup_poll(&mut j, &g, &p, poll(42, 2100))
+                        .unwrap(),
+                    setup::Step::DemoQualified
+                ),
+                "case {case}"
+            );
+            assert!(!j.state().unwrap().native_funding_ready());
+        }
+        let t = Temp::new();
+        let (mut j, c, g) = unqualified(&t);
+        let p = initial_policy();
+        observed_round(&mut j, &c, &g, &p, bodies());
+        assert!(matches!(
+            c.prepare_setup_poll(&mut j, &g, &p, poll(42, 12100))
+                .unwrap(),
+            setup::Step::Exhausted
+        ));
+        assert!(
+            !c.observe_setup_reads(&mut j, &g, &p, id(43), 12100)
+                .unwrap()
+        );
+    }
+    #[test]
+    fn demo_preflight_carries_only_one_original_deposit_and_cannot_upgrade_it() {
+        let t = Temp::new();
+        let (mut j, c, g) = unqualified(&t);
+        let p = initial_policy();
+        observed_round(&mut j, &c, &g, &p, bodies());
+        accept_initial(&mut j, 10, Rail::Release);
+        original_initial(&mut j, &c, &g, &p, 10, 70);
+        drop(j);
+        let mut j = open(&t);
+        accept_initial(&mut j, 11, Rail::Deposit);
+        original_initial(&mut j, &c, &g, &p, 11, 74);
+        // Even before credit, no second release can consume this initial grant.
+        accept_initial(&mut j, 12, Rail::Release);
+        assert!(
+            c.prepare_demo_ingress(
+                &mut j,
+                &g,
+                &p,
+                Dispatch {
+                    attempt: a(12),
+                    commit: id(69),
+                    at: 2100
+                }
+            )
+            .is_err()
+        );
+        let mut cancelled = tx(
+            &j,
+            68,
+            vec![],
+            vec![Control::Funds(lifecycle::Action::CancelUnexposed(
+                a(12).request,
+            ))],
+        );
+        cancelled.at = 2100;
+        assert!(j.commit(cancelled).unwrap().receipt.controls.is_none());
+        assert_eq!(
+            c.demo_deposit_candidate(&mut j, &g, &p, 2100).unwrap(),
+            Some(a(11))
+        );
+        let before = j.head();
+        assert!(
+            c.expose_demo_ingress(
+                &mut j,
+                &g,
+                &p,
+                Dispatch {
+                    attempt: a(11),
+                    commit: id(78),
+                    at: 2100
+                },
+                counters(Rail::Deposit, 0, 0)
+            )
+            .is_err()
+        );
+        assert!(
+            c.observe_credit(
+                &mut j,
+                id(79),
+                2100,
+                Credit {
+                    attempt: a(11),
+                    account: account(),
+                    deposit_signature: [76; 64],
+                    event: EconomicEventId::new(b"not a strong proof").unwrap(),
+                    cut: 999,
+                    amount: 20,
+                    fee: 0,
+                    final_credit: true,
+                    raw: raw(b"synthetic attempted upgrade"),
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(j.head(), before);
+        for (n, at, body) in [
+            (
+                80,
+                2100,
+                json!({"success":true,"data":[{"amount":"20","transaction_id":bs58::encode([76;64]).into_string(),"created_at":2100}],"has_more":false}),
+            ),
+            (
+                82,
+                3100,
+                json!({"success":true,"data":[{"amount":"20","balance":"20","pending_balance":"0","event_type":"deposit_release","created_at":2100}],"has_more":false}),
+            ),
+        ] {
+            let demo::Step::Request(request, completion) = c
+                .prepare_demo_deposit_poll(
+                    &mut j,
+                    &g,
+                    &p,
+                    demo::Poll {
+                        attempt: a(11),
+                        reservation: id(n),
+                        evidence: id(n + 1),
+                        at,
+                    },
+                )
+                .unwrap()
+            else {
+                panic!("one original GET");
+            };
+            request.consume(at).unwrap();
+            reads::complete(
+                &mut j,
+                &g,
+                *completion,
+                Reply::Response {
+                    status: 200,
+                    body: raw(&serde_json::to_vec(&body).unwrap()),
+                    received_at: at,
+                    retry_after_ms: None,
+                },
+            )
+            .unwrap();
+        }
+        assert!(
+            c.confirm_demo_deposit(&mut j, &g, &p, a(11), id(84), 3100)
+                .unwrap()
+        );
+        assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(20));
+        assert_eq!(
+            j.state()
+                .unwrap()
+                .ledger()
+                .book(Owner::Customer(user(1)))
+                .unwrap()
+                .cash(),
+            atoms(20)
+        );
+        assert!(!j.state().unwrap().native_funding_ready());
+        assert!(
+            j.state()
+                .unwrap()
+                .funds()
+                .iter()
+                .any(|o| o.attempt == Some(a(11)) && o.demo.is_some() && o.proof.is_none())
+        );
+        assert!(
+            c.expose_demo_ingress(
+                &mut j,
+                &g,
+                &p,
+                Dispatch {
+                    attempt: a(12),
+                    commit: id(85),
+                    at: 3100
+                },
+                counters(Rail::Deposit, 0, 0)
+            )
+            .is_err()
+        );
+        bridge(&j);
+    }
+    #[test]
+    fn authenticated_setup_round_replays_without_credit_readiness_or_repeat_record() {
+        let t = Temp::new();
+        let (mut j, c, g) = unqualified(&t);
+        for (i, body) in bodies().into_iter().enumerate() {
+            read(
+                &mut j,
+                &c,
+                &g,
+                30 + 2 * i as u8,
+                100 + 1000 * i as u64,
+                200,
+                body,
+            );
+        }
+        let setup::Step::Observed(observed) = c
+            .prepare_setup_poll(&mut j, &g, &demo_tests::policy(), poll(40, 2100))
+            .unwrap()
+        else {
+            panic!("expected retained observations")
+        };
+        assert!(observed.idle && observed.compatible_margin && observed.lending_disabled);
+        assert_eq!((observed.borrowed, observed.interest), (0, 0));
+        assert_eq!(format!("{observed:?}"), "SetupObservation([PRIVATE])");
+        assert!(
+            c.observe_setup_reads(&mut j, &g, &demo_tests::policy(), id(41), 2100)
+                .unwrap()
+        );
+        let head = j.head();
+        assert!(!j.state().unwrap().native_funding_ready());
+        assert_eq!(j.state().unwrap().unresolved_raw(), 0);
+        assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(0));
+        assert_eq!(
+            j.state()
+                .unwrap()
+                .ledger()
+                .book(Owner::Customer(user(1)))
+                .unwrap()
+                .cash(),
+            atoms(20)
+        );
+        drop(j);
+        let mut j = open(&t);
+        assert!(
+            !c.observe_setup_reads(&mut j, &g, &demo_tests::policy(), id(42), 2100)
+                .unwrap()
+        );
+        assert_eq!(j.head(), head);
+        let mut changed = demo_tests::policy();
+        changed.revision += 1;
+        assert!(
+            c.prepare_setup_poll(&mut j, &g, &changed, poll(43, 2100))
+                .is_err()
+        );
+        let changed = Controller::new(
+            profile(),
+            Route {
+                epoch: 2,
+                ..route()
+            },
+            Zeroizing::new([9; 32]),
+        )
+        .unwrap();
+        assert!(
+            changed
+                .prepare_setup_poll(&mut j, &g, &demo_tests::policy(), poll(44, 2100))
+                .is_err()
+        );
+    }
+    #[test]
+    fn missing_cache_malformed_and_future_sources_never_supply_setup() {
+        for case in 0..5 {
+            let t = Temp::new();
+            let (mut j, c, g) = unqualified(&t);
+            let mut bodies = bodies();
+            match case {
+                0 => bodies[1] = json!({"success":false,"error":"Account loan cache not found"}),
+                1 => {
+                    bodies[2]["data"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("account_equity");
+                }
+                2 => bodies[1]["data"]["updated_at"] = json!(1200),
+                3 => bodies[2]["data"]["balance"] = json!("1e0"),
+                _ => bodies[0]["data"]["error"] = json!("conflicting response"),
+            }
+            for (i, body) in bodies.into_iter().enumerate() {
+                read(
+                    &mut j,
+                    &c,
+                    &g,
+                    30 + 2 * i as u8,
+                    100 + 1000 * i as u64,
+                    if case == 0 && i == 1 { 404 } else { 200 },
+                    body,
+                );
+            }
+            let head = j.head();
+            assert!(
+                !c.observe_setup_reads(&mut j, &g, &demo_tests::policy(), id(41), 2100)
+                    .unwrap(),
+                "case {case}"
+            );
+            assert_eq!(j.head(), head);
+            assert!(!j.state().unwrap().native_funding_ready());
+        }
+    }
+    #[test]
+    fn lost_setup_requests_keep_original_budget_cadence_and_no_signed_action() {
+        let t = Temp::new();
+        let (mut j, c, g) = unqualified(&t);
+        for i in 0..8 {
+            let at = 100 + 1000 * i;
+            let setup::Step::Request(request, completion) = c
+                .prepare_setup_poll(
+                    &mut j,
+                    &g,
+                    &demo_tests::policy(),
+                    poll(30 + 2 * i as u8, at),
+                )
+                .unwrap()
+            else {
+                panic!("expected bounded GET")
+            };
+            request.consume(at).unwrap();
+            reads::complete(&mut j, &g, *completion, Reply::Unknown).unwrap();
+            assert!(matches!(
+                c.prepare_setup_poll(
+                    &mut j,
+                    &g,
+                    &demo_tests::policy(),
+                    poll(60 + 2 * i as u8, at)
+                )
+                .unwrap(),
+                setup::Step::Waiting | setup::Step::Exhausted
+            ));
+            drop(j);
+            j = open(&t);
+        }
+        assert!(matches!(
+            c.prepare_setup_poll(&mut j, &g, &demo_tests::policy(), poll(90, 8100))
+                .unwrap(),
+            setup::Step::Exhausted
+        ));
+        assert!(j.state().unwrap().attempts().is_empty());
+        assert_eq!(j.state().unwrap().unresolved_raw(), 0);
+        assert!(!j.state().unwrap().native_funding_ready());
+    }
+    #[test]
+    fn adverse_setup_remains_visible_and_deadline_cannot_refresh_from_retained_replies() {
+        let t = Temp::new();
+        let (mut j, c, g) = unqualified(&t);
+        let mut replies = bodies();
+        replies[0]["data"]["margin_settings"] =
+            json!([{"symbol":"BTC","isolated":true,"leverage":20}]);
+        replies[1]["data"]["borrowed"] = json!("2");
+        replies[1]["data"]["pending_interest"] = json!("1");
+        replies[2]["data"]["stop_orders_count"] = json!(1);
+        for (i, body) in replies.into_iter().enumerate() {
+            read(
+                &mut j,
+                &c,
+                &g,
+                30 + 2 * i as u8,
+                100 + 1000 * i as u64,
+                200,
+                body,
+            );
+        }
+        let setup::Step::Observed(observed) = c
+            .prepare_setup_poll(&mut j, &g, &demo_tests::policy(), poll(40, 2100))
+            .unwrap()
+        else {
+            panic!("adverse data must remain observable")
+        };
+        assert!(!observed.idle && !observed.compatible_margin);
+        assert_eq!((observed.borrowed, observed.interest), (2, 1));
+        assert!(
+            c.observe_setup_reads(&mut j, &g, &demo_tests::policy(), id(41), 2100)
+                .unwrap()
+        );
+        assert!(!j.state().unwrap().native_funding_ready());
+        let head = j.head();
+        assert!(
+            !c.observe_setup_reads(&mut j, &g, &demo_tests::policy(), id(42), 9100)
+                .unwrap()
+        );
+        assert!(matches!(
+            c.prepare_setup_poll(&mut j, &g, &demo_tests::policy(), poll(43, 9100))
+                .unwrap(),
+            setup::Step::Exhausted
+        ));
+        assert_eq!(j.head(), head);
+    }
+    #[test]
+    fn setup_rate_limit_and_oversized_reply_do_not_refund_original_read() {
+        for oversized in [false, true] {
+            let t = Temp::new();
+            let (mut j, c, g) = unqualified(&t);
+            let setup::Step::Request(request, completion) = c
+                .prepare_setup_poll(&mut j, &g, &demo_tests::policy(), poll(30, 100))
+                .unwrap()
+            else {
+                panic!("expected finite GET")
+            };
+            request.consume(100).unwrap();
+            let head = j.head();
+            let result = reads::complete(
+                &mut j,
+                &g,
+                *completion,
+                Reply::Response {
+                    status: if oversized { 200 } else { 429 },
+                    received_at: 100,
+                    retry_after_ms: Some(3000),
+                    body: raw(&if oversized {
+                        vec![b' '; demo::MAX_BODY + 1]
+                    } else {
+                        b"limited".to_vec()
+                    }),
+                },
+            );
+            if oversized {
+                assert!(result.is_err());
+                assert_eq!(j.head(), head);
+            } else {
+                assert!(matches!(result.unwrap(), reads::Outcome::Limited));
+            }
+            assert!(
+                !c.observe_setup_reads(&mut j, &g, &demo_tests::policy(), id(40), 1100)
+                    .unwrap()
+            );
+            if !oversized {
+                drop(j);
+                j = open(&t);
+                assert!(matches!(
+                    c.prepare_setup_poll(&mut j, &g, &demo_tests::policy(), poll(41, 1100))
+                        .unwrap(),
+                    setup::Step::Waiting
+                ));
+            }
+            assert!(!j.state().unwrap().native_funding_ready());
+            assert!(j.state().unwrap().attempts().is_empty());
+        }
+    }
+}
+
+#[test]
+fn original_ingress_preparation_uses_existing_authorization_and_never_exposes_or_retries() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    let intent = lifecycle::Intent {
+        request: a(10).request,
+        source: Location::Vault,
+        destination: Destination::Location(Location::Broker),
+        net: atoms(20),
+        maximum_fee: atoms(0),
+        fee_payer: Owner::House,
+        allow_partial: false,
+        policy: config().policy,
+        authority_epoch: 1,
+        expires_at: 10_000,
+    };
+    let approval = orders::Approval {
+        account: user(1),
+        intent_hash: intent.digest().unwrap(),
+        authority_epoch: 1,
+    };
+    let accepted = tx(
+        &j,
+        10,
+        vec![],
+        vec![Control::Funds(lifecycle::Action::Accept {
+            intent: Box::new(intent),
+            approval,
+        })],
+    );
+    assert_eq!(j.commit(accepted).unwrap().receipt.controls, None);
+    let mut incomplete = good_setup();
+    incomplete.complete = false;
+    c.observe_setup(&mut j, id(11), 100, incomplete).unwrap();
+    let before = j.head();
+    assert!(
+        c.prepare_ingress(
+            &mut j,
+            Dispatch {
+                attempt: a(10),
+                commit: id(12),
+                at: 100
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(j.head(), before);
+    c.observe_setup(&mut j, id(13), 100, good_setup()).unwrap();
+    assert_eq!(
+        c.prepare_ingress(
+            &mut j,
+            Dispatch {
+                attempt: a(10),
+                commit: id(14),
+                at: 100
+            }
+        )
+        .unwrap(),
+        Rail::Release
+    );
+    let original = j.head();
+    assert!(
+        !j.state()
+            .unwrap()
+            .attempts()
+            .iter()
+            .find(|record| record.key == a(10))
+            .unwrap()
+            .possibly_exposed
+    );
+    assert_eq!(j.state().unwrap().ledger().vault(), atoms(120));
+    assert_eq!(j.state().unwrap().ledger().broker(), atoms(0));
+    drop(j);
+    let mut j = open(&t);
+    assert!(
+        c.prepare_ingress(
+            &mut j,
+            Dispatch {
+                attempt: a(10),
+                commit: id(15),
+                at: 100
+            }
+        )
+        .is_err()
+    );
+    assert!(
+        c.prepare_ingress(
+            &mut j,
+            Dispatch {
+                attempt: a(16),
+                commit: id(16),
+                at: 100
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(j.head(), original);
+    let action = c
+        .expose_chain(
+            &mut j,
+            Dispatch {
+                attempt: a(10),
+                commit: id(17),
+                at: 100,
+            },
+            Rail::Release,
+            counters(Rail::Release, 0, 1),
+        )
+        .unwrap();
+    assert_eq!(action.plan().amount(), 20);
 }

@@ -17,6 +17,10 @@ use std::{
     },
     time::{Duration, Instant},
 };
+#[path = "runtime_demo_tests.rs"]
+mod demo_tests;
+#[path = "runtime_financial_tests.rs"]
+mod financial_tests;
 
 #[derive(Default)]
 struct Metrics {
@@ -135,8 +139,11 @@ fn configuration() -> Config {
     c
 }
 fn store(metrics: Arc<Metrics>) -> Store {
+    store_for(metrics, configuration())
+}
+fn store_for(metrics: Arc<Metrics>, config: Config) -> Store {
     let stream = Stream {
-        domain: configuration().domain,
+        domain: config.domain,
         id: [42; 32],
     };
     let replica = |id| MemoryReplica {
@@ -156,7 +163,7 @@ fn store(metrics: Arc<Metrics>) -> Store {
     Journal::create(
         Replicated::new(stream, 1, replica(1), replica(2), witness).unwrap(),
         RecordCipher::new(Zeroizing::new([55; 32]), 1, stream.id).unwrap(),
-        configuration(),
+        config,
     )
     .unwrap()
 }
@@ -280,6 +287,8 @@ fn application(metrics: Arc<Metrics>) -> Application {
             next_poll: NOW,
             read_kind: 0,
             deposit_index: 0,
+            demo_deposit: None,
+            demo_allocation: None,
         }),
         io: Mutex::new(NativeIo {
             egress,

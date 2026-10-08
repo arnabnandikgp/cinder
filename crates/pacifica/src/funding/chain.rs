@@ -144,6 +144,9 @@ impl std::fmt::Debug for Prepared<'_> {
     }
 }
 impl Prepared<'_> {
+    pub(super) fn rail(&self) -> Rail {
+        self.action.plan().rail()
+    }
     /// Exact unsigned message for getFeeForMessage; stays inside enclave egress.
     pub fn message(&self) -> &[u8] {
         &self.message
@@ -1064,6 +1067,7 @@ mod tests {
                 },
                 at: 100,
                 expires_at: 1000,
+                demo_setup: None,
             },
         }
     }

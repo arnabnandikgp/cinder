@@ -1339,9 +1339,11 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.count(s.funds.len());
     for o in &s.funds {
         w.byte(u8::from(o.recovery));
+        w.option(&o.flat, crate::funds::encode_flat);
         crate::funds::encode_intent(&mut w, &o.intent);
         w.option(&o.attempt, |w, a| w.item(a));
         w.option(&o.proof, crate::funds::encode_terminal);
+        w.option(&o.demo, crate::funds::encode_demo);
         w.byte(u8::from(o.terminal));
         w.byte(u8::from(o.faulted));
     }

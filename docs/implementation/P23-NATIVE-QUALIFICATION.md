@@ -1,7 +1,13 @@
 # Next P23 financial-evidence qualification
 
-Prepared 2026-10-07. **Proposed bounds, not authorization or an executable
-manifest.** This resolves existing G01/G05 gates; it adds no phase or product
+Prepared 2026-10-07; scope approved 2026-10-08. **The test bounds and bootstrap
+exception are approved. Three exact invocations stopped before financial
+activity: signer-locator, loader-constant and signer-buffer defects. The corrected
+fourth invocation establishes the original 20-USDP deposit / 19-USDP payment
+round trip with 1-USDP fee. A later empty-account setting check passes; original
+bootstrap, native completeness and lost-ACK recovery remain unqualified.** See the
+[invocation receipt](P23-NATIVE-SEMANTICS-RECEIPT.md). This scopes
+the existing G01/G05 gates; it adds no phase or product
 promise. [Financial map](P23-FINANCIAL-GATES.md),
 [native contract](P23-NATIVE-EVIDENCE.md),
 [measured capture](../architecture/0028-measured-native-capture.md).
@@ -27,9 +33,9 @@ documented idempotency/finality contract and the assumptions it needs. If those
 are absent, bring the smallest required policy/interface change for review rather
 than assign an arbitrary timestamp, counter or Solana slot as a native frontier.
 
-## Recommended scope for approval
+## Approved scope (2026-10-08)
 
-| Boundary | Proposed limit |
+| Boundary | Approved ceiling |
 | --- | --- |
 | Environment | Pacifica paper/testnet and Solana devnet only; fresh disposable identities, no existing venue wallets, mainnet or customer assets |
 | Quote exposure | At most 20 faucet USDP in total; at most 2 USDP total native fees; verify current mint, units, route and fee before any submission |
@@ -40,9 +46,17 @@ than assign an arbitrary timestamp, counter or Solana slot as a native frontier.
 | AWS | No AWS resources or spend in this native-semantics probe. It is not evidence of enclave execution, parent confidentiality or shipping financial activation |
 | Unknown outcome | Persist exact request/wire before exposure; no automatic POST retry, re-signing, new UUID, replacement operation or unapproved rescue transfer |
 
-These are suggested ceilings, not measured costs or production limits. The
-120-second bootstrap window is a **new exception to review**, not an inherited
-M1 permission and not the shipping deposit policy.
+These are approved test ceilings, not measured costs or production limits. The
+120-second bootstrap exception was approved explicitly for this probe, not
+inherited from M1 and not adopted as the shipping deposit policy. The source-bound
+[one-shot tool](../../tools/native-qualification/README.md) still refuses live
+requests without approval of its exact run seal.
+
+On 2026-10-08 the user granted standing authority for small test-only source/
+configuration corrections and new seals within these unchanged limits. Record
+that authority on the corrected seal rather than asking again for a minor fix.
+It does not permit restarting used records, resending uncertain economic actions,
+increased exposure, AWS/mainnet/customer assets, or custody/security-policy changes.
 
 ## Before execution
 
@@ -53,8 +67,9 @@ M1 permission and not the shipping deposit policy.
    origins/CA, devnet genesis/RPC, quote mint/precision/program/vault, sponsor and
    budgets in the G05 execution record. Keep keys, signed wires and private traces
    out of Git. A fresh namespace alone is not approval.
-3. Obtain approval of that exact execution record, including the bootstrap
-   exception. Stop if a prerequisite fails or a cap/assumption changes.
+3. Bind applicable explicit approval or standing minor-correction authority to
+   that exact execution record, including the bootstrap exception. Stop for an
+   uncertain economic outcome or material cap/policy/assumption change.
 4. Publish the sanitized native-semantics receipt and disposition of each gate.
    Implement only justified trusted providers, then their prepared-I/O-completion
    wiring and narrow measured financial policy. The current manifest still
@@ -65,5 +80,8 @@ M1 permission and not the shipping deposit policy.
 
 The local probe narrows uncertainty without paying for another exploratory AWS
 session. It does **not** replace P23's actual measured workflow acceptance. No
-experiment, new program deployment, funds transfer or live request has been run
-under this proposal.
+financial submission or program deployment occurred in the three stopped
+invocations; the third reached one explicitly rejected setting POST. The fourth
+invocation's original chain/event/payment facts and late settings check are
+recorded separately in the receipt. They do not establish complete native causal
+coverage, lost-reply recovery or a changed-image hardware pass.

@@ -50,6 +50,52 @@ fn policy() -> Policy {
 fn gateway() -> Gateway {
     Gateway::new(profile(), policy(), Zeroizing::new([7; 32]), 1).unwrap()
 }
+
+#[test]
+fn read_only_gateway_retains_unknown_trading_and_refuses_all_dispatch_without_exposure() {
+    let mut profile = profile();
+    profile.fills = Level::Unknown;
+    let mut policy = policy();
+    policy.execution = Level::Unknown;
+    assert!(Gateway::new(profile.clone(), policy.clone(), Zeroizing::new([7; 32]), 1).is_err());
+    let g = Gateway::new_read_only(profile, policy, Zeroizing::new([7; 32]), 1).unwrap();
+    let t = Temp::new();
+    let mut j = t.create();
+    seed(&mut j, &g);
+    let permit = g.reserve_read(&mut j, id(80), 15, false).unwrap();
+    permit.consume(15).unwrap();
+    prepare(&mut j, 3, 1, TimeInForce::GoodTilCancelled, 20);
+    let head = j.head();
+    let mut io = Fake::default();
+    assert!(g.prepare_dispatch(&mut j, dispatch(3, 30)).is_err());
+    assert!(
+        g.dispatch_recovery(&mut j, dispatch(3, 30), &mut io)
+            .is_err()
+    );
+    assert_eq!(j.head(), head);
+    assert!(!j.state().unwrap().attempts()[0].possibly_exposed);
+    assert!(io.requests.is_empty());
+}
+
+#[test]
+fn read_only_gateway_refuses_qualified_claims_mainnet_and_unknown_precision() {
+    for field in 0..4 {
+        let mut profile = profile();
+        profile.fills = Level::Unknown;
+        let mut policy = policy();
+        policy.execution = Level::Unknown;
+        match field {
+            0 => profile.fills = Level::Qualified,
+            1 => policy.execution = Level::Qualified,
+            2 => {
+                policy.origin = Origin::Mainnet;
+                profile.environment = policy.origin.url().into();
+            }
+            _ => profile.precision = Level::Unknown,
+        }
+        assert!(Gateway::new_read_only(profile, policy, Zeroizing::new([7; 32]), 1).is_err());
+    }
+}
 fn id(n: u8) -> CommitId {
     CommitId::new([n; 32]).unwrap()
 }
@@ -174,6 +220,69 @@ fn signature_valid(r: &Outbound) -> bool {
         .unwrap()
         .verify_strict(&bytes, &sig)
         .is_ok()
+}
+#[test]
+fn split_dispatch_archives_late_reply_after_writer_and_revocation_without_resend() {
+    let t = Temp::new();
+    let mut j = t.create();
+    let g = gateway();
+    seed(&mut j, &g);
+    prepare(&mut j, 3, 1, TimeInForce::GoodTilCancelled, 20);
+    let (request, completion) = g.prepare_dispatch(&mut j, dispatch(3, 30)).unwrap();
+    assert!(signature_valid(&request));
+    assert_eq!(request.expires_at(), 3030);
+    g.deactivate(&mut j, id(50), 80).unwrap();
+    let mut tx = transaction(j.head(), 51, vec![], vec![]);
+    tx.at = 90;
+    j.commit(tx).unwrap();
+    let mut io = Fake {
+        replies: [response(
+            200,
+            json!({"success":true,"data":{"order_id":123}}),
+            60,
+        )]
+        .into(),
+        ..Fake::default()
+    };
+    let reply = io.post(request);
+    assert_eq!(
+        g.complete_dispatch(&mut j, completion, reply, 100).unwrap(),
+        Outcome::Acknowledged
+    );
+    assert_eq!(io.requests.len(), 1);
+    let tx = j.transactions().last().unwrap();
+    assert_eq!(tx.at, 100);
+    assert_eq!(tx.order_observations[0].observed_at, 60);
+    assert!(g.prepare_dispatch(&mut j, dispatch(3, 110)).is_err());
+    let expected = j.state().unwrap().clone();
+    drop(j);
+    assert_eq!(open(&t.db).state().unwrap(), &expected);
+}
+#[test]
+fn split_dispatch_deadline_is_exact_signed_intent_expiry_and_future_reply_is_unknown() {
+    let t = Temp::new();
+    let mut j = t.create();
+    let g = gateway();
+    seed(&mut j, &g);
+    prepare(&mut j, 3, 1, TimeInForce::GoodTilCancelled, 20);
+    let (request, completion) = g.prepare_dispatch(&mut j, dispatch(3, 99_999)).unwrap();
+    assert_eq!(request.expires_at(), 100_000);
+    assert_eq!(parsed(&request)["expiry_window"], 1);
+    assert_eq!(
+        g.complete_dispatch(
+            &mut j,
+            completion,
+            response(
+                200,
+                json!({"success":true,"data":{"order_id":123}}),
+                100_002
+            ),
+            100_001
+        )
+        .unwrap(),
+        Outcome::Unknown
+    );
+    assert!(g.prepare_dispatch(&mut j, dispatch(3, 100_003)).is_err());
 }
 #[test]
 fn recovery_close_is_a_bounded_signed_ioc_not_an_ordinary_or_reusable_capability() {

@@ -169,6 +169,7 @@ fn runtime_configuration() -> cinder_service::runtime::Configuration {
         route: route(),
         trading_epoch: 1,
         chain: None,
+        demo_allocation: None,
     }
 }
 fn runtime_keys() -> std::collections::BTreeMap<cinder_service::boot::Role, Zeroizing<Vec<u8>>> {
@@ -233,11 +234,20 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
         root: root.clone(),
         root_hash: hash,
     };
-    for version in [1, 2, 3, 4] {
+    for (version, allocation) in [
+        (1, false),
+        (2, false),
+        (3, false),
+        (4, false),
+        (5, false),
+        (5, true),
+        (6, true),
+    ] {
         let mut manifest = Manifest {
             version: 1,
             history: None,
             native_capture: None,
+            demo_deposit: None,
         domain: [[1; 32], [2; 32]].concat(),
         application: [1; 32],
         stream: [42; 32],
@@ -308,6 +318,26 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
                     },
                 });
             }
+            if version >= 5 {
+                manifest.gates.native_reads = true;
+                manifest.gates.funding = version == 6;
+                manifest.demo_deposit = Some(cinder_pacifica::funding::demo::Policy {
+                    revision: 1,
+                    maximum_reads: 8,
+                    maximum_pages: 2,
+                    interval_ms: 1000,
+                    maximum_backoff_ms: 5000,
+                    lifetime_ms: 60000,
+                    initial_setup: if allocation {
+                        Some(cinder_pacifica::funding::demo::InitialSetup {
+                            revision: 1,
+                            exclusive_control: true,
+                        })
+                    } else {
+                        None
+                    },
+                });
+            }
             let mut slot = manifest.slots[0].clone();
             slot.role = Role::Funds;
             slot.endpoint.resource =
@@ -351,6 +381,42 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
                 poll_ms: 1000,
                 deposits: vec![],
             });
+            if allocation {
+                if version == 6 {
+                    configuration.fills = Level::Unknown;
+                    configuration.execution.execution = Level::Unknown;
+                    configuration.route.withdrawal = Level::Unknown;
+                    configuration.route.settings = Level::Observed;
+                }
+                let original = cinder_service::customer_deposit::Locator {
+                    account: [1; 32],
+                    operation: [44; 32],
+                    signature: vec![55; 64],
+                };
+                configuration.chain.as_mut().unwrap().deposits = vec![original.clone()];
+                configuration.demo_allocation = Some(cinder_service::demo_funding::Policy {
+                    revision: 1,
+                    original,
+                    amount: 20,
+                    release_request: [45; 32],
+                    deposit_request: [46; 32],
+                    authority_epoch: 1,
+                    expires_at: 1_700_000_060_000,
+                });
+                // Keep the actual 4-KiB KMS role limit. This one-owner demo
+                // profile must not inherit the larger two-customer fixture.
+                let oversized = serde_cbor::to_vec(&configuration).unwrap();
+                assert!(manifest.wrap(Role::Configuration, &oversized).is_err());
+                let mut ledger =
+                    cinder_journal::wire::decode_config(&configuration.ledger).unwrap();
+                ledger.customers.retain(|a| *a == support::user(1));
+                configuration.ledger = cinder_journal::wire::encode_config(&ledger).unwrap();
+                configuration.owners.retain(|o| o.account == [1; 32]);
+                configuration
+                    .route
+                    .beneficiaries
+                    .retain(|b| b.account == [1; 32]);
+            }
             input["funds"] = serde_json::json!(vec![11; 32]);
             let mut keys = runtime_keys();
             keys.insert(Role::Funds, Zeroizing::new(vec![11; 32]));
@@ -368,6 +434,14 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
         let witness: serde_cbor::Value =
             serde_cbor::from_slice(keys[&Role::Witness].as_slice()).unwrap();
         input["manifest"] = serde_json::to_value(&manifest).unwrap();
+        let configuration_bytes = serde_cbor::to_vec(&configuration).unwrap();
+        assert!(
+            manifest
+                .wrap(Role::Configuration, &configuration_bytes)
+                .is_ok(),
+            "configuration exceeds the existing role envelope: version={version}, allocation={allocation}, bytes={}",
+            configuration_bytes.len()
+        );
         input["configuration"] = serde_json::to_value(configuration).unwrap();
         input["witness"] = serde_json::to_value(witness).unwrap();
         let input = serde_cbor::to_vec(&input).unwrap();
@@ -382,13 +456,212 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
             .unwrap();
         child.stdin.take().unwrap().write_all(&input).unwrap();
         let receipt = child.wait_with_output().unwrap();
-        assert!(receipt.status.success(), "preparation refused");
+        assert!(
+            receipt.status.success(),
+            "preparation refused: version={version}, allocation={allocation}"
+        );
         assert!(receipt.stderr.is_empty());
         assert!(receipt.stdout.len() < 128);
         let m: Manifest =
             serde_cbor::from_slice(&std::fs::read(out.join("manifest.cbor")).unwrap()).unwrap();
         assert_eq!(m.application, expected);
         m.validate().unwrap();
+        if version >= 3 {
+            // Regression: echoing the loaded application hash must not allow a
+            // different (individually valid) history policy into cloud restore.
+            struct NoClock;
+            impl cinder_service::transport::Clock for NoClock {
+                fn now(&self) -> Result<u64, cinder_service::Error> {
+                    panic!("changed loaded policy reached clock/cloud preparation")
+                }
+            }
+            for field in 0..if version >= 5 { 12 } else { 5 } {
+                let mut changed = m.clone();
+                if field < 5 {
+                    let history = changed.history.as_mut().unwrap();
+                    match field {
+                        0 => history.record_bytes -= 1,
+                        1 => history.history_bytes -= 1,
+                        2 => history.records -= 1,
+                        3 => history.put_requests -= 1,
+                        _ => history.put_bytes -= 1,
+                    }
+                } else {
+                    let demo = changed.demo_deposit.as_mut().unwrap();
+                    match field {
+                        5 => demo.revision += 1,
+                        6 => demo.maximum_reads -= 1,
+                        7 => demo.maximum_pages -= 1,
+                        8 => demo.interval_ms += 1,
+                        9 => demo.maximum_backoff_ms -= 1,
+                        10 => demo.lifetime_ms -= 1,
+                        _ => {
+                            demo.initial_setup =
+                                Some(cinder_pacifica::funding::demo::InitialSetup {
+                                    revision: if allocation { 2 } else { 1 },
+                                    exclusive_control: true,
+                                })
+                        }
+                    }
+                }
+                changed.validate().unwrap();
+                assert_ne!(changed.digest().unwrap(), m.digest().unwrap());
+                let configuration =
+                    serde_cbor::from_slice::<cinder_service::runtime::Configuration>(
+                        &configuration_bytes,
+                    )
+                    .unwrap();
+                let mut keys = runtime_keys();
+                keys.insert(Role::Funds, Zeroizing::new(vec![11; 32]));
+                let loaded = configuration.construct_for(&m, keys).unwrap();
+                assert_eq!(loaded.commitment(), changed.application);
+                let parent = cinder_service::cloud::Credential {
+                    access: "not-a-live-access-id".into(),
+                    secret: "not-a-live-secret".into(),
+                    token: "not-a-live-token".into(),
+                    expires: 60000,
+                };
+                assert!(
+                    loaded
+                        .open(
+                            &changed,
+                            parent,
+                            std::sync::Arc::new(NoClock),
+                            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
+                        )
+                        .is_err()
+                );
+                let configuration =
+                    serde_cbor::from_slice::<cinder_service::runtime::Configuration>(
+                        &configuration_bytes,
+                    )
+                    .unwrap();
+                let mut keys = runtime_keys();
+                keys.insert(Role::Funds, Zeroizing::new(vec![11; 32]));
+                assert_ne!(
+                    configuration
+                        .construct_for(&changed, keys)
+                        .unwrap()
+                        .commitment(),
+                    m.application
+                );
+            }
+        }
+        if version >= 5 {
+            for field in 0..3 {
+                let mut configuration = serde_cbor::from_slice::<
+                    cinder_service::runtime::Configuration,
+                >(&configuration_bytes)
+                .unwrap();
+                if field == 0 {
+                    configuration.environment = Origin::Mainnet.url().into();
+                    configuration.execution.origin = Origin::Mainnet;
+                } else if field == 1 {
+                    configuration.precision = Level::Unknown;
+                } else {
+                    configuration.chain.as_mut().unwrap().poll_ms = 1001;
+                }
+                let mut keys = runtime_keys();
+                keys.insert(Role::Funds, Zeroizing::new(vec![11; 32]));
+                assert!(configuration.construct_for(&m, keys).is_err());
+            }
+        }
+        if allocation {
+            if version == 6 {
+                for field in 0..4 {
+                    let mut configuration = serde_cbor::from_slice::<
+                        cinder_service::runtime::Configuration,
+                    >(&configuration_bytes)
+                    .unwrap();
+                    match field {
+                        0 => configuration.fills = Level::Qualified,
+                        1 => configuration.execution.execution = Level::Qualified,
+                        2 => configuration.route.withdrawal = Level::Qualified,
+                        _ => configuration.route.settings = Level::Qualified,
+                    }
+                    let mut keys = runtime_keys();
+                    keys.insert(Role::Funds, Zeroizing::new(vec![11; 32]));
+                    assert!(configuration.construct_for(&m, keys).is_err());
+                }
+            }
+            struct NoAllocationClock;
+            impl cinder_service::transport::Clock for NoAllocationClock {
+                fn now(&self) -> Result<u64, cinder_service::Error> {
+                    panic!("changed allocation reached clock/cloud preparation")
+                }
+            }
+            for field in 0..9 {
+                let mut configuration = serde_cbor::from_slice::<
+                    cinder_service::runtime::Configuration,
+                >(&configuration_bytes)
+                .unwrap();
+                let p = configuration.demo_allocation.as_mut().unwrap();
+                match field {
+                    0 => p.revision += 1,
+                    1 => p.amount += 1,
+                    2 => p.release_request[0] ^= 1,
+                    3 => p.deposit_request[0] ^= 1,
+                    4 => p.authority_epoch += 1,
+                    5 => p.expires_at += 1,
+                    6 => p.original.operation[0] ^= 1,
+                    7 => p.original.signature[0] ^= 1,
+                    _ => {
+                        configuration.demo_allocation = None;
+                    }
+                }
+                let mut keys = runtime_keys();
+                keys.insert(Role::Funds, Zeroizing::new(vec![11; 32]));
+                let loaded = configuration.construct_for(&m, keys);
+                if field == 6 || field == 7 || version == 6 && field == 8 {
+                    assert!(loaded.is_err()); // Must match the ACTUAL chain locator.
+                } else {
+                    let loaded = loaded.unwrap();
+                    assert_ne!(loaded.commitment(), m.application);
+                    assert!(
+                        loaded
+                            .open(
+                                &m,
+                                cinder_service::cloud::Credential {
+                                    access: "not-a-live-access-id".into(),
+                                    secret: "not-a-live-secret".into(),
+                                    token: "not-a-live-token".into(),
+                                    expires: 60000,
+                                },
+                                std::sync::Arc::new(NoAllocationClock),
+                                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
+                            )
+                            .is_err()
+                    );
+                }
+            }
+            let json = serde_json::to_value(&m).unwrap();
+            assert!(json.get("demo_allocation").is_none());
+            for omitted in 0..2 {
+                let configuration =
+                    serde_cbor::from_slice::<cinder_service::runtime::Configuration>(
+                        &configuration_bytes,
+                    )
+                    .unwrap();
+                let mut keys = runtime_keys();
+                keys.insert(Role::Funds, Zeroizing::new(vec![11; 32]));
+                if omitted == 0 {
+                    assert!(configuration.construct(keys).is_err());
+                } else {
+                    let mut no_setup = m.clone();
+                    no_setup.demo_deposit.as_mut().unwrap().initial_setup = None;
+                    assert!(configuration.construct_for(&no_setup, keys).is_err());
+                }
+            }
+        } else {
+            let configuration: cinder_service::runtime::Configuration =
+                serde_cbor::from_slice(&configuration_bytes).unwrap();
+            assert!(
+                serde_json::to_value(configuration)
+                    .unwrap()
+                    .get("demo_allocation")
+                    .is_none()
+            );
+        }
         for role in m.slots.iter().map(|s| s.role) {
             let path = out.join(format!("{}.plain", role.name()));
             let bytes = std::fs::read(&path).unwrap();
@@ -396,7 +669,9 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
                 1 => b"CKR1",
                 2 => b"CKR2",
                 3 => b"CKR3",
-                _ => b"CKR4",
+                4 => b"CKR4",
+                5 => b"CKR5",
+                _ => b"CKR6",
             }));
             assert!(bytes.len() <= 4096);
             #[cfg(unix)]

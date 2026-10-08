@@ -105,4 +105,41 @@ impl ApplicationContract {
             ),
         })
     }
+    /// Bind the bounded deposit policy to the actual loaded native controllers.
+    pub(crate) fn with_demo(
+        self,
+        policy: &cinder_pacifica::funding::demo::Policy,
+        funding: &Controller,
+        gateway: &Gateway,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            digest: sha256(
+                &[
+                    b"CINDER-LOADED-DEMO-DEPOSIT-1\0".as_slice(),
+                    &self.digest,
+                    &policy
+                        .release_commitment(funding, gateway)
+                        .map_err(|_| Error)?,
+                ]
+                .concat(),
+            ),
+        })
+    }
+    /// Bind actually loaded internal allocation authority without putting its
+    /// private owner/amount/request metadata in the public manifest.
+    pub(crate) fn with_demo_allocation(
+        self,
+        authorization: &crate::demo_funding::Authorization,
+    ) -> Self {
+        Self {
+            digest: sha256(
+                &[
+                    b"CINDER-LOADED-ALLOCATION-1\0".as_slice(),
+                    &self.digest,
+                    &authorization.digest(),
+                ]
+                .concat(),
+            ),
+        }
+    }
 }

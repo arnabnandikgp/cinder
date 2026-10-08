@@ -2,7 +2,7 @@
 //! fixture dispatch, HTTP parent backend, hidden wallet loading or replay resend.
 use crate::{
     Error,
-    boot::{Gates, Manifest, Role},
+    boot::{Gates, HistoryPolicy, Manifest, Role},
     chain_funding,
     cloud::{Client, Credential, DynamoWitness, S3Packs, S3Replica},
     egress::{Egress, Trust},
@@ -40,6 +40,7 @@ const REQUEST_WAIT: std::time::Duration = std::time::Duration::from_millis(250);
 // Budget from BEFORE the final signed clock sample through authorization and
 // metadata release. Not a clock source, freshness TTL or wire reply timeout.
 const READ_RELEASE: std::time::Duration = std::time::Duration::from_millis(250);
+mod financial;
 /// Actual Runtime with explicit local file/witness/clock ports, never a shipping
 /// key-release or hardware entrypoint. Harness controls terminate on private stdin.
 #[cfg(feature = "local-fixture")]
@@ -171,11 +172,16 @@ pub struct Configuration {
     /// Version 2 private chain limits/path. Omitted in old five-role profiles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chain: Option<chain_funding::Configuration>,
+    /// Separately governed ONE-time demo collateral allocation. Private owner,
+    /// amount and operation bindings stay in encrypted configuration, not the EIF
+    /// manifest or public health. Absence preserves legacy encoding/authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub demo_allocation: Option<crate::demo_funding::Policy>,
 }
 impl Configuration {
     /// Consume separated secrets into actual validated controllers and API policy.
     pub fn construct(self, mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>) -> Result<Loaded, Error> {
-        self.construct_using(&mut keys, None)
+        self.construct_using(&mut keys, None, false)
     }
     /// Load versioned public trust from the ACTUAL measured manifest. Secret
     /// path/limits and separate funds identity contribute to the application hash.
@@ -185,9 +191,41 @@ impl Configuration {
         mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
     ) -> Result<Loaded, Error> {
         manifest.validate()?;
-        let mut loaded = self.construct_using(&mut keys, manifest.chain.as_ref())?;
+        let allocation = self.demo_allocation.clone();
+        if manifest.version == 6 && allocation.is_none() {
+            return Err(Error);
+        }
+        let mut loaded =
+            self.construct_using(&mut keys, manifest.chain.as_ref(), manifest.version == 6)?;
         if let Some(policy) = &manifest.history {
             loaded.application = loaded.application.with_history(policy)?;
+        }
+        loaded.history = manifest.history.clone();
+        if let Some(policy) = &manifest.demo_deposit {
+            if loaded
+                .chain
+                .as_ref()
+                .is_none_or(|chain| chain.poll_ms() > policy.interval_ms)
+            {
+                return Err(Error);
+            }
+            loaded.application =
+                loaded
+                    .application
+                    .with_demo(policy, &loaded.funding, &loaded.gateway)?;
+        }
+        loaded.demo_deposit = manifest.demo_deposit.clone();
+        if let Some(policy) = allocation {
+            let authorization = crate::demo_funding::Authorization::bind(
+                policy,
+                &loaded.config,
+                &loaded.funding,
+                &loaded.gateway,
+                manifest.demo_deposit.as_ref().ok_or(Error)?,
+                loaded.chain.as_ref().ok_or(Error)?,
+            )?;
+            loaded.application = loaded.application.with_demo_allocation(&authorization);
+            loaded.demo_allocation = Some(authorization);
         }
         if let Some(policy) = &manifest.native_capture {
             let origin =
@@ -202,7 +240,11 @@ impl Configuration {
         self,
         keys: &mut BTreeMap<Role, Zeroizing<Vec<u8>>>,
         peer: Option<&chain_funding::Peer>,
+        demo_ingress_only: bool,
     ) -> Result<Loaded, Error> {
+        if self.demo_allocation.is_some() && peer.is_none() {
+            return Err(Error);
+        }
         crate::boot::validate_keys(keys)?;
         let config = cinder_journal::wire::decode_config(&self.ledger).map_err(|_| Error)?;
         let source = config.sources.get(self.source).ok_or(Error)?.scope;
@@ -228,15 +270,28 @@ impl Configuration {
             ))
         };
         let storage = take(keys, Role::Storage)?;
-        let gateway = Gateway::new(
-            profile.clone(),
-            self.execution.clone(),
-            take(keys, Role::Trading)?,
-            self.trading_epoch,
-        )
+        let gateway = if demo_ingress_only {
+            Gateway::new_read_only(
+                profile.clone(),
+                self.execution.clone(),
+                take(keys, Role::Trading)?,
+                self.trading_epoch,
+            )
+        } else {
+            Gateway::new(
+                profile.clone(),
+                self.execution.clone(),
+                take(keys, Role::Trading)?,
+                self.trading_epoch,
+            )
+        }
         .map_err(|_| Error)?;
-        let funding =
-            Controller::new(profile, self.route, take(keys, Role::Broker)?).map_err(|_| Error)?;
+        let funding = if demo_ingress_only {
+            Controller::new_demo_ingress(profile, self.route, take(keys, Role::Broker)?)
+        } else {
+            Controller::new(profile, self.route, take(keys, Role::Broker)?)
+        }
+        .map_err(|_| Error)?;
         let owners = self
             .owners
             .into_iter()
@@ -295,6 +350,9 @@ impl Configuration {
             origin: self.execution.origin,
             chain,
             capture: None,
+            history: None,
+            demo_deposit: None,
+            demo_allocation: None,
         })
     }
 }
@@ -327,6 +385,11 @@ pub struct Loaded {
     origin: cinder_pacifica::execution::Origin,
     chain: Option<chain_funding::Loaded>,
     capture: Option<crate::native_capture::Loaded>,
+    // Retain the exact loaded policy, not just its contribution to the digest.
+    // A caller cannot change backend limits while echoing the old application.
+    history: Option<HistoryPolicy>,
+    demo_deposit: Option<cinder_pacifica::funding::demo::Policy>,
+    demo_allocation: Option<crate::demo_funding::Authorization>,
 }
 /// Public health is deliberately coarse; no balances, customer counts or keys.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -344,6 +407,8 @@ struct Active<B: Backend, P: Protection> {
     next_poll: u64,
     read_kind: usize,
     deposit_index: usize,
+    demo_deposit: Option<cinder_pacifica::funding::demo::Policy>,
+    demo_allocation: Option<crate::demo_funding::Authorization>,
 }
 struct NativeIo {
     egress: Egress,
@@ -419,7 +484,9 @@ impl Loaded {
         stop: Arc<AtomicBool>,
     ) -> Result<Runtime<Storage, RecordCipher>, Error> {
         manifest.validate()?;
-        if self.application.digest() != manifest.application
+        if self.history != manifest.history
+            || self.demo_deposit != manifest.demo_deposit
+            || self.application.digest() != manifest.application
             || [
                 self.config.domain.network.bytes().as_slice(),
                 &self.config.domain.deployment.bytes(),
@@ -547,6 +614,8 @@ impl Loaded {
                 next_poll: now,
                 read_kind: 0,
                 deposit_index: 0,
+                demo_deposit: self.demo_deposit,
+                demo_allocation: self.demo_allocation,
             }),
             io: Mutex::new(NativeIo { egress, chain }),
             capture: Mutex::new(capture),
@@ -743,102 +812,17 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
             if !self.gates.funding && !self.gates.trading {
                 return Ok(());
             }
-            // Financial activation remains rejected by the measured Manifest.
-            // Preserve its existing controller composition; no new signing or
-            // live funding authority follows from read-only I/O remediation.
-            let mut io = self.io.lock().map_err(|_| Error)?;
+            // Serialize finite supervisor ports, not the financial mutation
+            // owner. No RPC, simulation or venue POST carries a journal guard.
+            let Some(mut io) = lock_bounded(&self.io, REQUEST_WAIT)? else {
+                return Ok(());
+            };
             let NativeIo { egress, chain } = &mut *io;
-            let mut active = self.active.lock().map_err(|_| Error)?;
-            let now = self.active_time()?;
-            let Active {
-                store,
-                gateway,
-                funding,
-                ..
-            } = &mut *active;
-            funding
-                .release_commitment(store.configuration())
-                .map_err(|_| Error)?;
-            let state = store.verified_state().map_err(|_| Error)?;
-            if state.logical_time() > now {
-                return Err(Error);
-            }
             if self.gates.funding {
-                let next = store
-                    .verified_state()
-                    .map_err(|_| Error)?
-                    .funds()
-                    .iter()
-                    .find(|o| !o.terminal && o.attempt.is_some())
-                    .and_then(|o| o.attempt);
-                if let Some(attempt) = next {
-                    let exposed = store
-                        .state()
-                        .map_err(|_| Error)?
-                        .attempts()
-                        .iter()
-                        .find(|a| a.key == attempt)
-                        .ok_or(Error)?
-                        .possibly_exposed;
-                    let native = store
-                        .state()
-                        .map_err(|_| Error)?
-                        .funds()
-                        .iter()
-                        .find(|o| o.attempt == Some(attempt))
-                        .is_some_and(|o| o.intent.source == cinder_kernel::ledger::Location::Venue);
-                    if native {
-                        if !exposed {
-                            funding
-                                .withdraw(
-                                    store,
-                                    gateway,
-                                    cinder_pacifica::execution::Dispatch {
-                                        attempt,
-                                        commit: commit_id()?,
-                                        at: self.active_time()?,
-                                    },
-                                    egress,
-                                )
-                                .map_err(|_| Error)?;
-                        }
-                        // Native finality/causal provider remains explicitly gated.
-                    } else {
-                        let chain = chain.as_mut().ok_or(Error)?;
-                        if exposed {
-                            chain.reconcile(store, funding, attempt)?;
-                        } else {
-                            chain.issue(store, funding, attempt)?;
-                        }
-                    }
-                }
+                self.tick_funds(chain.as_mut(), egress)?;
             }
-            // Loaded contracts stay bound during every cut; their existence is
-            // not financial activation. The manifest still refuses live trading.
             if self.gates.trading {
-                let pending = store
-                    .verified_state()
-                    .map_err(|_| Error)?
-                    .attempts()
-                    .iter()
-                    .find(|a| {
-                        !a.possibly_exposed
-                            && matches!(a.kind, AttemptKind::Order | AttemptKind::Cancel)
-                    })
-                    .map(|a| a.key);
-                if let Some(attempt) = pending {
-                    gateway
-                        .dispatch(
-                            store,
-                            cinder_pacifica::execution::Dispatch {
-                                attempt,
-                                commit: commit_id()?,
-                                at: self.active_time()?,
-                            },
-                            egress,
-                        )
-                        .map_err(|_| Error)?;
-                }
+                self.tick_orders(egress)?;
             }
             Ok(())
         })();
@@ -918,7 +902,215 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                 _ => return Err(Error),
             }
         }
-        self.poll_venue(&mut io.egress)
+        self.poll_native(&mut io.egress)
+    }
+    fn poll_native<T: cinder_pacifica::reads::Transport>(
+        &self,
+        egress: &mut T,
+    ) -> Result<(), Error> {
+        if self
+            .active
+            .lock()
+            .map_err(|_| Error)?
+            .demo_deposit
+            .is_some()
+        {
+            // This explicit measured mode must not create unrelated unresolved
+            // diagnostic inputs or pretend those observations were reconciled.
+            if self.poll_setup(egress)? {
+                self.poll_demo_deposit(egress)
+            } else {
+                Ok(())
+            }
+        } else {
+            self.poll_venue(egress)
+        }
+    }
+    fn poll_setup<T: cinder_pacifica::reads::Transport>(
+        &self,
+        egress: &mut T,
+    ) -> Result<bool, Error> {
+        use cinder_pacifica::{
+            funding::setup::{Poll, Step},
+            reads,
+        };
+        if !self.gates.native_reads || self.gates.trading {
+            return Err(Error);
+        }
+        let prepared = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let now = self.active_time()?;
+            if self.gates.funding && active.demo_allocation.is_none() {
+                return Err(Error);
+            }
+            let Active {
+                store,
+                gateway,
+                funding,
+                demo_deposit,
+                next_poll,
+                poll_ms,
+                ..
+            } = &mut *active;
+            let policy = demo_deposit.as_ref().ok_or(Error)?;
+            if store.verified_state().map_err(|_| Error)?.logical_time() > now {
+                return Err(Error);
+            }
+            if now < *next_poll {
+                return Ok(false);
+            }
+            funding
+                .observe_setup_reads(store, gateway, policy, commit_id()?, now)
+                .map_err(|_| Error)?;
+            match funding
+                .prepare_setup_poll(
+                    store,
+                    gateway,
+                    policy,
+                    Poll {
+                        reservation: commit_id()?,
+                        evidence: commit_id()?,
+                        at: now,
+                    },
+                )
+                .map_err(|_| Error)?
+            {
+                Step::Qualified | Step::DemoQualified => return Ok(true),
+                Step::Request(request, completion) => {
+                    *next_poll = now.checked_add(poll_ms.ok_or(Error)?).ok_or(Error)?;
+                    Some((request, completion, policy.clone()))
+                }
+                Step::Waiting | Step::Exhausted | Step::Observed(_) => {
+                    *next_poll = now.checked_add(poll_ms.ok_or(Error)?).ok_or(Error)?;
+                    None
+                }
+            }
+        };
+        if let Some((request, completion, policy)) = prepared {
+            // Socket work owns no financial mutation lock. Only the prepared
+            // read permit crosses this boundary; completion rechecks this boot.
+            let reply = egress.get(request);
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let now = self.active_time()?;
+            let Active {
+                store,
+                gateway,
+                funding,
+                demo_deposit,
+                ..
+            } = &mut *active;
+            if demo_deposit.as_ref() != Some(&policy)
+                || store.verified_state().map_err(|_| Error)?.logical_time() > now
+                || matches!(&reply, cinder_pacifica::execution::Reply::Response { received_at, .. } if *received_at > now)
+            {
+                return Err(Error);
+            }
+            reads::complete(store, gateway, *completion, reply).map_err(|_| Error)?;
+            funding
+                .observe_setup_reads(store, gateway, &policy, commit_id()?, now)
+                .map_err(|_| Error)?;
+        }
+        Ok(false)
+    }
+    fn poll_demo_deposit<T: cinder_pacifica::reads::Transport>(
+        &self,
+        egress: &mut T,
+    ) -> Result<(), Error> {
+        use cinder_pacifica::{
+            funding::demo::{Poll, Step},
+            reads,
+        };
+        if !self.gates.native_reads || self.gates.trading {
+            return Err(Error);
+        }
+        let prepared = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            if self.gates.funding && active.demo_allocation.is_none() {
+                return Err(Error);
+            }
+            let Active {
+                store,
+                gateway,
+                funding,
+                demo_deposit,
+                next_poll,
+                poll_ms,
+                ..
+            } = &mut *active;
+            let policy = demo_deposit.as_ref().ok_or(Error)?;
+            if store.verified_state().map_err(|_| Error)?.logical_time() > current {
+                return Err(Error);
+            }
+            if current < *next_poll {
+                return Ok(());
+            }
+            *next_poll = current.checked_add(poll_ms.ok_or(Error)?).ok_or(Error)?;
+            let Some(attempt) = funding
+                .demo_deposit_candidate(store, gateway, policy, current)
+                .map_err(|_| Error)?
+            else {
+                return Ok(());
+            };
+            // Retained evidence may already suffice after a crash between archive
+            // and confirmation. Never spend another GET merely to repost credit.
+            if funding
+                .confirm_demo_deposit(store, gateway, policy, attempt, commit_id()?, current)
+                .map_err(|_| Error)?
+            {
+                return Ok(());
+            }
+            if !gateway
+                .read_available(store, current, false)
+                .map_err(|_| Error)?
+            {
+                return Ok(());
+            }
+            match funding
+                .prepare_demo_deposit_poll(
+                    store,
+                    gateway,
+                    policy,
+                    Poll {
+                        attempt,
+                        reservation: commit_id()?,
+                        evidence: commit_id()?,
+                        at: current,
+                    },
+                )
+                .map_err(|_| Error)?
+            {
+                Step::Request(request, completion) => {
+                    Some((request, completion, attempt, policy.clone()))
+                }
+                Step::Waiting | Step::Exhausted | Step::Confirmed => None,
+            }
+        };
+        if let Some((request, completion, attempt, policy)) = prepared {
+            // No journal mutation guard or financial authority crosses this I/O.
+            // Completion rejoins the current writer after concurrent commands.
+            let reply = egress.get(request);
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            let Active {
+                store,
+                gateway,
+                funding,
+                demo_deposit,
+                ..
+            } = &mut *active;
+            if demo_deposit.as_ref() != Some(&policy)
+                || store.verified_state().map_err(|_| Error)?.logical_time() > current
+                || matches!(&reply, cinder_pacifica::execution::Reply::Response { received_at, .. } if *received_at > current)
+            {
+                return Err(Error);
+            }
+            reads::complete(store, gateway, *completion, reply).map_err(|_| Error)?;
+            funding
+                .confirm_demo_deposit(store, gateway, &policy, attempt, commit_id()?, current)
+                .map_err(|_| Error)?;
+        }
+        Ok(())
     }
     fn poll_venue<T: cinder_pacifica::reads::Transport>(
         &self,
@@ -939,8 +1131,6 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
             Diagnostic::Settings,
             Diagnostic::Loan,
             Diagnostic::BalanceHistory,
-            Diagnostic::WithdrawalPending,
-            Diagnostic::WithdrawalHistory,
         ];
         let prepared = {
             let mut active = self.active.lock().map_err(|_| Error)?;
@@ -1032,6 +1222,55 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
             .ok_or(Error)?;
         Ok(())
     }
+}
+fn prepare_next_ingress<B: Backend, P: Protection>(
+    store: &mut Journal<B, P>,
+    funding: &Controller,
+    demo: Option<(&Gateway, &cinder_pacifica::funding::demo::Policy)>,
+    at: u64,
+) -> Result<(), Error> {
+    use cinder_kernel::ledger::{Location, funds::Destination};
+    let state = store.verified_state().map_err(|_| Error)?;
+    if state
+        .funds()
+        .iter()
+        .any(|o| !o.terminal && o.attempt.is_some())
+    {
+        return Ok(());
+    }
+    let request = state
+        .funds()
+        .iter()
+        .find(|o| {
+            !o.terminal
+                && !o.faulted
+                && !o.recovery
+                && o.attempt.is_none()
+                && matches!(
+                    (o.intent.source, o.intent.destination),
+                    (Location::Vault, Destination::Location(Location::Broker))
+                        | (Location::Broker, Destination::Location(Location::Venue))
+                )
+        })
+        .map(|o| o.intent.request);
+    if let Some(request) = request {
+        let dispatch = cinder_pacifica::execution::Dispatch {
+            attempt: AttemptKey {
+                request,
+                attempt: AttemptId::new(commit_id()?.bytes()).map_err(|_| Error)?,
+            },
+            commit: commit_id()?,
+            at,
+        };
+        match demo {
+            Some((gateway, policy)) => {
+                funding.prepare_demo_ingress(store, gateway, policy, dispatch)
+            }
+            None => funding.prepare_ingress(store, dispatch),
+        }
+        .map_err(|_| Error)?;
+    }
+    Ok(())
 }
 impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
     fn handle_available(

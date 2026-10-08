@@ -27,15 +27,1336 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62), ready/open |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-08. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### Current-head review closeout — 2026-10-08
+
+The integrated continuation was published on #63 at
+`9f80c90636346bf75c2e3e6408b45429403994e0`. All eight hosted jobs pass at that
+exact head: contracts, strict lint/build, Rust regressions, SDK/relay, complete
+browser qualification, retained-history growth, ARM64 package and SBF/Surfpool.
+CodeRabbit completed that review and identified four relevant narrow corrections.
+
+This follow-up advances setup polling's volatile deadline for waiting, exhausted
+and observed outcomes, aligns PLAN/financial-map instructions with the current
+independent-merge/deferred-live decision, and removes invented standing authority
+from diagnostic preparation. Each new seal still needs its own current execution
+approval; preparation makes no live call. Waiting/exhausted regressions and the
+existing observed-outcome test check the cadence without enabling financial gates.
+The first new exhaustion fixture used an invalid one-read policy; corrected to
+the existing two-read minimum, without changing production policy or assertions.
+
+Local validation: all 149 service unit tests pass, seven explicit hardware-only
+ignores; strict all-target/all-feature service Clippy and all 80 contract/inventory
+checks pass. The native tool's 37 offline cases include sealed-scope wording and
+unchanged exact current-approval enforcement. The initial incorrectly qualified
+test filter ran zero tests and is not evidence; the complete service run above is.
+The earlier full-workspace, SDK/browser/history and 64 vault receipts remain
+dated predecessor evidence, not a substitute for this follow-up's hosted checks.
+Exact staged-source export `cedb0f22e42bc2449224be218cf6112dd6cbe461` separately
+passes 96 shipping-default service unit tests (seven named hardware ignores),
+all 12 demo Runtime cases, default/all-feature strict service lint, format and
+all 80 contracts. Its plan guard checks 27 phases/53 tracked documents; the local
+54th document is unrelated and untracked. The export has no research, wallets,
+cloud configuration or user example, only dependency/build cache links. The
+initial export command used the temporary directory instead of the repository
+and failed before testing; the corrected explicit-repository export passes above.
+
+Next: publish this bounded correction on #63, confirm its own CI/review, then
+merge the existing eight-PR stack atomically into `product/tee-v1`. Resolve the
+fixed parent threads after their corrections land and record actual merge heads.
+No deferred live financial test, credit polling or new AWS/venue run is reopened.
+P23 remains in progress after implementation merge; preserve the residuals and
+unrelated local user files described below.
+
+### Finish and merge the independent P23 stack — 2026-10-08
+
+Latest user direction explicitly authorizes completing remaining independent
+implementation/tests and merging the P23 stack. This supersedes the prior
+handoff's lack of merge authority, not the credit deferral or financial gates.
+The tip continuation stays on `tee/p23-native-qualification` / #63, above #62;
+no extra product phase or new financial invocation is introduced.
+
+[The disposition table](P23-FINANCIAL-GATES.md#merge-scope-and-deferred-acceptance)
+separates merge deliverables from unpassed live criteria. Finish exact-source
+offline validation, publish the completed continuation and review fixes, rerun
+cancelled parent CI jobs, then merge the stack atomically only after current-head
+checks and relevant reviews pass. P23 remains `in progress`; record actual merge
+evidence separately rather than projecting a successful live funding/recovery run.
+Preserve the unrelated local example, user-journey document, `stays/` and ignored
+research. No further credit polling or venue/RPC/AWS activity is in this action.
+
+Offline merge validation used a clean export of the 55 explicitly staged files
+(tree `4442123d05cff728948c7187be5d77cf52cabf16`), with dependency/build caches
+only: no ignored research, `.git`, wallet/cloud directories or unrelated local
+example. Rust 1.97.1 / Node 24.21.0; Cargo locked/offline, no incremental output,
+debug information disabled for build-space control. Current results:
+
+- Contracts **79/79**, strict workspace boundaries and the 27-phase/54-document
+  plan/link guard; default and all-feature strict Clippy, format and all-target
+  all-feature build pass.
+- All-feature Rust debug and release each pass **602** tests, with ten explicitly
+  allowed ignores; shipping-default debug passes **543**, with nine allowed
+  ignores. No assertion or qualification gate was relaxed.
+- The independent client group passes **15** relay and **26** SDK/TLS tests,
+  including TypeScript checks and freshly built required verifiers/fixtures.
+- The local browser component passes its 17 discovered guards, isolated Rust
+  debug/release and WASM checks. Actual Node/Chrome each pass **14** core/attestation
+  and **26** HTTP/WebSocket groups. Node separately passes all **nine** joined
+  Runtime groups. Actual Node/Chrome each pass both packed-history groups, over
+  HTTP and WebSocket through head 64; accepted head 65, bounded storage counters
+  and the unchanged freshness/fault/refusal assertions pass. Complete joined
+  browser execution remains required in current-head hosted CI.
+- Anchor 1.2.0 / Agave 3.1.10 / Surfpool 1.5.0, `NO_DNA=1`: complete offline SBF,
+  exact IDL/types/source equality, strict Rust/TypeScript and all **64** signed
+  transaction tests pass, no skips, including normal and independent recovery
+  workflows. These are localhost fixtures, not fresh devnet/Nitro qualification.
+
+Unexpected local environment failures are retained in the validation logs. The
+first workspace run exhausted disk while linking shipping-default artifacts;
+after deleting only rebuildable release-cache output, one truncated non-executable
+test binary had to be removed explicitly. The unchanged complete shipping-default
+rerun then passes. The first browser runner passed assertions but failed Chrome
+group cleanup with `EPERM`; its unchanged focused rerun passes, as do the separate
+HTTP and packed Chrome runs. That isolated cleanup cause is not established; no
+cleanup assertion, timeout or automatic CI retry was weakened. Logs/source export
+are in the task-created temporary validation directory; the scoped review HTML
+is ignored in `work/reviews/`.
+
+The two cancelled #62 jobs were rerun at its unchanged exact head
+`b1b8235457c26c41c50ab4a8a5bc0183a10ce6b6`: Rust lint/build and Anchor/SBF/Surfpool
+both now succeed. Earlier published fixes address #61's clock-retention/connect
+deadline and #62's qualification wording. The integrated tip additionally binds
+loaded history/demo policy before clock/cloud use and retains unknown native
+POST replies; their owning regressions pass above. The documented single-object
+transfer envelope is already handled. Publish this continuation, verify its own
+fresh CI/review, and merge atomically; no new hosted or merge result is presumed
+by this local receipt. The residual and deferred live criteria remain unchanged.
+
+### Credit investigation deferred; resume independent stack work — 2026-10-08
+
+Latest user direction: park the Pacifica testnet credit problem, continue other
+planned P23 work toward stack readiness, and revisit credit later. Do not keep
+polling, retrying deposits, researching the same credit failure or asking for
+another initialization run. This supersedes the investigation-first next actions
+in historical handoffs below. All original receipts and the residual inventory
+remain retained; deferral is not confirmation, return or write-off of those funds.
+
+Resume independently completable implementation/regression work, exact-source
+validation, capability/evidence/runbook cleanup, then outstanding stack review
+fixes and hosted CI. First inventory those deliverables against existing P23
+requirements; do not add replacement milestones or make an unrelated feature a
+merge prerequisite. Missing native execution/funding/withdrawal/final-cut evidence
+remains separately named, rather than attributed entirely to the credit outage.
+Dependent live funding/trading/venue-backed recovery qualification is deferred;
+the corresponding capability gates remain closed.
+
+The user mentioned possibly mocking credit for a demo, not an approved shipping
+credit-contract change. Any later simulation must be explicit and isolated from
+live accounts, signing and financial qualification; never fabricate a credit
+observation/certificate in the shipping journal. Keep demo/live evidence visibly
+distinct. Public claims must match the demonstrated path.
+
+Merge readiness and full live acceptance are different: completed, reviewed,
+passing implementation changes can be prepared for merge with the deferred
+capabilities documented. P23 does not become fully live-qualified because the
+stack merges, and no merge/deployment is performed by this direction alone.
+Preserve unrelated dirty files and ignored research. No new venue/RPC/AWS call
+or financial action is part of recording this handoff.
+
+### Persistent credit investigation — repeated finalized deposits uncredited, 2026-10-08
+
+The latest user explicitly authorizes repeated **independent devnet/testnet**
+transfers and checks in one continuous run until credit behavior or another cause
+is established. Do not stop after each delivery failure or ask again for the same
+test-fund permission. This supersedes the earlier one-additional-round stopping
+instruction, not private-state/Nitro, customer funds, mainnet or shipping gates.
+
+The diagnostic now has a separately sealed `cinder-native-staged-delivery-v1`
+variant: `maxRetries:5` bounded RPC forwarding of the same signed wire, up to 60 original-
+status polls, twelve account/loan pairs within ten minutes. Total invocation
+limits remain 20 minutes/200 HTTP/400 RPC/eight finite WSS; native HTTP cadence
+remains 12 seconds and 429 stops rather than evades quotas. Historical schema
+semantics/seals remain unchanged. Focused offline tests passed **36/36**.
+Only diagnostic tooling changed; the shipping financial contracts are unchanged.
+
+Executed fresh cases: `run-credit-a-20261008` (owner → broker),
+`run-credit-b-20261008` (direct broker faucet, matching the official helper's
+funding route), `run-credit-c-20261008` (another owner → broker check).
+Exact approvals and public summaries are retained in their ignored
+owner-only directories. The direct control creates an empty owner return ATA;
+it does not invent an owner allocation or a customer entitlement.
+
+All three **actual native deposits finalized**, with matching 20-USDP broker
+debit, vault credit and independently decoded broker-bound events. Slots/nonces:
+A **508854102/3888**, B **508855757/3889**, C **508857501/3890**. All twelve
+account/loan pairs remained absent in each case. Each main invocation consumed
+76 RPC/27 HTTP/two WSS; five actions simulated and finalized, no settings or
+withdrawal was exposed. New sponsor debit is 0.18003 devnet SOL in total.
+
+A separate 20-GET comparison ran **15:20:53.677–15:24:42.628 UTC**. Original
+and A/B/C account/loan replies remain 404 with successful empty deposit/balance
+histories. Original age exceeds two hours; A/B/C later observations are after
+25/19/13 minutes. The older established control still has account/loan 200,
+zero cash and its historical deposit/balance rows. No old authority is adopted.
+A 22-RPC public native-event scan and six-GET distinct-account comparison show
+an earlier 10,000-USDP original has a matching history, while later 10,000-USDP
+and 500-USDP originals have no matching history after over two hours. This is
+not limited to 20-USDP amounts or the owner-to-broker route, and is not global
+API unavailability. A current native ingestion/credit delay or failure is the
+leading explanation; the exact backend cause and any eventual credit remain
+unproven. Details/hashes are in the
+[receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#persistent-credit-investigation).
+
+Residuals: **80 USDP** across the original plus three new finalized deposits
+are at the native vault with credit/return unresolved; the older unlanded
+fund2's separate **20 USDP** were last verified in its broker wallet. No
+customer top-up, vault/program deployment, trading or AWS host occurred.
+All reusable helpers, original wires/approvals/receipts and raw replies are
+retained in ignored owner-only research. The expanded original support packet
+is local and not sent. Offline native checks pass 36/36 again; the final contracts
+group passes 79/79 across six discovered suites, workspace boundaries and the
+27-phase/54-document foundation/link guard. Whitespace passes and older original
+journal heads remain unchanged. No broader new Rust, hardware or hosted pass is
+claimed by this diagnostic-only continuation.
+
+**Next exact action:** obtain venue tracing or later original-linked credit
+for the retained originals, then separately qualify setup before customer/AWS
+funding. Do not fabricate credit, reuse an older account's readiness or reopen a
+stopped invocation. The continuous investigation has obtained multiple finalized
+examples and controls, not stopped at the prior chain-delivery failure. Additional
+identical fresh deposits would duplicate this evidence without resolving current
+missing credit. P23 remains in progress; older handoffs below are historical.
+
+### Independent second diagnostic stopped at chain delivery — 2026-10-08
+
+The user explicitly approved another independent 20-faucet-USDP test if the
+original credit remained absent. The final pre-test GET-only scope,
+`reconcile-20261008-1430`, ran **14:30:45.151–14:31:46.421 UTC**: original account
+and loan 404, empty deposit/balance histories, default lending null; established
+public control account 200. It used six GETs only and did not reopen the original.
+
+A fresh staged invocation, `run-fund2-init`, ran once from
+**14:34:18.619–14:36:26.413 UTC**,
+seal `589f927374bee1cb2e0dc00512dca28281e2d529f401e4d7dab89577c1f59df9`.
+This is separately authorized additional test capital, not a resend, replacement
+signature or increased allowance on `run-fund1-init`. Fresh owner/broker identities,
+0.10-SOL sponsor ceiling, four initialization pairs/five minutes, a 20-minute
+invocation and the existing bounded HTTP/RPC/WSS/confirmed-return rules apply.
+No AWS, customer top-up, trading or shipping activation is authorized by this
+diagnostic. Focused offline native-qualification checks passed **35/35** immediately
+before launch. Both manifests, current approval and originals remain ignored.
+
+- All five chain actions simulated successfully. The two gas transfers, faucet
+  and owner-to-broker token allocation finalized. The RPC accepted the original
+  native-deposit signature, but all 30 status polls returned null; no finalized
+  deposit receipt or native setup/withdrawal was obtained. The original was not
+  resent or re-signed, and the stopped run was not restarted.
+- A retained GET/RPC-only child, **14:39:20.318–14:40:48.637 UTC**, checked the
+  exact submitted signature, expiry and both accounts within the remaining parent
+  deadline/caps. Finalized block height **496085059** exceeded the original last
+  valid height **496084157**; status and finalized transaction were absent.
+  **All 20 USDP remained in the new broker's token account**, owner tokens zero.
+  This is an observed apparently unlanded/expired submission, not a native
+  credit failure or a qualified financial no-later-effect certificate.
+- The first deposit still had finalized status but no original native credit;
+  both native accounts/loan observations remained 404 with empty histories.
+  Do not combine them as two successful deposits or 40 USDP in the venue vault.
+- New-run totals including the child: **108 RPC / ten HTTP / one finite WSS**.
+  Sponsor debit **0.06001 devnet SOL**. Residuals: first **20 USDP at the venue,
+  credit/return unresolved**; second **20 USDP in the disposable broker wallet,
+  not returned**. No withdrawal, settings mutation, economic retry, customer
+  top-up, new vault/program or AWS resource occurred.
+
+The [native receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#independent-second-initialization)
+retains journal/child hashes and source checks. **Next exact action:** review the
+bounded transaction-delivery policy before another separately sealed live attempt;
+the current `maxRetries:0` submission obtained an RPC acknowledgement but no chain
+inclusion. Do not change this stopped run or automatically create a replacement
+signature. Continue tracing the first original credit independently; a second
+successful deposit would still not explain or discharge it. Customer/Nitro
+funding readiness remains blocked. The older handoffs below are historical.
+
+### Original-credit read-only follow-up — 2026-10-08
+
+The user authorized investigating the existing credit ("I see, go for it").
+A **new GET-only** scope, `reconcile-20261008-1340`, ran from
+**13:39:26.467–13:40:27.289 UTC**, with six HTTP requests, a three-minute deadline,
+12-second cadence and 8-KiB reply bound. It did not reopen the expired funding
+invocation, renew an economic operation or read any signer/RPC credentials.
+
+- Original account and loan still returned 404; deposit/balance histories were
+  successful empty responses with no original-signature match. Settings were
+  successful defaults with lending null. The old public control account returned
+  200. Server response dates were coherent with receipt times; this is not a proof
+  of cache correctness, native finality or a specific backend fault.
+- Independent offline comparison with the earlier successful staged run verified
+  the same deposit ABI, 20-USDP owner-to-broker allocation and broker-bound native
+  event. Both mint to a distinct owner before transferring to the broker. The
+  earlier event nonce was 3880; the unresolved original is 3886. No historical
+  key, balance or readiness certificate was imported.
+- Two public source reads checked the current official MCP head
+  `4748feca93efe2b2a5a0c95993e40f68d0ca4338` and IDL SHA256
+  `a31bb37868338e189fead472c1481954ed876844e83529e2e68b5ef0dbf427a1`.
+  They still match the pinned program, ten accounts, discriminator and amount
+  encoding. The official funding helper deposits then polls account balance;
+  no additional registration step was found in those checked sources. The
+  published general $10 minimum does not explain this 20-USDP deposit, but is
+  not independent qualification of testnet policy.
+- The approved request scope completed without retry. The parent still has its
+  exact 208-row stopped head below; six new requests are **separate**, not charged
+  to or justified by that expired invocation. No new RPC/WSS, signing, settings,
+  withdrawal, faucet, deployment, AWS resource or financial action occurred.
+
+Receipt/provenance and the updated public-identifiers-only support note remain
+ignored under `work/experiments/p23-native-semantics/run-fund1-init/`; the helper
+is retained under `work/experiments/p23-live/funding-tools/reconcile.mjs`.
+The note is prepared locally, **not sent**. [The native receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#original-credit-follow-up)
+records scope/result hashes and primary-source references. Foundation/link and
+whitespace checks passed; financial source/builds are unchanged by this follow-up.
+
+**Next exact action:** have Pacifica trace the original deposit/event or obtain a
+later bounded observation of its full original credit. Current evidence narrows
+the problem to missing native credit but does not prove a specific root cause.
+Do not resend, seed collateral, reuse an old credited account or launch customer
+funding/AWS while setup remains absent. The 20 initialization USDP credit/return
+remains unresolved; customer top-up and AWS allowance remain unused. P23 is not
+complete and the stack has not been merged.
+
+### Fresh funding initialization blocked before AWS — 2026-10-08
+
+The approved fresh scope began with the separately allowed idle-account test
+capital, before launching any paid host or deploying the customer vault.
+`run-fund1-init` started once at **13:14:49.226 UTC**; its original observation
+deadline is **13:34:49.226 UTC**. The stopped hash-linked invocation and all
+originals remain intact. [The native receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#fresh-funding-initialization)
+records the actual result, not a successful bootstrap or funding workflow:
+
+- One original, simulated deposit of **20 faucet USDP** finalized at devnet slot
+  **508828590**, with exact broker debit and Pacifica vault credit. Independent
+  offline decoding matches the official deposit ABI and the original broker
+  signer. Its native CPI `DepositEvent` independently matches the broker, amount,
+  block timestamp and nonce 3886. The verified native executable hash is unchanged.
+- Four bounded account/loan read pairs returned 404. Separate GET-only follow-ups
+  still show empty deposit/balance histories and no original-signature match;
+  the final observation at **13:29:48.704 UTC** still has account 404. A previously
+  established test account returned 200. New-credit processing is unresolved;
+  this does not establish its root cause or a global API outage.
+- Combined retained requests: **79 RPC / 29 HTTP / two finite WSS**. No withdrawal,
+  lending/settings write, economic resend or new funding occurred. The sponsor
+  debit was **0.06001 devnet SOL**; unused gas and token-account rent remain.
+- **20 initialization USDP remain deposited with native credit and return
+  unresolved.** Customer top-up allowance is unused. No customer/mainnet funds,
+  new Solana program/vault, AWS resource, paid session or enclave was used.
+  Do not report a clean return, delete the originals or restart the locked run.
+
+Constructing the actual v6 funding-only configuration also exposed a local
+capability-loader mismatch: ordinary constructors required qualified execution,
+fills, withdrawal and strong settings. This is now corrected with separate
+testnet-only read-budget and demo-ingress constructors. Actual unqualified fields
+remain `Unknown`; settings remain `Observed`. Dispatch, native withdrawal, broker
+return and ordinary readiness cannot borrow the ingress exception. Normal
+constructors and manifest versions 1–5 retain their stricter contract.
+[ADR 0029](../architecture/0029-demo-deposit-confirmation.md#funding-only-capability-construction)
+records the correction and its exact boundary.
+
+Fresh pinned offline checks after that logic change:
+
+| Check | Result |
+| --- | --- |
+| Pacifica execution | 20 passed, 0 failed |
+| Pacifica funding | 60 passed, 0 failed; one named killed-child helper ignored |
+| Service library, all features | 148 passed, 0 failed; seven Nitro-only cases ignored |
+| Service library, default features | 96 passed, 0 failed; seven Nitro-only cases ignored |
+| Release composition | Five passed, 0 failed; v6 refuses promotion of each unqualified capability |
+| Repository contracts / foundation / dependency policy | 78 passed, 0 failed |
+| Owning default/all-feature release Clippy | Passed with `-D warnings` |
+| Formatting / whitespace | Passed |
+
+The earlier whole-workspace counts and ARM64 ELF below precede this correction;
+they are historical, not checks for the changed source. The fresh ARM64
+default-feature package **passed**, including an independently recompiled,
+byte-identical application ELF and expected non-Nitro boot refusal. Exact public
+source object `e712fb2647dbf1b8a9fb2c6eca42938833981c7c`, tree
+`d540614610c009a70a3110fc9bca6c25c16d981b`, archive SHA256
+`e8097810fd9b4d061da5d43418fe66d5ff35db4db8a047e40c7631567e462f2c`,
+contains the explicit 55-file continuation above `da52867`, with no branch/index
+change, unrelated files or private research. The same verified pinned tool image
+and locked vendor ran network-disabled; only the public source/vendor and owned
+cache/artifact paths were mounted. New enclave ELF SHA256:
+`bf3401242c1ce8a3f9983b0973406004e625c91f5d12b54a18027d9555f1541c`.
+The package/receipt remain in the owned `cinder-p23-funding-build.dBmvIv`
+temporary directory; the run container removed itself. Subsequent evidence
+updates are documentation-only. No new EIF/PCR, hardware, browser, SBF or hosted-CI
+pass is claimed. Temporary owning logs use
+`/private/tmp/cinder-p23-funding-mode-*.log`; private native originals and the
+GET-only helpers remain in ignored `work/`.
+
+**Next exact action:** resolve/trace the original native deposit credit without
+resending it. A verified full original credit and test-only return, then retained
+empty-account lending-disable/no-debt setup, must precede customer funding/AWS.
+Missing account/loan caches are not zero debt. Any later continuation must retain
+the original identity, residual inventory, source and finite remaining authority;
+it cannot reopen the closed runner or silently inherit its expired deadline.
+Once setup passes, seal the corrected actual source/profile and proceed with the
+already approved funding-only scope. Strong withdrawal/lost-ACK, trading/funding
+and final recovery remain independently open. Continue workstreams before stack
+housekeeping; no commit, push, merge or phase closure occurred.
+
+### Fresh funding-only hardware preparation — historical source checkpoint, 2026-10-08
+
+The user asked to proceed after the local option-2 implementation below. Fresh
+funding qualification is being prepared; no cloud resource or financial action
+has been launched. Do not run the historical packed-session tools unchanged or
+reuse their identities, manifests, keys, synthetic routes or approvals.
+
+- Refreshed `cinder_new` authentication verified the intended non-root IAM user.
+  Fresh `CinderP23FundingRuntimeBoundary`/`CinderP23FundingOperator` templates and
+  a read-only exact-document/name preflight are in ignored local research under
+  `work/experiments/p23-live/funding-permissions/`. Exact remote documents,
+  operator-only attachment and unused cloud names passed the ten-call read-only
+  preflight. No policy was created or attached by the agent.
+- An explicit 55-file continuation allowlist created local immutable source
+  object `02cb412cd7a8f18f0fae28c2b1edc89dae0f78e3` above `da52867`, tree
+  `ecf443d28b156152b4424173f7bf0e45be677db1`, archive SHA256
+  `44fef752fa0df82b0cf25d4b4867fe6ad3329b73dc4f1284569e745500e04720`.
+  This did **not** update the branch or normal index and is not a published PR
+  commit. Unrelated `qualification-v2.rs`, `docs/user-journey.md`, `stays/`,
+  ignored research and wallet/cloud files were excluded. Subsequent bookkeeping
+  is outside this tested source object. The subsequent capability correction
+  above supersedes this source/package for future live use.
+- The network-disabled Apple ARM64 default-feature package passed on pinned
+  tool image `33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`
+  (ARM variant `d3d2f4db64dfa8e64503cc08102b68c70d9af963cc9508d0bc7927934dd814e2`).
+  Fresh locked offline vendoring was necessary because the old vendor lock did
+  not match. The application rebuild was byte-identical; ordinary non-Nitro boot
+  refused as required. Enclave ELF SHA256:
+  `7eb85e45cfee1d7ec2f4562acfc2d1696f577d3e062b0a601fa3782bdf77a920`.
+  This is not an EIF/PCR or hardware/financial pass. Build container removed
+  itself; package and immutable source receipt remain in the owned temporary
+  `cinder-p23-funding-build.p5OEFy` directory. Log:
+  `/private/tmp/cinder-p23-flat-funding-arm64.log`.
+- Read-only AWS metadata reports Nitro support for `c6g.large`, no active hosts,
+  and $0.068/hour on-demand Linux pricing in `us-east-1`. Four devnet RPC reads
+  verified genesis, native deployment headers and quote mint/vault; the current
+  sponsor has sufficient devnet SOL. No secret key or old wallet was imported,
+  transaction sent, full native code hash qualified or readiness granted.
+- A local-only typed JSON-to-CBOR funding input helper compiled separately from
+  the measured source. It supplies no fabricated profile/defaults, refuses old
+  or trading manifests, and delegates actual loaded binding/role-size checks to
+  the owning release preparer. Four malformed/oversized/argument refusal cases
+  and Node/Rust syntax/format checks passed. It is not included in the image or
+  evidence that the final actual profile has already been sealed.
+- Only disposable `cinder-tee/target/debug` build output was removed under the
+  user's standing permission to recover approximately 2.4 GiB. It is rebuildable;
+  source/research/receipts/release artifacts were preserved.
+
+The user approved the fresh scope: one host at $5/four hours/eight non-debug boots,
+20 faucet USDP original customer top-up and at most 20 separate faucet USDP for
+idle-account initialization, with a separately recorded diagnostic return only
+after fencing (reply: “Yes, run within those bounds”). Exact addresses,
+program/loaded policies, source/package/EIF/PCR bindings, simulations and the
+containment ledger must be sealed/reviewed before live actions. This candidate
+does not permit trading or promote diagnostic return into shipping withdrawal,
+strong completion, lost-ACK reconciliation or recovery. P23 stays in progress.
+
+### Approved flat-account funding admission — 2026-10-08
+
+The user approved option 2: implement and locally verify a separately scoped
+cash-only admission rule for the already-approved fixed Vault → Broker → Pacifica
+demo allocation. The approved top-up UX preserves that route; a vault bypass is
+deferred. This does not authorize trading, withdrawals, recovery, a general risk
+exception or a new live invocation. The latest response was: “yeah I want to go
+with the option 2 as you stated here, go continue from here.”
+
+Implemented locally, uncommitted above `da52867` on
+`tee/p23-native-qualification` in `/Users/arnabnandi/cinder-tee`:
+
+- `funds::FlatAllocation`/`FlatAccept` retain the actual original receipt/amount,
+  loaded private-grant commitment and both exact intents on the owning operations.
+  The guard requires an otherwise idle, fully attributed cash-only state, current
+  authority/expiry, no unresolved facts/other commitments and exact vault/broker
+  backing. It reserves customer cash **and** physical source capacity.
+- Prepare, exposure and pre-signature checks re-evaluate the rule. Actual strong
+  full zero-fee first-leg completion precedes the second; pending originals can
+  reconcile without replacement signing. Neither customer credit nor native
+  risk/trading readiness is created by an internal transfer.
+- Journal engine revision 23 commits the certificate and refuses revision-22
+  histories; the loaded allocation binding has a distinct semantics label. No
+  automatic migration, historical-stream reset or completion upgrade is allowed.
+- Fresh allocation fixtures use the original owner-deposit recognizer, actual
+  journal/controller/codec/signers and synthetic external I/O, with **no seeded
+  complete native check, mark or collateral cut**. Twelve allocation tests cover
+  both original legs/demo credit/replay and changed certificate, state, epoch,
+  expiry, setup, cancellation, capacity and ordinary-payout/recovery borrowing.
+- The actual Runtime/AEAD/replicated-journal regression also passes: two original
+  sends, first completion before second, deposit still pending absent credit,
+  no resend, no native POST/readiness, and revoke during simulation prevents
+  signature persistence/submission. Initial fixture failures were a hardcoded
+  attempt ID and assumed deposit amount; it now follows actual stored originals.
+
+Executed pinned macOS/offline checks on this continuation:
+
+| Check | Recorded result |
+| --- | --- |
+| Whole workspace, all features/all targets | 597 passed, 0 failed, 10 explicitly ignored: three killed-child entrypoints invoked by their passing parent tests and seven Nitro-only cases |
+| Whole workspace, default features/all targets | 538 passed, 0 failed, 9 explicitly ignored: two killed-child entrypoints and seven Nitro-only cases |
+| Strict workspace clippy, default and all features | Passed, `-D warnings`; unused runtime-only helpers are gated by their owning `local-fixture` feature, not warning suppression |
+| Pinned Node contracts/foundation/dependency checks | 78 passed, 0 failed; documentation/workspace checks passed |
+| Formatting and whitespace | Passed |
+
+After the final test-only helper feature gate, the owning all-feature service
+library suite passed again: **148 passed, 0 failed, 7 Nitro-only cases ignored**. The
+whole-workspace results precede only that helper gate and documentation updates,
+not a later financial logic change. No release-profile, Linux/SBF, browser,
+hardware or hosted-CI pass is inferred. Logs are local:
+`/private/tmp/cinder-p23-flat-funding-{workspace,default,clippy,default-clippy,contracts-final,service-final}.log`.
+Portable evidence is the owning tests plus ADR 0029, not these temporary logs.
+
+**Next exact action:** review/seal the fresh funding-only changed-image G05 scope
+in [the existing continuation map](P23-FINANCIAL-GATES.md#next-changed-image-funding-only-review).
+Bind the actual source, image, fresh journal/route/customer original, idle-account
+setup, private grant, finite resources and explicit test-asset containment. V6
+can qualify ingress/demo credit only; it cannot sign native withdrawals/payouts.
+Strong withdrawal/lost-ACK, bounded trading/funding and final recovery remain
+separate existing workstreams. No AWS/native/RPC connection, wallet access,
+live transaction, deployment, new dependency, commit, push, merge or P23 closure
+occurred. Continue workstreams before stack housekeeping as directed.
+
+### Writer-free financial stages and fresh-boot admission boundary — 2026-10-08
+
+User authorized completing remaining P23 workstreams in the agreed order, stopping
+only for a real validation/approval boundary. Continued locally, uncommitted above
+`da52867` on `tee/p23-native-qualification`. This is the historical handoff before
+the option-2 approval/implementation above; its dated results are preserved.
+No workstream was marked complete to merge
+the stack, and no new financial phase was added.
+
+Implemented and verified:
+
+- Private non-clone chain phases separate actual context/code/counter RPC,
+  simulation, once-only submission and original finality from the mutation owner.
+  Current authority is checked before exposure and **before signature creation**;
+  the exact wire is durably retained before one-use delivery. A restart only
+  reconciles the original; it cannot issue a replacement signature.
+- Order/cancel and native-withdrawal requests split durable exposure/signing from
+  POST and current-head reply retention. Exact release/original-exposure binding
+  prevents foreign-journal completion. Late ACKs survive intervening writes and
+  revocation without refreshing receive time or settling cash. Shared 429 cooldown
+  and lost-reply containment remain. Signed deadlines are checked before socket
+  setup and again after TLS, before any HTTP bytes are sent.
+- `Runtime::tick` serializes finite supervisor I/O separately from the journal
+  mutation owner. Actual Runtime/encrypted replicated-journal tests insert writes
+  during context, simulation, submission, finality and native POST. Pre-signature
+  revocation refuses; post-release possible effects remain attributable.
+- Manifest v6 binds distinct KMS envelopes and permits only the private grant's
+  two retained original ingress acceptances. It requires initial-demo setup,
+  native reads, chain/packs and actual encrypted allocation policy; generic
+  capture, unrelated funds, withdrawals/payouts and trading cannot borrow it.
+  V1–V5 encodings/activation rules remain unchanged. Actual preparer tests cover
+  v6, missing grant, substitutions and the existing 4-KiB role limit.
+
+**Historical boundary, since resolved by the option-2 approval above:** the
+then-new fresh-boot regression recognizes
+the original owner deposit and qualifies approved idle demo setup **without** a
+synthetic complete native check/mark/collateral cut. Allocation correctly refuses
+with `ControlError::Unqualified`, no intent/attempt/signature and no trading
+readiness. Earlier joined fixtures seeded this financial prerequisite; shipping
+bootstrap does not yet supply it. Therefore the v6 schema is not an end-to-end
+funding pass or permission to insert a fictional complete native snapshot.
+
+[The decision and recommended bounded alternative](P23-FINANCIAL-GATES.md#fresh-flat-account-admission-decision--pending-user-review)
+are recorded in the existing continuation map: a separately scoped flat-account
+funding rule based on the original verified deposit, exact attributed physical/
+transit capacity, retained approved idle setup, no exposure/debt/commitments and
+the exact once-only grant. At this checkpoint it was proposed, not implemented or
+approved; the later implementation/status above supersedes that decision state.
+The alternative is to build/qualify the general native/market collateral provider
+first. Do not relax the ordinary risk, payout or recovery contracts implicitly.
+
+Fresh owning checks on this local source: **276 Rust tests passed, 0 failed,
+8 explicitly ignored** (one killed-child entrypoint and seven Nitro-only cases).
+Service unit tests: **143 passed**, including three actual-runtime financial I/O
+race cases; allocation tests: **8**, including the negative fresh-boot case.
+Adapter order and withdrawal suites add late-reply/current-head/revocation,
+immutable deadline, future-clock and foreign-journal cases. Release tests:
+**5 passed**, including actual v6 preparation. Default-feature owning checks:
+**222 passed, 0 failed, 8 explicitly ignored**. Pinned Node contracts:
+**78 passed**, plus foundation/dependency checks. Strict owning all-feature clippy,
+formatting and whitespace checks pass. Commands:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --locked --offline -p cinder-pacifica -p cinder-service --all-features --all-targets
+CARGO_INCREMENTAL=0 cargo test --locked --offline -p cinder-pacifica -p cinder-service --all-targets
+CARGO_INCREMENTAL=0 cargo clippy --locked --offline -p cinder-pacifica -p cinder-service --all-features --all-targets -- -D warnings
+cargo fmt --all -- --check
+node scripts/check.mjs --group=contracts
+git diff --check
+```
+
+Pinned Rust 1.97.1/Node 24.21.0, macOS/offline. Logs:
+`/private/tmp/cinder-p23-financial-stages-{owning,default,clippy,contracts}.log`.
+These are owning checks, not a whole-workspace/release-profile, Linux/SBF,
+browser/hardware or hosted-CI pass. Portable evidence is the tracked owning tests
+and ADR 0029. No new dependency, AWS/native connection, live funds, wallet access,
+commit, push, merge, changed EIF or P23 closure occurred.
+
+**Next exact action after user review:** implement/verify the chosen fresh flat
+funding admission mechanism without synthetic risk evidence, then prepare a fresh
+funding-only initialized-account/changed-image G05 scope and qualification. Live
+AWS/devnet/native actions require their exact scope/seal/approval. Strong
+withdrawal/lost-native-ACK, trading/funding cuts and final recovery remain
+independent gates. Preserve workstreams-before-housekeeping order.
+
+### Approved local demo allocation implementation — 2026-10-08
+
+The user explicitly approved the following proposal: **implement and test
+locally** a one-time governed allocation from one original verified owner deposit,
+for one fixed amount, through the fixed Vault → Broker → Pacifica testnet route.
+The two distinct request IDs, current customer authority epoch and absolute
+expiry must be bound to approved enclave configuration. It is an internal
+working-collateral authorization, not a fabricated customer signature or a second
+customer credit. No repeat allocation, withdrawal, payout or trading activation
+is authorized by this change. Live transfers and another AWS run remain separate
+approval gates. The user's response was: “yes, now it totally makes sense to me,
+go for it.” This supersedes the pending decision below, not other financial gates.
+
+An automated safety check initially still treated this new authority as
+unapproved and rejected the implementation edit. Read-only checks confirmed
+that none of that patch was applied. The same bounded local edit was subsequently
+approved after reconciling this explicit user authorization; no bypass or broader
+financial activation was used. The allocation decision is no longer pending.
+
+Implemented locally, uncommitted above `da52867` on `tee/p23-native-qualification`:
+
+- `service::demo_funding` binds private configuration to the actual Controller,
+  Gateway, demo policy and chain component. The original must be the sole eligible
+  configured owner deposit. Customer details are not added to the public manifest;
+  the actual application commitment and KMS context bind the grant.
+- Exact retained original receipt/amount, current customer claim, flat state,
+  fresh approved initial setup, current epoch and existing risk/capacity/liquidity
+  controls precede acceptance. Ordinary P08 intents use explicit internal governed
+  authority, never a fabricated user signature or a second customer credit.
+- Stable acceptance slots plus private journal provenance prevent grant renewal
+  by changed policy, request IDs, deposit, expiry or restart. A pending original
+  waits. Actual first-leg completion precedes second-leg acceptance; cancellation
+  and rejected controls cannot supply that completion. No third allocation exists.
+- Dormant scheduler wiring selects only this grant under the existing funding
+  gate. Shipping versions 1–5 still reject funding/trading activation; API risk
+  admission, stronger credit/withdrawal/terminal/recovery contracts are unchanged.
+- Release tests exercise the actual local preparer and changed-policy refusal
+  before clock/cloud. The inherited two-owner fixture exceeded the existing KMS
+  4-KiB role envelope; the approved one-owner demo profile fits. Oversized profiles
+  explicitly refuse, rather than increasing the limit or changing legacy encoding.
+
+Fresh final owning checks: **268 Rust tests passed, 0 failed, 8 explicitly
+ignored** (one killed-child fixture and seven Nitro-only cases). Service unit
+tests: **139 passed**, including all **7** allocation cases. The joined case
+also completes both retained demo-credit GETs, confirms native bookkeeping and
+reopens the completed journal past grant expiry: customer cash is unchanged,
+transit is cleared and no third intent/credit appears. Release tests: **5 passed**.
+Pinned Node contracts: **78 passed**, plus foundation and dependency checks.
+Owning all-target/all-feature clippy with warnings denied, formatting and
+whitespace checks pass. Executed commands:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --locked --offline -p cinder-pacifica -p cinder-service --all-features --all-targets
+CARGO_INCREMENTAL=0 cargo clippy --locked --offline -p cinder-pacifica -p cinder-service --all-features --all-targets -- -D warnings
+cargo fmt --all -- --check
+node scripts/check.mjs --group=contracts
+git diff --check
+```
+
+Pinned Rust 1.97.1/Node 24.21.0, macOS/offline. These are owning checks, not a
+fresh whole-workspace, release-profile, Linux/SBF/browser/hardware or hosted-CI
+pass. Logs: `/private/tmp/cinder-p23-demo-allocation-rust.log`,
+`/private/tmp/cinder-p23-demo-allocation-clippy.log` and
+`/private/tmp/cinder-p23-demo-allocation-contracts.log`. Portable evidence is the
+source/tests and ADR 0029, not ephemeral logs or historical private fixtures.
+No AWS/native activity, live funds, commit, push, merge or P23 closure occurred
+in this slice.
+
+**Next exact action:** finish financial prepare/I/O/completion without holding the
+journal writer across network work, then add narrow measured activation for this
+fixed route. After offline gates pass, prepare fresh initialized-account/changed-
+image qualification under a new bounded G05 run; live transfers/AWS need their
+own scope/seal/approval. Preserve strong withdrawal, lost-ACK and recovery gates.
+Workstreams still precede stack housekeeping.
+
+### Existing-intent demo chain wiring — 2026-10-08
+
+Continued offline above `da52867` on `tee/p23-native-qualification`. This
+supersedes the next-action wording below; the approved initial setup and deposit
+assumptions remain implemented. Workstreams still precede stack housekeeping.
+
+- Added an explicit chain `issue_demo_ingress` path for **already accepted**
+  initial Release/Deposit intents. It validates retained approved demo setup,
+  exact prepared movement, authority, expiry and policy before RPC, then rechecks
+  at physical capability exposure. No failed demo check falls back to strong
+  setup or to a different rail. Return, payout and recovery cannot use this path.
+- Reuses actual code/governance checks, counters, codec, simulation-before-sign,
+  purpose-separated signer, durable original wire and once-only submit. Existing
+  reconciliation handles retained originals, including lost submission replies;
+  neither the new port nor a restart creates an intent or a replacement signature.
+- The dormant funding scheduler explicitly selects the demo preparation/issue
+  ports when the loaded initial-setup policy opts in. Shipping manifests still
+  reject funding/trading activation; API risk admission remains disabled. This
+  wiring is not a newly enabled measured financial service.
+- Five joined synthetic-RPC regressions cover both ingress rails, strong-path
+  refusal, missing setup/non-ingress refusal before RPC, policy/expiry/freeze/
+  authority changes, simulation/fee failure and original-wire replay after a lost
+  ACK. A deposit's finalized chain debit still does not credit native cash.
+
+Fresh owning verification on the exact local source: **261 Rust tests passed,
+0 failed, 8 explicitly ignored** (one killed-child fixture and seven Nitro-only
+cases). Service unit tests: **132 passed**; adapter funding: **57 passed**.
+All-target/all-feature owning clippy with warnings denied, formatting and
+whitespace checks pass. Pinned Node contracts: **78 passed**, plus foundation
+and dependency checks. Commands:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --locked --offline -p cinder-pacifica -p cinder-service --all-features --all-targets
+CARGO_INCREMENTAL=0 cargo clippy --locked --offline -p cinder-pacifica -p cinder-service --all-features --all-targets -- -D warnings
+cargo fmt --all -- --check
+node scripts/check.mjs --group=contracts
+git diff --check
+```
+
+Local command logs: `/private/tmp/cinder-p23-demo-chain-rust.log` and
+`/private/tmp/cinder-p23-demo-chain-contracts.log`; portable evidence is the
+owning source/tests, not local log paths. These are pinned macOS/offline checks,
+not whole-workspace/release-profile, Linux/SBF/browser/hardware or hosted CI.
+Two fixture corrections preserved rather than weakened the actual contract:
+authenticated GETs use the existing minimum 120-credit cost, and an exposed
+unsent plan remains pending until original expiry plus verified no-wire closure.
+
+**Historical allocation decision (now approved above):** auto-review rejected a proposed
+new governed allocation/approval path because setup and deposit-confirmation
+approval did not explicitly authorize creation of money-movement intents. That
+patch was not applied. The user has been asked whether confidential, measured
+demo configuration may authorize exactly one fixed working-collateral amount,
+bound to the original verified owner deposit, two distinct durable request IDs,
+the current customer epoch and an absolute expiry, only Vault → Broker → Venue.
+This would be governed internal allocation, not a fabricated wallet signature,
+public funding API, second customer credit or repeat allocation. Live execution
+would still need a fresh G05 scope/seal. Do not infer this authorization from a
+positive setup read or circumvent the rejected patch. The existing-intent wiring
+and its offline tests are unaffected and have proceeded.
+
+**Superseded next action:** once that decision is approved, implement/bind the exact
+allocation in the authoritative journal and finish narrow measured activation,
+including financial prepare/I/O/completion without holding the writer across
+network work. Then prepare fresh initialized-account/changed-image qualification
+under a new bounded run. Withdrawals, lost-ACK and recovery keep their original
+evidence contracts. No AWS/native activity, live funds, commit, push, merge or
+P23 closure occurred in this slice.
+
+### Approved initial demo setup boundary — 2026-10-08
+
+The user approved the separately described initial testnet setup assumption:
+fresh authenticated settings/loan/account reads, disabled lending, zero debt and
+interest, idle compatible account, exclusive wallet/agent authority and no
+unresolved setup operation. This supersedes the setup-policy question in the
+older handoff below, not the withdrawal/recovery gates. ADR 0029 owns the exact
+assumptions and explicit measured-policy opt-in.
+
+Implemented and checked offline in the same worktree, uncommitted above
+`da52867`:
+
+- Explicit optional `demo_deposit.initial_setup` binds approval revision and the
+  governed exclusive-control assumption into actual loaded-policy/application
+  commitments and KMS context. Omission preserves legacy policy/plan bytes;
+  absent/invalid opt-in and mainnet do not acquire the weaker readiness.
+- Retained demo setup carries the three exact authenticated read identities,
+  original observed time and nonrenewable expiry. Required settings/loan/account
+  fields, debt, margin, spot configuration/balances and nested errors are checked.
+  A missing cache/field is not zero, and separate replies are not atomic.
+- `Setup.complete` and native risk readiness remain false. Explicit demo ingress
+  ports prepare/expose only accepted initial Release/Deposit intents through all
+  existing journal authority, risk, capacity and hold checks. The persisted plan
+  retains its weaker setup provenance; ordinary strong ingress cannot borrow it.
+- One synthetic original release/deposit/credit lifecycle passes through the real
+  adapter and replayed journal without increasing the customer's existing claim.
+  Another allocation and stronger credit upgrade refuse. Wire publication still
+  checks authority/freeze/setup expiry. Original reconciliation may outlive
+  preflight age, within its own deadline, without another signature or transfer.
+- The actual Runtime/AEAD/independent-reader preflight and measured release
+  tests pass with synthetic GETs. Policy changes refuse before clock/cloud
+  access. Runtime still cannot create a funding intent or activate financial
+  signing from these read-only results.
+
+Fresh final owning checks:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --locked --offline -p cinder-pacifica -p cinder-service --all-features --all-targets
+CARGO_INCREMENTAL=0 cargo clippy --locked --offline -p cinder-pacifica -p cinder-service --all-features --all-targets -- -D warnings
+cargo fmt --all -- --check
+node scripts/check.mjs --group=contracts
+git diff --check
+```
+
+Rust **256 passed / 0 failed / 8 ignored** (the prior killed-child fixture plus
+seven explicit Nitro-only tests); funding **57**, including **11** setup cases,
+service unit **127**, and release **5**. Contracts **78 passed**; 27-phase/
+54-document foundation, dependency guard, clippy, formatting and whitespace pass.
+Pinned Node 24.21.0/Rust 1.97.1; no fresh whole-workspace, release-profile,
+Linux/SBF/browser/hardware or hosted-CI pass is claimed. Local command logs are
+`/private/tmp/cinder-p23-demo-setup-final-rust.log`,
+`/private/tmp/cinder-p23-demo-setup-final-clippy.log` and
+`/private/tmp/cinder-p23-demo-setup-contracts.log`; portable evidence is the
+tracked source/tests, not those local paths.
+
+Implementation detail discovered during this slice: the setup deadline must
+retain the original read budget's start as well as the route freshness limit;
+replay cannot refresh it. Explicit plan provenance is boxed to keep controller
+record size bounded without changing its JSON representation. A new test's
+initial expectation that plaintext role wrapping authenticates the full policy
+was corrected: KMS encryption context and actual loaded application binding own
+that check; no key-release contract was weakened.
+
+**Next exact action:** prepare authorized original working-collateral intent
+allocation and narrow measured financial composition selecting the explicit
+demo ports; then fresh initialized-account/changed-image qualification under a
+new bounded run. Shipping funding/trading remain disabled; withdrawal/lost-ACK
+and recovery completion still have their original evidence gates. No AWS/native
+activity, funds, commit, push, merge or P23 closure occurred. Workstreams remain
+ahead of PR housekeeping.
+
+### Authenticated setup observations and original ingress preparation — 2026-10-08
+
+Continued offline on `tee/p23-native-qualification`, uncommitted above
+`da52867`. This supersedes the next-action wording in the older bootstrap
+handoff below. Workstreams remain ahead of stack housekeeping; no live run,
+wallet/native action, AWS launch, push or merge was performed.
+
+- Added `funding::setup`: fixed testnet Settings → Loan → Account GET rounds,
+  durable spend/response identities and exact route/epoch/Gateway/policy binding.
+  Cadence, finite cap/lifetime, lost replies and shared 429 cooldown survive
+  restart. Private replies are non-economic evidence, not unresolved raw cash
+  inputs or a second ledger. Both setup and deposit scans are bounded separately;
+  this is not authority to expand a previously sealed live request budget.
+- Rechecked current primary account/settings/loan schemas. Parses exact atoms,
+  `account_equity`, spot/margin/order/stop-order fields and explicit debt. Missing
+  cache, malformed/contradictory/future data and incomplete rounds cannot supply
+  a snapshot. Observed adverse debt/configuration/exposure remains visible.
+- Connected actual v5 Runtime preparation/I/O/completion without holding the
+  financial writer during sockets. Derived controller input is deliberately
+  **complete=false** and idempotent; positive observations are not an atomic
+  setup certificate. No native-credit readiness or economic approval is granted.
+- Added `Controller::prepare_ingress` for already accepted original Vault →
+  Broker/Broker → Venue intents, retaining authority, risk, liquidity, full-amount
+  and immutable-route checks. The existing funding-gated scheduler prepares
+  only when no original attempt is pending. It creates no approval or customer
+  credit; signing/sending still belongs to the existing durable chain boundary.
+  Shipping manifests continue to reject funding/trading activation.
+- Final owning offline `cargo test --locked --offline -p cinder-pacifica
+  -p cinder-service --all-features --all-targets` passes **249** tests, with one
+  existing killed-child fixture and seven explicitly Nitro-only tests ignored.
+  Included funding **51**, evidence **5**, reads **16**, service unit **126**
+  (ten Runtime demo/setup cases) and release **5**, plus other adapter/process
+  targets. This is macOS/synthetic I/O evidence, not hardware or live semantics.
+  Final owning all-target/all-feature Clippy passes with warnings denied; format
+  and diff checks pass. Pinned Node `scripts/check.mjs --group=contracts` passes
+  **78** tests, the **54-document** foundation/link check and workspace dependency
+  guard. No new dependency, wallet or live approval was introduced. No fresh full
+  workspace, optimized/release-profile, Linux/SBF/browser/Nitro or hosted CI
+  claim follows from these owning checks.
+
+**Next exact action:** qualify the existing positive setup-provider contract
+before working-collateral allocation or a fresh measured financial activation.
+The authenticated read adapter is implemented; it cannot by itself establish
+no unresolved native setup/configuration. Retain `complete=false` while that
+boundary is unresolved. If the MVP instead needs a bounded non-atomic readiness
+assumption under exclusive broker control, review and encode it separately as
+demo assurance—never silently promote these GETs to the stronger contract.
+Then connect original allocation and qualify the fresh measured vault/native
+path with a new applicable scope/seal. Strong withdrawal/lost-ACK/final-cut and
+recovery gates remain unchanged, not newly added phases. See
+[ADR 0029](../architecture/0029-demo-deposit-confirmation.md) and the
+[existing financial map](P23-FINANCIAL-GATES.md).
+
+### Fresh test-capital bootstrap and actual empty-account readiness — 2026-10-08
+
+Continued on `tee/p23-native-qualification`, uncommitted above `da52867`, under
+the user's explicit separately staged-test approval. See the
+[actual receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#separate-staged-bootstrap).
+
+- Added a distinct staged diagnostic schema/sequence, fresh preparation and
+  exact source/TLS approval; no legacy 120-second exception or reply-loss test.
+  Only test/house capital may initialize the native account; no customer credit,
+  trading, borrowing, agents, AWS or shipping gate is enabled.
+- Executed one fresh 20-USDP deposit/withdrawal round trip: six original chain
+  sends simulated/finalized, retained ACK plus original batch/instruction/payment
+  linkage, 1-USDP fee and exact 19-USDP net returned. Broker tokens/cash/pending
+  zero. Sponsor debit 0.06001 devnet SOL; remaining test gas/rent retained.
+- Main invocation: 225,163 ms, 95 RPC / 14 HTTP / three finite WSS. **Staging
+  failed locally** because the diagnostic expected `equity` instead of native
+  `account_equity`; it exposed no lending toggle. Corrected the field mapping
+  against actual bytes/current primary docs, added an actual-shape regression,
+  and verified the initial positive idle/loan observations offline at their
+  original receive time. Do not rewrite this failed result into a pass.
+- A separately sealed `finish-staging.mjs` continuation, after all net returned,
+  made ten HTTP calls and one first lending-disable request, no economic action
+  or RPC. It checks finalized return effects, a closed hash-linked parent, no
+  prior toggle and original remaining budget before signing; its own lock,
+  request-before-I/O files and approval prevent restart/retry. Parent journal/
+  result remain unchanged. Combined HTTP count 24, other exposure unchanged.
+- Empty native account readiness readback passes: actual lending disabled,
+  borrowing/interest zero, no spot/margin/order/stop-order/position exposure.
+  History matches the withdrawn original signature and zero latest cash—not a
+  new credit, complete financial cut or atomic shipping setup certificate.
+- Current native diagnostic suite passes **35** tests, vault codecs **5**,
+  Pacifica funding **45** plus one existing named killed-child-worker ignore,
+  and evidence **5**. `node scripts/check.mjs --group=contracts` passes **78**
+  discovered tests, the **54-document** foundation/link check and workspace
+  dependency guard. Formatting and diff hygiene pass; private RPC/key/reply
+  artifacts are confirmed Git-ignored. No new full workspace/release/browser/SBF/ARM/Nitro/hosted CI
+  pass, commit/push, stack housekeeping, merge or P23 closure is claimed.
+
+**Next exact action:** use the qualified response mappings to implement the
+shipping authenticated setup provider and original funding-route creation under
+the existing Controller/one authoritative journal. Keep funding/trading/cuts
+disabled until their actual contracts qualify. The measured v5 scheduler only
+consumes an existing eligible deposit; it does not create/sign/send one.
+The disable-before-withdrawal staging sequence remains unqualified; any further
+financial invocation needs its applicable fresh scope/seal, not reuse of this
+closed test. Then qualify the fresh measured vault/native-credit path; do not
+import these local test keys/history as shipping authority or fake native cuts.
+Workstreams first; review/CI/merge housekeeping remains deferred.
+
+### Current actual schema/readiness observation — 2026-10-08
+
+Continued the approved deposit-only workstream on `tee/p23-native-qualification`,
+still uncommitted above `da52867`. The latest exact receipt is the
+[separate GET-only observation](P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation),
+not a restart of the closed native round trip or a fresh Nitro invocation.
+
+- Added reusable `tools/native-qualification/observe.mjs`: fixed testnet origin,
+  12 GETs / 12-second cadence / three-minute total / 8-KiB bodies, pre-I/O retained
+  records, separate private source/TLS/scope metadata, no keys/signing/RPC/AWS.
+  Existing namespaces, redirects, transport overrides, 429 and uncertain replies
+  refuse; there is no retry or shipping-ready output.
+- Executed all 12 observations in 132,829 ms, plus three earlier read-only shape
+  checks (**15 current HTTP GETs total**). The established returned test account
+  has the exact original 20-USDP signature in deposit history but latest balance
+  history is its withdrawal, current cash/pending zero, lending disabled, zero
+  debt/interest and no spot balances/orders/positions. This does not recredit it.
+- The public-only uninitialized probe has successful empty histories/default
+  settings but account/loan 404. These cannot supply `Setup.complete` or zero debt.
+  No private key or funding was created for that probe. Established-account
+  observations are sequential, not atomic setup or fresh-account bootstrap.
+- Promoted only identity/time-replaced shapes into offline funding fixtures.
+  Added current-withdrawal refusal and explicitly synthetic first-credit-prefix
+  cases, extended settings/loan parsing and top-level native error-code refusal.
+  Strong withdrawal, native-risk readiness and recovery-cut contracts are unchanged.
+- New observer offline suite passes **24** tests. Owning Pacifica funding suites
+  pass **45** funding tests (one existing killed-worker ignore) and **5** evidence
+  tests. `node scripts/check.mjs --group=contracts` passes **67** tests, the
+  **54-document** foundation/link check and workspace dependency guard. The first
+  link check found a missing explicit section anchor; adding that anchor fixes
+  the owning check. Strict Pacifica Clippy passes with default and all features /
+  all targets; `cargo fmt --all -- --check` and `git diff --check` pass. These use
+  pinned macOS tools, locked/offline Cargo and `CARGO_INCREMENTAL=0`.
+  Old full-workspace receipts remain dated, not rerun claims for these additions.
+
+**Superseded next action (completed bounded test recorded above):** the user approved a separately sealed staged
+faucet/test-only bootstrap (up to 20 USDP / 0.10 devnet SOL, no AWS or customer/
+mainnet assets) on 2026-10-08 ("you have my permission, go ahead"). Prepare fresh
+identities and exact source/TLS/run approval; execute once and record the actual
+result. Establish positive disabled-lending/debt/idle baseline before
+customer-vault funding; do not reuse the old 120-second bootstrap exception or
+promote historical account/keys into the new release. The shipping authenticated
+setup provider, original funding-route creation and changed-image measured
+financial run remain necessary. Version 5 only consumes an existing eligible
+original deposit; it cannot create/sign/send that route. No commit, push, stack
+housekeeping, AWS resource, chain/native financial action or phase closure occurred.
+
+### Approved demo deposit continuation — 2026-10-08
+
+Latest instruction: implement transaction-linked polling for the MVP, explicitly
+trusting venue bookkeeping for the testnet demo. This narrowly supersedes the
+earlier wait-for-stronger-evidence decision **for deposits only**; do not pause on
+that older handoff or weaken withdrawal/recovery guarantees. The four-workstream
+order below remains unchanged; stack housekeeping/merging stays deferred.
+[ADR 0029](../architecture/0029-demo-deposit-confirmation.md) is the current policy
+and implementation boundary.
+
+Uncommitted source based on `da52867` now adds durable bounded GET polling,
+original-signature/full-credit matching and non-pending balance corroboration for
+a positively initialized otherwise idle testnet native account. The journal
+retains explicit demo assurance, stable original credit identity and no native
+cut; native risk readiness/recovery are not automatically granted. Engine revision
+22 refuses old revision-21 replay rather than silently changing archived results.
+The explicit measured version-5 policy/scheduler is also wired locally as recorded
+below. No live invocation, financial activation, commit/push or stack merge is claimed.
+
+Local verification passed on pinned macOS Rust 1.97.1 / Node 24.21.0:
+
+- `cargo test --locked --offline -p cinder-journal -p cinder-pacifica -p
+  cinder-service --all-features --lib --tests` passes, including engine-revision
+  refusal, durable replay and all 12 new demo regressions. After the final narrow
+  strong-credit upgrade guard, the complete Pacifica funding suite passes again
+  (43 tests; the named killed-child worker retains its existing ignore).
+- The remaining workspace packages' all-feature library/test suites pass:
+  `cinder-api`, `cinder-kernel`, `cinder-ports`, `cinder-test-support` and
+  `cinder-web-channel`. This is not a fresh full release/browser/SBF runner claim.
+- The existing confidential egress suite passes all five tests after adding the
+  exact testnet deposit-history GET, escaped cursor/balance query wire checks and
+  mainnet refusal. No new parent-side plaintext or endpoint was added.
+- Strict workspace Clippy passes with default and all features/all targets;
+  `cargo fmt --all -- --check` and `git diff --check` pass. Cargo uses
+  `CARGO_INCREMENTAL=0`, locked/offline dependencies and no live financial I/O.
+- `node scripts/check.mjs --group=contracts` passes all 62 tests, the 54-document
+  foundation/link check and the pinned workspace graph guard.
+
+No new SBF, ARM, Nitro, actual venue schema or hosted current-head CI pass is
+claimed. A focused rate-limit regression found that the added atomic
+polling marker violated the old one-evidence-item assumption; the correction
+requires exactly one original Gateway spend while retaining additional provenance.
+The strong credit port also explicitly rejects a demo-to-strong upgrade before
+posting or granting readiness; duplicate credit/head and direct proof-upgrade
+regressions pass.
+Preserve existing independent changes and the unrelated untracked paths listed
+below.
+
+Next exact action: qualify actual response schemas and initialized-account readiness
+on a separately scoped fresh testnet run, then carry the exact policy onto a fresh
+measured financial invocation. No old bootstrap exception, source fixture, account
+or closed AWS invocation is permission for that run. Version 5 consumes an existing
+eligible original deposit only; it does not yet create/sign/send the funding route.
+The
+stronger native withdrawal/debit, genuinely lost-ACK correlation, order/funding
+and recovery final-cut gaps remain open; this deposit mode is not proof of those.
+
+### Demo deposit measured wiring — 2026-10-08
+
+Implemented in the same uncommitted `tee/p23-native-qualification` continuation,
+not a new phase or independently live deployment:
+
+- Closed manifest **5** requires the explicit finite testnet demo policy, chain
+  route, bounded packs and native reads; rejects native capture, funding and
+  trading activation; keeps six independent roles and adds `CKR5` envelopes.
+  Versions 1–4 omit the new field and keep their prior envelope encodings.
+- The actual loaded Controller/Gateway policy contributes to the application
+  commitment. `Loaded::open` verifies exact policy equality before clock/cloud
+  preparation. Per-field substitution, mainnet, unqualified precision, too-small
+  record/lease limits and a polling interval slower than the policy refuse.
+- The scheduler waits without a GET when original plan/finality or fresh positive
+  setup is missing. It selects only the existing original deposit, spends before
+  I/O, releases the journal guard during the GET, rejoins the current writer and
+  atomically confirms only matching retained evidence. It does not sign or create
+  transfers, fabricate setup or enable risk admission/recovery.
+- Explicit demo mode does not run the generic diagnostic/WSS observer. Inspection
+  found that its unqualified raw diagnostic inputs would otherwise create an
+  unresolved gap; they cannot be silently marked reconciled. Chain customer-
+  deposit observation remains available with its existing bounded locator policy.
+- Responses are at most **8 KiB**, with conservative record-size allowance for
+  encoded bytes/metadata. Unknown replies consume the durable budget; resetting
+  volatile cadence cannot renew it. Retained positive replies can be confirmed
+  without an extra GET. Concurrent freeze retains the response without credit.
+
+Executed locally on pinned macOS Rust 1.97.1 / Node 24.21.0, locked/offline Cargo
+with `CARGO_INCREMENTAL=0`:
+
+- Full all-feature journal/Pacifica/service library and integration suites pass,
+  including all 12 adapter demo regressions, durable replay and the new archive
+  bound check. The service suite at that cut passes **122** library tests (seven
+  existing named hardware/worker ignores), plus all five release integration
+  tests and attestation/framing tests.
+- The final additional concurrent-freeze regression and all seven earlier
+  focused demo/manifest checks pass together (**8 passed**). These use actual
+  Runtime/API/AEAD/replicated-journal paths with **synthetic** chain prerequisites
+  and GETs; they do not qualify a native signature, venue schema or Nitro image.
+- Release preparation exercises versions **1–5**; all six changed demo-policy
+  fields change the manifest and loaded application hashes. Echoing an old
+  application with new valid limits refuses before clock/cloud access.
+- All-feature library/test suites for API, kernel, ports, test support and web
+  channel pass. Strict workspace Clippy passes with default and all features /
+  all targets; formatting and diff whitespace checks pass.
+- `node scripts/check.mjs --group=contracts` passes **62** tests, the
+  **54-document** foundation/link check and the pinned dependency graph guard.
+
+No fresh full release/browser/SBF/ARM/Nitro or hosted CI pass is claimed. No wallet,
+live endpoint, funds, AWS resource, commit/push/PR or merge action was performed.
+Preserve unrelated untracked files. This finishes the local loaded-policy/
+scheduler connection, not P23, native bootstrap qualification or the funding
+round trip. Actual schema/readiness and the G05 run requirements above remain.
+
+### Workstreams before stack housekeeping — 2026-10-08
+
+Historical pre-demo decision checkpoint; the latest deposit instruction above
+supersedes its wait-only next action. Its investigation and executed checks remain
+dated evidence, not results for the subsequent engine/provider changes.
+
+The user explicitly directed completion of the remaining P23 workstreams before
+review/CI/merge housekeeping. Keep the existing stack open while progressing in
+this fixed order: (1) native financial providers and account readiness;
+(2) measured customer/vault/Pacifica round trip; (3) bounded order lifecycle and
+funding qualification; (4) operator-assisted recovery. Work on an earlier PR
+first only when its remaining defect blocks a workstream or an implementation
+bug requires correction. Do not merge merely to shorten the stack or add new
+milestones to these four workstreams. Their acceptance gates remain in PLAN and
+the [financial continuation map](P23-FINANCIAL-GATES.md).
+
+Reuse already-passing transport/storage evidence with its exact source limits;
+do not repeat it as unrelated work or claim it qualifies changed financial code.
+Record provider semantics, owning offline tests and exact live authorization
+before each actual-rail run. Existing closed invocations remain closed. Tiny
+test-only corrections retain the previously approved limits; new economic or
+security choices, unknown-operation replacements, AWS/exposure increases and
+unsupported native capabilities still require their applicable review. A named
+capability blocker must be evidenced rather than hidden with a synthetic pass.
+
+After these workstreams, address relevant outstanding CodeRabbit/Codex findings,
+refresh stack bases and current-head checks, then merge bottom-up when qualified.
+P24 release/customer-funds gates and terminal/multi-venue features are outside
+this completion run. Current tip before this continuation is `da52867`; no
+additional live action, stack merge or financial activation is claimed.
+
+First-workstream continuation at the uncommitted source based on `da52867`:
+
+- Native POST failures now durably retain the exposed original and unknown reply;
+  a second submission under that identity refuses before I/O. Callback withholding
+  of a separately audited response remains distinct from a genuinely lost ACK.
+- Fresh unqualified perp withdrawal-history/pending requests refuse before credit
+  reservation or egress; legacy tags remain readable in archived records.
+  Subsequent source investigation found these routes in official MCP documentation
+  and client code. The refusal is a current Cinder gate, not a missing endpoint.
+- The retained native payment passes a read-only strict one-recipient legacy
+  `batch_withdraw` ABI check. Its batch nonce matches the audit ACK, while its
+  separate `withdraw_id` does not. Program, recipient, net atoms and privileges
+  match. No live artifact, seal or result was changed; no completion is inferred.
+- A discovered loaded-history policy mismatch now refuses before clock/cloud
+  preparation. Regression tests change each of five valid policy fields under
+  the same old application digest in both version-3/4 manifests. This is a
+  blocking runtime-boundary correction, not general stack housekeeping.
+- Owning checks pass on pinned macOS Rust 1.97.1 / Node 24.21.0:
+  `node scripts/check.mjs --group=contracts` (62 tests plus foundation/workspace
+  guards); `cargo test --locked --offline -p cinder-pacifica -p cinder-service
+  --all-features --lib --tests`; the same crates' strict all-feature
+  `cargo clippy --locked --offline --lib --bins --tests -- -D warnings`;
+  the vault client's funding/native-qualification tests (11) and `tsc --noEmit`.
+  The focused read suite passes 16 cases and the feature-enabled release suite
+  five, including the policy regressions. All Rust commands use
+  `CARGO_INCREMENTAL=0`; named child-process harness ignores retain their existing
+  semantics. No new SBF/ARM/Nitro or hosted current-head CI pass is claimed.
+
+The first-workstream evidence gaps are final native credit/debit and qualified
+operation-completion/cut semantics, plus supported original UUID correlation
+after a genuinely missing native ACK. The read-only code audit confirms funding
+completion is already per-operation; demanding a universal trading/account
+frontier was an overly broad explanation. A batch-bound positive payment is
+stronger chain evidence, not proof of complete off-chain processing. The minimal
+[completion-contract decision and dependency map](P23-FINANCIAL-GATES.md#funding-completion-contract-decision)
+record the alternatives. On 2026-10-08 the user explicitly chose **keep the
+current contract; wait for stronger venue evidence**. The proposed
+operation-scoped alternative is not approved for implementation. No serialized
+financial contract, settlement or activation changed. Preserve ambiguous
+outcomes/holds; the decision does not authorize resend or another live run.
+
+Read-only investigation completed: official current MCP/Python SDK pins and
+primary REST/WSS/LI documentation reviewed; 35 retained API responses inspected;
+finalized deposit, batch-completion and withdrawal event bytes independently
+matched to retained instructions. The historical bridge audit was checked but
+not treated as current source equivalence. Loan `updated_at` is documented and
+observed; historical withdrawal-history/pending `amount` is net, not gross.
+The repeatable local inspector and precise unsent venue questions are in
+`work/venues/pacifica/experiments/completion-evidence-2026-10-08/`; sanitized
+findings are promoted in [native evidence](P23-NATIVE-EVIDENCE.md#completion-contract-audit-2026-10-08).
+No new runtime edit, venue-account/RPC call, wallet/key read, live run or financial
+activation occurred in this investigation. Closed records remain unchanged.
+The pinned offline inspector passed; documentation/contract checks passed all 62
+tests plus link/workspace guards, and `git diff --check` passed. This is not a
+new Rust/SBF/Nitro or hosted current-head CI qualification.
+
+Next exact action: obtain supported original-signature final-credit semantics,
+original-UUID status/batch/payment lookup and final native debit/once-only
+completion/retention details satisfying the unchanged provider contract. The
+local investigation README now contains a send-ready three-point request and
+an answer-to-provider qualification map. No message has been sent; contact/channel
+and venue clarification are pending. The official MCP withdrawal-tool removal
+was checked and does not resolve the native completion/identity gaps. The
+investigated interfaces do not yet establish those guarantees; another identical
+economic run cannot prove them by silence. Implement only a justified provider
+and its offline failure/replay tests before preparing the separately scoped measured financial
+run. Do not reopen the declined alternative without new evidence or a user
+request. The measured round trip,
+trade/funding and live recovery depend on that capability, not unfinished PR
+housekeeping. #55 → #63 remain open; no commit/push/review response/CI rerun/merge
+has been made during this continuation. Preserve unrelated untracked
+`crates/service/examples/qualification-v2.rs`, `docs/user-journey.md` and `stays/`.
+
+### Native-semantics corrected signer boundary — 2026-10-08
+
+Explicitly approved `run-final-03` at source `19a6953181695371a97ce7880c710bf6151a9d01`
+passed deployment/fresh-account checks, then received an explicit signature
+rejection on the pre-funding lending-setting request. Its original journal
+records 19 RPC / three native HTTP / zero WSS, simulations or financial
+submissions: no funds moved and no fees. Offline expected-public verification
+identifies our SDK buffer-aliasing defect, not a venue signing-policy failure.
+The [invocation receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) owns the exact evidence.
+
+The diagnostic now retains separately owned signer bytes and verifies native
+signatures against the configured public identity. A deterministic unfunded test
+reproduces/refuses the old defect and validates corrected native/chain signing.
+All 17 core/driver, 60 contract/inventory and ten vault funding/ABI/signer tests
+pass; vault type checking passes. No Rust/SBF/Nitro rerun is claimed.
+The SDK's opaque objects still offer no secure-erasure guarantee.
+
+The user granted standing authority for small test-only source/configuration
+corrections and reseals within unchanged devnet/testnet limits, without another
+permission question. Record that authority on every permitted new seal. It does
+not cover restarting used records, uncertain economic replacements, increased
+exposure, AWS/mainnet/customer assets, custody/security-policy changes or
+shipping financial activation.
+
+Under that authority, the fresh corrected `run-final-04` completed once at seal
+`77421841139e81672e3ea6f4eeeaa8b2adf8be7e695b4c804148c16b70990b6a`.
+Its exact `REVIEW.md`/`MAPPINGS.md` are in the ignored experiment directory.
+Prior locks/journals/approvals remain untouched. The 253,308-ms invocation proves
+an actual 20-USDP deposit, one original withdrawal with 1-USDP fee, independently
+finalized 19-USDP payment and exact return to the fresh owner. Six original chain
+sends simulated/finalized; sponsor debit was 0.06001 devnet SOL. Venue/broker
+balances and observed pending balance, orders, positions, debt and interest are
+zero. Deposit joins its original signature; the private audit ACK is not controller
+recovery or a complete native cut.
+
+Original status remains `closeout-unresolved`: pre/post-deposit setting requests
+returned exact 422 rejections and final lending setting was null. A separately
+recorded, one-shot settings-only follow-up on the empty original broker then
+passes actual lending-disabled/no-debt readback, without economic or chain actions.
+Combined counts are 96 RPC / 20 HTTP / four finite WSS and three setting attempts,
+within original budgets. The helper is retained privately for reproducibility.
+Late setup success does not qualify the original bootstrap; no historical result
+is overwritten. The receipt owns the detailed outcome and limitations.
+
+Next: qualify staged initialized-account readiness and resolve the named native
+causal-completeness / genuinely lost-ACK recovery contract before shipping
+financial activation; then separately scoped measured workflows. No additional
+financial run, AWS, current hosted-CI success or stack merge is claimed. P23 stays
+in progress; these local-process native facts are not an enclave workflow pass.
+
+Publication remains the same ready/open [#63](https://github.com/arnabnandikgp/cinder/pull/63)
+on `tee/p23-native-qualification`, directly above #62 / `tee/p23-capture-runtime`
+at `b1b8235457c26c41c50ab4a8a5bc0183a10ce6b6`. The actual executed source bundle
+is `be4fdf99ca24059d44fc96128becea2578c48fec941d2c1b7fb57b6339f1d5da`;
+only public code/tests and sanitized handoff evidence are published. Seven
+hosted jobs succeeded at prior head `19a6953`; the Anchor job was cancelled, not
+passed. New publication needs its own CI/review. Preserve unrelated untracked
+examples, user-journey docs, `stays/`, stashes and ignored private research.
+
+### Native-semantics loader preflight refusal (historical) — 2026-10-08
+
+The user approved exact `run-final-02`; source `90b0e00a46fec8cd27da9fdbc997983de12d105d`
+performed three read-only devnet RPC requests, then refused the loader owner.
+Private receipts establish the correct genesis, unchanged native ProgramData,
+slot and upgrade authority. The cause is our malformed loader-ID constant, not
+native deployment drift. Zero native HTTP/WSS, simulations, financial submissions,
+funds moved or fees. Original lock/journal/approval remain untouched; no restart.
+
+The [invocation receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) records the actual result
+and why the self-referential fixture missed it. The local correction adds canonical
+route-key validation, an independently pinned loader and derived ProgramData PDA.
+Primary-doc review also corrects this probe's single-object transfer envelope and
+documented balance-history route; it stops relying on assumed perp withdrawal
+history/pending endpoints. An empty page and zero observed pending balance remain
+diagnostic observations, not complete cuts or shipping financial authority.
+All 17 native tool, 60 contract/inventory and nine vault codec cases pass; vault
+SDK type checking and offline replay of the retained public headers also pass.
+
+The fresh offline replacement is
+`work/experiments/p23-native-semantics/run-final-03/REVIEW.md` with adjacent
+`MAPPINGS.md`, seal
+`ade4499008899fc2fc8c8d43b41df8a3836b7bed2a990bc9670935a56597c604`.
+It is unapproved/unstarted. The funding/quote/fee/bootstrap/request ceilings and
+no-AWS scope are unchanged. Next: explicit review/approval of this corrected
+exact record, then one invocation. No shipping financial activation, AWS run,
+new-head hosted CI success or stack merge is claimed.
+
+### Native-semantics signer refusal (historical, before second invocation) — 2026-10-08
+
+The user approved the exact `run-final-01` seal; its one authorized invocation
+stopped during sponsor loading because offline preparation retained trailing CLI
+display whitespace in the wallet locator. The original journal contains only
+`start`: zero RPC/HTTP/WSS calls, financial submissions, funds moved or fees.
+The lock/private originals are preserved without restart or rescue. This is a
+local preparation defect, not a native capability result or P23 pass.
+The [sanitized receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) records the diagnosis,
+strict metadata-before-start fix and actual offline checks: 15 native regressions,
+58 contracts/inventory checks, nine vault codec checks and SDK type checking.
+
+The corrected offline replacement is
+`work/experiments/p23-native-semantics/run-final-02/REVIEW.md`, seal
+`160e00d1a5a7286f3dbabeda1aecdf5ccd9123b600eeae319548bfeeb8d1e59f`.
+Fresh identities and the validated sponsor locator are bound; financial limits,
+bootstrap exception and fee-acceptance limitation are unchanged. It has no
+approval, journal or lock, and made no live requests. Next: user review/approval
+of that exact replacement, then one bounded invocation. No AWS, shipping financial
+activation, stack merge or complete hosted-CI pass is claimed by this correction.
+
+### Native-semantics execution preparation (historical, before invocation) — 2026-10-08
+
+Published ready/open as [#63](https://github.com/arnabnandikgp/cinder/pull/63) on
+`tee/p23-native-qualification`, immediately above #62 at
+`b1b8235457c26c41c50ab4a8a5bc0183a10ce6b6`. The user approved the proposed
+20-faucet-USDP / 0.10-devnet-SOL / no-AWS scope and the 120-second bootstrap
+exception. **Exact current execution-record approval is still pending.**
+No testnet/RPC call, funding, native action or AWS deployment has occurred.
+Preserve the same unrelated untracked examples/docs/`stays/` and stashes.
+
+The [one-shot diagnostic tool](../../tools/native-qualification/README.md)
+promotes the current official public deposit/faucet ABI and reuses the existing
+locked vault SDK only as a codec boundary. It creates fresh test identities,
+seals source/lock/Node/TLS/config/roles/UUID/routes/budgets, and refuses execution
+without exact current approval. Durable original requests/wires, counters and
+remaining cleanup capacity precede exposure; unknown outcomes cannot retry,
+re-sign, select a new UUID or automatically restart. Streamed executable/header,
+mint/token layout, simulation, finality and independent payment checks are
+separate from native completeness. A callback-level lost reply retains explicitly
+audit-only evidence, not a fabricated controller ACK. Source cuts and shipping
+credit/completion remain absent. No shipping manifest or financial flag changed.
+
+The owning offline checks pass 13 core/sequence regressions and three actual SDK
+ABI/hostile-layout cases; all 56 contract/inventory regressions pass. The parent
+#62 browser CI job timed out at its existing 30-second qualification limit.
+The unchanged actual Node/Chrome check passed locally (14 groups, 40 signed
+synthetic fixtures); one failed-job-only rerun was requested. No timeout increase,
+disabled assertion, new-head hosted success or hardware receipt is claimed.
+CodeRabbit's legitimate #62 documentation finding is addressed here: a proposed
+test scopes G01/G05; it does not resolve them. Parent review remains unmerged.
+
+Next: seal/review the exact private run record, obtain its approval, then execute
+the approved native test and publish a sanitized receipt. The API has no signed
+max-fee field: 2 USDP is an acceptance ceiling, not an enforceable native request
+guarantee; expose this in the exact review. Missing bootstrap/history/UUID/cut
+semantics are named blockers or narrowly reviewed policy questions, not new
+phases or injected provider certificates. The separate measured vault/trading/
+funding/recovery P23 gates remain open.
+
+The exact private record is prepared at
+`work/experiments/p23-native-semantics/run-final-01/REVIEW.md`, seal
+`2dbcf59f6272128e08eec9f34c113af3967549025e162ed76362d2eeff736fcc`.
+It proposes 0.035/0.025 devnet SOL funding to the fresh owner/broker (0.06 SOL
+plus bounded sponsor fees, below the approved 0.10 ceiling). No approval file,
+network trace or invocation start exists. The actual runner refuses before signer
+loading/network I/O when exact approval is absent. Preparing this artifact is not
+a native pass, external authority grant or shipping key-release record. Vault SDK
+type checking and all nine existing/new funding codec cases also pass.
+Earlier `run-01` and `run-candidate-02` records were unused offline preparations
+superseded by the final source review; their identities/records are preserved,
+not submitted, approved, funded or reused in the final candidate.
+Implementation checkpoint `d9fc8391f61f1d98a2dd203068b6b9c30703345d` is published;
+this receipt changes only the tracker. Hosted new-head CI/review is pending, not
+claimed green. The parent's cancelled lint cell and browser rerun are not
+substituted with a fictitious full CI pass. No stack merge occurred.
 
 ### Measured capture runtime continuation — 2026-10-07
 
@@ -88,7 +1409,8 @@ merely flipping manifest booleans. P23 stays `in progress`.
 [Next native-semantics proposal](P23-NATIVE-QUALIFICATION.md): setup, exact
 signature deposit, original UUID withdrawal and lost-native-reply investigation,
 using fresh faucet-only accounts without AWS. Proposed 20-USDP/0.10-devnet-SOL
-and 120-second bootstrap bounds remain unapproved; the exact reviewed runner,
+and 120-second bootstrap bounds were unapproved at this dated checkpoint (scope
+subsequently approved 2026-10-08 above); the exact reviewed runner,
 identities and G05 seal must precede execution. No historical permissions, wallets
 or weak amount/time matcher are adopted. Changed-image Nitro and the actual
 vault/trading/funding/recovery lifecycle remain separate existing P23 gates.

@@ -39,6 +39,146 @@ open; passing this candidate must not close them.
 
 ## How to reuse the research
 
+2026-10-08 demo deposit promotion: [ADR 0029](../architecture/0029-demo-deposit-confirmation.md)
+uses the official MCP account client's pinned deposit-history example and current
+balance-history documentation for strict offline response fixtures. The
+[separate current GET receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
+now confirms actual testnet shapes and established/absent account predicates
+outside Nitro; `demo-native-shapes.json` replaces identity/timestamps for owning
+offline regressions. Fresh initialized-account setup, actual route precision and
+changed-image financial evidence still need qualification. The approved bookkeeping assumption is explicitly
+stored as demo assurance, not inferred from a response hash or substituted for
+complete native coverage. Original identity, polling budget and full-credit
+checks use the same authoritative journal; no historical account/key/archive is
+promoted. Strong withdrawal, lost-ACK and recovery gates remain independent.
+The measured v5 composition binds the actual loaded policy before cloud restore,
+selects an already-finalized original deposit and retains its GET evidence without
+generic diagnostic capture. Offline Runtime/API/AEAD-journal tests are synthetic
+I/O evidence only; the separate GET receipt is actual format evidence, not a
+changed-Nitro or newly funded original-deposit pass.
+Exact executed checks and next step are in TRACKER.
+
+The next offline slice promotes `funding::setup`: fixed authenticated settings,
+loan and account reads, durable bounded request/archive replay, explicit observed
+predicates and idempotent incomplete controller input. Its fixtures exercise
+missing caches, adverse/malformed/future data, timeout budgets, policy/epoch
+rebinding and restart. Runtime/AEAD tests confirm journal-lock release during
+setup I/O. Already-authorized ingress preparation reuses the existing route and
+journal controls; it supplies no fresh approval or send. See ADR 0029. This is
+not `Setup.complete`, native-correctness qualification or a measured financial
+pass; archived historical account keys/responses remain outside shipping authority.
+
+The separately user-approved initial-demo boundary adds a measured-policy opt-in
+and retained read provenance, never `Setup.complete` or native risk readiness.
+Owning adapter regressions cover explicit/omitted policy, mainnet/rebinding,
+adverse/missing/future observations, original expiry/restart, authority/freeze,
+one original release/deposit, no second allocation and no stronger-credit upgrade.
+Runtime tests exercise the same encrypted journal/reader with synthetic GETs;
+release tests refuse changed setup policy before clock/cloud access. Exact checks
+are recorded in TRACKER. No test fixture establishes external exclusive control,
+native cache correctness, changed-image qualification or customer-fund authority.
+
+Existing-intent chain continuation adds five joined offline regressions in
+`service/src/chain_demo_tests.rs`: actual original codec, simulation, separated
+signing, durable wire and receipt reconciliation with synthetic RPC/time/setup
+replies. Both approved ingress rails pass; missing/changed/expired authority,
+unsupported rails and strong-path borrowing refuse. Simulation/fee failures
+never submit; lost chain ACK replay does not create a replacement wire. The
+dormant scheduler's explicit demo-port selection changes no manifest activation,
+native risk readiness, allocation authorization or withdrawal/recovery contract.
+The initial allocation-authority proposal was rejected and not applied at that
+checkpoint; the subsequent explicit user approval supersedes the pending decision.
+The now implemented `service/src/demo_funding.rs` binds one private configuration
+grant to the actual loaded components and one recognized owner deposit. The original eight
+joined regressions in `service/src/chain_allocation_tests.rs` cover once-only
+acceptance/restart, both fixed legs, absent original evidence, changed policy,
+mainnet/invalid scope, expiry/epoch/freeze/stale setup, cancellation and capacity
+rejection. Actual codec/signing/retention paths use synthetic RPC/time, not a live
+wallet. Customer credit does not increase when collateral moves. Release tests
+run the actual local preparer, reject changed allocation before clock/cloud
+access, keep customer details out of the public manifest and preserve the 4-KiB
+role-envelope cap with a one-owner profile plus oversized-configuration refusal.
+Exact executed checks and the next action are in TRACKER. No native/AWS, customer
+money, measured-image or fresh hardware evidence is claimed.
+
+The subsequent financial I/O continuation splits chain context, simulation,
+submission and original finality from the mutation owner. Order/cancel/native
+withdrawal requests and their non-clone reply correlations likewise separate
+durable exposure from POST and current-head completion. Actual Runtime/encrypted
+replicated-journal regressions allow an intervening write during RPC/POST; revoke
+before signing refuses, while late replies and final receipts remain recordable
+without replacement signing. Trusted commit time does not replace receive time.
+An immutable signed deadline is checked before socket setup and again after TLS,
+before HTTP bytes. Distinct v6 KMS envelopes and actual preparer/refusal tests bind
+the fixed private grant; versions 1–5 retain their earlier contracts.
+The original eighth allocation case was a **negative fresh-boot regression**: original
+deposit plus demo setup cannot manufacture the missing collateral cut or complete
+native check. The user subsequently approved the scoped flat-only rule; fresh
+allocation fixtures now remove their seeded native/mark/collateral prerequisites.
+The journal retains the original receipt and exact two-intent certificate,
+reserves customer/source capacity and rechecks at preparation/exposure/signing.
+Additional refusals cover 16 certificate substitutions, seven adverse-state
+changes, post-prepare freeze/revocation and three ordinary payout/withdrawal/
+recovery borrowing attempts. An ordinary funding acceptance still refuses without
+its full prerequisite. The joined actual encrypted Runtime test exercises fresh
+two-original dispatch and a revoke during simulation with synthetic external I/O.
+Engine revision 23 refuses older financial histories instead of migrating them
+implicitly. Exact executed results are in TRACKER; no live qualification follows.
+
+The subsequent actual-profile preparation exposed a capability-construction
+mismatch. V6 now constructs only testnet read-budget/demo-ingress objects with
+execution/fills/withdrawal explicitly unknown and settings observed, not invented
+qualified values. Ordinary readiness/dispatch/return still refuse. The owning
+allocation/Runtime fixtures use that honest composition; new promotion/refusal
+regressions and fresh executed results are in ADR 0029/TRACKER. The fresh
+initialization's chain debit without native credit is a retained unresolved live
+outcome, not a synthetic pass or a new completion-policy approval.
+
+The persistent credit diagnostic adds a separately sealed delivery variant;
+historical manifests retain their exact original defaults. Its RPC forwarding
+allowance is `maxRetries:5` for the same signed wire, not another economic intent
+or a freshly signed replacement. It permits sixty original-status polls and
+twelve account/loan pairs under unchanged global invocation caps. A distinct
+direct-broker faucet control follows the official funding helper, creating only
+an empty owner return ATA; owner-via-broker staging remains another fixed mode.
+The new offline regression checks exact seals, route separation, immutable older
+defaults, forbidden budget increments and refusal of AWS/shipping promotion.
+Focused checks pass **36/36** on 2026-10-08. Three fresh actual deposits finalize
+with exact original broker debit, vault credit and independently decoded native
+events; initialization remains absent. These are diagnostic receipts, not live
+customer funding, a stronger credit certificate or Nitro evidence. Their final
+comparisons and residual accounting belong in the
+[native receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#persistent-credit-investigation).
+
+The [fresh staged-test receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#separate-staged-bootstrap)
+adds one actual 20-USDP round trip (1 fee / 19 returned) and successful
+empty-account lending-disable/readback on fresh identities. Main pre-withdrawal
+staging failed on a Cinder diagnostic field-name error; its result stays failed.
+The corrected `account_equity` shape and stop/spot exposure checks are portable
+offline fixtures, not imported accounts or authority. A separately sealed
+settings-only continuation leaves that closed parent intact and uses no new
+economic action. These Node-TLS facts do not qualify shipping setup atomicity,
+native cuts, new customer credit, Nitro or recovery.
+
+The [bounded native-semantics tool](../../tools/native-qualification/README.md)
+promotes only the current official public deposit/faucet ABI, exact original
+operation/receipt linkage, one-shot budgets and offline fault assertions. Its
+diagnostic process uses fresh test identities, not historical M1 wallets,
+deployment or amount/time-based completion. JS test-key persistence is explicitly
+local/plaintext, not enclave protection or secure erasure. Scope approval and
+exact execution approval remain distinct. No native/chain receipt or financial
+certificate is established by its offline tests; source cuts and lost-native-ACK
+recovery remain unqualified. The [invocation receipts](P23-NATIVE-SEMANTICS-RECEIPT.md)
+record signer-locator/loader/signer-buffer defects and zero financial activity
+in those stopped invocations. Independent route, observation and expected-public
+signing checks are offline corrections, not native qualification. The corrected
+fourth invocation establishes an actual original 20-USDP deposit and 19-USDP
+payment/return with 1-USDP fee. Its original bootstrap is unresolved; a separate
+empty-account setting/readback check passes without further economic activity.
+Complete native cuts and genuinely lost-ACK recovery remain unqualified. Standing
+authority does not permit economic retries or financial-policy changes. TRACKER
+owns publication.
+
 P23 additionally promotes [confidential chain ports](../architecture/0024-confidential-chain-ports.md):
 controller-bound signing/finality, purpose-separated release, original owner
 deposits and bounded diagnostic scheduling. Deterministic **unfunded** public

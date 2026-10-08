@@ -13,6 +13,8 @@ pub mod chain_rpc;
 pub mod cloud;
 /// Finalized owner-signed vault deposits into the one authoritative ledger.
 pub mod customer_deposit;
+/// Governed one-time demo allocation; not a customer signature or live activation.
+pub mod demo_funding;
 pub mod egress;
 #[cfg(feature = "local-fixture")]
 pub mod fixture;

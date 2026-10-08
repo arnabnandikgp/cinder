@@ -12,7 +12,7 @@ use cinder_kernel::{
     ledger::{Location, funds::Destination},
 };
 use cinder_pacifica::{
-    execution::{Dispatch, Reply},
+    execution::{Dispatch, Gateway, Reply},
     funding::{
         Controller, Rail,
         chain::{self, Limits},
@@ -26,9 +26,11 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use zeroize::Zeroizing;
 
+mod staged;
+
 #[cfg(test)]
 #[path = "chain_funding_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 /// Explicit encrypted release policy. Native semantics stay independently gated.
 #[derive(Clone, Serialize, Deserialize)]
@@ -175,6 +177,10 @@ impl Loaded {
     /// Component derived from actually consumed policy/key identity.
     pub fn commitment(&self) -> [u8; 32] {
         self.commitment
+    }
+    /// The demo grant must name the sole configured original customer deposit.
+    pub(crate) fn permits_demo_deposit(&self, locator: &crate::customer_deposit::Locator) -> bool {
+        self.configuration.deposits.as_slice() == std::slice::from_ref(locator)
     }
     /// Public-only parent route, never the credential-bearing RPC path.
     pub fn peer(&self) -> (&str, u32) {
@@ -421,90 +427,35 @@ impl<T: Transport> Port<T> {
         funding: &Controller,
         attempt: AttemptKey,
     ) -> Result<Outcome, Error> {
-        let (rail, recovery) = rail(j, attempt)?;
-        if j.state()
-            .map_err(|_| Error)?
-            .attempts()
-            .iter()
-            .find(|a| a.key == attempt)
-            .is_none_or(|a| a.possibly_exposed)
-        {
-            return Err(Error);
-        }
-        let c = &self.loaded.configuration;
-        let d = if rail == Rail::Deposit {
-            &c.native
-        } else {
-            &c.custody
-        };
-        let (slot, at) = self.client.slot(self.clock.now()?)?;
-        let proof =
-            chain_code::verify(&mut self.client, d, self.loaded.endpoint.network, slot, at)?;
-        let r = funding.route();
-        let b = r
-            .beneficiaries
-            .iter()
-            .find(|b| b.account == attempt.request.account.bytes())
-            .ok_or(Error)?;
-        let mut keys = vec![r.config];
-        if rail == Rail::Payout {
-            keys.extend([
-                chain::pda(r.program, &[b"customer", &r.config, &b.wallet]).map_err(|_| Error)?,
-                b.tokens,
-            ]);
-        }
-        let accounts = self.client.accounts(&keys, slot, proof.at())?;
-        let context = self.client.context(self.clock.now()?)?;
-        let epoch = if recovery && rail == Rail::Return {
-            r.epoch.checked_add(1).ok_or(Error)?
-        } else {
-            r.epoch
-        };
-        let counters = chain_receipt::counters(
-            &accounts,
-            r,
-            rail,
-            b.wallet,
-            b.tokens,
-            epoch,
-            context.slot.checked_add(c.expiry_slots).ok_or(Error)?,
-        )?;
-        let now = self.clock.now()?;
-        let action = funding
-            .expose_chain(
-                j,
-                Dispatch {
-                    attempt,
-                    commit: id()?,
-                    at: now,
-                },
-                rail,
-                counters,
-            )
-            .map_err(|_| Error)?;
-        let prepared = chain::prepare(&action, context, c.limits, now).map_err(|_| Error)?;
-        let simulated = self.client.simulate(&prepared, self.clock.now()?)?;
-        let signed = if matches!(rail, Rail::Release | Rail::Payout) {
-            prepared
-                .sign(self.loaded.funds.clone(), simulated, self.clock.now()?)
-                .map_err(|_| Error)?
-        } else {
-            funding
-                .sign_chain(prepared, simulated, self.clock.now()?)
-                .map_err(|_| Error)?
-        };
-        let delivery = funding
-            .persist_wire(j, id()?, self.clock.now()?, action, signed)
-            .map_err(|_| Error)?;
-        Ok(
-            match self
-                .client
-                .submit(delivery, context.slot, self.clock.now()?)
-            {
-                Reply::Response { .. } => Outcome::Submitted,
-                _ => Outcome::Unknown,
-            },
-        )
+        self.issue_using(j, funding, attempt, None)
+    }
+    /// Explicit approved demo setup selection for an already accepted initial
+    /// Release/Deposit. This does not admit an intent or activate a manifest;
+    /// absent/failed demo setup never falls back to the strong issuance path.
+    pub fn issue_demo_ingress<B: Backend, P: Protection>(
+        &mut self,
+        j: &mut Journal<B, P>,
+        funding: &Controller,
+        gateway: &Gateway,
+        policy: &cinder_pacifica::funding::demo::Policy,
+        attempt: AttemptKey,
+    ) -> Result<Outcome, Error> {
+        self.issue_using(j, funding, attempt, Some((gateway, policy)))
+    }
+    fn issue_using<B: Backend, P: Protection>(
+        &mut self,
+        j: &mut Journal<B, P>,
+        funding: &Controller,
+        attempt: AttemptKey,
+        demo: Option<(&Gateway, &cinder_pacifica::funding::demo::Policy)>,
+    ) -> Result<Outcome, Error> {
+        let request = self.prepare_issue(j, funding, attempt, demo, self.clock.now()?)?;
+        let read = self.collect_issue(request)?;
+        let work = read.expose(j, funding, demo, self.clock.now()?)?;
+        let simulation = self.simulate_issue(&work)?;
+        let slot = work.slot();
+        let delivery = self.persist_issue(j, funding, work, simulation, self.clock.now()?)?;
+        self.submit_issue(delivery, slot)
     }
     /// Reconcile the ORIGINAL retained signature. No new blockhash/signature or
     /// send capability is created, including when missing/pruned/expired.
@@ -515,11 +466,13 @@ impl<T: Transport> Port<T> {
         attempt: AttemptKey,
     ) -> Result<Outcome, Error> {
         let now = self.clock.now()?;
-        let Some(wire) = funding.retained_wire(j, attempt, now).map_err(|_| Error)? else {
+        let Some(request) = self.prepare_reconcile(j, funding, attempt, now)? else {
             return Ok(
-                if funding
-                    .close_unsent_chain(j, id()?, now, attempt)
+                if j.state()
                     .map_err(|_| Error)?
+                    .funds()
+                    .iter()
+                    .any(|o| o.attempt == Some(attempt) && o.terminal)
                 {
                     Outcome::Settled
                 } else {
@@ -527,53 +480,7 @@ impl<T: Transport> Port<T> {
                 },
             );
         };
-        let contract = funding
-            .original_chain_contract(j, attempt, now)
-            .map_err(|_| Error)?;
-        let target = chain::inspect(contract.as_bytes(), attempt, wire.wire.as_bytes())
-            .map_err(|_| Error)?;
-        let Some(tx) = self.client.finalized(wire.signature, self.clock.now()?)? else {
-            return Ok(Outcome::Pending);
-        };
-        let c = &self.loaded.configuration;
-        let d = if target.rail == Rail::Deposit {
-            &c.native
-        } else {
-            &c.custody
-        };
-        let proof = chain_code::verify(
-            &mut self.client,
-            d,
-            self.loaded.endpoint.network,
-            tx.slot,
-            tx.at,
-        )?;
-        let keys = chain_receipt::effect_keys(&target, d)?;
-        let accounts = self.client.accounts(&keys, tx.slot, proof.at())?;
-        let receipt = chain_receipt::recognize_verified(
-            contract.as_bytes(),
-            attempt,
-            wire.wire.as_bytes(),
-            tx,
-            accounts,
-            d,
-            c.limits.maximum_fee_lamports,
-            proof,
-        )?;
-        funding
-            .observe_chain(j, id()?, self.clock.now()?, receipt)
-            .map_err(|_| Error)?;
-        Ok(
-            if j.state()
-                .map_err(|_| Error)?
-                .funds()
-                .iter()
-                .any(|o| o.attempt == Some(attempt) && o.terminal)
-            {
-                Outcome::Settled
-            } else {
-                Outcome::Pending
-            },
-        )
+        self.collect_reconcile(request)?
+            .complete(j, funding, self.clock.now()?)
     }
 }

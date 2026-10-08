@@ -1,10 +1,13 @@
 # P23 live qualification
 
-Updated 2026-10-06. **Offline preparation and bounded read-only hardware work.**
+Updated 2026-10-08. **Offline financial composition and bounded read-only hardware work.**
 The phase remains in progress; this document is not authorization for an AWS
 session, deployment, funding, account setup or native transaction. The separately
-approved hardware receipt and its remaining stream/concurrency limitation are
-recorded in [TRACKER](../implementation/TRACKER.md#p23--live-integration-qualification).
+approved read-only transport/storage receipt, including the passing 64-record
+growth gate, is recorded in [the hardware receipt](../implementation/P23-PACKS-HARDWARE.md).
+The newer funding composition is not covered by that older image's pass. Native
+credit investigation and dependent live financial runs are deferred; see
+[the current disposition](../implementation/P23-FINANCIAL-GATES.md#merge-scope-and-deferred-acceptance).
 Historical M1/M2/P20 receipts are provenance, not
 current release qualification or reusable permission. See
 [PLAN](../implementation/PLAN.md#p23), [TRACKER](../implementation/TRACKER.md),
@@ -26,8 +29,9 @@ current release qualification or reusable permission. See
 | Native deposit/withdrawal | Funding Controller's durable plans and separate broker-owner signer | Authentic deposit-linked credit and original-UUID withdrawal history plus finalized recipient payment; no mock credit or balance-delta shortcut |
 | Recovery | Fence/reconcile/settle/return/final-claim controller, recipient-encrypted kits and actual local SBF claims | Actual authority fencing, complete final cut, returned vault backing, authorized activation and independent kit delivery/claim on devnet |
 
-The entrypoint still refuses live **financial** activation and API risk admission
-is disabled. Version 2 now permits bounded read-only qualification, including
+API risk admission remains disabled. Versions 1–5 refuse financial activation;
+version 6 has only the governed ingress boundary described below, not general
+funding or trading authority. Version 2 permits bounded read-only qualification, including
 one configured original owner deposit per cadence; it does not create funds/order
 intents. The six-role release adds a distinct Solana funds seed and binds actual
 loaded RPC/policy/key identity into the application commitment. Version 1 remains
@@ -40,10 +44,42 @@ reconnect or enable financial actions. [ADR 0028](../architecture/0028-measured-
 records loaded binding, lease/resource refusal, archive rejoin and panic fencing.
 The old version-3 hardware receipt is not qualification of this changed image.
 
-The chain controller locally issues/reconciles existing durable mandates, but
-shipping manifest validation **still rejects** `funding` and `trading`. Do not
-flip them before a bounded policy and authentic evidence providers are qualified.
+The chain controller locally issues/reconciles existing durable mandates.
+Shipping manifest versions 1–5 still reject `funding` and `trading`; the separately
+approved v6 local composition permits only the fixed private allocation's two
+original ingress acceptances. All versions reject trading. Do not treat its
+schema or local tests as live authority or authentic financial qualification.
 Current prepared recovery interfaces likewise do not invent a final native cut.
+
+The latest deposit-only demo approval is [ADR 0029](../architecture/0029-demo-deposit-confirmation.md):
+original finalized signature → exact full deposit-history record → corroborated
+non-pending collateral, explicitly trusting venue bookkeeping on testnet. Its
+bounded polling/confirmation port is implemented offline, but this entrypoint
+now loads it only through explicit manifest version 5. That mode requires bounded
+packs/chain routing, exact loaded testnet policy, sufficient frame/lease allowance
+and an existing eligible original deposit. It skips generic diagnostic/WSS capture
+and does not create transfers or activate financial signing. The separately
+approved `initial_setup` opt-in can now record **demo-only initial readiness**
+from fresh coherent settings/loan/account replies for an idle, exclusively
+controlled account with disabled lending and zero debt/interest. `Setup.complete`
+and native risk readiness remain false. The exact governed wallet/agent inventory
+and absence of external writers are run prerequisites, not facts established by
+the API or the opt-in flag. Original demo ingress uses separate bounded ports;
+The private one-time grant and restricted v6 activation are now implemented
+offline, including writer-free financial stages and the subsequent user-approved
+flat-account funding admission. The rule retains the actual receipt and loaded
+grant, reserves customer cash/source liquidity and rechecks both fixed originals
+without synthetic native checks/marks/collateral cuts. Changed-image financial
+testing remains open. It grants no trading/recovery readiness
+and does not relax original withdrawal debit/payment or lost-ACK handling. A
+fresh measured run must bind the actual policy, schema, initialized account,
+source and caps; closed prior invocations remain closed. The
+[separate current GET receipt](../implementation/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
+now verifies actual testnet response shapes outside Nitro, including default
+settings returned for an address whose account/loan remain absent. It neither
+qualifies fresh setup nor permits promotion of the already-withdrawn historical
+deposit into a new financial run. Stage any fresh test-only initialization under
+its own accepted scope before customer-vault funding.
 
 ## Venue qualification findings
 
@@ -73,12 +109,27 @@ assigning the displayed rate directly to customer cash.
 Settings and loan diagnostics preserve the distinction between default-enabled
 lending, missing cache and proven zero debt. The documented balance-history
 schema does not provide original deposit signature or withdrawal UUID linkage.
-Historically observed withdrawal-history/pending routes are diagnostic candidates,
-not a documented current payment certificate. A response or amount/time match
+Legacy withdrawal-history/pending tags remain readable in archived diagnostics,
+but fresh requests to those currently unqualified routes refuse before credit
+reservation or egress. The official MCP documentation/client does list these
+perp routes; calling them undocumented was incorrect. The scheduler currently
+polls settings, loan and balance-history diagnostics. A response or amount/time match
 does not enable native credit, payment, complete coverage or recovery readiness.
 [Settings](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-settings),
 [loan](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-loan-info),
 [balance history](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-balance-history).
+
+The retained native round-trip payment also passes an offline single-recipient
+`batch_withdraw` ABI check: the ACK's batch nonce, configured recipient, net atoms,
+program and account privileges match. The separate instruction `withdraw_id` is
+not that batch nonce. This is a read-only verification of existing evidence, not
+a new live receipt, a native UUID lookup or qualified financial completion.
+See [the receipt](../implementation/P23-NATIVE-SEMANTICS-RECEIPT.md).
+The [subsequent contract/source audit](../implementation/P23-NATIVE-EVIDENCE.md#completion-contract-audit-2026-10-08)
+also verifies retained deposit/batch-completion events and confirms that funds
+completion is per-operation, not a universal account/trading frontier. Native
+credit/debit terminality, supported lost-UUID lookup and recovery's separate final
+account-cut requirements remain unqualified. No shipping gate changed.
 
 ## Fixed local gate checklist
 

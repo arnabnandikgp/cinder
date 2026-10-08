@@ -156,20 +156,19 @@ pub enum Diagnostic {
     Loan,
     /// Documented balance effects; amounts/times alone do not identify a deposit.
     BalanceHistory,
-    /// Historical experimental route; current live schema remains unqualified.
+    /// Retained legacy archive tag; fresh requests are unsupported.
     WithdrawalPending,
-    /// Historical experimental route; no UUID/completeness assumption.
+    /// Retained legacy archive tag; fresh requests are unsupported.
     WithdrawalHistory,
 }
 impl Diagnostic {
-    fn route(self) -> (&'static str, bool) {
-        match self {
+    fn route(self) -> Result<(&'static str, bool), Error> {
+        Ok(match self {
             Self::Settings => ("/api/v1/account/settings", false),
             Self::Loan => ("/api/v1/account/loan", false),
             Self::BalanceHistory => ("/api/v1/account/balance/history", true),
-            Self::WithdrawalPending => ("/api/v1/account/withdraw/pending", false),
-            Self::WithdrawalHistory => ("/api/v1/account/withdraw/history", true),
-        }
+            Self::WithdrawalPending | Self::WithdrawalHistory => return Err(Error::Qualification),
+        })
     }
 }
 /// Trusted fixed-account diagnostic request, with separate durable identities.
@@ -188,6 +187,8 @@ pub struct DiagnosticPoll {
 enum Selection {
     Observation { kind: Kind, cursor: Option<String> },
     Diagnostic(Diagnostic),
+    Demo(crate::funding::demo::Metadata),
+    Setup(crate::funding::setup::Metadata),
 }
 /// Non-clone completion identity created only after durable credit reservation.
 /// It carries no signing key, journal mutation authority, or replacement request.
@@ -215,8 +216,9 @@ fn reserve<B: Backend, P: Protection>(
     input: Reservation,
     query: Query,
     selection: Selection,
+    marker: Option<cinder_journal::model::PrivateBytes>,
 ) -> Result<(Request, Completion), Error> {
-    let permit = gateway.reserve_read(journal, input.id, input.at, input.cleanup)?;
+    let permit = gateway.reserve_read_with(journal, input.id, input.at, input.cleanup, marker)?;
     Ok((
         Request { query, permit },
         Completion {
@@ -244,7 +246,7 @@ pub fn prepare_diagnostic<B: Backend, P: Protection>(
     {
         return Err(Error::Qualification);
     }
-    let (path, paged) = input.kind.route();
+    let (path, paged) = input.kind.route()?;
     let query = Query {
         origin: policy.origin,
         target: account_target(path, paged, &profile.account, None)?,
@@ -261,6 +263,7 @@ pub fn prepare_diagnostic<B: Backend, P: Protection>(
         },
         query,
         Selection::Diagnostic(kind),
+        None,
     )
 }
 /// Prepare one exact account/cursor request. No automatic paging or retries.
@@ -299,6 +302,90 @@ pub fn prepare_poll<B: Backend, P: Protection>(
         },
         query,
         selection,
+        None,
+    )
+}
+/// Fixed-origin testnet GET prepared by the demo funding controller. The private
+/// request marker and read spend are one durable transaction before I/O.
+pub(crate) fn prepare_demo<B: Backend, P: Protection>(
+    journal: &mut Journal<B, P>,
+    gateway: &Gateway,
+    metadata: crate::funding::demo::Metadata,
+) -> Result<(Request, Completion), Error> {
+    use crate::{execution::Origin, funding::demo};
+    let (profile, policy) = gateway.read_binding();
+    if policy.origin != Origin::Testnet
+        || profile.environment != Origin::Testnet.url()
+        || metadata.reservation == metadata.evidence
+        || journal
+            .transaction(cinder_journal::model::CommitId::new(metadata.evidence)?)
+            .is_some()
+        || policy.read_cost < MIN_READ_COST
+    {
+        return Err(Error::Qualification);
+    }
+    let mut target = account_target(
+        metadata.endpoint.path(),
+        true,
+        &profile.account,
+        metadata.cursor.as_deref(),
+    )?;
+    if metadata.endpoint == demo::Endpoint::Balance {
+        target.push_str("&include_trades=true");
+    }
+    let marker = demo::marker(&metadata)?;
+    reserve(
+        journal,
+        gateway,
+        Reservation {
+            id: cinder_journal::model::CommitId::new(metadata.reservation)?,
+            evidence: cinder_journal::model::CommitId::new(metadata.evidence)?,
+            at: metadata.at,
+            cleanup: false,
+        },
+        Query {
+            origin: policy.origin,
+            target,
+        },
+        Selection::Demo(metadata),
+        Some(marker),
+    )
+}
+/// Fixed testnet setup reads. Raw bytes are retained as private evidence rather
+/// than unresolved economic inputs or fabricated cash/reconciliation events.
+pub(crate) fn prepare_setup<B: Backend, P: Protection>(
+    journal: &mut Journal<B, P>,
+    gateway: &Gateway,
+    metadata: crate::funding::setup::Metadata,
+) -> Result<(Request, Completion), Error> {
+    let (profile, policy) = gateway.read_binding();
+    if policy.origin != crate::execution::Origin::Testnet
+        || profile.environment != policy.origin.url()
+        || metadata.reservation == metadata.evidence
+        || journal
+            .transaction(CommitId::new(metadata.evidence)?)
+            .is_some()
+        || policy.read_cost < MIN_READ_COST
+    {
+        return Err(Error::Qualification);
+    }
+    let query = Query {
+        origin: policy.origin,
+        target: account_target(metadata.endpoint.path(), false, &profile.account, None)?,
+    };
+    let marker = crate::funding::setup::marker(&metadata)?;
+    reserve(
+        journal,
+        gateway,
+        Reservation {
+            id: CommitId::new(metadata.reservation)?,
+            evidence: CommitId::new(metadata.evidence)?,
+            at: metadata.at,
+            cleanup: false,
+        },
+        query,
+        Selection::Setup(metadata),
+        Some(marker),
     )
 }
 /// Rejoin the SAME authoritative writer after bounded I/O. Intervening commands
@@ -330,7 +417,10 @@ pub fn complete<B: Backend, P: Protection>(
     if received_at < completion.reserved.at {
         return Err(Error::Qualification);
     }
-    if matches!(completion.selection, Selection::Diagnostic(_)) && body.as_bytes().len() > MAX_BODY
+    if matches!(
+        completion.selection,
+        Selection::Diagnostic(_) | Selection::Demo(_) | Selection::Setup(_)
+    ) && body.as_bytes().len() > MAX_BODY
     {
         return Err(Error::Qualification);
     }
@@ -341,6 +431,34 @@ pub fn complete<B: Backend, P: Protection>(
     let at = received_at.max(logical);
     let (profile, _) = gateway.read_binding();
     match completion.selection {
+        Selection::Setup(metadata) => {
+            let raw =
+                crate::funding::setup::archive(&metadata, status, received_at, body.as_bytes())?;
+            Ok(Outcome::Ingested(journal.commit(Transaction {
+                id: completion.evidence,
+                expected: journal.head(),
+                at,
+                evidence: vec![raw],
+                inputs: vec![],
+                order_observations: vec![],
+                funds_observations: vec![],
+                controls: vec![],
+            })?))
+        }
+        Selection::Demo(metadata) => {
+            let raw =
+                crate::funding::demo::archive(&metadata, status, received_at, body.as_bytes())?;
+            Ok(Outcome::Ingested(journal.commit(Transaction {
+                id: completion.evidence,
+                expected: journal.head(),
+                at,
+                evidence: vec![raw],
+                inputs: vec![],
+                order_observations: vec![],
+                funds_observations: vec![],
+                controls: vec![],
+            })?))
+        }
         Selection::Diagnostic(kind) => {
             use cinder_journal::model::{Input, PrivateBytes};
             let raw=PrivateBytes::new(serde_json::to_vec(&serde_json::json!({"schema":"cinder-native-diagnostic-v1","kind":kind,"account":profile.account,

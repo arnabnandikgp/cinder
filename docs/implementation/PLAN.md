@@ -715,6 +715,76 @@ Local success does not close the phase before PR review/merge or enable live por
 
 Depends on: P20, P22.
 
+Historical continuation order, superseded by the subsequent direction below:
+complete native financial providers,
+measured funding, bounded trading/funding and operator-assisted recovery before
+stack review/CI/merge housekeeping. Touch remaining earlier-PR work during this
+run only for a blocking defect or a discovered bug. Do not merge for stack depth,
+add completion milestones, or broaden existing financial/live authority gates.
+The current execution handoff belongs in TRACKER; provider boundaries remain in
+P23-FINANCIAL-GATES.
+
+Subsequent direction, 2026-10-08: after multiple finalized originals lacked
+native credit, the user explicitly deferred that investigation. Continue
+independently completable P23 implementation/validation and evidence upkeep,
+then stack reviews/CI; do not revisit credit polling or initialization tests in
+this workstream. Dependent live financial scenarios remain named deferred
+capabilities with their gates closed. This changes execution priority, not the
+meaning of a live pass, the economic contract or production readiness. Completed
+implementation may be prepared for merge without describing all P23 workflows
+as qualified. A possible future mocked demo is not shipping credit evidence and
+requires clear isolation/labeling; no fake live observations or certificates.
+The latest tracker handoff supersedes historical investigation-first actions.
+
+The later user-approved [demo deposit policy](../architecture/0029-demo-deposit-confirmation.md)
+is a deposit-only testnet bookkeeping assumption, implemented with separate
+durable assurance and bounded original-signature GET polling. Continue only its
+offline implementation in this workstream; fresh initialized-account readiness
+and changed-image qualification remain deferred to a separately authorized run.
+Loaded-policy/scheduler wiring is implemented offline through explicit
+manifest version 5; it creates no transfers and disables generic diagnostic capture
+in this narrow mode. It is not strong native completion, risk readiness,
+automatic recovery or a new acceptance phase; withdrawal and final-cut gates
+remain unchanged. Do not stop this implementation on the earlier superseded
+wait-only deposit decision.
+The [separate current GET receipt](P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
+confirms actual deposit/balance shapes and established/absent account predicates
+outside Nitro. It is not a newly funded deposit, a shipping setup certificate or
+fresh bootstrap approval. The later separate staged receipt preserves the failed
+pre-withdrawal sequence and successful empty-account settings continuation.
+The authenticated setup-read/original-ingress continuation in ADR 0029 is locally
+wired; it deliberately records incomplete setup and keeps financial activation
+closed. The user subsequently approved explicit initial-demo readiness from
+fresh non-atomic reads under exclusive wallet/agent control, disabled lending,
+zero debt and an idle compatible account. ADR 0029 defines this separate policy,
+retained provenance and first-original-ingress scope. Implement/qualify it without
+promoting `Setup.complete` or native risk readiness; preserve strong withdrawal
+and recovery gates. Narrow measured financial composition and fresh changed-image
+qualification still follow; the subsequently approved local allocation is below.
+The existing-intent continuation now connects explicit demo preparation/chain
+issuance and original reconciliation offline, without enabling the financial
+manifest gate. The user subsequently approved and the local implementation now
+binds a private, one-time working-collateral grant to the original verified owner
+deposit, fixed amount, two request IDs, current customer epoch and absolute expiry.
+The authoritative journal accepts only the next fixed leg; actual first-leg
+completion is required before the second. This is governed internal authority,
+not customer consent inferred from a balance or a fabricated wallet signature.
+Local replay, refusal and release-binding tests precede live qualification.
+Measured activation must preserve this finite scope and keep financial network
+I/O outside the journal writer. That split and narrow v6 composition are now
+implemented offline, with two-original grant checks and distinct KMS envelopes;
+versions 1–5 remain nonfinancial and all versions reject trading. The user then
+approved the scoped flat-funding admission rule in the continuation map. Its
+explicit journal certificate binds the actual original receipt and both fixed
+intents, reserves customer cash plus source liquidity, and requires an otherwise
+idle, fully attributed cash-only state. Preparation/exposure/signing recheck the
+current authority and capacity; actual first-leg completion precedes the second.
+Fresh fixtures no longer seed a native check, mark or collateral cut. Ordinary
+funding, payout, trading and recovery cannot borrow this rule. Engine revision
+23 retains it across replay and refuses older financial histories; no implicit
+migration is authorized. Complete owning offline regressions, then seal/review
+the exact fresh funding-only changed-image scope before live qualification.
+
 Deliver: current G05-approved account/funding/environment/cleanup manifest, tagged
 release tests using the actual program, adapter, enclave and recovery path. Reuse
 M1/M2 scenarios but obtain new implementation evidence. No mainnet inference.
@@ -811,6 +881,22 @@ ordinary supervisor I/O guard spanning socket work. It does not reconnect or
 qualify setup/credit/payment/completeness. Actual changed-image/native evidence
 and provider qualification still require separately authorized live activity.
 Financial gates remain closed.
+The [bounded local native-semantics probe](../../tools/native-qualification/README.md)
+now implements exact-seal approval, fresh identities, the one-deposit/one-withdrawal
+scenario, original-wire persistence, explicit lost-reply audit separation and
+independent finalized payment checks. Its scope/bootstrap exception was approved
+2026-10-08. Approved invocations stopped at a malformed sponsor locator and a
+malformed loader constant and a signer-buffer aliasing defect. The
+[receipt](P23-NATIVE-SEMANTICS-RECEIPT.md) preserves those unfunded failures and
+records the corrected actual 20-USDP deposit / 19-USDP finalized payment and
+return with 1-USDP fee. The original bootstrap remains unresolved; a bounded late
+empty-account lending-disable/readback check passes with no further economic
+activity. Standing authority covers small test-only corrections within unchanged
+limits, not economic retries or financial-policy changes. Actual observations and
+offline tests cannot supply a complete native cut, UUID recovery capability or
+shipping funding provider.
+Any unsupported requirement returns as a named G01/policy question; the following
+measured financial run remains separately scoped, not automatically authorized.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial
 activation and the existing durable storage/repair contract are unchanged.

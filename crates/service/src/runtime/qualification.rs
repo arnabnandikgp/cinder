@@ -464,6 +464,8 @@ fn application(
             next_poll: now,
             read_kind: 0,
             deposit_index: 0,
+            demo_deposit: None,
+            demo_allocation: None,
         }),
         io: Mutex::new(NativeIo {
             egress,

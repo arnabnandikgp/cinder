@@ -223,6 +223,7 @@ struct Response<T> {
     success: bool,
     data: T,
     error: Option<String>,
+    code: Option<i64>,
 }
 #[derive(Deserialize)]
 struct Settings {
@@ -276,6 +277,8 @@ pub fn setup(profile: &Profile, settings: &[u8], loan: &[u8]) -> Result<SetupObs
         || !l.success
         || s.error.is_some()
         || l.error.is_some()
+        || s.code.is_some()
+        || l.code.is_some()
         || s.data.error.is_some()
         || s.data.code.is_some()
         || s.data.margin_settings.len() > 32

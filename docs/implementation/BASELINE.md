@@ -4,6 +4,43 @@ Approved directions as of 2026-09-30; tracked extraction, not a new product-poli
 approval or deployment claim. [Plan](PLAN.md), [tracker](TRACKER.md),
 [source/evidence register](EVIDENCE.md). Requirement IDs below are stable.
 
+2026-10-08 bounded demo addendum: [ADR 0029](../architecture/0029-demo-deposit-confirmation.md)
+permits original-finalized-signature deposit-history matching plus available
+balance corroboration under an explicit testnet venue-bookkeeping assumption.
+Its weaker journal marker is not B05 production credit qualification, a native
+risk-readiness grant or B07 recovery backing. The original stronger contracts and
+unresolved production gates remain; do not treat this approval as a silent
+general relaxation of funding finality.
+
+The subsequent separately approved initial-demo setup boundary in ADR 0029
+accepts fresh non-atomic venue reads for an idle, exclusively controlled test
+account with disabled lending and zero debt. Its explicit policy and retained
+provenance can authorize only original bounded ingress, not a second allocation.
+`Setup.complete`, native risk readiness and the stronger withdrawal/recovery
+contracts remain unchanged; activation and changed-image qualification remain
+separate. This is not production setup or a solvency proof.
+
+The subsequently approved local allocation implementation adds one private
+configuration grant: one original verified owner deposit, one fixed quote amount,
+two distinct request IDs, the current customer authority epoch and an absolute
+expiry. Its only route is Vault → Broker → Pacifica testnet. Actual loaded
+controllers, chain configuration and demo policy bind its application/KMS context;
+durable journal identities prevent renewal or a second allocation. It is governed
+internal working-collateral authority, not a customer signature or another credit.
+No public funding endpoint, trading, withdrawal, payout, recovery relaxation or
+live-run permission follows. Versions 1–5 still reject financial activation.
+The subsequent offline v6 composition permits only this private grant's two
+retained ingress acceptances and rejects trading, unrelated funds and payouts.
+The user subsequently approved a separate common-journal flat-funding rule in
+[the continuation map](P23-FINANCIAL-GATES.md#fresh-flat-account-admission-decision--pending-user-review).
+Its durable certificate permits only the two fixed cash transfers against the
+actual original receipt, with zero positions/funding/debt/other commitments and
+exact location capacity. It rechecks before preparation and exposure/signing;
+the second leg needs full first-leg completion. No complete native check, mark
+or collateral cut is invented. Ordinary admission, withdrawals, payouts, trading
+readiness and recovery retain their stronger contracts. Local tests do not grant
+changed-image live authority.
+
 ## Product and custody contract
 
 | ID | Binding direction | Boundary / unresolved qualification |
