@@ -24,6 +24,20 @@ export function configuredWallet(config) {
   if(!isAbsolute(path)||/[\x00-\x1f\x7f]/.test(path))throw Error('Absolute sponsor locator required');
   return path;
 }
+// Accept an explicitly supplied old PRIVATE transport config as a locator only.
+// Never import its accounts, keys, authority or execution approval.
+export function configuredRpc(bytes) {
+  const text=Buffer.from(bytes).toString().trim();
+  let rpc=text;
+  if(text.startsWith('{')) {
+    const config=JSON.parse(text);
+    if(Object.keys(config).sort().join(',')!=='rpc,wallet'||typeof config.rpc!=='string'||typeof config.wallet!=='string')throw Error('Private RPC locator shape');
+    rpc=config.rpc;
+  }
+  const u=new URL(rpc);
+  if(u.origin!=='https://devnet.helius-rpc.com'||u.username||u.password||u.hash||u.pathname!=='/')throw Error('Fixed devnet RPC required');
+  return rpc;
+}
 export function validateSignerLocator(path) {
   if(typeof path!=='string'||path!==path.trim()||!isAbsolute(path)||/[\x00-\x1f\x7f]/.test(path))throw Error('Signer locator shape');
   const st=lstatSync(path);

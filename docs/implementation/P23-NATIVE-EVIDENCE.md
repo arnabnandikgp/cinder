@@ -1,18 +1,29 @@
 # Pacifica native evidence contract
 
-Updated 2026-10-07. Documented schemas and offline tests, **not fresh venue
+Updated 2026-10-08. Documented schemas and offline tests, **not fresh venue
 qualification or financial activation**. This supplements
 [the financial gates](P23-FINANCIAL-GATES.md); the approved ledger, custody and
 recovery contracts are unchanged.
+
+Latest deposit-only exception: [ADR 0029](../architecture/0029-demo-deposit-confirmation.md)
+implements the user-approved testnet bookkeeping assumption with explicit journal
+demo state (introduced in engine revision 22; current revision 23 also retains
+the separately approved flat-only allocation certificate). It requires an original finalized signature,
+matching full deposit-history credit and available balance evidence on an idle
+initialized account. These local tests neither observe the current endpoint nor
+establish final/no-later-effect semantics. Strong `Credit`, `Withdrawal` and
+recovery cut ports remain unchanged. Version 6 has a locally implemented two-leg
+allocation gate, not qualified live financial activation; earlier versions stay off.
 
 ## Primary sources
 
 | Source | Useful evidence | Not established by this source |
 | --- | --- | --- |
-| [Account transfers](https://docs.pacifica.fi/api-documentation/api/websocket/subscriptions/account-transfers) | Exact account/asset, deposit transaction ID; pending/confirmed withdrawal batch nonce, requested gross, net and fee | Deposit final-total semantics; persisted withdrawal UUID → batch correlation after lost ACK; durable replay, complete causal frontier or no later effects |
+| [Account transfers](https://docs.pacifica.fi/api-documentation/api/websocket/subscriptions/account-transfers) | Exact account/asset, deposit transaction ID; pending/confirmed withdrawal batch nonce, transfer amount (`am`), requested amount before fees (`ra`) and fee (`f`) | Deposit final-total semantics; persisted withdrawal UUID → batch correlation after lost ACK; durable replay, complete causal frontier or no later effects |
 | [Account settings](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-settings) | Explicit `auto_lend_disabled`, configured margin modes/leverage. Null lending flag is the enabled default; absent margin overrides use native defaults. | Atomic settings/debt observation, completion of all pending setup, safe fresh-account bootstrap |
 | [Account loan](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-loan-info) | Exact `borrowed` and `pending_interest` | A missing cache/account means zero debt; atomicity or causal completeness with settings |
 | [Withdrawal request](https://docs.pacifica.fi/api-documentation/api/rest-api/account/request-withdrawal) | Optional UUID idempotency key; response batch nonce/gross/fee; duplicate UUID returns conflict | ACK is payment; a retry is safe; a lost ACK can be reconstructed from amount/time alone |
+| [Official MCP tools](https://docs.pacifica.fi/api-documentation/api/mcp/tools), [pinned account client](https://github.com/pacifica-fi/pacifica-mcp/blob/4748feca93efe2b2a5a0c95993e40f68d0ca4338/src/tools/account.ts) | Perp deposit-history, withdrawal-history and pending-withdrawal routes; account/limit/cursor queries. Retained historical withdrawal rows expose batch/payment transaction. | Original UUID lookup, native economic terminality, retention/completeness guarantees or current-profile qualification |
 | [Balance history](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-account-balance-history) | Paginated balance movements and timestamps | Original deposit signature or withdrawal UUID linkage, complete/no-later-effect certificate |
 | [Funding history](https://docs.pacifica.fi/api-documentation/api/rest-api/account/get-funding-history) | Account payout, history ID, side, amount, rate and time | Complete hourly/gross-private-user allocation, especially when the external pooled position is flat |
 | [WebSocket lifecycle](https://docs.pacifica.fi/api-documentation/api/websocket) | Separate testnet socket origin, ping/pong and finite connection lifetime | Authenticated replay or completeness after disconnect; the existing REST egress automatically supports native WebSocket |
@@ -21,6 +32,56 @@ The separate spot withdrawal history endpoint is **not** the current perp quote
 route. Do not substitute it to close a perp withdrawal gate. Schemas were checked
 against the primary documentation on the date above; example fields are not an
 observation of our account, asset or environment.
+Correction from the read-only investigation: these perp routes are documented
+by the official MCP tool list/client, although detailed REST pages are absent
+from the inspected index. Current diagnostic withdrawal requests still refuse before spending
+read credits; their tags remain readable in archives. That is Cinder's current
+unqualified-provider gate, not evidence that Pacifica lacks the endpoints. Do not
+re-enable settlement merely because a GET route exists.
+
+[Official MCP PR #5](https://github.com/pacifica-fi/pacifica-mcp/pull/5), merged
+July 9, 2026 into the pinned source, intentionally removes executing withdrawal
+tools while retaining read-only withdrawal queries. This explains the tool-list
+and current client discrepancy; it does not remove the venue withdrawal API or
+establish UUID lookup, native processing completeness or terminality.
+
+<a id="completion-contract-audit-2026-10-08"></a>
+## Completion-contract audit (2026-10-08)
+
+`journal::funds::funds_complete` already checks **one original operation**: exact
+debit/settled totals and receipt set, with independently qualified coverage for
+each receipt's source. It does not require a universal account/trading frontier.
+The earlier global-frontier explanation was too broad. The current trusted
+`Credit.cut`, `Withdrawal.cut`, final-total and no-later-effect requirements
+remain unchanged; a provider must justify them, not supply an arbitrary integer
+that passes the journal's structural comparison. Recovery separately requires
+all exposed lifecycles closed, no unresolved commitments, flat settled accounts,
+returned backing, final native reconciliation and authority fencing.
+
+Read-only reinspection of 35 retained September loan/withdrawal responses found
+successful batch/transaction history and pending withdrawals, but no original
+request UUID or `withdraw_id` in their rows. In the inspected positive withdrawal,
+history/pending `amount` is **net**, not fee-inclusive native debit. Current loan
+REST documentation and retained replies include the parser-required `updated_at`;
+its omission from the MCP example is not a missing venue capability.
+
+The closed October receipts additionally contain a finalized `DepositEvent`,
+`BatchCompletedEvent` and `WithdrawEvent`, matching original gross/broker and
+withdrawal instruction batch/net/withdrawal ID respectively. They strengthen
+chain-effect evidence, not final off-chain credit/debit processing. The historical
+bridge audit contains nonce checks/counter increments, but a withdrawal event
+field differs from this observed deployment; audited source cannot be promoted
+as current bytecode equivalence. Deposit nonce, withdrawal nonce and symbol LI
+are not one interchangeable native sequence.
+
+Detailed provenance and a reproducible read-only inspector are retained locally
+at `work/venues/pacifica/experiments/completion-evidence-2026-10-08/`. No original
+archive was changed, no financial provider/serialized contract was altered and
+no fresh venue-account/RPC/AWS action occurred. The decision to keep the current
+contract remains binding for strong completion; the later approved demo deposit
+policy above is a separately labeled exception. Obtain supported final-credit/debit semantics and lost
+UUID correlation before qualifying those ports; an identical economic rerun or
+finite silence does not supply them.
 
 ## Promoted components
 
@@ -33,6 +94,9 @@ decoding exposes observations, including disabled-lending and compatible-margin
 flags, rather than accepting unsafe settings or a missing debt response as ready.
 Debug output redacts values. Unit/time/asset inputs require the independently
 qualified profile; no decimal precision is inferred from an example string.
+The gross/net conservation equality is a parser invariant and was observed in
+the bounded native round trip; the field documentation does not itself state
+that equation or establish final-total semantics.
 
 `withdrawal_acknowledgment` strictly decodes the documented success response's
 batch nonce, gross requested amount and advertised fee. The response contains
@@ -122,8 +186,12 @@ network I/O. Local runtime activation is implemented; this is neither actual
 native capture nor hardware evidence. The prior closed AWS receipt does not
 qualify the new image. No setup/credit/payment certificate follows from capture.
 
-The shipping manifest still forbids funding and trading. Setup/credit/payment,
-complete execution/funding cuts and final native recovery are named open gates.
+Shipping manifest versions 1–5 forbid funding and trading. The separately approved
+v6 composition permits only the private grant's two original ingress operations;
+all versions forbid trading. Its local tests do not qualify financial activation.
+Strong setup/credit/payment, complete execution/funding cuts and final native
+recovery remain named open gates. The approved demo setup/credit exception is
+described separately in [ADR 0029](../architecture/0029-demo-deposit-confirmation.md).
 The retained-pack hardware invocation is closed, with all fixed read-only cells
 passing. It grants no financial activity. Actual provider capture and financial
 activation require a separate bounded manifest and qualified evidence.

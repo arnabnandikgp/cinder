@@ -230,6 +230,7 @@ fn run() -> Result<(), Error> {
         route,
         trading_epoch: 1,
         chain: None,
+        demo_allocation: None,
     };
     let aws_root: Vec<u8> = serde_json::from_value(v["awsRoot"].clone()).map_err(|_| Error)?;
     let venue_root: Vec<u8> = serde_json::from_value(v["venueRoot"].clone()).map_err(|_| Error)?;
@@ -247,6 +248,7 @@ fn run() -> Result<(), Error> {
         return Err(Error);
     }
     let manifest = Manifest {
+        demo_deposit: None,
         version: 1,
         chain: None,
         history: None,

@@ -3,10 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { Keypair, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { Keypair, PublicKey, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 const require=createRequire(import.meta.url);
-const { ROUTE,decodeSigner,signNative,nativeInstruction,verifyDeployment,verifyMint,verifyToken }=require('../../../tools/native-qualification/bindings.mjs');
+const { ROUTE,decodeSigner,signNative,nativeInstruction,batchWithdrawal,verifyDeployment,verifyMint,verifyToken }=require('../../../tools/native-qualification/bindings.mjs');
 const owner=Keypair.fromSeed(Buffer.alloc(32,77)).publicKey;
 test('native diagnostic owns signer bytes after clearing parse input; signatures bind the expected public identity',()=>{
   const fixture=Keypair.fromSeed(Buffer.alloc(32,79)),raw=Array.from(fixture.secretKey);
@@ -64,4 +64,35 @@ test('native qualification token layouts bind classic token program, quote mint,
   const mint=Buffer.alloc(82);mint[44]=6;mint[45]=1;
   const m=()=>({owner:TOKEN_PROGRAM_ID.toBase58(),executable:false,data:[mint.toString('base64'),'base64']});
   assert.doesNotThrow(()=>verifyMint(m()));mint[44]=9;assert.throws(()=>verifyMint(m()));
+});
+test('native payment ABI joins retained ACK nonce, recipient and net without inventing completion',()=>{
+  const authority=Keypair.fromSeed(Buffer.alloc(32,81)),program=new PublicKey(ROUTE.program),
+    pda=(seed:string)=>PublicKey.findProgramAddressSync([Buffer.from(seed)],program)[0];
+  const accounts=[authority.publicKey,new PublicKey(ROUTE.central),new PublicKey(ROUTE.vault),pda('pacifica-fallback'),
+    TOKEN_PROGRAM_ID,ASSOCIATED_TOKEN_PROGRAM_ID,new PublicKey(ROUTE.mint),SystemProgram.programId,pda('__event_authority'),
+    program,getAssociatedTokenAddressSync(new PublicKey(ROUTE.mint),owner)];
+  const data=Buffer.alloc(68);createHash('sha256').update('global:batch_withdraw').digest().subarray(0,8).copy(data);
+  data.writeUInt32LE(1,8);data.writeBigUInt64LE(19000000n,12);data.writeBigUInt64LE(9007199254740993n,20);
+  owner.toBuffer().copy(data,28);data.writeBigUInt64LE(42n,60);
+  const transaction=new Transaction({feePayer:authority.publicKey,recentBlockhash:PublicKey.default.toBase58()});
+  transaction.add(new TransactionInstruction({programId:program,data,keys:accounts.map((pubkey,i)=>({pubkey,isSigner:i===0,isWritable:i<4||i===10}))}));
+  transaction.sign(authority);assert(transaction.verifySignatures());
+  const message=transaction.compileMessage(),base58=require('bs58'),fixture={version:'legacy',transaction:{signatures:[base58.encode(transaction.signature!)],message:{
+    accountKeys:message.accountKeys.map((pubkey,i)=>({pubkey:pubkey.toBase58(),signer:message.isAccountSigner(i),writable:message.isAccountWritable(i)})),
+    instructions:[{programId:program.toBase58(),accounts:accounts.map(a=>a.toBase58()),data:base58.encode(data)}]}}};
+  const ack={batch:42,gross:'20000000',fee:'1000000'},decode=(t=fixture,a=ack)=>batchWithdrawal(t,owner.toBase58(),a);
+  assert.deepEqual(decode(),{batch:42,net:'19000000',withdraw_id:'9007199254740993',instruction_observed:true,financial_completion:false,source_cut:null});
+  const corrupt=(edit:(v:typeof fixture)=>void)=>{const v=structuredClone(fixture);edit(v);assert.throws(()=>decode(v));};
+  for(const offset of [0,8,12,28,60])corrupt(v=>{const b=Buffer.from(base58.decode(v.transaction.message.instructions[0].data));b[offset]^=1;v.transaction.message.instructions[0].data=base58.encode(b);});
+  corrupt(v=>v.transaction.message.instructions[0].data=base58.encode(Buffer.concat([data,Buffer.alloc(1)])));
+  corrupt(v=>v.transaction.message.instructions[0].programId=TOKEN_PROGRAM_ID.toBase58());
+  corrupt(v=>v.transaction.message.instructions[0].accounts[10]=owner.toBase58());
+  corrupt(v=>v.transaction.message.accountKeys[1].writable=!v.transaction.message.accountKeys[1].writable);
+  corrupt(v=>v.transaction.message.accountKeys[1].signer=true);
+  corrupt(v=>v.transaction.message.instructions.push(v.transaction.message.instructions[0]));
+  corrupt(v=>v.transaction.message.accountKeys.push(v.transaction.message.accountKeys[0]));
+  corrupt(v=>v.version='0');
+  for(const a of [{...ack,batch:43},{...ack,batch:Number.MAX_SAFE_INTEGER+1},{...ack,gross:'1e7'},
+    {...ack,fee:'3000000'},{...ack,fee:'0'}])assert.throws(()=>decode(fixture,a));
+  assert.throws(()=>batchWithdrawal(fixture,Keypair.fromSeed(Buffer.alloc(32,82)).publicKey.toBase58(),ack));
 });

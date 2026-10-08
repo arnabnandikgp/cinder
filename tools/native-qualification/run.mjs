@@ -8,7 +8,7 @@ import { rootCertificates } from 'node:tls';
 import { createRequire } from 'node:module';
 import { setTimeout as pause } from 'node:timers/promises';
 import { LIMITS,canonical,sha,privateRead,exclusive,validateManifest,assertApproval,Journal,
-  boundedBody,decodeResponse,nativeAck,setupObservations,transfers,emptyBalanceBaseline,flatAccountObservation,depositLink,withdrawalLink,paymentDelta,tokenDelta,atoms } from './core.mjs';
+  boundedBody,decodeResponse,originalNativeReply,nativeAck,setupObservations,stagedInitialization,stagedIdle,stagedDepositHistory,transfers,emptyBalanceBaseline,flatAccountObservation,depositLink,withdrawalLink,paymentDelta,tokenDelta,atoms,deliveryPolicy,faucetRecipient } from './core.mjs';
 import { checkEnvironment,validateSignerLocator,runDirectory,sources,tlsRoots } from './artifacts.mjs';
 
 // The independent offline harness drives this same sequence. Native receipt loss
@@ -35,11 +35,27 @@ export async function qualify(p) {
   return p.closeout({deposit,setup,payment,controller_ack:null});
 }
 
+// Fresh house/test capital initializes the venue before any customer funding.
+// This separate sequence never inherits the legacy 120-second exception or
+// withheld-ACK experiment. Failed setup permits only original containment.
+export async function qualifyStaged(p) {
+  await p.preflight();await p.baseline();await p.fund();
+  const deposit=await p.capture(()=>p.deposit());
+  let setup;
+  try {setup=await p.stageSetup(deposit);p.checkBootstrap();}
+  catch {p.note('staged-setup-blocker');setup={status:'unresolved',shipping_complete:false};}
+  const reply=await p.capture(()=>p.withdrawRetained());
+  const payment=await p.reconcilePayment(reply);
+  if(!payment)throw Error('Original withdrawal unresolved; no replacement or rescue');
+  await p.returnNet(payment);
+  return p.closeout({deposit,setup,payment,controller_ack:reply});
+}
+
 export async function main(directory) {
   checkEnvironment();const dir=runDirectory(directory),m=JSON.parse(privateRead(join(dir,'manifest.json'))),
     config=JSON.parse(privateRead(join(dir,'config.json'))),approval=JSON.parse(privateRead(join(dir,'approval.json')));
-  const seal=validateManifest(m);assertApproval(m,approval,Date.now());
-  const {web3,token,base58,ROUTE,ata,pub,decodeSigner,signNative,nativeInstruction,verifyDeployment,verifyMint,verifyToken}=await import('./bindings.mjs');
+  const seal=validateManifest(m),delivery=deliveryPolicy(m);assertApproval(m,approval,Date.now());
+  const {web3,token,base58,ROUTE,ata,pub,decodeSigner,signNative,nativeInstruction,batchWithdrawal,verifyDeployment,verifyMint,verifyToken}=await import('./bindings.mjs');
   const {Transaction,SystemProgram}=web3;
   if(canonical(m.route)!==canonical(ROUTE)||canonical(m.sponsor_transfers)!==canonical({owner:'35000000',broker:'25000000'})
     ||m.sources!==sources()||m.tls_roots!==tlsRoots()||m.rpc_config_hash!==sha(config.rpc)||m.sponsor_locator_hash!==sha(config.wallet)
@@ -77,9 +93,10 @@ export async function main(directory) {
     if(r.status!==200||r.body.id!==1||r.body.error||!Object.hasOwn(r.body,'result'))throw Error('RPC refused/unknown');return r.body.result;
   };
   const get=async(path,cleanup=false)=>{
-    if(!['account','account/settings','account/loan','positions','orders','account/balance/history'].includes(path))throw Error('Native GET scope');
+    if(!['account','account/settings','account/loan','positions','orders','account/balance/history','account/deposit/history'].includes(path))throw Error('Native GET scope');
     const url=new URL(`/api/v1/${path}`,m.native_origin);url.searchParams.set('account',m.broker);
     if(path.endsWith('history'))url.searchParams.set('limit','20');
+    if(path==='account/balance/history'&&m.test_capital_only)url.searchParams.set('include_trades','true');
     return request('http',url.href,{method:'GET',headers:{accept:'application/json'}},cleanup);
   };
   const info=async(account,cleanup=false,dataSlice)=>(await rpc('getAccountInfo',[account,{encoding:'base64',commitment:'finalized',...(dataSlice?{dataSlice}:{})}],cleanup)).value;
@@ -104,7 +121,7 @@ export async function main(directory) {
     j.append('native-deployment',{sha256:programDigest,loader_slot:ROUTE.slot,source_equivalence:false});
   };
   const final=async(signature,cleanup=false)=>{
-    for(let i=0;i<30;i++) {
+    for(let i=0;i<delivery.polls;i++) {
       const status=(await rpc('getSignatureStatuses',[[signature],{searchTransactionHistory:true}],cleanup)).value?.[0];
       if(status?.err)throw Error('Original transaction failed');
       if(status?.confirmationStatus==='finalized') {
@@ -112,7 +129,7 @@ export async function main(directory) {
         if(tx?.meta?.err!==null||tx.transaction?.signatures?.[0]!==signature)throw Error('Original transaction receipt');
         return {signature,status,tx};
       }
-      await pause(2000);
+      await pause(delivery.pollMs);
     }
     throw Error('Original signature remains unknown; no resend');
   };
@@ -141,7 +158,7 @@ export async function main(directory) {
     if(!Number.isSafeInteger(height)||height>block.lastValidBlockHeight)throw Error('Expired original wire; no re-sign');
     j.once(identity,{signature,wire_hash:sha(wire)});
     if(identity==='native-deposit')nativeDepositAt=Date.now();
-    const reported=await rpc('sendTransaction',[wire.toString('base64'),{encoding:'base64',skipPreflight:false,maxRetries:0,preflightCommitment:'finalized'}],cleanup);
+    const reported=await rpc('sendTransaction',[wire.toString('base64'),{encoding:'base64',skipPreflight:false,maxRetries:delivery.maxRetries,preflightCommitment:'finalized'}],cleanup);
     if(reported!==signature)throw Error('Submission identity mismatch');
     const receipt=await final(signature,cleanup);exclusive(join(dir,`receipt-${identity}.json`),JSON.stringify(receipt));return receipt;
   };
@@ -155,11 +172,9 @@ export async function main(directory) {
     // refreshed or replayed if the bounded expiry cannot be met.
     await pause(Math.max(0,lastHttp+12000-Date.now()));
     if(Date.now()-timestamp>=30000)throw Error('Original native request expired unsent');
-    j.once(identity,{type,request_hash:sha(canonical(body))});
-    const result=await request('http',m.native_origin+path,{method:'POST',headers:{'content-type':'application/json'},body:canonical(body)},cleanup);
-    exclusive(join(dir,`audit-${identity}.json`),result);
-    if(lose){j.append('lost-native-reply',{identity,controller_accepted:false});return null;}
-    j.append('native-reply',{identity,status:result.status,success:result.body.success===true});return result;
+    return originalNativeReply(j,identity,{type,request_hash:sha(canonical(body))},
+      ()=>request('http',m.native_origin+path,{method:'POST',headers:{'content-type':'application/json'},body:canonical(body)},cleanup),
+      result=>exclusive(join(dir,`audit-${identity}.json`),result),lose);
   };
   const require=createRequire(new URL('../../clients/vault/package.json',import.meta.url)),WebSocket=require('ws');
   const capture=async(action,cleanup=false)=>{
@@ -201,6 +216,12 @@ export async function main(directory) {
     },
     fund:async()=>{
       for(const role of ['owner','broker'])await send(`sponsor-${role}`,sponsor,[SystemProgram.transfer({fromPubkey:sponsor.publicKey,toPubkey:pub(m[role]),lamports:BigInt(m.sponsor_transfers[role])})],{sponsorAmount:BigInt(m.sponsor_transfers[role])});
+      if(faucetRecipient(m)===m.broker) {
+        await send('faucet',broker,[nativeInstruction('mint_test_usdc',m.broker)]);
+        await send('allocate',owner,[token.createAssociatedTokenAccountIdempotentInstruction(owner.publicKey,pub(m.owner_tokens),owner.publicKey,pub(ROUTE.mint))]);
+        if(verifyToken(await info(m.owner_tokens),m.owner)!==0n||verifyToken(await info(m.broker_tokens),m.broker)!==20000000n)throw Error('Direct faucet amount');
+        j.append('diagnostic-faucet-route',{mode:'broker-direct',amount:'20000000',customer_funds:false});return;
+      }
       await send('faucet',owner,[nativeInstruction('mint_test_usdc',m.owner)]);
       if(verifyToken(await info(m.owner_tokens),m.owner)!==20000000n)throw Error('Faucet amount');
       await send('allocate',owner,[token.createAssociatedTokenAccountIdempotentInstruction(owner.publicKey,pub(m.broker_tokens),broker.publicKey,pub(ROUTE.mint)),
@@ -216,21 +237,48 @@ export async function main(directory) {
       return receipt;
     },
     setup:async()=>setupObservations((await get('account/settings')).body,(await get('account/loan')).body),
-    checkBootstrap:()=>{if(!nativeDepositAt||Date.now()-nativeDepositAt>LIMITS.bootstrap_ms)throw Error('Bootstrap deadline');},
+    stageSetup:async deposit=>{
+      let initialized=false;
+      for(let i=0;i<m.limits.initialization_cycles;i++) {
+        p.checkBootstrap();
+        initialized=stagedInitialization(await get('account',true),await get('account/loan',true),Date.now());
+        j.append('staged-initialization',{cycle:i+1,initialized,customer_funds:false});
+        console.log(JSON.stringify({stage:'initialization',cycle:i+1,initialized}));
+        if(initialized)break;
+      }
+      if(!initialized)throw Error('Staged initialization window exhausted');
+      if(await p.disable('staged')!=='disabled')throw Error('Original staged lending-disable not established');
+      const settings=await get('account/settings',true),loan=await get('account/loan',true),account=await get('account',true),
+        positions=await get('positions',true),orders=await get('orders',true);
+      const setup=stagedIdle(settings,loan,account,positions,orders,Date.now());
+      const history=stagedDepositHistory(await get('account/deposit/history',true),await get('account/balance/history',true),deposit.signature);
+      j.append('staged-setup',{...setup,history,customer_funds:false});
+      console.log(JSON.stringify({stage:'setup',status:setup.status,deposit_history:history.status,shipping:false}));
+      return {...setup,history};
+    },
+    checkBootstrap:()=>{if(!nativeDepositAt||Date.now()-nativeDepositAt>m.limits.bootstrap_ms)throw Error('Bootstrap deadline');},
     note:reason=>j.append('blocker',{reason}),
     withdrawLostReply:async()=>{
       const account=await get('account',true);if(account.body.success!==true||atoms(account.body.data?.available_to_withdraw)<20000000n)throw Error('Original withdrawal not available');
       return post('withdraw','native-withdraw',{amount:'20',idempotency_key:m.withdraw_uuid},true,true);
     },
-    reconcilePayment:async()=>{
+    withdrawRetained:async()=>{
+      const account=await get('account',true);if(account.status!==200||account.body.success!==true
+        ||account.body.error!=null||account.body.code!=null||atoms(account.body.data?.available_to_withdraw)<20000000n)throw Error('Original withdrawal not available');
+      return post('withdraw','native-withdraw',{amount:'20',idempotency_key:m.withdraw_uuid},true,false);
+    },
+    reconcilePayment:async reply=>{
       const audit=JSON.parse(privateRead(join(dir,'audit-native-withdraw.json')));if(audit.status!==200)return null;
-      const ack=nativeAck(audit.body);j.append('audit-only-ack',{...ack,controller_accepted:false});
+      if(m.test_capital_only&&canonical(reply)!==canonical(audit))throw Error('Original retained ACK mismatch');
+      const ack=nativeAck(audit.body);j.append(m.test_capital_only?'diagnostic-retained-ack':'audit-only-ack',{...ack,controller_accepted:!!m.test_capital_only,shipping:false});
       for(let i=0;i<3;i++) {
-        const link=withdrawalLink(observed,ack,null,m.broker);
+        const link=withdrawalLink(observed,ack,m.test_capital_only?reply:null,m.broker);
         if(link.signature) {
           const receipt=await final(link.signature,true),delta=paymentDelta(receipt.tx,receipt.status,{signature:link.signature,ata:m.broker_tokens,mint:ROUTE.mint,owner:m.broker});
           if(delta.toString()!==link.net)throw Error('Payment/transfer mismatch');
-          exclusive(join(dir,'native-payment.json'),JSON.stringify({link,receipt}));return {...link,fee:ack.fee};
+          const instruction=batchWithdrawal(receipt.tx,m.broker,ack);
+          if(instruction.net!==link.net)throw Error('Native instruction/payment mismatch');
+          exclusive(join(dir,'native-payment.json'),JSON.stringify({link,receipt,instruction}));return {...link,fee:ack.fee};
         }
         // Separate planned, finite observation windows, not an economic resend.
         await capture(async()=>{await get('account',true);await get('account/balance/history',true);},true);
@@ -252,16 +300,23 @@ export async function main(directory) {
       const clean=ownerAtoms===BigInt(state.payment.net)&&brokerAtoms===0n&&flatAccountObservation(account)
         &&[positions,orders].every(r=>r.status===200&&r.body.success===true&&Array.isArray(r.body.data)&&r.body.data.length===0)
         &&setupObservations(settings.body,loan.body).status==='observed-disabled-no-debt';
+      let emptyBaseline;
+      if(m.test_capital_only) {
+        try {emptyBaseline=stagedIdle(settings,loan,account,positions,orders,Date.now(),'0');}
+        catch {emptyBaseline={status:'unresolved',shipping_complete:false};}
+      }
       return {status:clean?'assets-reconciled-financial-gates-unqualified':'closeout-unresolved',setup:state.setup,
         deposit:depositLink(observed,state.deposit.signature,m.broker),payment:state.payment,owner_atoms:ownerAtoms.toString(),broker_atoms:brokerAtoms.toString(),
         sponsor_debit_reserved:sponsorDebit.toString(),history_observed:history.body.success===true,source_cut:null,
         pending_balance_observed:typeof account.body.data?.pending_balance==='string'?account.body.data.pending_balance:null,pending_operations_complete:false,
         sol_balances_lamports:sol,gas_and_token_account_rent_reclaimed:false,
-        lost_reply_reconciliation:'unresolved-native-UUID-query-not-established',agent_mutations:0,
+        ...(m.test_capital_only?{scenario:'staged-test-capital-bootstrap',empty_baseline:emptyBaseline,
+          staged_qualification:clean&&state.setup.status==='observed-disabled-no-debt'&&emptyBaseline.status==='observed-disabled-no-debt'?'passed':'unresolved'}:{}),
+        lost_reply_reconciliation:m.test_capital_only?'not-injected':'unresolved-native-UUID-query-not-established',agent_mutations:0,
         shipping:false,nitro:false,controller_credit:false,financial_completion:false};
     },
   };
-  try {const result=await qualify(p);exclusive(join(dir,'result.json'),result);j.append('closed',{status:result.status});console.log(JSON.stringify({seal,status:result.status,shipping:false}));}
+  try {const result=await (m.test_capital_only?qualifyStaged(p):qualify(p));exclusive(join(dir,'result.json'),result);j.append('closed',{status:result.status});console.log(JSON.stringify({seal,status:result.status,staged_qualification:result.staged_qualification??'not-requested',shipping:false}));}
   catch {j.append('stopped',{reason:'Inspect private original request/receipt evidence; no automatic restart/rescue'});console.error('Native qualification stopped; original identities and budgets retained. Inspect private evidence.');process.exitCode=1;}
   // JS/SDK opaque key objects have no secure-erasure guarantee. This disposable
   // diagnostic process is not a production secret-lifetime implementation.

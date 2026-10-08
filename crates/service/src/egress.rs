@@ -122,8 +122,11 @@ impl Egress {
         }
         let start = Instant::now();
         let now = self.clock.now()?;
+        if now >= request.expires_at() {
+            return Err(Error);
+        }
         let wire = encode(host(self.origin), request.path(), request.body())?;
-        self.deliver(&wire, now, start)
+        self.deliver(&wire, now, start, Some(request.expires_at()))
     }
     fn read_once(&self, request: reads::Request) -> Result<Reply, Error> {
         let start = Instant::now();
@@ -133,11 +136,31 @@ impl Egress {
             return Err(Error);
         }
         let wire = encode_read(host(self.origin), query.target())?;
-        self.deliver(&wire, now, start)
+        self.deliver(&wire, now, start, None)
     }
-    fn deliver(&self, wire: &[u8], now: u64, start: Instant) -> Result<Reply, Error> {
+    fn deliver(
+        &self,
+        wire: &[u8],
+        now: u64,
+        start: Instant,
+        expires_at: Option<u64>,
+    ) -> Result<Reply, Error> {
         let socket = VsockStream::connect(self.target)?;
-        let result = exchange(socket, &self.trust, host(self.origin), now, wire, start)?;
+        let result = exchange_checked(
+            socket,
+            &self.trust,
+            host(self.origin),
+            now,
+            wire,
+            start,
+            (MAX_BODY, || {
+                let current = self.clock.now()?;
+                if current < now || expires_at.is_some_and(|until| current >= until) {
+                    return Err(Error);
+                }
+                Ok(())
+            }),
+        )?;
         let received_at = self.clock.now()?;
         if received_at < now
             || received_at - now > DEADLINE.as_millis() as u64
@@ -197,9 +220,11 @@ fn encode_read(host: &str, target: &str) -> Result<Zeroizing<Vec<u8>>, Error> {
                 | "/api/v1/account/settings"
                 | "/api/v1/account/loan"
                 | "/api/v1/account/balance/history"
+                | "/api/v1/account/deposit/history"
                 | "/api/v1/account/withdraw/pending"
                 | "/api/v1/account/withdraw/history"
         )
+        || path == "/api/v1/account/deposit/history" && host != "test-api.pacifica.fi"
         || !query.starts_with("account=")
         || query.len() > 1024
         || !target.bytes().all(|b| (33..=126).contains(&b))
@@ -209,6 +234,7 @@ fn encode_read(host: &str, target: &str) -> Result<Zeroizing<Vec<u8>>, Error> {
     }
     Ok(Zeroizing::new(format!("GET {target} HTTP/1.1\r\nHost: {host}\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n").into_bytes()))
 }
+#[cfg(test)]
 fn exchange<S: Socket>(
     socket: S,
     trust: &Trust,
@@ -228,6 +254,26 @@ pub(crate) fn exchange_bounded<S: Socket>(
     start: Instant,
     maximum_body: usize,
 ) -> Result<Response, Error> {
+    exchange_checked(
+        socket,
+        trust,
+        hostname,
+        now,
+        wire,
+        start,
+        (maximum_body, || Ok(())),
+    )
+}
+fn exchange_checked<S: Socket, F: FnOnce() -> Result<(), Error>>(
+    socket: S,
+    trust: &Trust,
+    hostname: &str,
+    now: u64,
+    wire: &[u8],
+    start: Instant,
+    limits: (usize, F),
+) -> Result<Response, Error> {
+    let (maximum_body, before_write) = limits;
     if maximum_body == 0 || maximum_body > cinder_journal::wire::MAX_RECORD {
         return Err(Error);
     }
@@ -253,6 +299,8 @@ pub(crate) fn exchange_bounded<S: Socket>(
     {
         return Err(Error);
     }
+    // Refuse an expired queued signature AFTER TLS too, before any HTTP bytes.
+    before_write()?;
     tls.write_all(wire)?;
     tls.flush()?;
     let result = response_bounded(&mut tls, start, maximum_body)?;
@@ -391,8 +439,19 @@ mod tests {
         let target = "/api/v1/trades/history?account=fixture&limit=32&cursor=a%26b";
         let wire = encode_read("test-api.pacifica.fi", target).unwrap();
         assert_eq!(wire.as_slice(), format!("GET {target} HTTP/1.1\r\nHost: test-api.pacifica.fi\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n").as_bytes());
+        for target in [
+            "/api/v1/account/deposit/history?account=fixture&limit=32&cursor=a%2Fb%3Fc",
+            "/api/v1/account/balance/history?account=fixture&limit=32&include_trades=true",
+        ] {
+            let wire = encode_read("test-api.pacifica.fi", target).unwrap();
+            assert_eq!(wire.as_slice(), format!("GET {target} HTTP/1.1\r\nHost: test-api.pacifica.fi\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n").as_bytes());
+        }
         for (host, target) in [
             ("evil.example", target),
+            (
+                "api.pacifica.fi",
+                "/api/v1/account/deposit/history?account=fixture&limit=32",
+            ),
             (
                 "test-api.pacifica.fi",
                 "/api/v1/account/withdraw?account=fixture",
@@ -620,7 +679,7 @@ mod tests {
         let mut trailing = der.clone();
         trailing.push(0);
         assert!(Trust::from_der(&trailing, sha256(&trailing)).is_err());
-        for ((hostname, now, selected_root, succeeds), read) in [
+        for ((hostname, now, selected_root, succeeds), read, expired) in [
             ("test-api.pacifica.fi", 1_700_000_500_000, &root, true),
             ("api.pacifica.fi", 1_700_000_500_000, &root, false),
             (
@@ -633,8 +692,12 @@ mod tests {
             ("test-api.pacifica.fi", 1_699_999_500_000, &root, false),
         ]
         .into_iter()
-        .flat_map(|case| [(case, false), (case, true)])
-        {
+        .flat_map(|case| [(case, false, false), (case, true, false)])
+        .chain([(
+            ("test-api.pacifica.fi", 1_700_000_500_000, &root, false),
+            false,
+            true,
+        )]) {
             let mut builder =
                 SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server()).unwrap();
             builder
@@ -663,6 +726,14 @@ mod tests {
                     .set_write_timeout(Some(Duration::from_secs(2)))
                     .unwrap();
                 if let Ok(mut tls) = acceptor.accept(stream) {
+                    if expired {
+                        let mut byte = [0];
+                        assert!(
+                            !matches!(tls.read(&mut byte), Ok(n) if n > 0),
+                            "expired signature leaked HTTP bytes after TLS"
+                        );
+                        return;
+                    }
                     let mut request = Zeroizing::new(vec![0; expected.len()]);
                     tls.read_exact(&mut request).unwrap();
                     assert_eq!(request.as_slice(), expected);
@@ -678,10 +749,20 @@ mod tests {
                 .unwrap();
             let der = selected_root.to_der().unwrap();
             let trust = Trust::from_der(&der, sha256(&der)).unwrap();
-            assert_eq!(
-                exchange(stream, &trust, hostname, now, &wire, Instant::now()).is_ok(),
-                succeeds
-            );
+            let result = if expired {
+                exchange_checked(
+                    stream,
+                    &trust,
+                    hostname,
+                    now,
+                    &wire,
+                    Instant::now(),
+                    (MAX_BODY, || Err(Error)),
+                )
+            } else {
+                exchange(stream, &trust, hostname, now, &wire, Instant::now())
+            };
+            assert_eq!(result.is_ok(), succeeds);
             worker.join().unwrap();
         }
     }

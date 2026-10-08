@@ -1,17 +1,84 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, chmodSync, writeFileSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, rmSync, chmodSync, writeFileSync, symlinkSync,readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { LIMITS, canonical, sha, validateManifest, assertApproval, Journal, atoms, nativeAck,
-  setupObservations, transfers, emptyBalanceBaseline, flatAccountObservation, depositLink, withdrawalLink, paymentDelta, tokenDelta, boundedBody, privateRead, exclusive } from '../tools/native-qualification/core.mjs';
-import { qualify } from '../tools/native-qualification/run.mjs';
-import { configuredWallet,validateSignerLocator } from '../tools/native-qualification/artifacts.mjs';
+import { LIMITS, STAGED_LIMITS, DELIVERY_LIMITS, deliveryPolicy, faucetRecipient, canonical, sha, validateManifest, assertApproval, Journal, atoms, nativeAck,
+  setupObservations, stagedInitialization, stagedIdle, stagedDepositHistory, transfers, emptyBalanceBaseline, flatAccountObservation, depositLink, withdrawalLink, paymentDelta, tokenDelta, boundedBody, privateRead, exclusive, originalNativeReply } from '../tools/native-qualification/core.mjs';
+import { qualify,qualifyStaged } from '../tools/native-qualification/run.mjs';
+import { configuredRpc,configuredWallet,validateSignerLocator } from '../tools/native-qualification/artifacts.mjs';
+import { targets,observe,shape,body as observationBody,BOUNDS } from '../tools/native-qualification/observe.mjs';
+import {eligible as followupEligible,BOUNDS as FOLLOWUP_BOUNDS} from '../tools/native-qualification/finish-staging.mjs';
+
+test('schema observation is fixed testnet GET-only with bounded first-page histories',()=>{
+  const rows=targets('1'.repeat(32),'2'.repeat(32));assert.equal(rows.length,BOUNDS.requests);
+  for(const row of rows){const u=new URL(row.url);assert.equal(u.origin,'https://test-api.pacifica.fi');
+    assert.equal(u.searchParams.get('account'),row.account);assert.equal(u.pathname,'/api/v1/'+row.path);
+    if(row.path.endsWith('history'))assert.equal(u.searchParams.get('limit'),'32');
+    if(row.path.includes('balance/history'))assert.equal(u.searchParams.get('include_trades'),'true');}
+  for(const values of [['1'.repeat(32),'1'.repeat(32)],['https://evil','2'.repeat(32)],['','2'.repeat(32)]])
+    assert.throws(()=>targets(...values));
+});
+test('schema observation reports types without leaking values, enforces streaming/nesting bounds',async()=>{
+  const secret='DO_NOT_LOG';assert.equal(JSON.stringify(shape({error:secret,data:[{transaction_id:secret}]})).includes(secret),false);
+  assert.throws(()=>shape({'bad\nfield':1}));
+  let deep={};for(let i=0;i<10;i++)deep={data:deep};assert.throws(()=>shape(deep),/nesting/);
+  await assert.rejects(observationBody(new Response('x'.repeat(BOUNDS.body_bytes+1))),/size bound/);
+  assert.equal((await observationBody(new Response('ok'))).toString(),'ok');
+});
+function schemaPorts(status=200,raw='{"success":true,"data":[],"has_more":false}') {
+  let at=1000;const retained=[],calls=[],reports=[];
+  return {retained,calls,reports,ports:{now:()=>at,wait:async ms=>{at+=ms;},
+    retain:(name,value)=>retained.push({name,value}),report:v=>reports.push(v),
+    fetch:async (url,options)=>{calls.push({url,options,at});return new Response(raw,{status});}}};
+}
+test('read-only schema qualification retains before GET, observes fixed cadence and never grants readiness',async()=>{
+  const h=schemaPorts();assert.equal(await observe('1'.repeat(32),'2'.repeat(32),h.ports),12);
+  assert.equal(h.calls.length,12);assert.equal(h.reports.length,12);
+  for(let i=0;i<12;i++){assert.equal(h.retained[i*3].name,'request-'+(i+1));
+    assert.equal(h.calls[i].options.method,'GET');assert.equal(h.calls[i].options.redirect,'error');
+    assert.deepEqual(h.calls[i].options.headers,{accept:'application/json'});
+    if(i)assert.equal(h.calls[i].at-h.calls[i-1].at,12000);}
+  assert.equal(h.retained.at(-1).value.shipping_readiness,false);
+});
+test('schema qualification stops on rate limit, upstream/transport/malformed response; no retries',async()=>{
+  for(const [status,raw] of [[429,'{}'],[503,'{}'],[200,'bad-json'],[200,'x'.repeat(8193)]]){
+    const h=schemaPorts(status,raw);await assert.rejects(observe('1'.repeat(32),'2'.repeat(32),h.ports));
+    assert.equal(h.calls.length,1);assert.equal(h.retained.some(v=>v.name==='complete'),false);
+  }
+  const h=schemaPorts();h.ports.fetch=async()=>{h.calls.push({});throw Error('Network unknown');};
+  await assert.rejects(observe('1'.repeat(32),'2'.repeat(32),h.ports));assert.equal(h.calls.length,1);
+  assert.deepEqual(h.retained.map(v=>v.name),['request-1']);
+});
+test('schema observation bounds elapsed/backward time and refuses I/O after retention failure',async()=>{
+  const h=schemaPorts();h.ports.wait=async()=>{};h.ports.now=(()=>{let n=0;return ()=>++n===1?1000:200000;})();
+  await assert.rejects(observe('1'.repeat(32),'2'.repeat(32),h.ports),/bound/);assert.equal(h.calls.length,0);
+  const j=schemaPorts();j.ports.retain=()=>{throw Error('Disk unavailable');};
+  await assert.rejects(observe('1'.repeat(32),'2'.repeat(32),j.ports));assert.equal(j.calls.length,0);
+});
 const manifest=()=>({schema:'cinder-native-qualification-v1',cluster:'devnet',aws:false,shipping:false,
   native_origin:'https://test-api.pacifica.fi',wss_origin:'wss://test-ws.pacifica.fi/ws',
   genesis:'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',rpc_origin:'https://devnet.helius-rpc.com',
   limits:{...LIMITS},bootstrap_exception:true,lost_native_reply:true,withdraw_uuid:'12345678-1234-4234-8234-123456789abc',
   sources:'a'.repeat(64),tls_roots:'b'.repeat(64),node:'24.21.0',owner:'owner',broker:'broker',sponsor:'sponsor'});
+test('persistent diagnostic seals bounded original-wire forwarding and distinct faucet control routes',()=>{
+  const old=manifest();assert.deepEqual(deliveryPolicy(old),{maxRetries:0,polls:30,pollMs:2000});
+  const staged={...old,schema:'cinder-native-staged-bootstrap-v1',limits:{...STAGED_LIMITS},
+    bootstrap_exception:false,lost_native_reply:false,test_capital_only:true};
+  assert.deepEqual(deliveryPolicy(staged),deliveryPolicy(old));
+  for(const mode of ['owner-via-broker','broker-direct']) {
+    const m={...staged,schema:'cinder-native-staged-delivery-v1',limits:{...DELIVERY_LIMITS},faucet_mode:mode};
+    const approval={manifest:validateManifest(m),approved:true,reference:'latest user persistent diagnostics',not_after:2000};
+    assert.deepEqual(deliveryPolicy(m),{maxRetries:5,polls:60,pollMs:2000});
+    assert.equal(faucetRecipient(m),mode==='broker-direct'?'broker':'owner');
+    assert.doesNotThrow(()=>assertApproval(m,approval,1000));
+    assert.throws(()=>assertApproval({...m,faucet_mode:mode==='broker-direct'?'owner-via-broker':'broker-direct'},approval,1000));
+    for(const change of [{limits:{...DELIVERY_LIMITS,rpc_max_retries:6}},{limits:{...DELIVERY_LIMITS,status_polls:61}},
+      {limits:{...DELIVERY_LIMITS,initialization_cycles:13}},{faucet_mode:'any-wallet'},{aws:true},{shipping:true}])
+      assert.throws(()=>validateManifest({...m,...change}));
+  }
+  assert.throws(()=>validateManifest({...staged,faucet_mode:'broker-direct'}));
+});
 function temp(fn){const dir=mkdtempSync(join(tmpdir(),'cinder-native-offline-'));try{return fn(dir);}finally{rmSync(dir,{recursive:true,force:true});}}
 test('native offline sponsor locator strips CLI display padding without reading key material',()=>{
   assert.equal(configuredWallet('Config File: other\nKeypair Path: /private/tmp/test wallet.json \nCommitment: confirmed\n'),'/private/tmp/test wallet.json');
@@ -121,6 +188,31 @@ test('native HTTP body bound is enforced while reading, not after buffering an u
   await assert.rejects(boundedBody(response),/bound/);
   assert.equal((await boundedBody(new Response('ok'))).toString(),'ok');
 });
+test('original native transport/body/rate-limit/audit failures retain exposure and cannot resend',async()=>{
+  for(const stage of ['transport','body','rate-limit','audit']) {
+    const dir=mkdtempSync(join(tmpdir(),'cinder-native-unknown-'));
+    try {
+      chmodSync(dir,0o700);
+      const m=manifest(),j=new Journal(dir,m,()=>1000);j.begin();let requests=0;
+      const receive=async()=>{requests++;if(stage!=='audit')throw Error(stage);return {status:200,body:{success:true}};};
+      await assert.rejects(originalNativeReply(j,'original',{type:'withdraw'},receive,()=>{throw Error('audit');}),new RegExp(stage));
+      const unknown=j.rows.filter(r=>r.kind==='native-reply-unknown');
+      assert.equal(unknown.length,1);assert.deepEqual(unknown[0].data,{identity:'original',exposed:true,controller_accepted:false});
+      assert.equal(j.rows.some(r=>r.kind==='native-reply'),false);
+      await assert.rejects(originalNativeReply(j,'original',{},receive,()=>{}),/no resend/);
+      assert.equal(requests,1);
+    } finally {rmSync(dir,{recursive:true,force:true});}
+  }
+});
+test('original native response withholding is distinct from genuine unknown reply',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'cinder-native-withheld-'));
+  try {
+    chmodSync(dir,0o700);const j=new Journal(dir,manifest(),()=>1000);j.begin();let retained=false;
+    assert.equal(await originalNativeReply(j,'original',{},async()=>({status:200,body:{success:true}}),()=>{retained=true;},true),null);
+    assert.equal(retained,true);assert.equal(j.rows.at(-1).kind,'lost-native-reply');
+    assert.equal(j.rows.some(r=>r.kind==='native-reply-unknown'),false);
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});
 function harness(overrides={}) {
   const calls=[],p={};
   for(const name of ['preflight','baseline','fund','returnNet'])p[name]=async()=>{calls.push(name);};
@@ -151,4 +243,119 @@ test('native sequence uncertain original deposit or missing original payment can
   assert(!deposit.calls.includes('original-withdrawal-response-withheld'));
   const withdrawal=harness({reconcilePayment:async()=>null});await assert.rejects(qualify(withdrawal.p),/unresolved/);
   assert(!withdrawal.calls.includes('returnNet'));assert(!withdrawal.calls.includes('closeout'));
+});
+test('staged manifest is a distinct sealed scenario, not the old timing exception or reply-loss authority',()=>{
+  const m={...manifest(),schema:'cinder-native-staged-bootstrap-v1',limits:{...STAGED_LIMITS},
+    bootstrap_exception:false,lost_native_reply:false,test_capital_only:true};
+  const approval={approved:true,manifest:validateManifest(m),reference:'separate staged bootstrap approval',not_after:2000};
+  assert.doesNotThrow(()=>assertApproval(m,approval,1000));
+  for(const change of [{bootstrap_exception:true},{lost_native_reply:true},{test_capital_only:false},
+    {limits:{...STAGED_LIMITS,bootstrap_ms:300001}},{limits:{...STAGED_LIMITS,initialization_cycles:5}}])
+    assert.throws(()=>assertApproval({...m,...change},approval,1000));
+  assert.throws(()=>assertApproval(manifest(),approval,1000));
+  assert.throws(()=>validateManifest({...manifest(),test_capital_only:true}),/Mixed/);
+});
+test('private RPC locator imports only fixed devnet transport, never old account/approval authority',()=>{
+  const url='https://devnet.helius-rpc.com/?api-key=TEST_ONLY';
+  assert.equal(configuredRpc(Buffer.from(url+'\n')),url);
+  assert.equal(configuredRpc(Buffer.from(JSON.stringify({rpc:url,wallet:'/old/ignored.json'}))),url);
+  for(const value of ['https://api.mainnet-beta.solana.com',url+'#fragment','https://user@devnet.helius-rpc.com/',
+    'https://devnet.helius-rpc.com/other',JSON.stringify({rpc:url,wallet:'/old',approved:true}),JSON.stringify({rpc:42,wallet:'/old'})])
+    assert.throws(()=>configuredRpc(Buffer.from(value)));
+});
+function idleResponses() {
+  const r=data=>({status:200,body:{success:true,data,error:null,code:null}});
+  return {settings:r({auto_lend_disabled:true,margin_settings:[],spot_settings:[]}),
+    loan:r({borrowed:'0',pending_interest:'0',spot_balances:[],updated_at:1000}),
+    account:r({balance:'20',account_equity:'20',pending_balance:'0',pending_interest:'0',total_margin_used:'0',
+      spot_market_value:'0',spot_collateral:'0',positions_count:0,orders_count:0,stop_orders_count:0,spot_balances:[]}),positions:r([]),orders:r([])};
+}
+test('staged initialization waits for an explicitly absent loan cache, never interprets it as zero debt',()=>{
+  const x=idleResponses(),missing={status:404,body:{success:false,data:null,code:404}};
+  assert.equal(stagedInitialization(x.account,missing,1000),false);
+  assert.equal(stagedInitialization(missing,missing,1000),false);
+  assert.equal(stagedInitialization(x.account,x.loan,1000),true);
+  for(const bad of [{status:500,body:{success:false}},{status:200,body:{success:true,data:null}},
+    {...missing,body:{success:false}}, {...x.loan,body:{...x.loan.body,code:404}}])
+    assert.throws(()=>stagedInitialization(x.account,bad,1000));
+});
+test('staged setup refuses exposures, debt, pending cash, stale/future data and incomplete cross settings',()=>{
+  const check=x=>stagedIdle(x.settings,x.loan,x.account,x.positions,x.orders,1000);
+  assert.equal(check(idleResponses()).shipping_complete,false);
+  for(const [section,key,value] of [['account','balance','19'],['account','account_equity','19'],['account','pending_balance','1'],
+    ['account','positions_count',1],['account','orders_count',1],['account','stop_orders_count',1],['account','total_margin_used','1'],
+    ['account','spot_market_value','1'],['account','spot_collateral','1'],
+    ['account','spot_balances',[{}]],['loan','borrowed','1'],['loan','pending_interest','1'],['loan','spot_balances',[{}]],
+    ['loan','updated_at',0],['loan','updated_at',6001],['settings','auto_lend_disabled',null],
+    ['settings','margin_settings',[{}]],['settings','spot_settings',[{}]]]) {
+    const x=idleResponses();x[section].body.data[key]=value;assert.throws(()=>check(x));
+  }
+  const x=idleResponses();assert.throws(()=>stagedIdle(x.settings,x.loan,x.account,x.positions,x.orders,181001));
+  x.orders.body.data=[{}];assert.throws(()=>check(x));
+});
+test('staged empty baseline requires positively observed zero cash and disabled/no-debt state',()=>{
+  const x=idleResponses();x.account.body.data.balance='0';x.account.body.data.account_equity='0';
+  assert.equal(stagedIdle(x.settings,x.loan,x.account,x.positions,x.orders,1000,'0').status,'observed-disabled-no-debt');
+  assert.throws(()=>stagedIdle(x.settings,x.loan,x.account,x.positions,x.orders,1000));
+  x.loan.body.data.borrowed='1';assert.throws(()=>stagedIdle(x.settings,x.loan,x.account,x.positions,x.orders,1000,'0'));
+});
+test('staged deposit history requires original full signature credit and latest nonpending balance, not a certificate',()=>{
+  const d={status:200,body:{success:true,data:[{transaction_id:signature,amount:'20',created_at:1000}],has_more:false}},
+    b={status:200,body:{success:true,data:[{event_type:'deposit',amount:'20',balance:'20',pending_balance:'0',created_at:1100}],has_more:false}};
+  const result=stagedDepositHistory(d,b,signature);assert.equal(result.financial_credit,false);assert.equal(result.source_cut,null);
+  for(const [section,key,value] of [['deposit','transaction_id','different'],['deposit','amount','19'],['deposit','created_at',0],
+    ['balance','event_type','withdraw'],['balance','balance','0'],['balance','amount','19'],['balance','pending_balance','20'],['balance','created_at',999]]) {
+    const dd=structuredClone(d),bb=structuredClone(b);(section==='deposit'?dd:bb).body.data[0][key]=value;
+    assert.throws(()=>stagedDepositHistory(dd,bb,signature));
+  }
+  for(const change of [{has_more:true},{next_cursor:'another'},{data:[...d.body.data,...d.body.data]},{code:404}])
+    assert.throws(()=>stagedDepositHistory({...d,body:{...d.body,...change}},b,signature));
+});
+function stagedHarness(overrides={}) {
+  const h=harness();h.p.stageSetup=async()=>{h.calls.push('staged-setup');return {status:'observed-disabled-no-debt'};};
+  h.p.withdrawRetained=async()=>{h.calls.push('original-withdrawal-retained');return {status:200,body:{success:true}};};
+  h.p.closeout=async state=>{h.calls.push('closeout');assert.equal(state.controller_ack.status,200);return state;};
+  return {calls:h.calls,p:{...h.p,...overrides}};
+}
+test('staged sequence initializes with test capital and retains the original ACK without legacy settings/loss injection',async()=>{
+  const h=stagedHarness();await qualifyStaged(h.p);
+  assert.deepEqual(h.calls,['preflight','baseline','fund','original-deposit','staged-setup','bootstrap-checked',
+    'original-withdrawal-retained','returnNet','closeout']);
+});
+test('staged setup failure only allows the planned original withdrawal containment',async()=>{
+  const h=stagedHarness({stageSetup:async()=>{throw Error('missing cache');}}),r=await qualifyStaged(h.p);
+  assert.equal(r.setup.status,'unresolved');assert(h.calls.includes('staged-setup-blocker'));
+  assert.equal(h.calls.filter(x=>x==='original-withdrawal-retained').length,1);
+});
+test('staged uncertain deposit, withdrawal ACK or payment stops without resend, return or rescue',async()=>{
+  for(const key of ['deposit','withdrawRetained','reconcilePayment']) {
+    const h=stagedHarness({[key]:async()=>{throw Error('original unknown');}});
+    await assert.rejects(qualifyStaged(h.p),/unknown/);assert(!h.calls.includes('returnNet'));assert(!h.calls.includes('closeout'));
+    assert(h.calls.filter(x=>x==='original-withdrawal-retained').length<=1);
+  }
+});
+test('actual account schema uses account_equity, not a made-up equity alias, and includes stop-order exposure',()=>{
+  const fixture=JSON.parse(readFileSync(new URL('../crates/pacifica/tests/fixtures/demo-native-shapes.json',import.meta.url))),x=idleResponses();
+  x.account.body.data=fixture.account.data;
+  assert.equal(stagedInitialization(x.account,x.loan,1000),true);
+  const old=structuredClone(x.account);old.body.data.equity=old.body.data.account_equity;delete old.body.data.account_equity;
+  assert.throws(()=>stagedInitialization(old,x.loan,1000));
+  const missing=structuredClone(x.account);delete missing.body.data.stop_orders_count;
+  assert.throws(()=>stagedInitialization(missing,x.loan,1000));
+});
+test('settings continuation requires a closed returned staged run and no earlier setting exposure',()=>{
+  const m={...manifest(),schema:'cinder-native-staged-bootstrap-v1',limits:{...STAGED_LIMITS},
+    bootstrap_exception:false,lost_native_reply:false,test_capital_only:true},
+    result={owner_atoms:'19000000',broker_atoms:'0',payment:{net:'19000000'},pending_balance_observed:'0',source_cut:null,shipping:false,financial_completion:false},
+    rows=[{kind:'start',at:1000},{kind:'http',at:2000},{kind:'closed',at:3000}],now=4000;
+  assert.deepEqual(followupEligible(m,result,rows,now),{deadline:1201000,parent_http:1,last_http:2000});
+  for(const change of [{broker_atoms:'1'},{owner_atoms:'20000000'},{pending_balance_observed:'1'},{shipping:true},{financial_completion:true}])
+    assert.throws(()=>followupEligible(m,{...result,...change},rows,now));
+  assert.throws(()=>followupEligible(m,result,[...rows,{kind:'native-intent',data:{type:'set_auto_lend_disabled'}},{kind:'closed'}],now));
+  assert.throws(()=>followupEligible(m,result,rows.slice(0,-1),now));
+  assert.throws(()=>followupEligible(manifest(),result,rows,now));
+  assert.throws(()=>followupEligible(m,result,rows,1200000));
+  assert.throws(()=>followupEligible(m,result,rows,999));
+  const spent=[rows[0],...Array.from({length:191},()=>({kind:'http',at:2000})),rows[2]];
+  assert.throws(()=>followupEligible(m,result,spent,now));assert.equal(FOLLOWUP_BOUNDS.posts,1);
 });

@@ -25,7 +25,7 @@ use zeroize::Zeroizing;
 pub struct Gates {
     /// Risk-increasing native signing; P20 refuses activation.
     pub trading: bool,
-    /// Fund-moving native signing; P20 refuses activation.
+    /// Fund-moving signing. Only version 6's fixed private demo grant may enable it.
     pub funding: bool,
     /// Qualified source reads; P20 refuses activation pending P23.
     pub native_reads: bool,
@@ -124,7 +124,8 @@ impl HistoryPolicy {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
-    /// Closed schema: 1 (five roles), 2 (chain), 3 (packs), 4 (finite native capture).
+    /// Closed schema: 1 (five roles), 2 (chain), 3 (packs), 4 (native capture),
+    /// 5 (demo confirmation), 6 (one fixed demo allocation; no withdrawal/trading).
     pub version: u32,
     /// Exact 64-byte network/deployment namespace.
     pub domain: Vec<u8>,
@@ -165,17 +166,20 @@ pub struct Manifest {
     /// Version 4's separate fixed WSS route and one-capture-per-boot resource policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_capture: Option<crate::native_capture::Policy>,
+    /// Explicit testnet-only confirmation policy, absent from versions 1–4.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub demo_deposit: Option<cinder_pacifica::funding::demo::Policy>,
 }
 impl Manifest {
     /// Refuse ambiguous routes, key-role reuse, missing trust or live activation.
     pub fn validate(&self) -> Result<(), Error> {
-        if !matches!(self.version,1..=4) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
+        if !matches!(self.version,1..=6) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
             || self.application==[0;32] || self.stream==[0;32] || self.generation==0 || self.epoch==0
             || self.slots.len()!=if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
             || (self.first.resource==self.second.resource) || self.gates.maximum_boot_ms==0 || self.gates.maximum_boot_ms>3_600_000
             // P20 packages/test-gates only. Live reads/money movement need P23's
             // qualified chain/read ports and separately authorized manifest.
-            || self.gates.trading || self.gates.funding || (self.version==1 && self.gates.native_reads)
+            || self.gates.trading || (self.gates.funding != (self.version==6)) || (self.version==1 && self.gates.native_reads)
         {
             return Err(Error);
         }
@@ -189,7 +193,7 @@ impl Manifest {
         ];
         match (self.version, &self.chain) {
             (1, None) => {}
-            (2..=4, Some(peer)) => {
+            (2..=6, Some(peer)) => {
                 peer.validate()?;
                 if peer.network.as_slice() != &self.domain[..32] {
                     return Err(Error);
@@ -200,13 +204,13 @@ impl Manifest {
         }
         match (self.version, &self.history) {
             (1 | 2, None) => {}
-            (3 | 4, Some(policy)) => {
+            (3..=6, Some(policy)) => {
                 policy.limits()?;
             }
             _ => return Err(Error),
         }
         match (self.version, &self.native_capture) {
-            (1..=3, None) => {}
+            (1..=3 | 5 | 6, None) => {}
             (4, Some(policy)) => {
                 policy.validate()?;
                 let history = self.history.as_ref().ok_or(Error)?;
@@ -225,6 +229,22 @@ impl Manifest {
                     return Err(Error);
                 }
                 ports.push(policy.port);
+            }
+            _ => return Err(Error),
+        }
+        match (self.version, &self.demo_deposit) {
+            (1..=4, None) => {}
+            (5 | 6, Some(policy)) => {
+                policy.validate().map_err(|_| Error)?;
+                // Worst-case decimal-byte JSON encoding plus metadata/frame.
+                let frame = cinder_pacifica::funding::demo::MAX_BODY * 4 + 8192;
+                if !self.gates.native_reads
+                    || self.version == 6 && policy.initial_setup.is_none()
+                    || policy.lifetime_ms > self.gates.maximum_boot_ms
+                    || frame > self.history.as_ref().ok_or(Error)?.record_bytes as usize
+                {
+                    return Err(Error);
+                }
             }
             _ => return Err(Error),
         }
@@ -291,7 +311,9 @@ impl Manifest {
                     1 => b"CINDER-RUNTIME-MANIFEST-1\0".as_slice(),
                     2 => b"CINDER-RUNTIME-MANIFEST-2\0".as_slice(),
                     3 => b"CINDER-RUNTIME-MANIFEST-3\0".as_slice(),
-                    _ => b"CINDER-RUNTIME-MANIFEST-4\0".as_slice(),
+                    4 => b"CINDER-RUNTIME-MANIFEST-4\0".as_slice(),
+                    5 => b"CINDER-RUNTIME-MANIFEST-5\0".as_slice(),
+                    _ => b"CINDER-RUNTIME-MANIFEST-6\0".as_slice(),
                 },
                 &serde_cbor::to_vec(self).map_err(|_| Error)?,
             ]
@@ -316,7 +338,9 @@ impl Manifest {
                 1 => b"CKR1".as_slice(),
                 2 => b"CKR2".as_slice(),
                 3 => b"CKR3".as_slice(),
-                _ => b"CKR4".as_slice(),
+                4 => b"CKR4".as_slice(),
+                5 => b"CKR5".as_slice(),
+                _ => b"CKR6".as_slice(),
             },
             &[role.code()],
             &self.generation.to_be_bytes(),
@@ -632,6 +656,7 @@ pub(crate) fn qualification_manifest() -> Manifest {
     };
     Manifest {
         version: 1,
+        demo_deposit: None,
         domain: [[1; 32], [2; 32]].concat(),
         application: [4; 32],
         stream: [5; 32],
@@ -930,6 +955,150 @@ mod tests {
                 .is_err()
         );
         assert_ne!(public, Recipient::new().unwrap().public().unwrap());
+    }
+    #[cfg(feature = "local-fixture")]
+    #[test]
+    fn demo_manifest_is_explicit_bounded_and_separate_from_capture_and_financial_activation() {
+        let mut m = qualification_manifest();
+        m.version = 5;
+        m.gates.native_reads = true;
+        let mut funds = m.slots[0].clone();
+        funds.role = Role::Funds;
+        funds.plaintext_hash = sha256(&[6; 32]);
+        funds.endpoint.resource =
+            "arn:aws:kms:us-east-1:123456789012:key/00000000-0000-0000-0000-000000000006".into();
+        m.slots.push(funds);
+        m.chain = Some(crate::chain_funding::Peer {
+            host: "api.devnet.solana.com".into(),
+            port: 9007,
+            root: m.venue_root.clone(),
+            root_hash: m.venue_root_hash,
+            network: [1; 32],
+        });
+        m.history = Some(HistoryPolicy {
+            record_bytes: 65536,
+            history_bytes: 8388608,
+            records: 256,
+            put_requests: 512,
+            put_bytes: 134217728,
+        });
+        m.demo_deposit = Some(cinder_pacifica::funding::demo::Policy {
+            revision: 1,
+            maximum_reads: 8,
+            maximum_pages: 2,
+            interval_ms: 1000,
+            maximum_backoff_ms: 5000,
+            lifetime_ms: 60000,
+            initial_setup: None,
+        });
+        m.validate().unwrap();
+        assert!(m.wrap(Role::Funds, &[6; 32]).unwrap().starts_with(b"CKR5"));
+        m.unwrap(Role::Funds, m.wrap(Role::Funds, &[6; 32]).unwrap())
+            .unwrap();
+        for case in 0..17 {
+            let mut changed = m.clone();
+            match case {
+                0 => changed.demo_deposit = None,
+                1 => changed.version = 3,
+                2 => changed.version = 4,
+                3 => changed.gates.native_reads = false,
+                4 => changed.gates.funding = true,
+                5 => changed.gates.trading = true,
+                6 => changed.gates.maximum_boot_ms = 59999,
+                7 => changed.history.as_mut().unwrap().record_bytes = 40959,
+                8 => changed.chain = None,
+                9 => changed.demo_deposit.as_mut().unwrap().revision = 0,
+                10 => changed.demo_deposit.as_mut().unwrap().maximum_reads = 65,
+                11 => changed.demo_deposit.as_mut().unwrap().maximum_pages = 9,
+                12 => changed.demo_deposit.as_mut().unwrap().interval_ms = 999,
+                13 => changed.demo_deposit.as_mut().unwrap().maximum_backoff_ms = 999,
+                14 => changed.demo_deposit.as_mut().unwrap().lifetime_ms = 999,
+                15 => changed.version = 6,
+                _ => {
+                    changed.native_capture = Some(crate::native_capture::Policy {
+                        port: 9008,
+                        root: changed.venue_root.clone(),
+                        root_hash: changed.venue_root_hash,
+                        limits: cinder_pacifica::capture::Limits {
+                            maximum_ms: 1000,
+                            maximum_messages: 2,
+                            maximum_bytes: 2048,
+                            maximum_message: 1024,
+                        },
+                    })
+                }
+            }
+            assert!(changed.validate().is_err(), "demo manifest case {case}");
+        }
+        let mut legacy = m.clone();
+        legacy.version = 3;
+        legacy.demo_deposit = None;
+        assert_ne!(legacy.digest().unwrap(), m.digest().unwrap());
+        let mut financial = m.clone();
+        financial.version = 6;
+        financial.gates.funding = true;
+        financial.demo_deposit.as_mut().unwrap().initial_setup =
+            Some(cinder_pacifica::funding::demo::InitialSetup {
+                revision: 1,
+                exclusive_control: true,
+            });
+        financial.validate().unwrap();
+        assert!(
+            financial
+                .wrap(Role::Funds, &[6; 32])
+                .unwrap()
+                .starts_with(b"CKR6")
+        );
+        assert!(
+            financial
+                .unwrap(Role::Funds, m.wrap(Role::Funds, &[6; 32]).unwrap())
+                .is_err()
+        );
+        for case in 0..5 {
+            let mut changed = financial.clone();
+            match case {
+                0 => changed.gates.funding = false,
+                1 => changed.gates.trading = true,
+                2 => changed.gates.native_reads = false,
+                3 => changed.demo_deposit.as_mut().unwrap().initial_setup = None,
+                _ => changed.version = 5,
+            }
+            assert!(changed.validate().is_err());
+        }
+        assert!(
+            m.unwrap(Role::Funds, legacy.wrap(Role::Funds, &[6; 32]).unwrap())
+                .is_err()
+        );
+        let value = serde_json::to_value(&legacy).unwrap();
+        assert!(value.get("demo_deposit").is_none());
+        let original = m.digest().unwrap();
+        let context = m.context(Role::Funds).unwrap();
+        m.demo_deposit.as_mut().unwrap().initial_setup =
+            Some(cinder_pacifica::funding::demo::InitialSetup {
+                revision: 1,
+                exclusive_control: true,
+            });
+        m.validate().unwrap();
+        assert_ne!(m.digest().unwrap(), original);
+        // KMS authenticates the full policy via encryption context; the role
+        // plaintext prefix deliberately binds only domain/stream/generation.
+        assert_ne!(m.context(Role::Funds).unwrap(), context);
+        for case in 0..2 {
+            let mut changed = m.clone();
+            let setup = changed
+                .demo_deposit
+                .as_mut()
+                .unwrap()
+                .initial_setup
+                .as_mut()
+                .unwrap();
+            if case == 0 {
+                setup.revision = 0;
+            } else {
+                setup.exclusive_control = false;
+            }
+            assert!(changed.validate().is_err());
+        }
     }
     #[test]
     fn cms_framing_accepts_bounded_ber_but_not_ambiguous_or_incomplete_objects() {

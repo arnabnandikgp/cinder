@@ -100,6 +100,7 @@ pub struct Outbound {
     origin: Origin,
     path: &'static str,
     body: PrivateBytes,
+    expires_at: u64,
 }
 impl std::fmt::Debug for Outbound {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -107,7 +108,11 @@ impl std::fmt::Debug for Outbound {
     }
 }
 impl Outbound {
-    pub(crate) fn funding(origin: &str, body: PrivateBytes) -> Result<Self, Error> {
+    pub(crate) fn funding(
+        origin: &str,
+        body: PrivateBytes,
+        expires_at: u64,
+    ) -> Result<Self, Error> {
         let origin = if origin == Origin::Testnet.url() {
             Origin::Testnet
         } else if origin == Origin::Mainnet.url() {
@@ -119,6 +124,7 @@ impl Outbound {
             origin,
             path: "/api/v1/account/withdraw",
             body,
+            expires_at,
         })
     }
     /// Only the prequalified origin; never follow a server-supplied redirect.
@@ -132,6 +138,23 @@ impl Outbound {
     /// Private-runtime-only request bytes; never log or send through host plaintext.
     pub fn body(&self) -> &[u8] {
         self.body.as_bytes()
+    }
+    /// Immutable signing deadline; egress must refuse an expired queued request.
+    pub fn expires_at(&self) -> u64 {
+        self.expires_at
+    }
+}
+/// Non-clone reply correlation, issued with the one durably exposed request.
+/// It may retain late actual replies, but cannot sign, send, retry or settle cash.
+pub struct DispatchCompletion {
+    dispatch: Dispatch,
+    plan: Plan,
+    binding: [u8; 32],
+    exposure: PrivateBytes,
+}
+impl std::fmt::Debug for DispatchCompletion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DispatchCompletion([PRIVATE])")
     }
 }
 /// Trusted one-shot egress seam. P19/P20 own actual in-enclave TLS/host isolation.
@@ -236,14 +259,40 @@ impl Gateway {
         seed: Zeroizing<[u8; 32]>,
         epoch: u64,
     ) -> Result<Self, Error> {
+        if policy.execution != Level::Qualified || profile.fills != Level::Qualified {
+            return Err(Error::Qualification);
+        }
+        Self::construct(profile, policy, seed, epoch)
+    }
+    /// Testnet read-budget composition without a qualified trading capability.
+    /// Unknown execution/fills stay unknown in the immutable release commitment;
+    /// every ordinary/recovery signing plan refuses this gateway.
+    pub fn new_read_only(
+        profile: Profile,
+        policy: Policy,
+        seed: Zeroizing<[u8; 32]>,
+        epoch: u64,
+    ) -> Result<Self, Error> {
+        if policy.origin != Origin::Testnet
+            || policy.execution != Level::Unknown
+            || profile.fills != Level::Unknown
+        {
+            return Err(Error::Qualification);
+        }
+        Self::construct(profile, policy, seed, epoch)
+    }
+    fn construct(
+        profile: Profile,
+        policy: Policy,
+        seed: Zeroizing<[u8; 32]>,
+        epoch: u64,
+    ) -> Result<Self, Error> {
         let fingerprint = profile.commitment()?;
         if epoch == 0
             || policy.revision == 0
             || policy.evidence.is_empty()
             || policy.evidence.len() > 256
             || !policy.evidence.is_ascii()
-            || policy.execution != Level::Qualified
-            || profile.fills != Level::Qualified
             || profile.precision != Level::Qualified
             || policy.expiry_ms == 0
             || policy.expiry_ms > 30_000
@@ -519,12 +568,22 @@ impl Gateway {
         at: u64,
         cleanup: bool,
     ) -> Result<ReadPermit, Error> {
+        self.reserve_read_with(journal, id, at, cleanup, None)
+    }
+    pub(crate) fn reserve_read_with<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        id: CommitId,
+        at: u64,
+        cleanup: bool,
+        evidence: Option<PrivateBytes>,
+    ) -> Result<ReadPermit, Error> {
         if journal.transaction(id).is_some() {
             return Err(Error::Qualification);
         }
         let history = self.history(journal, at)?;
         self.credit(&history, at, self.policy.read_cost, cleanup)?;
-        let tx = self.transaction(
+        let mut tx = self.transaction(
             journal,
             id,
             at,
@@ -534,6 +593,9 @@ impl Gateway {
                 plan: None,
             },
         )?;
+        if let Some(evidence) = evidence {
+            tx.evidence.push(evidence);
+        }
         let c = journal.commit(tx)?;
         if c.duplicate {
             return Err(Error::Qualification);
@@ -587,9 +649,17 @@ impl Gateway {
         let source = journal
             .transaction(reservation)
             .ok_or(Error::Qualification)?;
-        let [body] = source.evidence.as_slice() else {
+        // A demo polling marker shares the reservation transaction. Require one
+        // original Gateway spend, not one total provenance item; never select
+        // between conflicting Gateway records or treat extra evidence as a spend.
+        let mut records = source
+            .evidence
+            .iter()
+            .filter(|body| body.as_bytes().starts_with(MAGIC));
+        let body = records.next().ok_or(Error::Qualification)?;
+        if records.next().is_some() {
             return Err(Error::Qualification);
-        };
+        }
         let archive: Archive = serde_json::from_slice(
             body.as_bytes()
                 .strip_prefix(MAGIC)
@@ -637,6 +707,9 @@ impl Gateway {
         dispatch: Dispatch,
         recovery: bool,
     ) -> Result<(Plan, u32, bool), Error> {
+        if self.policy.execution != Level::Qualified || self.profile.fills != Level::Qualified {
+            return Err(Error::Qualification);
+        }
         let a = state
             .attempts()
             .iter()
@@ -760,6 +833,31 @@ impl Gateway {
         transport: &mut T,
         recovery: bool,
     ) -> Result<Outcome, Error> {
+        let (request, completion) = self.prepare_dispatch_scoped(journal, dispatch, recovery)?;
+        let reply = transport.post(request);
+        let at = match &reply {
+            Reply::Response { received_at, .. } => *received_at,
+            Reply::Unknown => dispatch.at,
+        }
+        .max(journal.state()?.logical_time());
+        self.complete_dispatch(journal, completion, reply, at)
+    }
+    /// Validate, durably charge/expose and sign one request under the mutation
+    /// owner. The returned one-use request is sent without holding that owner.
+    /// No retry is authorized when the request or reply is lost.
+    pub fn prepare_dispatch<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        dispatch: Dispatch,
+    ) -> Result<(Outbound, DispatchCompletion), Error> {
+        self.prepare_dispatch_scoped(journal, dispatch, false)
+    }
+    fn prepare_dispatch_scoped<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        dispatch: Dispatch,
+        recovery: bool,
+    ) -> Result<(Outbound, DispatchCompletion), Error> {
         if journal.transaction(dispatch.commit).is_some() {
             return Err(Error::Qualification);
         }
@@ -780,6 +878,7 @@ impl Gateway {
             },
         )?;
         tx.controls.push(Control::Expose(dispatch.attempt));
+        let exposure = tx.evidence[0].clone();
         let c = journal.commit(tx)?;
         if c.duplicate || c.receipt.controls.is_some() || c.exposures.len() != 1 {
             return Err(Error::Qualification);
@@ -820,9 +919,44 @@ impl Gateway {
                 _ => return Err(Error::Qualification),
             },
             body: PrivateBytes::new(serde_json::to_vec(&body).map_err(|_| Error::Codec)?)?,
+            expires_at: dispatch
+                .at
+                .checked_add(signed["expiry_window"].as_u64().ok_or(Error::Codec)?)
+                .ok_or(Error::Limit)?,
         };
-        let reply = transport.post(request);
-        self.record_reply(journal, dispatch, &plan, reply)
+        Ok((
+            request,
+            DispatchCompletion {
+                dispatch,
+                plan,
+                binding: self.release_commitment(journal.configuration())?,
+                exposure,
+            },
+        ))
+    }
+    /// Archive a correlated actual reply against the CURRENT journal head. A
+    /// concurrent revoke does not erase an already sent action or its late ACK.
+    /// The trusted completion time is not substituted for the observed time.
+    pub fn complete_dispatch<B: Backend, P: Protection>(
+        &self,
+        journal: &mut Journal<B, P>,
+        completion: DispatchCompletion,
+        reply: Reply,
+        at: u64,
+    ) -> Result<Outcome, Error> {
+        if completion.binding != self.release_commitment(journal.configuration())?
+            || at < completion.dispatch.at
+            || at < journal.verified_state()?.logical_time()
+            || journal
+                .transaction(completion.dispatch.commit)
+                .is_none_or(|tx| {
+                    tx.at != completion.dispatch.at
+                        || tx.evidence.first() != Some(&completion.exposure)
+                })
+        {
+            return Err(Error::Qualification);
+        }
+        self.record_reply(journal, completion.dispatch, &completion.plan, reply, at)
     }
     fn record_reply<B: Backend, P: Protection>(
         &self,
@@ -830,6 +964,7 @@ impl Gateway {
         dispatch: Dispatch,
         plan: &Plan,
         reply: Reply,
+        commit_at: u64,
     ) -> Result<Outcome, Error> {
         let (outcome, raw, at, cooldown, http_status) = match reply {
             Reply::Unknown => (
@@ -845,9 +980,10 @@ impl Gateway {
                 received_at,
                 retry_after_ms,
             } => {
-                let malformed =
-                    body.as_bytes().len() > observation::MAX_BODY || received_at < dispatch.at;
-                let received_at = received_at.max(dispatch.at);
+                let malformed = body.as_bytes().len() > observation::MAX_BODY
+                    || received_at < dispatch.at
+                    || received_at > commit_at;
+                let received_at = received_at.clamp(dispatch.at, commit_at);
                 let body = if malformed {
                     PrivateBytes::new(b"response rejected: bound or clock".to_vec())?
                 } else {
@@ -870,7 +1006,7 @@ impl Gateway {
         let mut tx = Transaction {
             id,
             expected: journal.head(),
-            at,
+            at: commit_at,
             evidence: vec![],
             inputs: vec![],
             order_observations: vec![],

@@ -91,7 +91,10 @@ impl State {
                     || self.recovery_sealed()
                     || self.holds.iter().any(|h| h.active)
                     || self.orders.iter().any(|o| !o.complete())
-                    || self.funds.iter().any(|o| !o.terminal || o.faulted)
+                    || self
+                        .funds
+                        .iter()
+                        .any(|o| !o.terminal || o.faulted || o.demo.is_some())
                     || self.raw_unresolved != 0
                     || self.ledger.unresolved_attribution() != 0
                     || self.ledger.unresolved_funds() != 0
@@ -385,7 +388,9 @@ impl<B: Backend, P: Protection> Journal<B, P> {
         }
         if s.holds().iter().any(|h| h.active)
             || s.orders().iter().any(|o| !o.complete())
-            || s.funds().iter().any(|o| !o.terminal || o.faulted)
+            || s.funds()
+                .iter()
+                .any(|o| !o.terminal || o.faulted || o.demo.is_some())
             || s.attempts().iter().any(|a| match a.kind {
                 AttemptKind::Funds => !s
                     .funds()

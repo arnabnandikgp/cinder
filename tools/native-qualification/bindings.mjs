@@ -53,6 +53,40 @@ export function nativeInstruction(kind,owner,amount=20000000n) {
       meta(pub(ROUTE.mint),false,true),meta(central),meta(token.ASSOCIATED_TOKEN_PROGRAM_ID),meta(token.TOKEN_PROGRAM_ID),meta(SystemProgram.programId)];
   return new TransactionInstruction({programId:pub(ROUTE.program),keys,data});
 }
+// Strict one-recipient diagnostic ABI observation, not a finalized-payment or
+// native no-later-effect certificate. It joins the ACK batch to actual on-chain
+// instruction bytes; it does not recover an ACK that was never persisted.
+export function batchWithdrawal(tx,broker,ack) {
+  const message=tx?.transaction?.message,ix=message?.instructions;
+  if(tx?.version!=='legacy'||!Array.isArray(ix)||ix.length!==1
+    ||!Array.isArray(message.accountKeys)||message.accountKeys.length!==11
+    ||!Array.isArray(tx.transaction.signatures)||tx.transaction.signatures.length!==1
+    ||!Number.isSafeInteger(ack?.batch)||ack.batch<0)throw Error('Native payment ABI scope');
+  const instruction=ix[0],keys=message.accountKeys;
+  const signer=keys.filter(k=>k?.signer===true);
+  if(signer.length!==1||signer[0]!==keys[0]||instruction.programId!==ROUTE.program
+    ||instruction.accounts?.length!==11||typeof instruction.data!=='string')throw Error('Native payment program/accounts');
+  const authority=pub(signer[0].pubkey).toBase58(),who=pub(broker);
+  const expected=[authority,ROUTE.central,ROUTE.vault,pda([Buffer.from('pacifica-fallback')]).toBase58(),
+    token.TOKEN_PROGRAM_ID.toBase58(),token.ASSOCIATED_TOKEN_PROGRAM_ID.toBase58(),ROUTE.mint,
+    SystemProgram.programId.toBase58(),pda([Buffer.from('__event_authority')]).toBase58(),ROUTE.program,ata(broker).toBase58()];
+  if(new Set(keys.map(k=>k.pubkey)).size!==keys.length
+    ||new Set(expected).size!==expected.length
+    ||expected.some((k,i)=>instruction.accounts[i]!==k)
+    ||expected.some(k=>keys.filter(x=>x.pubkey===k).length!==1))throw Error('Native payment route');
+  const writable=new Set([authority,ROUTE.central,ROUTE.vault,expected[3],expected[10]]);
+  if(keys.some(k=>k.signer!==(k.pubkey===authority)||k.writable!==writable.has(k.pubkey)))throw Error('Native payment privileges');
+  const data=Buffer.from(base58.decode(instruction.data));
+  if(base58.encode(data)!==instruction.data||data.length!==68
+    ||!data.subarray(0,8).equals(Buffer.from([37,76,149,71,94,36,245,195]))
+    ||data.readUInt32LE(8)!==1||!data.subarray(28,60).equals(who.toBuffer())
+    ||data.readBigUInt64LE(60)!==BigInt(ack.batch))throw Error('Native payment batch/recipient');
+  for(const value of [ack.gross,ack.fee])if(typeof value!=='string'||value.length>20||!/^(0|[1-9][0-9]*)$/.test(value))throw Error('Native payment amount');
+  const net=data.readBigUInt64LE(12),gross=BigInt(ack.gross),fee=BigInt(ack.fee);
+  if(net===0n||gross!==20000000n||fee>2000000n||net!==gross-fee)throw Error('Native payment net amount');
+  return {batch:ack.batch,net:net.toString(),withdraw_id:data.readBigUInt64LE(20).toString(),
+    instruction_observed:true,financial_completion:false,source_cut:null};
+}
 export function verifyDeployment(program,data) {
   const p=Buffer.from(program?.data?.[0]??'','base64'),d=Buffer.from(data?.data?.[0]??'','base64');
   if(program?.owner!==ROUTE.loader||program.executable!==true||p.length!==36||p.readUInt32LE(0)!==2

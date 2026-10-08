@@ -6,6 +6,34 @@ It uses the existing vault client's locked legacy codecs at an explicit boundary
 no packages, shipping dependencies or program deployments are added. There is no
 ambient live mode, mainnet/AWS path, automatic economic retry or live restart.
 
+## Separate read-only schema observations
+
+`observe.mjs` is a reusable **GET-only** diagnostic, separate from the funding
+driver and its closed invocations. Supply an authorized disposable test account
+address, a distinct public-only absence probe (no private key or funding), and a
+new `work/experiments/p23-native-schemas/observe-NAME` directory:
+
+```sh
+node tools/native-qualification/observe.mjs PUBLIC_TEST_ACCOUNT PUBLIC_ABSENCE_PROBE work/experiments/p23-native-schemas/observe-NAME
+```
+
+It reads the fixed testnet account/deposit-history/balance-history/settings/loan/
+positions/orders routes: at most 12 GETs, 12-second cadence, 12-second request
+deadline, three-minute total lifetime and 8-KiB bodies. It stops on HTTP 429,
+upstream failure or unavailable/malformed replies, with no retry. It cannot read
+wallets, sign requests, change settings, use RPC, move funds or create AWS resources.
+Native TLS verification stays enabled; redirects and ambient transport overrides
+refuse. Source/TLS/scope metadata and pre-I/O request/raw reply records are retained
+in new owner-only files. Existing directories refuse rather than reset a budget.
+Stdout contains bounded field/type summaries and hashes, not raw values/signatures.
+These sequential public observations are not atomic setup or financial certificates.
+
+The [2026-10-08 receipt](../../docs/implementation/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
+records actual established/absent-account results. Sanitized shapes in
+`crates/pacifica/tests/fixtures/demo-native-shapes.json` replace signatures and
+timestamps; they are offline regression inputs, not reusable native authority.
+No signing-key generation or financial invocation is part of this command.
+
 ## Offline checks and preparation
 
 Use pinned Node 24.21.0. Normal contract CI discovers these dependency-free tests:
@@ -16,7 +44,7 @@ node scripts/check.mjs --group=contracts
 ```
 
 The actual driver sequence is tested through independent fake ports. They are
-not native/chain evidence. `bindings.mjs` promotes only the public deposit/faucet
+not native/chain evidence. `bindings.mjs` promotes the public deposit/faucet
 ABI from [Pacifica's official SDK](https://github.com/pacifica-fi/pacifica-mcp/blob/4748feca93efe2b2a5a0c95993e40f68d0ca4338/src/idl/pacifica_solana.json):
 full IDL SHA256 `a31bb37868338e189fead472c1481954ed876844e83529e2e68b5ef0dbf427a1`.
 No historical key, plaintext controller, prototype deployment or amount/time
@@ -28,6 +56,13 @@ slot/authority. This is not verified source equivalence or an audited native ima
 All route identifiers must parse as canonical public keys. An independent fixture
 pins the [official loader-v3 ID](https://solana.com/docs/core/programs/program-deployment)
 and derives ProgramData rather than copying the implementation's owner constant.
+The withdrawal diagnostic checks a single-recipient legacy `batch_withdraw`
+instruction against that IDL: program, account order/privileges, recipient,
+integer net amount and batch nonce. The HTTP ACK's `batch_nonce` matches the
+instruction's batch nonce, **not** its separate `withdraw_id`. Multi-recipient,
+versioned or extra-instruction payments are outside this diagnostic's scope.
+The caller still owns signature, finality and token-effect verification; the
+ABI observation is not a financial completion certificate or lost-ACK lookup.
 
 Once the scope is approved, offline preparation creates **two fresh disposable
 test identities** in a new private namespace. It reads only the configured CLI
@@ -59,8 +94,10 @@ node tools/native-qualification/run.mjs \
 `MAPPINGS.md` also states the sealed diagnostic observation contract: documented
 single-object transfer messages, perp balance history and observed pending balance.
 An empty history page or zero pending balance does not prove complete operations.
-The probe does not assume undocumented perp withdrawal-history/pending routes or
-substitute unrelated spot endpoints.
+The probe does not assume unqualified perp withdrawal-history/pending semantics
+or substitute unrelated spot endpoints. Those perp routes are listed in official
+MCP documentation/client code; their existence does not establish original UUID
+lookup, final native debit or no-later-effect semantics.
 
 Changing source/configuration requires a new reviewed seal, not reuse of an old
 approval. On 2026-10-08 the user authorized small test-only corrections/reseals
@@ -70,6 +107,10 @@ retries, uncertain replacements, increased exposure, AWS/mainnet/customer assets
 or custody/security-policy changes. Once started, the owned lock remains and a
 second invocation refuses.
 Counter/head history survives restart; a torn journal requires manual analysis.
+Every original native POST retains its exposure before I/O. Transport, body,
+rate-limit or audit-storage failures retain an unknown reply and prevent a second
+submission under that identity. A separately retained reply withheld at the
+callback is labeled loss injection, not genuinely missing native evidence.
 Private files are exclusive, owner-only and fsynced before exposure. They are
 **not** Nitro-protected or rollback-proof; this tool must never handle customers.
 JavaScript/SDK key objects do not guarantee secure erasure. Its private key files
@@ -77,6 +118,66 @@ and remaining disposable devnet gas/token-account rent are retained for manual
 inspection, not automatically deleted or reclaimed.
 
 ## Fixed scenario and honest outcomes
+
+### Separately approved staged test-capital scenario
+
+Explicitly pass `staged-bootstrap` as the third preparation argument to select
+`cinder-native-staged-bootstrap-v1`. An explicitly supplied owner-only JSON
+transport configuration with exactly `rpc` and `wallet` fields can supply the
+devnet RPC locator; its old wallet value, test identities and approvals are not
+imported. The sponsor is resolved anew from current Solana CLI configuration.
+
+```sh
+node tools/native-qualification/prepare.mjs \
+  work/experiments/p23-native-semantics/run-staged-NAME \
+  /absolute/private/transport-config.json staged-bootstrap
+```
+
+Review both `REVIEW.md` and `STAGED-REVIEW.md`; the latter replaces the legacy
+timing/loss-injection bullets for this distinct manifest. It deposits only
+20 faucet USDP of test/house capital, observes positive idle account/loan-cache
+initialization (at most four read pairs), then submits **one** lending-disable
+request. Sequential settings/loan/account/positions/orders must show disabled
+lending, zero debt/interest, no spot exposure or margin overrides and no orders
+or positions. Original-signature deposit history plus the full, nonpending
+balance page corroborate the original credit; neither grants a financial cut.
+
+The explicit staging window is five minutes, not the legacy 120-second
+exception. Total HTTP/RPC/WSS, funds and 20-minute invocation limits are unchanged.
+The original withdrawal ACK is retained, not withheld. Original batch/instruction/
+finalized recipient checks precede return of confirmed net; closeout requires an
+empty disabled/no-debt baseline. Failed setup allows only the planned original
+withdrawal containment. There is no signed-setting retry, deposit/withdrawal
+resend, customer capital, trading, AWS, customer credit or shipping activation.
+Unknown economic execution stops. A fresh, separately bound approval is required;
+neither an old seal nor historical bootstrap success authorizes this scenario.
+
+`finish-staging.mjs prepare|run ORIGINAL_STAGED_DIRECTORY` supports a separately
+sealed **settings-only** continuation if the closed staged run returned the exact
+finalized net, has zero broker tokens/pending balance and never exposed a lending
+toggle. It verifies the parent's hash-linked journal and original recipient/token
+effects before reading the broker key. Up to ten HTTP calls and one first toggle
+share the original remaining 200-HTTP / 20-minute budget; no RPC or financial
+action is available. A separate `settings-followup/approval.json` must name the
+new scope hash and expire within that original deadline. The new child lock and
+exclusive pre-I/O artifacts prohibit restart. The parent's result and journal
+stay unchanged. A successful empty-account readback does **not** retroactively
+pass the earlier pre-withdrawal staging check or grant shipping setup authority.
+
+### Persistent credit investigation
+
+The separately approved persistent credit investigation can instead prepare
+`staged-reliable` or `staged-direct`. They use a distinct sealed delivery schema:
+bounded `maxRetries:5` forwarding of the same original signed wire, 60 status polls
+and twelve initialization pairs/ten minutes, under the same overall request and
+20-minute caps. `staged-direct` mints directly to the broker (official helper
+control) and creates an empty owner return ATA. Review `DELIVERY-REVIEW.md` as the
+authoritative variant override. Never restart/rewrite historical manifests or
+infer credit failure from an unlanded transaction. Independent repeat-round
+permission applies only when the current user explicitly grants it; financial
+and shipping qualification remain separate.
+
+### Legacy reply-loss scenario
 
 1. Pin devnet genesis; verify native loader metadata, mint and vault layout; reject
    nonempty fresh identities. Require an authentic empty account/history baseline.

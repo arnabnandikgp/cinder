@@ -23,7 +23,7 @@ use sha2::{Digest, Sha256};
 use std::{fmt, sync::Arc};
 
 // Order classification/authority/lifecycle changes replay semantics.
-const ENGINE_REVISION: u16 = 21;
+const ENGINE_REVISION: u16 = 23;
 
 /// Public storage sequencing metadata, never customer identity or balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

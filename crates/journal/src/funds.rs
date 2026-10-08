@@ -47,6 +47,24 @@ impl Intent {
     }
 }
 
+/// Trusted INTERNAL certificate for one flat testnet allocation. The owning
+/// service must authenticate the original vault receipt, idle native setup and
+/// governed release binding; public clients cannot supply this certificate.
+/// Neither its existence nor a nonzero hash proves external completeness.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlatAllocation {
+    /// Actual loaded application/allocation commitment, not a wallet signature.
+    pub authorization: [u8; 32],
+    /// Applied original owner receipt in the configured vault source namespace.
+    pub original: EventKey,
+    /// Original attributed cash; unrelated cash cannot replace this receipt.
+    pub original_amount: QuoteAtoms,
+    /// Sole Vault -> Broker instruction.
+    pub release: Intent,
+    /// Sole Broker -> Venue instruction, after full original release completion.
+    pub deposit: Intent,
+}
+
 /// Independently qualified causal coverage for each source of a cross-location move.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Coverage {
@@ -73,6 +91,21 @@ pub struct Terminal {
     /// P16 must validate its substance; nonzero alone is NOT authentication.
     pub no_later_execution: [u8; 32],
 }
+/// Explicit demo-only deposit closure under trusted venue bookkeeping. This is
+/// NOT a causal-coverage/no-later-effects certificate and cannot back recovery.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DemoDeposit {
+    /// Exact original exposed broker-to-venue attempt.
+    pub attempt: AttemptKey,
+    /// Immutable testnet confirmation policy commitment supplied by the adapter.
+    pub policy: [u8; 32],
+    /// Independently finalized original broker debit.
+    pub debit: EventKey,
+    /// Transaction-linked full venue credit, with no invented native cut.
+    pub credit: EventKey,
+    /// Full gross amount; this narrow mode permits no deposit fee/partial credit.
+    pub amount: QuoteAtoms,
+}
 /// Raw qualified completion evidence, independent of ordinary-control mode.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Observation {
@@ -96,6 +129,16 @@ impl std::fmt::Debug for Observation {
 /// Funds controls, committed atomically with holds and postings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
+    /// Governed cash-only testnet ingress. This is not ordinary customer authority
+    /// or a general collateral/risk cut. Prepare/exposure recheck the same grant.
+    FlatAccept {
+        /// Exact next instruction from the two-instruction grant.
+        intent: Box<Intent>,
+        /// Trusted internal intent digest, not a fabricated wallet signature.
+        approval: Approval,
+        /// Immutable certificate retained through journal replay.
+        allocation: Box<FlatAllocation>,
+    },
     /// Authenticated recovery operator's return of existing, gross-settled assets.
     /// Only Venue -> Broker or Broker -> Vault; never deposits or beneficiary payouts.
     RecoveryAccept {
@@ -128,6 +171,10 @@ pub enum Action {
     /// Trusted funding-qualification port: fence native risk while collateral or
     /// account setup is uncertain. This does not authorize a transfer or payout.
     NativeCreditReady(bool),
+    /// Trusted internal testnet port only. No customer API exposes this action.
+    /// Release only this fully observed zero-fee deposit, retaining its weaker
+    /// assurance permanently; never upgrade it to Terminal or a recovery cut.
+    ConfirmDemoDeposit(Box<DemoDeposit>),
 }
 
 /// Queue/lifecycle metadata, not another asset or claim ledger.
@@ -135,12 +182,16 @@ pub enum Action {
 pub struct Operation {
     /// Recovery-only return; cannot revive an ordinary prepared capability.
     pub recovery: bool,
+    /// Cash-only scoped authority; never inherited by another funds operation.
+    pub flat: Option<FlatAllocation>,
     /// Requested economics; vector insertion order is durable queue order.
     pub intent: Intent,
     /// At most one dispatch attempt in this phase.
     pub attempt: Option<AttemptKey>,
     /// Complete qualified history, possibly received before its legs.
     pub proof: Option<Terminal>,
+    /// Weaker testnet bookkeeping assumption, never hidden inside `proof`.
+    pub demo: Option<DemoDeposit>,
     /// Authorization safely closed or cancelled before exposure.
     pub terminal: bool,
     /// Contradictory/invalid lifecycle evidence; never silently reset.
@@ -148,6 +199,193 @@ pub struct Operation {
 }
 
 impl State {
+    fn flat_ready(&self, g: &FlatAllocation, intent: &Intent) -> Result<(), ControlError> {
+        let release = &g.release;
+        let deposit = &g.deposit;
+        let owner = Owner::Customer(release.request.account);
+        if g.authorization == [0; 32]
+            || g.original_amount.unit() != self.config.quote
+            || g.original_amount.atoms() < release.net.atoms()
+            || release.net.atoms() <= 0
+            || release.request.domain != self.config.domain
+            || release.request == deposit.request
+            || release.request.account != deposit.request.account
+            || release.source != Location::Vault
+            || release.destination != Destination::Location(Location::Broker)
+            || deposit.source != Location::Broker
+            || deposit.destination != Destination::Location(Location::Venue)
+            || release.net != deposit.net
+            || release.authority_epoch != deposit.authority_epoch
+            || release.expires_at != deposit.expires_at
+            || [release, deposit].iter().any(|i| {
+                i.request.domain != self.config.domain
+                    || i.policy != self.config.policy
+                    || i.net.unit() != self.config.quote
+                    || i.maximum_fee != QuoteAtoms::new(self.config.quote, 0)
+                    || i.allow_partial
+                    || i.fee_payer != Owner::House
+                    || self.authority(i.request.account) != Some(i.authority_epoch)
+                    || i.expires_at <= self.now
+            })
+            || intent != release && intent != deposit
+            || !self
+                .config
+                .sources
+                .iter()
+                .any(|s| s.scope == g.original.scope && s.location == Location::Vault)
+            || !self.ledger.events().iter().any(|e| {
+                matches!(&e.key, RecordKey::Economic(k) if k == &g.original)
+                    && e.policy == self.config.policy
+                    && e.change
+                        == Change::Receipt {
+                            owner,
+                            location: Location::Vault,
+                            amount: g.original_amount,
+                        }
+            })
+            || self.collateral.is_some()
+            || self.risk.is_some()
+            || self.frozen
+            || self.recovery.is_some()
+            || self.native_funding_ready
+            || self.raw_unresolved != 0
+            || self.ledger.unresolved_attribution() != 0
+            || self.ledger.unresolved_funds() != 0
+            || self.ledger.issues().iter().any(|i| i.open)
+            || !self.orders.is_empty()
+            || !self.closes.is_empty()
+            || !self.restorations.is_empty()
+            || !self.selections.is_empty()
+            || self.ledger.protection().active
+            || !self.ledger.protection().claims.is_empty()
+            || self.ledger.protection().reserve.atoms() != 0
+            || self.funds.iter().any(|o| {
+                o.recovery
+                    || o.faulted
+                    || o.flat.as_ref() != Some(g)
+                    || o.intent != *release && o.intent != *deposit
+            })
+            || self
+                .holds
+                .iter()
+                .any(|h| h.request != release.request && h.request != deposit.request)
+            || self.attempts.iter().any(|a| {
+                a.kind != AttemptKind::Funds
+                    || a.key.request != release.request && a.key.request != deposit.request
+            })
+        {
+            return Err(ControlError::Unqualified);
+        }
+        for book_owner in self
+            .config
+            .customers
+            .iter()
+            .copied()
+            .map(Owner::Customer)
+            .chain([Owner::House, Owner::Suspense])
+        {
+            let b = self
+                .ledger
+                .book(book_owner)
+                .map_err(|_| ControlError::Invalid)?;
+            if b.cash()
+                != if book_owner == owner {
+                    g.original_amount
+                } else {
+                    QuoteAtoms::new(self.config.quote, 0)
+                }
+                || b.funding().atoms() != 0
+                || b.positions()
+                    .iter()
+                    .any(|p| p.quantity().lots() != 0 || p.basis().atoms() != 0)
+            {
+                return Err(ControlError::Unqualified);
+            }
+        }
+        let native = self.ledger.venue();
+        if native.cash().atoms() != 0
+            || native.funding().atoms() != 0
+            || native
+                .positions()
+                .iter()
+                .any(|p| p.quantity().lots() != 0 || p.basis().atoms() != 0)
+            || self
+                .ledger
+                .in_transit()
+                .map_err(|_| ControlError::Invalid)?
+                .atoms()
+                != 0
+            || self.ledger.movements().iter().any(|m| {
+                m.faulted
+                    || !self
+                        .funds
+                        .iter()
+                        .any(|o| o.attempt == Some(m.mandate.attempt))
+            })
+        {
+            return Err(ControlError::Unqualified);
+        }
+        let is_deposit = intent == deposit;
+        let broker = if is_deposit {
+            release.net
+        } else {
+            QuoteAtoms::new(self.config.quote, 0)
+        };
+        if self.ledger.broker() != broker
+            || self.ledger.vault()
+                != g.original_amount
+                    .checked_sub(broker)
+                    .map_err(|_| ControlError::Capacity)?
+        {
+            return Err(ControlError::Capacity);
+        }
+        if is_deposit {
+            let first = self
+                .funds
+                .iter()
+                .find(|o| o.intent == *release)
+                .ok_or(ControlError::Unqualified)?;
+            let proof = first.proof.as_ref().ok_or(ControlError::Unqualified)?;
+            let movement = self
+                .ledger
+                .movements()
+                .iter()
+                .find(|m| Some(m.mandate.attempt) == first.attempt)
+                .ok_or(ControlError::Unqualified)?;
+            if !first.terminal
+                || first.demo.is_some()
+                || proof.debit != release.net
+                || proof.settled != release.net
+                || proof.no_later_execution == [0; 32]
+                || !self.funds_complete(
+                    self.funds
+                        .iter()
+                        .position(|o| o == first)
+                        .ok_or(ControlError::Invalid)?,
+                )
+                || movement.debit != release.net
+                || movement.arrived != release.net
+                || movement.settled != release.net
+                || movement.fees.atoms() != 0
+                || movement.returned.atoms() != 0
+                || movement.impaired.atoms() != 0
+            {
+                return Err(ControlError::Unqualified);
+            }
+        }
+        // With no marked portfolio installed, the existing reservation machinery
+        // checks exact cash/location capacities. Transit is never spendable cash.
+        self.all_capacity()
+    }
+
+    fn operation_ready(&self, index: usize) -> Result<(), ControlError> {
+        let o = &self.funds[index];
+        if let Some(ref g) = o.flat {
+            self.flat_ready(g, &o.intent)
+        } else {
+            self.funds_ready(o.recovery)
+        }
+    }
     /// Durable FIFO operation order for this pool/asset; no caller-side reordering.
     pub fn funds(&self) -> &[Operation] {
         &self.funds
@@ -221,9 +459,20 @@ impl State {
             | Action::RecoveryAccept {
                 intent: i,
                 approval,
+            }
+            | Action::FlatAccept {
+                intent: i,
+                approval,
+                ..
             } => {
                 let recovery = matches!(action, Action::RecoveryAccept { .. });
-                self.funds_ready(recovery)?;
+                let flat = if let Action::FlatAccept { allocation, .. } = action {
+                    self.flat_ready(allocation, i)?;
+                    Some((**allocation).clone())
+                } else {
+                    self.funds_ready(recovery)?;
+                    None
+                };
                 if recovery
                     && (self.recovery_epoch() != Some(i.authority_epoch)
                         || i.fee_payer != Owner::House
@@ -264,6 +513,12 @@ impl State {
                     .checked_add(i.maximum_fee)
                     .map_err(|_| ControlError::Invalid)?;
                 let mut reservations = vec![];
+                if flat.is_some() {
+                    reservations.push(Reservation {
+                        resource: Resource::Customer(i.request.account),
+                        amount: i.net,
+                    });
+                }
                 if matches!(i.destination, Destination::Recipient(_)) {
                     reservations.push(Reservation {
                         resource: Resource::Customer(i.request.account),
@@ -291,9 +546,11 @@ impl State {
                 })?;
                 self.funds.push(Operation {
                     recovery,
+                    flat,
                     intent: (**i).clone(),
                     attempt: None,
                     proof: None,
+                    demo: None,
                     terminal: false,
                     faulted: false,
                 });
@@ -305,7 +562,7 @@ impl State {
                     .position(|o| o.intent.request == attempt.request)
                     .ok_or(ControlError::Invalid)?;
                 let recovery = self.funds[index].recovery;
-                self.funds_ready(recovery)?;
+                self.operation_ready(index)?;
                 self.funds_turn(index)?;
                 let o = &self.funds[index];
                 let i = o.intent.clone();
@@ -424,6 +681,76 @@ impl State {
                     .ok_or(ControlError::Invalid)?
                     .active = false;
             }
+            Action::ConfirmDemoDeposit(t) => {
+                let index = self
+                    .funds
+                    .iter()
+                    .position(|o| o.attempt == Some(t.attempt))
+                    .ok_or(ControlError::Invalid)?;
+                let o = &self.funds[index];
+                if o.demo.as_ref() == Some(t.as_ref()) && o.terminal && !o.faulted {
+                    return Ok(());
+                }
+                if o.recovery
+                    || o.terminal
+                    || o.faulted
+                    || o.proof.is_some()
+                    || t.policy == [0; 32]
+                    || t.amount.unit() != self.config.quote
+                    || t.amount.atoms() <= 0
+                    || t.amount != o.intent.net
+                    || o.intent.source != Location::Broker
+                    || o.intent.destination != Destination::Location(Location::Venue)
+                    || !self
+                        .attempts
+                        .iter()
+                        .any(|a| a.key == t.attempt && a.possibly_exposed)
+                    || !self
+                        .config
+                        .sources
+                        .iter()
+                        .any(|s| s.scope == t.debit.scope && s.location == Location::Broker)
+                    || !self
+                        .config
+                        .sources
+                        .iter()
+                        .any(|s| s.scope == t.credit.scope && s.location == Location::Venue)
+                    || !self
+                        .funds_receipts
+                        .iter()
+                        .any(|(k, cut)| k == &t.debit && cut.is_some())
+                    || !self
+                        .funds_receipts
+                        .iter()
+                        .any(|(k, cut)| k == &t.credit && cut.is_none())
+                {
+                    return Err(ControlError::Unqualified);
+                }
+                let m = self
+                    .ledger
+                    .movements()
+                    .iter()
+                    .find(|m| m.mandate.attempt == t.attempt)
+                    .ok_or(ControlError::Invalid)?;
+                if m.faulted
+                    || m.debit != t.amount
+                    || m.settled != t.amount
+                    || m.arrived != t.amount
+                    || m.fees.atoms() != 0
+                    || m.receipts.len() != 2
+                    || !m.receipts.contains(&t.debit)
+                    || !m.receipts.contains(&t.credit)
+                {
+                    return Err(ControlError::Unqualified);
+                }
+                self.funds[index].demo = Some((**t).clone());
+                self.funds[index].terminal = true;
+                self.holds
+                    .iter_mut()
+                    .find(|h| h.request == t.attempt.request)
+                    .ok_or(ControlError::Invalid)?
+                    .active = false;
+            }
         }
         Ok(())
     }
@@ -438,7 +765,7 @@ impl State {
             .position(|o| o.attempt == Some(a.key))
             .ok_or(ControlError::Invalid)?;
         let recovery = self.funds[index].recovery;
-        self.funds_ready(recovery)?;
+        self.operation_ready(index)?;
         self.funds_turn(index)?;
         if self.funds[index].terminal
             || self.funds[index].proof.is_some()
@@ -519,7 +846,8 @@ impl State {
         }
         let index = index.ok_or(Error::Invalid)?;
         let t = &o.terminal;
-        let valid = t.no_later_execution != [0; 32]
+        let valid = self.funds[index].demo.is_none()
+            && t.no_later_execution != [0; 32]
             && t.debit.unit() == self.config.quote
             && t.settled.unit() == self.config.quote
             && t.debit.atoms() >= 0
@@ -577,6 +905,15 @@ impl State {
                 continue;
             };
             o.faulted |= m.faulted
+                || o.demo.as_ref().is_some_and(|t| {
+                    m.debit != t.amount
+                        || m.settled != t.amount
+                        || m.arrived != t.amount
+                        || m.fees.atoms() != 0
+                        || m.receipts.len() != 2
+                        || !m.receipts.contains(&t.debit)
+                        || !m.receipts.contains(&t.credit)
+                })
                 || o.proof.as_ref().is_some_and(|t| {
                     m.debit.atoms() > t.debit.atoms()
                         || m.settled.atoms() > t.settled.atoms()
@@ -732,6 +1069,22 @@ pub(crate) fn encode_action(w: &mut Writer, a: &Action) {
             w.byte(5);
             w.byte(u8::from(*ready));
         }
+        Action::ConfirmDemoDeposit(t) => {
+            w.byte(7);
+            encode_demo(w, t);
+        }
+        Action::FlatAccept {
+            intent,
+            approval,
+            allocation,
+        } => {
+            w.byte(8);
+            encode_intent(w, intent);
+            w.raw(&approval.account.bytes());
+            w.raw(&approval.intent_hash);
+            w.u64(approval.authority_epoch);
+            encode_flat(w, allocation);
+        }
     }
 }
 pub(crate) fn decode_action(r: &mut Reader<'_>) -> Result<Action, Error> {
@@ -760,6 +1113,45 @@ pub(crate) fn decode_action(r: &mut Reader<'_>) -> Result<Action, Error> {
                 authority_epoch: r.u64()?,
             },
         }),
+        7 => Ok(Action::ConfirmDemoDeposit(Box::new(decode_demo(r)?))),
+        8 => Ok(Action::FlatAccept {
+            intent: Box::new(decode_intent(r)?),
+            approval: Approval {
+                account: AccountId::new(r.array()?).map_err(|_| Error::Codec)?,
+                intent_hash: r.array()?,
+                authority_epoch: r.u64()?,
+            },
+            allocation: Box::new(FlatAllocation {
+                authorization: r.array()?,
+                original: r.item()?,
+                original_amount: r.item()?,
+                release: decode_intent(r)?,
+                deposit: decode_intent(r)?,
+            }),
+        }),
         _ => Err(Error::Codec),
     }
+}
+pub(crate) fn encode_flat(w: &mut Writer, g: &FlatAllocation) {
+    w.raw(&g.authorization);
+    w.item(&g.original);
+    w.item(&g.original_amount);
+    encode_intent(w, &g.release);
+    encode_intent(w, &g.deposit);
+}
+pub(crate) fn encode_demo(w: &mut Writer, t: &DemoDeposit) {
+    w.item(&t.attempt);
+    w.raw(&t.policy);
+    w.item(&t.debit);
+    w.item(&t.credit);
+    w.item(&t.amount);
+}
+fn decode_demo(r: &mut Reader<'_>) -> Result<DemoDeposit, Error> {
+    Ok(DemoDeposit {
+        attempt: r.item()?,
+        policy: r.array()?,
+        debit: r.item()?,
+        credit: r.item()?,
+        amount: r.item()?,
+    })
 }

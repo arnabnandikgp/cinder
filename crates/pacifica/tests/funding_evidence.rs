@@ -281,4 +281,30 @@ fn setup_observes_defaults_debt_and_incompatible_margin_without_promoting_author
     let mut l = loan.clone();
     l["error"] = json!("missing cache");
     assert!(parse(&settings, &l).is_err());
+    // Actual envelopes have top-level error/code too. A success bit does not
+    // override a conflicting native error code in either observation.
+    for code in [json!(0), json!(404), json!("404")] {
+        let mut s = settings.clone();
+        s["code"] = code.clone();
+        assert!(parse(&s, &loan).is_err());
+        let mut l = loan.clone();
+        l["code"] = code;
+        assert!(parse(&settings, &l).is_err());
+    }
+}
+
+#[test]
+fn observed_extended_testnet_settings_and_loan_shapes_are_components_not_readiness() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/demo-native-shapes.json")).unwrap();
+    let got = evidence::setup(
+        &profile(),
+        &serde_json::to_vec(&fixture["settings"]).unwrap(),
+        &serde_json::to_vec(&fixture["loan"]).unwrap(),
+    )
+    .unwrap();
+    assert!(got.lending_disabled && got.compatible_margin);
+    assert_eq!((got.borrowed, got.interest), (0, 0));
+    assert_eq!(got.loan_at, 100); // Replaced timestamp, not source freshness.
+    // This API intentionally returns no Controller::Setup.complete certificate.
 }

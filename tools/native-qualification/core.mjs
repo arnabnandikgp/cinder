@@ -13,6 +13,22 @@ export const canonical = x => {
 export const LIMITS = Object.freeze({ http:200, rpc:400, wss:8, duration_ms:1200000,
   bootstrap_ms:120000, quote_atoms:'20000000', fee_atoms:'2000000', sponsor_lamports:'100000000',
   socket_ms:30000, messages:256, message_bytes:16384, payload_bytes:1048576 });
+// Separate house/test-capital staging, never the old customer-timing exception.
+export const STAGED_LIMITS = Object.freeze({...LIMITS,bootstrap_ms:300000,initialization_cycles:4});
+// Separately sealed persistent diagnostic. Forward one original signed wire;
+// do not renew an expired transaction or silently change historical scenarios.
+export const DELIVERY_LIMITS = Object.freeze({...STAGED_LIMITS,bootstrap_ms:600000,
+  initialization_cycles:12,rpc_max_retries:5,status_polls:60,poll_ms:2000});
+export function deliveryPolicy(m) {
+  validateManifest(m);
+  return m.schema==='cinder-native-staged-delivery-v1'
+    ? {maxRetries:m.limits.rpc_max_retries,polls:m.limits.status_polls,pollMs:m.limits.poll_ms}
+    : {maxRetries:0,polls:30,pollMs:2000};
+}
+export function faucetRecipient(m) {
+  validateManifest(m);
+  return m.faucet_mode==='broker-direct'?m.broker:m.owner;
+}
 export function atoms(s) {
   if (typeof s !== 'string' || !/^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$/.test(s)) throw Error('Exact quote decimal required');
   const [a,b=''] = s.split('.'); return BigInt(a)*1000000n + BigInt(b.padEnd(6,'0'));
@@ -32,11 +48,16 @@ export function exclusive(path, value) {
   const parent = openSync(join(path,'..'),constants.O_RDONLY); try { fsyncSync(parent); } finally { closeSync(parent); }
 }
 export function validateManifest(m) {
-  if (m?.schema !== 'cinder-native-qualification-v1' || m.cluster !== 'devnet' || m.aws !== false
+  const reliable=m?.schema==='cinder-native-staged-delivery-v1',
+    staged=reliable||m?.schema==='cinder-native-staged-bootstrap-v1';
+  if(!staged&&m?.test_capital_only!==undefined)throw Error('Mixed diagnostic scenarios');
+  if((!reliable&&m?.faucet_mode!==undefined)||(reliable&&!['owner-via-broker','broker-direct'].includes(m.faucet_mode)))throw Error('Mixed faucet scenario');
+  if ((!staged && m?.schema !== 'cinder-native-qualification-v1') || m.cluster !== 'devnet' || m.aws !== false
     || m.shipping !== false || m.native_origin !== 'https://test-api.pacifica.fi'
     || m.wss_origin !== 'wss://test-ws.pacifica.fi/ws' || m.genesis !== 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG'
-    || canonical(m.limits) !== canonical(LIMITS) || m.bootstrap_exception !== true
-    || m.lost_native_reply !== true || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(m.withdraw_uuid)
+    || canonical(m.limits) !== canonical(reliable?DELIVERY_LIMITS:staged?STAGED_LIMITS:LIMITS) || m.bootstrap_exception !== !staged
+    || m.lost_native_reply !== !staged || (staged && m.test_capital_only!==true)
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(m.withdraw_uuid)
     || !/^[0-9a-f]{64}$/.test(m.sources) || !/^[0-9a-f]{64}$/.test(m.tls_roots)
     || m.node !== '24.21.0' || m.rpc_origin !== 'https://devnet.helius-rpc.com') throw Error('Unapproved manifest shape');
   if (new Set([m.owner,m.broker,m.sponsor]).size !== 3 || [m.owner,m.broker,m.sponsor].some(x=>typeof x!=='string'||!x)) throw Error('Distinct identities required');
@@ -103,6 +124,22 @@ export function decodeResponse(bytes) {
   if(bytes.length>LIMITS.payload_bytes)throw Error('Response bound');
   return JSON.parse(Buffer.from(bytes).toString('utf8'));
 }
+// Exposure is durable before I/O. A thrown transport/body/audit error means the
+// ORIGINAL native operation may have executed, never that it was rejected.
+export async function originalNativeReply(journal, identity, exposure, receive, retain, lose=false) {
+  journal.once(identity,exposure);
+  try {
+    const result=await receive();
+    await retain(result);
+    if(lose){journal.append('lost-native-reply',{identity,controller_accepted:false});return null;}
+    journal.append('native-reply',{identity,status:result.status,success:result.body.success===true});
+    return result;
+  } catch(error) {
+    // Do not copy arbitrary upstream exception text (URLs/wires may be private).
+    journal.append('native-reply-unknown',{identity,exposed:true,controller_accepted:false});
+    throw error;
+  }
+}
 export async function boundedBody(response) {
   const chunks=[];let n=0;
   if(!response.body)throw Error('Missing response body');
@@ -112,15 +149,56 @@ export async function boundedBody(response) {
 }
 export function nativeAck(value) {
   const d=value?.data;
-  if(value?.success!==true||!d||!Number.isSafeInteger(d.batch_nonce)||d.batch_nonce<0
+  if(value?.success!==true||value.error!=null||value.code!=null||!d||!Number.isSafeInteger(d.batch_nonce)||d.batch_nonce<0
     ||atoms(d.requested_amount)!==20000000n||atoms(d.fee_amount)>2000000n)throw Error('Withdrawal ACK mismatch');
   return {batch:d.batch_nonce,gross:atoms(d.requested_amount).toString(),fee:atoms(d.fee_amount).toString()};
 }
 export function setupObservations(settings, loan) {
-  if(settings?.success!==true||settings.data?.auto_lend_disabled!==true||loan?.success!==true
-    ||!Number.isSafeInteger(loan.data?.updated_at)||atoms(loan.data.borrowed)!==0n
+  if(settings?.success!==true||settings.error!=null||settings.code!=null||settings.data?.auto_lend_disabled!==true
+    ||loan?.success!==true||loan.error!=null||loan.code!=null
+    ||!Number.isSafeInteger(loan.data?.updated_at)||loan.data.updated_at<=0||atoms(loan.data.borrowed)!==0n
     ||atoms(loan.data.pending_interest)!==0n) return {status:'unresolved',shipping_complete:false};
   return {status:'observed-disabled-no-debt',shipping_complete:false};
+}
+const success=r=>r?.status===200&&r.body?.success===true&&r.body.error==null&&r.body.code==null;
+const absent=r=>r?.status===404&&r.body?.success===false&&r.body.data===null&&r.body.code===404;
+// Missing cache means wait, never zero debt. Successful but non-idle observations
+// fail rather than normalize an unexpected exposure into a setup prerequisite.
+export function stagedInitialization(account,loan,now,expected='20000000') {
+  if(absent(account)||absent(loan)) {
+    if(![account,loan].every(r=>absent(r)||success(r)))throw Error('Initialization response unknown');
+    return false;
+  }
+  if(!success(account)||!success(loan)||!Number.isSafeInteger(now))throw Error('Initialization response unknown');
+  const a=account.body.data,l=loan.body.data;
+  if(!a||!l||atoms(a.balance)!==BigInt(expected)||atoms(a.pending_balance)!==0n
+    ||atoms(a.account_equity)!==BigInt(expected)||atoms(a.total_margin_used)!==0n||atoms(a.pending_interest)!==0n
+    ||atoms(a.spot_market_value)!==0n||atoms(a.spot_collateral)!==0n
+    ||a.positions_count!==0||a.orders_count!==0||a.stop_orders_count!==0||!Array.isArray(a.spot_balances)||a.spot_balances.length
+    ||atoms(l.borrowed)!==0n||atoms(l.pending_interest)!==0n||!Array.isArray(l.spot_balances)||l.spot_balances.length
+    ||!Number.isSafeInteger(l.updated_at)||l.updated_at<=0||l.updated_at>now+5000||now-l.updated_at>180000)
+    throw Error('Initialized account is not idle/no-debt');
+  return true;
+}
+export function stagedIdle(settings,loan,account,positions,orders,now,expected='20000000') {
+  if(![settings,loan,account,positions,orders].every(success)
+    ||setupObservations(settings.body,loan.body).status!=='observed-disabled-no-debt'
+    ||!Array.isArray(settings.body.data.margin_settings)||settings.body.data.margin_settings.length
+    ||!Array.isArray(settings.body.data.spot_settings)||settings.body.data.spot_settings.length
+    ||![positions,orders].every(r=>Array.isArray(r.body.data)&&r.body.data.length===0))throw Error('Staged idle setup incomplete');
+  // Reuse the same full checks at closeout, with a zero-cash empty baseline.
+  if(!stagedInitialization(account,loan,now,expected))throw Error('Staged idle setup incomplete');
+  return {status:'observed-disabled-no-debt',sequential:true,shipping_complete:false};
+}
+export function stagedDepositHistory(deposit,balance,signature) {
+  for(const r of [deposit,balance])if(!success(r)||!Array.isArray(r.body.data)||r.body.data.length!==1
+    ||r.body.has_more!==false||r.body.next_cursor!=null)throw Error('Staged history incomplete/conflicting');
+  const d=deposit.body.data[0],b=balance.body.data[0];
+  if(d.transaction_id!==signature||atoms(d.amount)!==20000000n||!Number.isSafeInteger(d.created_at)||d.created_at<=0
+    ||!['deposit','deposit_release'].includes(b.event_type)||atoms(b.amount)!==20000000n
+    ||atoms(b.balance)!==20000000n||atoms(b.pending_balance)!==0n
+    ||!Number.isSafeInteger(b.created_at)||b.created_at<d.created_at)throw Error('Staged original credit mismatch');
+  return {status:'original-signature-full-credit-observed',gross:'20000000',financial_credit:false,source_cut:null};
 }
 export function transfers(value, account) {
   if(value?.channel!=='account_transfers')return [];

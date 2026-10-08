@@ -21,9 +21,13 @@ use zeroize::Zeroizing;
 const MAGIC: &[u8] = b"CINDER-PACIFICA-FUNDING-1\0";
 /// Narrow legacy Solana instruction/message codec; no RPC or ambient wallet.
 pub mod chain;
+/// Explicit transaction-linked, zero-fee testnet deposit confirmation policy.
+pub mod demo;
 /// Strict documented setup/transfer wire parsing; not a financial certificate.
 pub mod evidence;
 pub mod recovery;
+/// Authenticated, bounded setup observations; not a complete setup certificate.
+pub mod setup;
 /// Governed binding between an opaque private account and its public payout owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Beneficiary {
@@ -138,6 +142,8 @@ pub struct Plan {
     counters: Counters,
     at: u64,
     expires_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    demo_setup: Option<Box<setup::Qualification>>,
 }
 impl std::fmt::Debug for Plan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -350,10 +356,25 @@ pub struct Withdrawal {
     /// Retained authenticated native history, including causal/correlation evidence.
     pub raw: PrivateBytes,
 }
+/// One-use correlation for a durably exposed native withdrawal. It can archive
+/// the actual reply against the current journal, but cannot send or settle cash.
+pub struct WithdrawalCompletion {
+    dispatch: Dispatch,
+    plan: Plan,
+    controller: [u8; 32],
+    gateway: [u8; 32],
+    exposure: PrivateBytes,
+}
+impl std::fmt::Debug for WithdrawalCompletion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("WithdrawalCompletion([PRIVATE])")
+    }
+}
 #[derive(Serialize, Deserialize)]
 enum Record {
     Bind,
     Setup(Setup),
+    DemoSetup(setup::Qualification),
     Plan(Plan),
     Chain {
         attempt: Vec<u8>,
@@ -370,6 +391,8 @@ enum Record {
     Reply {
         attempt: Vec<u8>,
         status: Option<u16>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        observed_at: Option<u64>,
     },
     Wire {
         attempt: Vec<u8>,
@@ -412,6 +435,7 @@ pub(crate) fn opaque_evidence_slot(tx: &Transaction) -> Result<Option<usize>, Er
 struct History {
     bound: bool,
     setup: Option<Setup>,
+    demo_setup: Option<setup::Qualification>,
     plans: Vec<Plan>,
     chains: Vec<(Vec<u8>, Vec<u8>, bool)>,
     final_credits: Vec<Vec<u8>>,
@@ -529,6 +553,30 @@ impl Controller {
     }
     /// Explicit injected enclave signer, never a configured wallet or fallback master.
     pub fn new(profile: Profile, route: Route, seed: Zeroizing<[u8; 32]>) -> Result<Self, Error> {
+        if route.withdrawal != Level::Qualified || route.settings != Level::Qualified {
+            return Err(Error::Qualification);
+        }
+        Self::construct(profile, route, seed)
+    }
+    /// Narrow testnet ingress composition. Observed idle settings do not become
+    /// strong readiness, and withdrawal remains explicitly unqualified. Only
+    /// separately certified demo release/deposit plans can be newly exposed.
+    pub fn new_demo_ingress(
+        profile: Profile,
+        route: Route,
+        seed: Zeroizing<[u8; 32]>,
+    ) -> Result<Self, Error> {
+        if profile.environment != crate::execution::Origin::Testnet.url()
+            || profile.fills != Level::Unknown
+            || profile.precision != Level::Qualified
+            || route.withdrawal != Level::Unknown
+            || route.settings != Level::Observed
+        {
+            return Err(Error::Qualification);
+        }
+        Self::construct(profile, route, seed)
+    }
+    fn construct(profile: Profile, route: Route, seed: Zeroizing<[u8; 32]>) -> Result<Self, Error> {
         let key = SigningKey::from_bytes(&seed);
         let keys = [
             route.funds,
@@ -561,9 +609,7 @@ impl Controller {
             })
             || route.decimals != profile.quote_places
             || route.decimals > 18
-            || route.withdrawal != Level::Qualified
             || route.chain != Level::Qualified
-            || route.settings != Level::Qualified
             || route.maximum_movement == 0
             || route.maximum_fee >= route.maximum_movement
             || route.setup_max_age == 0
@@ -619,7 +665,9 @@ impl Controller {
         simulation: chain::Simulation,
         at: u64,
     ) -> Result<VerifiedWire, Error> {
-        if prepared.signer() != self.route.broker {
+        if prepared.signer() != self.route.broker
+            || self.route.withdrawal != Level::Qualified && prepared.rail() != Rail::Deposit
+        {
             return Err(Error::Qualification);
         }
         prepared.sign(Zeroizing::new(self.key.to_bytes()), simulation, at)
@@ -694,8 +742,15 @@ impl Controller {
                         continue;
                     }
                     match archive.record {
-                        Record::Reply { attempt, status } => {
-                            if index != 0 || opaque != Some(1) {
+                        Record::Reply {
+                            attempt,
+                            status,
+                            observed_at,
+                        } => {
+                            if index != 0
+                                || opaque != Some(1)
+                                || observed_at.is_some_and(|t| t > tx.at)
+                            {
                                 return Err(Error::Qualification);
                             }
                             let raw = tx.evidence.get(1).ok_or(Error::Codec)?;
@@ -723,6 +778,11 @@ impl Controller {
                             result.bound = true;
                         }
                         Record::Setup(setup) => result.setup = Some(setup),
+                        Record::DemoSetup(setup) => {
+                            if result.demo_setup.replace(setup).is_some() {
+                                return Err(Error::Qualification);
+                            }
+                        }
                         Record::Plan(plan) => result.plans.push(plan),
                         Record::Chain {
                             attempt,
@@ -741,7 +801,9 @@ impl Controller {
         Ok(result)
     }
     fn ready(&self, history: &History, at: u64) -> bool {
-        history.bound
+        self.route.withdrawal == Level::Qualified
+            && self.route.settings == Level::Qualified
+            && history.bound
             && history.setup.as_ref().is_some_and(|s| {
                 s.complete
                     && s.lending_disabled
@@ -825,6 +887,73 @@ impl Controller {
         checked(j.commit(tx)?)?;
         Ok(ready)
     }
+    /// Prepare an already accepted, authenticated original ingress intent. This
+    /// does not approve a new intent, create assets, expose a signature or send.
+    /// The common journal still checks current authority, liquidity and risk.
+    pub fn prepare_ingress<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        dispatch: Dispatch,
+    ) -> Result<Rail, Error> {
+        let history = self.history(j, dispatch.at)?;
+        if !self.ready(&history, dispatch.at) {
+            return Err(Error::Qualification);
+        }
+        self.prepare_ingress_inner(j, dispatch)
+    }
+    fn prepare_ingress_inner<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        dispatch: Dispatch,
+    ) -> Result<Rail, Error> {
+        if j.transaction(dispatch.commit).is_some() {
+            return Err(Error::Qualification);
+        }
+        let operation = j
+            .state()?
+            .funds()
+            .iter()
+            .find(|o| o.intent.request == dispatch.attempt.request)
+            .ok_or(Error::Qualification)?;
+        let rail = match (operation.intent.source, operation.intent.destination) {
+            (Location::Vault, Destination::Location(Location::Broker)) => Rail::Release,
+            (Location::Broker, Destination::Location(Location::Venue)) => Rail::Deposit,
+            _ => return Err(Error::Qualification),
+        };
+        if operation.recovery
+            || operation.terminal
+            || operation.faulted
+            || operation.attempt.is_some()
+            || operation.intent.maximum_fee.atoms() != 0
+            || operation.intent.expires_at <= dispatch.at
+            || u64::try_from(operation.intent.net.atoms()).map_err(|_| Error::Limit)?
+                > self.route.maximum_movement
+            || !self
+                .route
+                .beneficiaries
+                .iter()
+                .any(|b| b.account == dispatch.attempt.request.account.bytes())
+        {
+            return Err(Error::Qualification);
+        }
+        let net = operation.intent.net;
+        let mut tx = Transaction {
+            id: dispatch.commit,
+            expected: j.head(),
+            at: dispatch.at,
+            evidence: vec![],
+            inputs: vec![],
+            order_observations: vec![],
+            funds_observations: vec![],
+            controls: vec![],
+        };
+        tx.controls.push(Control::Funds(funds::Action::Prepare {
+            attempt: dispatch.attempt,
+            net,
+        }));
+        checked(j.commit(tx)?)?;
+        Ok(rail)
+    }
     fn plan<B: Backend, P: Protection>(
         &self,
         j: &mut Journal<B, P>,
@@ -832,9 +961,29 @@ impl Controller {
         rail: Rail,
         counters: Counters,
     ) -> Result<Plan, Error> {
+        self.plan_inner(j, dispatch, rail, counters, None)
+    }
+    fn plan_inner<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        dispatch: Dispatch,
+        rail: Rail,
+        counters: Counters,
+        demo_setup: Option<setup::Qualification>,
+    ) -> Result<Plan, Error> {
+        if self.route.withdrawal != Level::Qualified
+            && (!matches!(rail, Rail::Release | Rail::Deposit) || demo_setup.is_none())
+        {
+            return Err(Error::Qualification);
+        }
         let history = self.history(j, dispatch.at)?;
         if !history.bound
-            || matches!(rail, Rail::Release | Rail::Deposit) && !self.ready(&history, dispatch.at)
+            || matches!(rail, Rail::Release | Rail::Deposit)
+                && if let Some(ref demo) = demo_setup {
+                    !self.demo_setup_current(&history, demo, dispatch.at, true)
+                } else {
+                    !self.ready(&history, dispatch.at)
+                }
         {
             return Err(Error::Qualification);
         }
@@ -926,6 +1075,7 @@ impl Controller {
             counters,
             at: dispatch.at,
             expires_at: a.expires_at,
+            demo_setup: demo_setup.map(Box::new),
         })
     }
     /// Persist and expose one unsigned physical-rail capability. The receiving
@@ -942,9 +1092,17 @@ impl Controller {
             return Err(Error::Qualification);
         }
         let plan = self.plan(j, dispatch, rail, counters)?;
+        self.expose_chain_plan(j, dispatch, plan)
+    }
+    fn expose_chain_plan<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        dispatch: Dispatch,
+        plan: Plan,
+    ) -> Result<ChainAction, Error> {
         let mut tx = self.tx(j, dispatch.commit, dispatch.at, Record::Plan(plan.clone()))?;
         tx.controls.push(Control::Expose(dispatch.attempt));
-        if rail == Rail::Deposit {
+        if plan.rail == Rail::Deposit {
             tx.controls
                 .push(Control::Funds(funds::Action::NativeCreditReady(false)));
         }
@@ -965,6 +1123,23 @@ impl Controller {
         dispatch: Dispatch,
         transport: &mut T,
     ) -> Result<(), Error> {
+        let (request, completion) = self.prepare_withdrawal(j, gateway, dispatch)?;
+        let reply = transport.post(request);
+        let at = match &reply {
+            Reply::Response { received_at, .. } => *received_at,
+            Reply::Unknown => dispatch.at,
+        }
+        .max(j.state()?.logical_time());
+        self.complete_withdrawal(j, gateway, completion, reply, at)
+    }
+    /// Validate, reserve capacity, durably expose and sign one original native
+    /// withdrawal under the mutation owner. Send the request outside that owner.
+    pub fn prepare_withdrawal<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        gateway: &Gateway,
+        dispatch: Dispatch,
+    ) -> Result<(Outbound, WithdrawalCompletion), Error> {
         let counters = Counters {
             sequence: 0,
             paid: 0,
@@ -996,7 +1171,8 @@ impl Controller {
             &self.profile,
             self.route.withdrawal_cost,
         )?;
-        tx.evidence.push(self.evidence(Record::Plan(plan.clone()))?);
+        let retained = self.evidence(Record::Plan(plan.clone()))?;
+        tx.evidence.push(retained.clone());
         tx.controls.push(Control::Expose(dispatch.attempt));
         exposure(j.commit(tx)?, &plan)?;
         gateway.funding_current(j, dispatch.at)?;
@@ -1011,11 +1187,49 @@ impl Controller {
         );
         body.insert("timestamp".into(), json!(dispatch.at));
         body.insert("expiry_window".into(), json!(expiry));
-        let reply = transport.post(Outbound::funding(
+        let request = Outbound::funding(
             self.profile.environment.as_str(),
             PrivateBytes::new(serde_json::to_vec(&body).map_err(|_| Error::Codec)?)?,
-        )?);
-        let (status, raw, at, retry) = match reply {
+            plan.expires_at,
+        )?;
+        Ok((
+            request,
+            WithdrawalCompletion {
+                dispatch,
+                plan,
+                controller: self.release_commitment(j.configuration())?,
+                gateway: gateway.release_commitment(j.configuration())?,
+                exposure: retained,
+            },
+        ))
+    }
+    /// Retain a correlated actual reply at the current head, including after a
+    /// concurrent revoke. ACK retention is not native debit or payment finality.
+    pub fn complete_withdrawal<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        gateway: &Gateway,
+        completion: WithdrawalCompletion,
+        reply: Reply,
+        commit_at: u64,
+    ) -> Result<(), Error> {
+        let WithdrawalCompletion {
+            dispatch,
+            plan,
+            controller,
+            gateway: binding,
+            exposure,
+        } = completion;
+        if controller != self.release_commitment(j.configuration())?
+            || binding != gateway.release_commitment(j.configuration())?
+            || commit_at < dispatch.at
+            || commit_at < j.verified_state()?.logical_time()
+            || j.transaction(dispatch.commit)
+                .is_none_or(|tx| tx.at != dispatch.at || tx.evidence.get(1) != Some(&exposure))
+        {
+            return Err(Error::Qualification);
+        }
+        let (status, raw, observed_at, retry) = match reply {
             Reply::Unknown => (
                 None,
                 PrivateBytes::new(b"withdrawal outcome unknown".to_vec())?,
@@ -1031,12 +1245,13 @@ impl Controller {
                 Some(status),
                 if body.as_bytes().len() <= crate::observation::MAX_BODY
                     && received_at >= dispatch.at
+                    && received_at <= commit_at
                 {
                     body
                 } else {
                     PrivateBytes::new(b"withdrawal response rejected: bound or clock".to_vec())?
                 },
-                received_at.max(dispatch.at),
+                received_at.clamp(dispatch.at, commit_at),
                 retry_after_ms,
             ),
         };
@@ -1046,15 +1261,17 @@ impl Controller {
         let mut tx = self.tx(
             j,
             CommitId::new(h.finalize().into())?,
-            at,
+            commit_at,
             Record::Reply {
                 attempt: plan.attempt,
                 status,
+                observed_at: Some(observed_at),
             },
         )?;
         tx.evidence.push(raw);
         if status == Some(429) {
-            tx.evidence.push(gateway.funding_cooldown(at, retry)?);
+            tx.evidence
+                .push(gateway.funding_cooldown(observed_at, retry)?);
         }
         checked(j.commit(tx)?)?;
         Ok(())
@@ -1227,6 +1444,51 @@ impl Controller {
         }
         found.map(Some).ok_or(Error::Qualification)
     }
+    /// Recheck current journal authority and the retained physical plan before
+    /// local signature creation after unlocked simulation I/O. This grants no
+    /// send or replacement-wire capability; persist_wire repeats these checks.
+    pub fn validate_chain_signing<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        action: &ChainAction,
+        at: u64,
+    ) -> Result<(), Error> {
+        self.signing_plan(j, action, at).map(|_| ())
+    }
+    fn signing_plan<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        action: &ChainAction,
+        at: u64,
+    ) -> Result<Plan, Error> {
+        let attempt = action.plan.attempt()?;
+        let p = self.existing(j, attempt, at)?;
+        if self.route.withdrawal != Level::Qualified
+            && (!matches!(p.rail, Rail::Release | Rail::Deposit) || p.demo_setup.is_none())
+        {
+            return Err(Error::Qualification);
+        }
+        let history = self.history(j, at)?;
+        j.state()?
+            .qualified_funds_delivery(attempt)
+            .map_err(|_| Error::Qualification)?;
+        if matches!(p.rail, Rail::Release | Rail::Deposit)
+            && if let Some(ref demo) = p.demo_setup {
+                !self.demo_setup_current(&history, demo, at, true)
+            } else {
+                !self.ready(&history, at)
+            }
+            || action.plan != p
+            || action.route != self.route
+            || action.network != self.profile.config.domain.network.bytes()
+            || p.rail == Rail::Withdraw
+            || at >= p.expires_at
+            || history.wires.iter().any(|(a, _, _)| *a == p.attempt)
+        {
+            return Err(Error::Qualification);
+        }
+        Ok(p)
+    }
     /// Persist the verified ORIGINAL signed chain wire before any submission.
     /// Lost/uncertain commits return no delivery. Restart may only reconcile the
     /// retained wire/signature/operation, not create a different blockhash/signature.
@@ -1238,18 +1500,8 @@ impl Controller {
         action: ChainAction,
         wire: VerifiedWire,
     ) -> Result<ChainDelivery, Error> {
-        let p = self.existing(j, wire.attempt, at)?;
-        let history = self.history(j, at)?;
-        j.state()?
-            .qualified_funds_delivery(wire.attempt)
-            .map_err(|_| Error::Qualification)?;
-        if matches!(p.rail, Rail::Release | Rail::Deposit) && !self.ready(&history, at)
-            || action.plan != p
-            || action.route != self.route
-            || action.network != self.profile.config.domain.network.bytes()
-            || p.rail == Rail::Withdraw
-            || at >= p.expires_at
-            || history.wires.iter().any(|(a, _, _)| *a == p.attempt)
+        let p = self.signing_plan(j, &action, at)?;
+        if wire.attempt != p.attempt()?
             || wire.signature == [0; 64]
             || wire.wire.as_bytes().is_empty()
             || wire.wire.as_bytes().len() > 1232
@@ -1610,6 +1862,11 @@ impl Controller {
         let plan = self.existing(j, c.attempt, at)?;
         let history = self.history(j, at)?;
         if plan.rail != Rail::Deposit
+            || plan.demo_setup.is_some()
+            || j.state()?
+                .funds()
+                .iter()
+                .any(|o| o.attempt == Some(c.attempt) && o.demo.is_some())
             || c.account != self.route.broker
             || c.amount == 0
             || c.fee > c.amount

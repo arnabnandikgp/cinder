@@ -11,6 +11,7 @@ use cinder_kernel::{
     ledger::{evidence::*, *},
 };
 use cinder_pacifica::{
+    execution::{Gateway, Origin, Policy},
     funding::{Beneficiary, Route, Setup},
     profile::*,
 };
@@ -22,6 +23,10 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
+#[path = "chain_allocation_tests.rs"]
+pub(crate) mod allocation_tests;
+#[path = "chain_demo_tests.rs"]
+pub(crate) mod demo_tests;
 
 struct Fixed;
 impl Clock for Fixed {
@@ -51,7 +56,7 @@ fn vector(i: usize) -> Value {
 fn field(v: &Value, k: &str) -> [u8; 32] {
     serde_json::from_value(v[k].clone()).unwrap()
 }
-fn config() -> Config {
+pub(crate) fn config() -> Config {
     let mut c = support::config();
     c.markets[0] = cinder_kernel::position::Market::new(c.markets[0].unit(), 1_000_000, 1).unwrap();
     for (tag, location) in [(8, Location::Vault), (9, Location::Broker)] {
@@ -103,29 +108,27 @@ fn route() -> Route {
     }
 }
 fn controller() -> Controller {
-    Controller::new(
-        Profile {
-            config: config(),
-            source: config().sources[0].scope,
-            account: chain::address(route().broker),
-            environment: cinder_pacifica::execution::Origin::Testnet.url().into(),
-            revision: 1,
-            evidence: "synthetic joined RPC fixture, not live qualification".into(),
-            precision: Level::Qualified,
-            fills: Level::Qualified,
-            quote_places: 6,
-            perp_tag: 0,
-            markets: vec![Mapping {
-                symbol: "BTC".into(),
-                market: 0,
-                size: Grid { places: 0, step: 1 },
-                price: Grid { places: 0, step: 1 },
-            }],
-        },
-        route(),
-        Zeroizing::new([9; 32]),
-    )
-    .unwrap()
+    Controller::new(profile(), route(), Zeroizing::new([9; 32])).unwrap()
+}
+fn profile() -> Profile {
+    Profile {
+        config: config(),
+        source: config().sources[0].scope,
+        account: chain::address(route().broker),
+        environment: cinder_pacifica::execution::Origin::Testnet.url().into(),
+        revision: 1,
+        evidence: "synthetic joined RPC fixture, not live qualification".into(),
+        precision: Level::Qualified,
+        fills: Level::Qualified,
+        quote_places: 6,
+        perp_tag: 0,
+        markets: vec![Mapping {
+            symbol: "BTC".into(),
+            market: 0,
+            size: Grid { places: 0, step: 1 },
+            price: Grid { places: 0, step: 1 },
+        }],
+    }
 }
 fn id(n: u8) -> CommitId {
     CommitId::new([n; 32]).unwrap()
@@ -187,17 +190,23 @@ fn setup(temp: &support::Temp) -> (support::Store, Controller) {
         .unwrap(),
     )
 }
-fn seed<B: Backend, P: Protection>(mut j: Journal<B, P>) -> (Journal<B, P>, Controller) {
+pub(crate) fn seed<B: Backend, P: Protection>(j: Journal<B, P>) -> (Journal<B, P>, Controller) {
+    seed_at(j, Location::Vault)
+}
+fn seed_at<B: Backend, P: Protection>(
+    mut j: Journal<B, P>,
+    customer_location: Location,
+) -> (Journal<B, P>, Controller) {
     let c = controller();
     let t = tx(
         &j,
         1,
         vec![
             (
-                Location::Vault,
+                customer_location,
                 Change::Receipt {
                     owner: Owner::Customer(support::user(1)),
-                    location: Location::Vault,
+                    location: customer_location,
                     amount: atoms(20_000_000),
                 },
             ),
@@ -279,7 +288,7 @@ fn seed<B: Backend, P: Protection>(mut j: Journal<B, P>) -> (Journal<B, P>, Cont
     );
     (j, c)
 }
-fn prepare<B: Backend, P: Protection>(j: &mut Journal<B, P>, n: u8, rail: Rail) {
+pub(crate) fn prepare<B: Backend, P: Protection>(j: &mut Journal<B, P>, n: u8, rail: Rail) {
     let (source, destination) = match rail {
         Rail::Release => (Location::Vault, Destination::Location(Location::Broker)),
         Rail::Deposit => (Location::Broker, Destination::Location(Location::Venue)),
@@ -325,6 +334,7 @@ fn prepare<B: Backend, P: Protection>(j: &mut Journal<B, P>, n: u8, rail: Rail) 
     assert_eq!(j.commit(t).unwrap().receipt.controls, None);
 }
 struct Rpc {
+    at: u64,
     requests: Vec<Value>,
     accounts: BTreeMap<[u8; 32], Value>,
     wire: Option<Vec<u8>>,
@@ -341,7 +351,7 @@ struct Rpc {
     bad_deltas: bool,
 }
 #[derive(Clone)]
-struct Fake(Arc<Mutex<Rpc>>);
+pub(crate) struct Fake(Arc<Mutex<Rpc>>);
 fn account_json(a: &Account) -> Value {
     json!({"owner":chain::address(a.owner),"executable":a.executable,"lamports":a.lamports,"data":[STANDARD.encode(a.data.as_bytes()),"base64"]})
 }
@@ -361,7 +371,7 @@ fn case_from_vector(i: usize) -> chain_receipt::tests::Case {
     };
     chain_receipt::tests::fixture_from(serde_json::to_vec(&vector(i)).unwrap(), attempt, wire)
 }
-fn fake(n: u8) -> Fake {
+pub(crate) fn fake(n: u8) -> Fake {
     let c = case_from_vector(0);
     let mut accounts = BTreeMap::new();
     for a in c.accounts.values.into_iter().flatten() {
@@ -397,6 +407,7 @@ fn fake(n: u8) -> Fake {
         .unwrap();
     assert_eq!(bytes.len(), 333);
     Fake(Arc::new(Mutex::new(Rpc {
+        at: 100,
         requests: vec![],
         accounts,
         wire: None,
@@ -454,7 +465,7 @@ impl Transport for Fake {
                     let result = json!({"slot":200,"version":"legacy","transaction":[STANDARD.encode(w),"base64"],"meta":{"err":{"InstructionError":[0,{"Custom":1}]},"fee":5000}});
                     return Ok(Response {
                         status: 200,
-                        at: 100,
+                        at: s.at,
                         body: PrivateBytes::new(
                             serde_json::to_vec(
                                 &json!({"jsonrpc":"2.0","id":r["id"],"result":result}),
@@ -522,7 +533,7 @@ impl Transport for Fake {
         };
         Ok(Response {
             status: 200,
-            at: 100,
+            at: s.at,
             body: PrivateBytes::new(
                 serde_json::to_vec(&json!({"jsonrpc":"2.0","id":r["id"],"result":result})).unwrap(),
             )
@@ -530,7 +541,7 @@ impl Transport for Fake {
         })
     }
 }
-fn loaded(c: &Controller, deposits: Vec<crate::customer_deposit::Locator>) -> Loaded {
+pub(crate) fn loaded(c: &Controller, deposits: Vec<crate::customer_deposit::Locator>) -> Loaded {
     // Parser-valid public CA only; Fake never opens TLS or claims this is the
     // provider's production trust anchor.
     let root = openssl::x509::X509::from_pem(include_bytes!("aws-root.pem"))
@@ -996,13 +1007,50 @@ fn verified_head_failure_fences_deposit_poll_and_unsent_closure() {
     assert_eq!(index, 0);
     assert_eq!(f.0.lock().unwrap().requests.len(), calls);
 }
-fn retain(f: &Fake, j: &mut support::Store, c: &Controller, n: u8) {
-    f.0.lock().unwrap().contract = Some(
-        c.original_chain_contract(j, support::attempt(n), 100)
+pub(crate) fn retain<B: Backend, P: Protection>(
+    f: &Fake,
+    j: &mut Journal<B, P>,
+    c: &Controller,
+    n: u8,
+) {
+    retain_at(f, j, c, support::attempt(n), 100);
+}
+pub(crate) fn retain_at<B: Backend, P: Protection>(
+    f: &Fake,
+    j: &mut Journal<B, P>,
+    c: &Controller,
+    attempt: AttemptKey,
+    at: u64,
+) {
+    let contract = c
+        .original_chain_contract(j, attempt, at)
+        .unwrap()
+        .as_bytes()
+        .to_vec();
+    let mut rpc = f.0.lock().unwrap();
+    rpc.attempt = attempt;
+    rpc.contract = Some(contract);
+}
+#[cfg(feature = "local-fixture")]
+impl Fake {
+    pub(crate) fn time(&self, at: u64) {
+        self.0.lock().unwrap().at = at;
+    }
+    pub(crate) fn next(&self, n: u8) {
+        let mut rpc = self.0.lock().unwrap();
+        rpc.wire = None;
+        rpc.contract = None;
+        rpc.attempt = support::attempt(n);
+    }
+    pub(crate) fn calls(&self, method: &str) -> usize {
+        self.0
+            .lock()
             .unwrap()
-            .as_bytes()
-            .to_vec(),
-    );
+            .requests
+            .iter()
+            .filter(|r| r["method"] == method)
+            .count()
+    }
 }
 #[test]
 fn lost_send_ack_restart_reconciles_original_without_second_signature_or_submission() {

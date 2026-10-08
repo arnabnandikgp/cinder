@@ -53,9 +53,16 @@ pub(crate) fn recorded<B: Backend, P: Protection>(
     journal: &Journal<B, P>,
     locator: &Locator,
 ) -> Result<bool, Error> {
+    Ok(recorded_amount(journal, locator)?.is_some())
+}
+/// Original attributed deposit amount, never the current aggregate vault balance.
+pub(crate) fn recorded_amount<B: Backend, P: Protection>(
+    journal: &Journal<B, P>,
+    locator: &Locator,
+) -> Result<Option<QuoteAtoms>, Error> {
     let id = locator.commit(journal.configuration().domain)?;
     let Some(tx) = journal.transaction(id) else {
-        return Ok(false);
+        return Ok(None);
     };
     let receipt = journal.transaction_receipt(id).ok_or(Error)?;
     if !tx.controls.is_empty()
@@ -95,7 +102,10 @@ pub(crate) fn recorded<B: Backend, P: Protection>(
     {
         return Err(Error);
     }
-    Ok(true)
+    let Change::Receipt { amount, .. } = event.change else {
+        return Err(Error);
+    };
+    Ok(Some(amount))
 }
 /// Immutable original-transaction eligibility, separate from current account/code
 /// reads and persistence. Ineligibility cannot be repaired by polling this signature.
