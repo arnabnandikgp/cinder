@@ -1296,6 +1296,8 @@ fn credit(c: &Controller, j: &mut Store, n: u8, amount: u64, final_credit: bool)
 struct Fake {
     calls: usize,
     status: Option<u16>,
+    body: Option<Vec<u8>>,
+    received_at: Option<u64>,
 }
 impl Transport for Fake {
     fn post(&mut self, r: Outbound) -> Reply {
@@ -1321,8 +1323,10 @@ impl Transport for Fake {
         match self.status {
             Some(status) => Reply::Response {
                 status,
-                body: raw(br#"{"success":true,"data":{"batch_nonce":42}}"#),
-                received_at: 100,
+                body: raw(self.body.as_deref().unwrap_or(
+                    br#"{"success":true,"data":{"batch_nonce":42,"requested_amount":"20","fee_amount":"1"}}"#,
+                )),
+                received_at: self.received_at.unwrap_or(100),
                 retry_after_ms: None,
             },
             None => Reply::Unknown,
@@ -1372,6 +1376,285 @@ fn withdrawal(n: u8, gross: u64, net: u64) -> Withdrawal {
         gross,
         payment: payment(n, net),
         raw: raw(b"qualified complete original-intent withdrawal history"),
+    }
+}
+fn transfer_body(batch: u64, requested: &str, amount: &str, fee: &str) -> Value {
+    json!({"channel":"account_transfers","data":{
+        "u":profile().account,"e":"withdrawal_confirmed","a":"USDP",
+        "am":amount,"ra":requested,"f":fee,"bn":batch,"t":100,
+        "tx":bs58::encode([77;64]).into_string()
+    }})
+}
+fn linked_transfer(c: &Controller, j: &mut Store, n: u8, v: &Value) -> bool {
+    c.linked_withdrawal_transfer(
+        j,
+        a(n),
+        cinder_pacifica::funding::evidence::TransferMessage {
+            quote_symbol: "USDP",
+            bytes: &serde_json::to_vec(v).unwrap(),
+            received_at: 101,
+            maximum_age_ms: 1000,
+        },
+    )
+    .is_ok()
+}
+#[test]
+fn retained_withdrawal_ack_rebuilds_original_batch_after_restart_without_cash_or_resend() {
+    let t = Temp::new();
+    let (mut j, c, g) = setup(&t, true);
+    prepare(&mut j, 10, Rail::Withdraw, 19, 1);
+    let mut f = Fake {
+        status: Some(200),
+        ..Fake::default()
+    };
+    withdraw(&c, &mut j, &g, 10, &mut f);
+    let head = j.head();
+    drop(j);
+    let mut j = open(&t);
+    let ack = c
+        .withdrawal_acknowledgment(&mut j, a(10), 101)
+        .unwrap()
+        .unwrap();
+    assert_eq!((ack.batch, ack.requested, ack.fee), (42, 20, 1));
+    assert!(linked_transfer(
+        &c,
+        &mut j,
+        10,
+        &transfer_body(42, "20", "19", "1")
+    ));
+    // Fee changes/overruns are still real evidence, not erased by the estimate.
+    assert!(linked_transfer(
+        &c,
+        &mut j,
+        10,
+        &transfer_body(42, "20", "18", "2")
+    ));
+    let mut pending = transfer_body(42, "20", "19", "1");
+    pending["data"]["e"] = json!("withdrawal_pending");
+    pending["data"].as_object_mut().unwrap().remove("tx");
+    assert!(linked_transfer(&c, &mut j, 10, &pending));
+    assert_eq!(j.head(), head);
+    assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(20));
+    assert_eq!(j.state().unwrap().ledger().broker(), atoms(0));
+    assert_eq!(
+        j.state()
+            .unwrap()
+            .reserved(Resource::Location(Location::Venue))
+            .unwrap(),
+        atoms(20)
+    );
+    assert_eq!(c.residuals(&mut j, 101).unwrap().unresolved, [a(10)]);
+    assert!(
+        c.withdraw(
+            &mut j,
+            &g,
+            Dispatch {
+                attempt: a(10),
+                commit: id(91),
+                at: 101
+            },
+            &mut f
+        )
+        .is_err()
+    );
+    assert_eq!(f.calls, 1);
+    for (field, value) in [
+        ("bn", json!(43)),
+        ("u", json!(bs58::encode([41; 32]).into_string())),
+        ("a", json!("USDC")),
+        ("t", json!(99)),
+        ("ra", json!("19")),
+        ("e", json!("deposit")),
+    ] {
+        let mut v = transfer_body(42, "20", "19", "1");
+        v["data"][field] = value;
+        assert!(!linked_transfer(&c, &mut j, 10, &v), "accepted {field}");
+    }
+    assert!(c.withdrawal_acknowledgment(&mut j, a(11), 101).is_err());
+}
+#[test]
+fn deposit_link_requires_original_finalized_chain_signature_and_never_mints_credit() {
+    let t = Temp::new();
+    let (mut j, c, _) = setup(&t, false);
+    prepare(&mut j, 10, Rail::Release, 20, 0);
+    let p = expose(&mut j, &c, 10, Rail::Release, 60);
+    c.observe_chain(&mut j, id(60), 100, chain(&p, 60)).unwrap();
+    prepare(&mut j, 11, Rail::Deposit, 20, 0);
+    let p = expose(&mut j, &c, 11, Rail::Deposit, 61);
+    let mut body = json!({"channel":"account_transfers","data":{
+        "u":profile().account,"e":"deposit","a":"USDP","am":"20","t":100,
+        "tx":bs58::encode([61;64]).into_string()
+    }});
+    let linked = |j: &mut Store, v: &Value| {
+        c.linked_deposit_transfer(
+            j,
+            a(11),
+            cinder_pacifica::funding::evidence::TransferMessage {
+                quote_symbol: "USDP",
+                bytes: &serde_json::to_vec(v).unwrap(),
+                received_at: 101,
+                maximum_age_ms: 1000,
+            },
+        )
+    };
+    assert!(linked(&mut j, &body).is_err());
+    c.observe_chain(&mut j, id(61), 100, chain(&p, 61)).unwrap();
+    drop(j);
+    let mut j = open(&t);
+    let head = j.head();
+    for amount in ["8", "20"] {
+        body["data"]["am"] = json!(amount);
+        assert!(linked(&mut j, &body).is_ok());
+    }
+    for (field, value) in [
+        ("tx", json!(bs58::encode([62; 64]).into_string())),
+        ("u", json!(bs58::encode([41; 32]).into_string())),
+        ("a", json!("USDC")),
+        ("am", json!("21")),
+        ("t", json!(99)),
+    ] {
+        let mut changed = body.clone();
+        changed["data"][field] = value;
+        assert!(linked(&mut j, &changed).is_err(), "accepted {field}");
+    }
+    assert_eq!(j.head(), head);
+    assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(0));
+    assert_eq!(j.state().unwrap().ledger().in_transit().unwrap(), atoms(20));
+    assert!(!j.state().unwrap().native_funding_ready());
+}
+#[test]
+fn lost_failed_malformed_or_backdated_native_ack_cannot_be_inferred_from_transfer() {
+    for (status, body, received_at) in [
+        (None, None, 100),
+        (Some(409), None, 100),
+        (Some(429), None, 100),
+        (Some(500), None, 100),
+        (
+            Some(200),
+            Some(br#"{"success":true,"data":{"batch_nonce":42}}"#.to_vec()),
+            100,
+        ),
+        (Some(200), None, 99),
+    ] {
+        let t = Temp::new();
+        let (mut j, c, g) = setup(&t, true);
+        prepare(&mut j, 10, Rail::Withdraw, 19, 1);
+        let mut f = Fake {
+            status,
+            body,
+            received_at: Some(received_at),
+            ..Fake::default()
+        };
+        withdraw(&c, &mut j, &g, 10, &mut f);
+        drop(j);
+        let mut j = open(&t);
+        assert!(
+            c.withdrawal_acknowledgment(&mut j, a(10), 101)
+                .unwrap()
+                .is_none()
+        );
+        assert!(!linked_transfer(
+            &c,
+            &mut j,
+            10,
+            &transfer_body(42, "20", "19", "1")
+        ));
+        assert_eq!(c.residuals(&mut j, 101).unwrap().unresolved, [a(10)]);
+        assert_eq!(f.calls, 1);
+    }
+}
+#[test]
+fn withdrawal_bindings_refuse_shared_batches_and_changed_gross_but_retain_fee_overrun() {
+    let t = Temp::new();
+    let (mut j, c, g) = setup(&t, true);
+    prepare(&mut j, 10, Rail::Withdraw, 9, 1);
+    let response = |requested: &str, fee: &str| {
+        serde_json::to_vec(&json!({
+            "success":true,"data":{"batch_nonce":42,"requested_amount":requested,"fee_amount":fee}
+        }))
+        .unwrap()
+    };
+    withdraw(
+        &c,
+        &mut j,
+        &g,
+        10,
+        &mut Fake {
+            status: Some(200),
+            body: Some(response("10", "2")),
+            ..Fake::default()
+        },
+    );
+    let ack = c
+        .withdrawal_acknowledgment(&mut j, a(10), 100)
+        .unwrap()
+        .unwrap();
+    assert_eq!(ack.fee, 2);
+    // The controller serializes exposed fund operations. Complete the first
+    // with a separately qualified fixture before testing reuse of its batch.
+    c.observe_withdrawal(&mut j, id(60), 100, withdrawal(10, 10, 9))
+        .unwrap();
+    prepare(&mut j, 11, Rail::Withdraw, 9, 1);
+    withdraw(
+        &c,
+        &mut j,
+        &g,
+        11,
+        &mut Fake {
+            status: Some(200),
+            body: Some(response("10", "1")),
+            ..Fake::default()
+        },
+    );
+    assert!(c.withdrawal_acknowledgment(&mut j, a(10), 100).is_err());
+    assert!(c.withdrawal_acknowledgment(&mut j, a(11), 100).is_err());
+    assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(10));
+    let t = Temp::new();
+    let (mut j, c, g) = setup(&t, true);
+    prepare(&mut j, 10, Rail::Withdraw, 19, 1);
+    withdraw(
+        &c,
+        &mut j,
+        &g,
+        10,
+        &mut Fake {
+            status: Some(200),
+            body: Some(response("19", "1")),
+            ..Fake::default()
+        },
+    );
+    assert!(c.withdrawal_acknowledgment(&mut j, a(10), 100).is_err());
+}
+#[test]
+fn opaque_native_reply_cannot_inject_funding_or_gateway_control_records() {
+    for header in [3, 4] {
+        let t = Temp::new();
+        let (mut j, c, g) = setup(&t, true);
+        let injected = j.transaction(id(header)).unwrap().evidence[0]
+            .as_bytes()
+            .to_vec();
+        prepare(&mut j, 10, Rail::Withdraw, 19, 1);
+        withdraw(
+            &c,
+            &mut j,
+            &g,
+            10,
+            &mut Fake {
+                status: Some(200),
+                body: Some(injected),
+                ..Fake::default()
+            },
+        );
+        drop(j);
+        let mut j = open(&t);
+        assert!(c.bound(&mut j, 100).unwrap());
+        g.reserve_read(&mut j, id(90), 100, true).unwrap();
+        assert!(
+            c.withdrawal_acknowledgment(&mut j, a(10), 100)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(j.state().unwrap().ledger().venue().cash(), atoms(20));
     }
 }
 

@@ -323,7 +323,11 @@ impl Gateway {
             if tx.at > at {
                 return Err(Error::Qualification);
             }
-            for body in &tx.evidence {
+            let opaque = crate::funding::opaque_evidence_slot(tx)?;
+            for (index, body) in tx.evidence.iter().enumerate() {
+                if opaque == Some(index) {
+                    continue;
+                }
                 if let Some(bytes) = body.as_bytes().strip_prefix(MAGIC) {
                     let a: Archive = serde_json::from_slice(bytes).map_err(|_| Error::Codec)?;
                     if a.contract != self.contract {

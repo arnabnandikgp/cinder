@@ -385,6 +385,29 @@ struct Archive {
     contract: [u8; 32],
     record: Record,
 }
+// These transactions retain an opaque native reply/signed wire/failed-chain
+// body after their typed header. Its bytes must never be interpreted as another
+// controller or gateway record, even if they begin with an internal magic tag.
+pub(crate) fn opaque_evidence_slot(tx: &Transaction) -> Result<Option<usize>, Error> {
+    let Some(bytes) = tx
+        .evidence
+        .first()
+        .and_then(|body| body.as_bytes().strip_prefix(MAGIC))
+    else {
+        return Ok(None);
+    };
+    let archive: Archive = serde_json::from_slice(bytes).map_err(|_| Error::Codec)?;
+    Ok(matches!(
+        archive.record,
+        Record::Reply { .. }
+            | Record::Wire { .. }
+            | Record::Chain {
+                succeeded: false,
+                ..
+            }
+    )
+    .then_some(1))
+}
 #[derive(Default)]
 struct History {
     bound: bool,
@@ -394,6 +417,7 @@ struct History {
     final_credits: Vec<Vec<u8>>,
     wires: Vec<(Vec<u8>, Vec<u8>, [u8; 32])>,
     unsent: Vec<Vec<u8>>,
+    withdrawal_replies: Vec<(Vec<u8>, Option<evidence::WithdrawalAcknowledgment>)>,
 }
 /// Derived residual report. Amounts come only from the common ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -643,7 +667,11 @@ impl Controller {
             if tx.at > at {
                 return Err(Error::Qualification);
             }
-            for bytes in &tx.evidence {
+            let opaque = opaque_evidence_slot(tx)?;
+            for (index, bytes) in tx.evidence.iter().enumerate() {
+                if opaque == Some(index) {
+                    continue;
+                }
                 if let Some(bytes) = bytes.as_bytes().strip_prefix(MAGIC) {
                     let archive: Archive =
                         serde_json::from_slice(bytes).map_err(|_| Error::Codec)?;
@@ -666,6 +694,22 @@ impl Controller {
                         continue;
                     }
                     match archive.record {
+                        Record::Reply { attempt, status } => {
+                            if index != 0 || opaque != Some(1) {
+                                return Err(Error::Qualification);
+                            }
+                            let raw = tx.evidence.get(1).ok_or(Error::Codec)?;
+                            let ack = (status == Some(200))
+                                .then(|| {
+                                    evidence::withdrawal_acknowledgment(
+                                        &self.profile,
+                                        raw.as_bytes(),
+                                    )
+                                    .ok()
+                                })
+                                .flatten();
+                            result.withdrawal_replies.push((attempt, ack));
+                        }
                         Record::Unsent { attempt } => result.unsent.push(attempt),
                         Record::Wire {
                             attempt,
@@ -985,10 +1029,12 @@ impl Controller {
                 retry_after_ms,
             } => (
                 Some(status),
-                if body.as_bytes().len() <= crate::observation::MAX_BODY {
+                if body.as_bytes().len() <= crate::observation::MAX_BODY
+                    && received_at >= dispatch.at
+                {
                     body
                 } else {
-                    PrivateBytes::new(b"withdrawal response rejected: bound".to_vec())?
+                    PrivateBytes::new(b"withdrawal response rejected: bound or clock".to_vec())?
                 },
                 received_at.max(dispatch.at),
                 retry_after_ms,
@@ -1012,6 +1058,107 @@ impl Controller {
         }
         checked(j.commit(tx)?)?;
         Ok(())
+    }
+    /// Rebuild the original request -> batch binding from the durably retained
+    /// authenticated response. This neither posts cash nor authorizes resending.
+    /// A missing/failed/malformed reply stays unresolved, including after restart.
+    pub fn withdrawal_acknowledgment<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        attempt: AttemptKey,
+        at: u64,
+    ) -> Result<Option<evidence::WithdrawalAcknowledgment>, Error> {
+        let history = self.history(j, at)?;
+        let original = attempt.encode();
+        let plan = history
+            .plans
+            .iter()
+            .find(|p| p.attempt == original && p.rail == Rail::Withdraw)
+            .ok_or(Error::Qualification)?;
+        let mut replies = history
+            .withdrawal_replies
+            .iter()
+            .filter(|(a, _)| a == &original);
+        let ack = replies.next().and_then(|(_, ack)| ack.as_ref());
+        if replies.next().is_some() {
+            return Err(Error::Qualification);
+        }
+        let Some(ack) = ack else { return Ok(None) };
+        if ack.requested != plan.gross
+            || history.withdrawal_replies.iter().any(|(other, reply)| {
+                other != &original && reply.as_ref().is_some_and(|r| r.batch == ack.batch)
+            })
+        {
+            // A batch shared by several local requests is ambiguous. Do not
+            // select one by amount/time or silently assign an aggregate payment.
+            return Err(Error::Qualification);
+        }
+        // An advertised fee above the mandate remains identifiable evidence;
+        // qualification/payment must record real overruns, not erase their link.
+        Ok(Some(ack.clone()))
+    }
+    /// Correlate an authenticated transfer event to an acknowledged original
+    /// request. No source frontier, terminal debit or finalized payment is created.
+    /// A changed fee remains visible in the observation, not overwritten by the ACK.
+    pub fn linked_withdrawal_transfer<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        attempt: AttemptKey,
+        message: evidence::TransferMessage<'_>,
+    ) -> Result<evidence::TransferObservation, Error> {
+        let ack = self
+            .withdrawal_acknowledgment(j, attempt, message.received_at)?
+            .ok_or(Error::Qualification)?;
+        let plan = self.existing(j, attempt, message.received_at)?;
+        let observation = evidence::transfer(
+            &self.profile,
+            message.quote_symbol,
+            message.bytes,
+            message.received_at,
+            message.maximum_age_ms,
+        )?;
+        if !matches!(
+            &observation,
+            evidence::TransferObservation::Withdrawal { batch, requested, at, .. }
+                if *batch == ack.batch && *requested == ack.requested && *at >= plan.at
+        ) {
+            return Err(Error::Qualification);
+        }
+        Ok(observation)
+    }
+    /// Correlate an authenticated deposit event to the original, successfully
+    /// finalized chain deposit. A partial/whole amount is still an observation:
+    /// this does not infer final credit totals, fees or a native causal frontier.
+    pub fn linked_deposit_transfer<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        attempt: AttemptKey,
+        message: evidence::TransferMessage<'_>,
+    ) -> Result<evidence::TransferObservation, Error> {
+        let history = self.history(j, message.received_at)?;
+        let original = attempt.encode();
+        let plan = history
+            .plans
+            .iter()
+            .find(|p| p.attempt == original && p.rail == Rail::Deposit)
+            .ok_or(Error::Qualification)?;
+        let observation = evidence::transfer(
+            &self.profile,
+            message.quote_symbol,
+            message.bytes,
+            message.received_at,
+            message.maximum_age_ms,
+        )?;
+        if !matches!(
+            &observation,
+            evidence::TransferObservation::Deposit { signature, amount, at }
+                if *at >= plan.at && *amount <= plan.gross && history.chains.iter().any(
+                    |(a, s, ok)| a == &original && s.as_slice() == signature && *ok
+                )
+        ) {
+            return Err(Error::Qualification);
+        }
+        Ok(observation)
     }
     fn existing<B: Backend, P: Protection>(
         &self,

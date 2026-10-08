@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59), ready/open |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60), ready/open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-07. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -36,6 +36,45 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+Provider continuation is published ready/open as [#60](https://github.com/arnabnandikgp/cinder/pull/60)
+on `tee/p23-funding-providers`, based on #59 at
+`6ecaf39cbf48d0308bab7e69b283a80d2424482c`. The existing open predecessors remain
+unchanged; no new hardware, native/RPC request, wallet use or merge is authorized
+by this offline implementation. The prior shipping run below is closed.
+
+### Financial providers — 2026-10-07
+
+Implemented first bounded provider components: deposit transfer linkage requiring
+the exact original finalized chain signature, and strict native withdrawal
+ACK decoding, original request → batch lookup from retained HTTP-200 replies, and
+account/asset/gross/time-bound transfer observation correlation. Restart restores
+the mapping without cash postings, hold release or a second send. A missing native
+ACK remains unresolved; loss of a customer reply after native ACK retention is a
+different, recoverable case. Shared batches are refused rather than assigned by
+amount/time. Deposit observations never mint venue credit; partial/whole reported
+amounts retain the transit/readiness gates. Advertised/observed fee differences
+remain visible for later actual settlement. This also closes an encountered
+evidence-framing defect: opaque native
+reply/wire/failed-chain bytes are not interpreted as controller/gateway records.
+No new ledger or record format, dependency, financial policy or activation exists.
+
+Final focused local checks: locked/offline `cargo test -p cinder-pacifica
+--all-features --test funding --test funding_evidence`, in debug and release,
+passes 31 funding cases and four evidence groups. The one explicitly allowlisted
+child worker is invoked by its parent
+kill/restart test, not claimed as an independently run scenario. Pinned
+`node scripts/check.mjs` passed all 42 contracts, strict default/all-feature
+lint/build, all-feature debug/release and shipping-default tests, and 26 SDK/TLS
+cases. The deposit join was added during that run; its final owning-crate
+debug/release tests and strict all-feature workspace lint were rerun afterward.
+Implementation checkpoint: `41b51540c3d2fd9a1fd29c1116224472b8534e20`; publication
+receipt updates only this handoff. New-head hosted CI and review are not yet
+qualified; no fresh hardware receipt or merge is claimed.
+Next: prepare authenticated native capture, setup and original-deposit credit
+recognition. Finality/completeness, fresh-account bootstrap, lost-native-ACK
+reconciliation and actual funding/recovery remain open provider gates, not extra
+storage tests. Fresh live financial activity needs its own G05 manifest approval.
 
 P23 is in progress. Shipping continuation is published ready/open as #59 on
 `tee/p23-shipping-packs`, based on reviewed #58 (`tee/p23-packed-history`) at

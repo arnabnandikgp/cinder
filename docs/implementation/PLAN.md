@@ -793,6 +793,13 @@ Node/Chrome head 64, S3 repair/refusal, restart and natural expiry. Ciphertext
 archive and independently verified owned teardown also pass; this invocation
 is closed. Earlier unpassed C5 results remain historical. Financial lifecycle
 gates are independent and remain open.
+The financial-provider continuation first adds strict withdrawal ACK decoding and
+rebuilds original-request/batch bindings from retained authenticated responses.
+Deposit joins require the exact original finalized chain signature.
+Transfer joins remain non-financial observations; successful native ACK retention
+is distinct from losing the native reply before persistence. This slice does not
+close credit/payment/cut/bootstrap gates or enable money movement; its evidence
+and next bounded provider step belong in TRACKER and P23-NATIVE-EVIDENCE.
 Inactive ticks check signed lease/sticky fence without proactive cloud polling;
 actual operations retain independent current checks. Manifest-forbidden financial
 activation and the existing durable storage/repair contract are unchanged.
