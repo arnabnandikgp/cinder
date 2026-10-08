@@ -1,7 +1,8 @@
 # ADR 0027 — Bounded confidential native transfer capture
 
-Status: implemented and locally tested transport/journal boundary; loaded-runtime
-activation and actual Nitro/native qualification remain open. This continues
+Status: implemented and locally tested transport/journal boundary; the subsequent
+[measured runtime continuation](0028-measured-native-capture.md) supplies local
+loaded-runtime wiring. Actual Nitro/native qualification remains open. This continues
 P23's existing funding-provider gate, not a new financial policy or storage model.
 
 ## Decision
@@ -53,12 +54,15 @@ another message, try another journal identity or resend the subscription.
   duplicate bodies remain available rather than being interpreted as economic
   events or silently deduplicated. Close, interruption and limits are uncertain
   capture endings, not evidence that all native effects have arrived.
-- On clock failure/backward time, discard the newly received body and record an
-  uncertain stop using the **last available trusted observation time**. That
-  marker's timestamp is explicitly tagged `clock_sample=last_known`, not a fresh
-  network receive time. If the process/sink
-  fails before the stop is retained, the start without an ending remains an
-  unresolved capture. Restart retains evidence but does not resume the socket.
+- If the post-read clock is unavailable/backward or the deadline has elapsed,
+  retain an already received bounded body and its original kind, then end capture.
+  `clock_sample=unverified_after_read` explicitly marks its timestamp as the
+  **last available trusted time**, not the body's receipt time. It cannot become
+  financial evidence. Stops without a received body use `last_known`. The shipping
+  sink still requires an independent current clock/witness: if they or durability
+  are unavailable, it refuses and fences rather than bypassing freshness. A crash
+  or failed sink can therefore leave an unresolved start; retention is not promised
+  through loss of all trusted storage authority. Restart never resumes the socket.
 
 Each archive input has `event=None`, `source_cut=None`, `authority_epoch=0`.
 Capture cannot create cash, establish setup readiness, release a funding hold,
@@ -105,8 +109,10 @@ unknown bodies, TLS root/name/time rejection, malformed upgrade/frames, finite
 budgets, bad clocks, sink failure, raw replay, shared credits and head races.
 They are not Pacifica or Nitro receipts.
 
-The shipping `runtime::Configuration` and `boot::Manifest` are deliberately
-unchanged. This component has no shipping scheduler activation yet. Before live
+At the original #61 component checkpoint, `runtime::Configuration` and
+`boot::Manifest` were deliberately unchanged and no scheduler activation existed.
+The subsequent [ADR 0028](0028-measured-native-capture.md) implements the measured
+version-4 one-shot worker locally, without financial activation. Before live
 capture, bind its actual route/root, limits and account to the measured loaded
 contract; wire preparation/I/O/append outside the mutation guard; keep current
 financial gates closed. Continuous subscription, reconnect/gap policy and live

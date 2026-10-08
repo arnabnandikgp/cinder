@@ -87,6 +87,12 @@ are retained, not treated as results for this new artifact. Strict
 [documented native evidence components](P23-NATIVE-EVIDENCE.md) preserve exact
 schema/unit/linkage failures without manufacturing source authentication, UUID
 correlation, completeness or final payment. No financial authority is promoted.
+The subsequent [measured capture worker](../architecture/0028-measured-native-capture.md)
+binds version-4 actual route/root/origin/limits and prepares/archives through one
+journal without either runtime I/O guard spanning socket work. Explicit synthetic
+runtime tests join concurrent commands, clock/epoch/lease/budget failures and
+panic fencing; process provisioning checks all four envelope versions. This is
+local composition evidence, not a new native/Nitro receipt or financial provider.
 Subsequent PR #55 corrections qualify exact role coverage, rejected-deposit
 progress, verified expired no-wire closure, absence of unsupported source cuts
 and bounded lock backpressure. They require new host/ARM application evidence;

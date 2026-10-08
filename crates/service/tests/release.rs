@@ -233,10 +233,11 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
         root: root.clone(),
         root_hash: hash,
     };
-    for version in [1, 2, 3] {
+    for version in [1, 2, 3, 4] {
         let mut manifest = Manifest {
             version: 1,
             history: None,
+            native_capture: None,
         domain: [[1; 32], [2; 32]].concat(),
         application: [1; 32],
         stream: [42; 32],
@@ -284,13 +285,27 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
         let mut input = serde_json::json!({"manifest":null,"configuration":null,"storage":vec![55;32],"trading":vec![7;32],"broker":vec![9;32],"witness":null});
         let expected = if version >= 2 {
             manifest.version = version;
-            if version == 3 {
+            if version >= 3 {
                 manifest.history = Some(cinder_service::boot::HistoryPolicy {
                     record_bytes: 65536,
                     history_bytes: 8388608,
                     records: 256,
                     put_requests: 512,
                     put_bytes: 134217728,
+                });
+            }
+            if version == 4 {
+                manifest.gates.native_reads = true;
+                manifest.native_capture = Some(cinder_service::native_capture::Policy {
+                    port: 9008,
+                    root: root.clone(),
+                    root_hash: hash,
+                    limits: cinder_pacifica::capture::Limits {
+                        maximum_ms: 5000,
+                        maximum_messages: 16,
+                        maximum_bytes: 8192,
+                        maximum_message: 4096,
+                    },
                 });
             }
             let mut slot = manifest.slots[0].clone();
@@ -380,7 +395,8 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
             assert!(bytes.starts_with(match version {
                 1 => b"CKR1",
                 2 => b"CKR2",
-                _ => b"CKR3",
+                3 => b"CKR3",
+                _ => b"CKR4",
             }));
             assert!(bytes.len() <= 4096);
             #[cfg(unix)]

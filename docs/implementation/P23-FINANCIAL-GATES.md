@@ -54,8 +54,9 @@ all money-movement and complete-cut gates below remain open.
    The offline capture transport/archive in
    [ADR 0027](../architecture/0027-native-transfer-capture.md) is the next bounded
    component: it retains raw transfer evidence without settlement or readiness.
-   Loaded-manifest/supervisor activation and actual native qualification remain
-   open; a library port or local TLS peer is not a deployed capture provider.
+   [Loaded-manifest/one-shot-worker wiring](../architecture/0028-measured-native-capture.md)
+   is subsequently implemented and tested locally. Actual native qualification
+   remains open; a local worker or TLS peer is not a deployed financial provider.
 3. Add a **narrow measured financial activation policy** only once the relevant
    providers and bounded admission are tested. `boot::Manifest::validate` still
    rejects `funding` and `trading`; `Runtime::tick` has composed controller paths
@@ -78,6 +79,11 @@ all money-movement and complete-cut gates below remain open.
    release/customer-funds review and a new venue integration remain separate.
 
 ## Minimal evidence receipt for each provider
+
+[The next native-semantics proposal](P23-NATIVE-QUALIFICATION.md) scopes fresh
+setup/deposit/withdrawal/lost-native-reply qualification without an exploratory
+AWS session. Its proposed faucet/devnet and bootstrap bounds are unapproved;
+the exact runner/identity/source G05 record is still required before execution.
 
 Record the bound environment/account/profile and source version/date, request and
 response schema, authenticated channel, exact native/chain identity correlation,

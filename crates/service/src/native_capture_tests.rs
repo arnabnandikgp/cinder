@@ -172,6 +172,79 @@ fn certificates(host: &str) -> (SslAcceptor, Trust) {
     let der = root.to_der().unwrap();
     (b.build(), Trust::from_der(&der, sha256(&der)).unwrap())
 }
+#[test]
+fn loaded_capture_derives_actual_origin_route_root_and_limits_not_an_echoed_digest() {
+    assert_eq!(
+        connect_budget(1000, Duration::from_millis(999)),
+        Some(Duration::from_millis(1))
+    );
+    assert_eq!(connect_budget(1000, Duration::from_millis(1000)), None);
+    assert_eq!(connect_budget(1000, Duration::from_millis(1001)), None);
+    assert_eq!(
+        connect_budget(30000, Duration::ZERO),
+        Some(Duration::from_secs(5))
+    );
+    let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
+    let ca = PKey::from_ec_key(EcKey::generate(&group).unwrap()).unwrap();
+    let root = certificate(&ca, None, "fixture-root").to_der().unwrap();
+    let policy = super::Policy {
+        port: 9008,
+        root_hash: sha256(&root),
+        root,
+        limits: limits(),
+    };
+    let loaded = Loaded::new(Origin::Testnet, &policy).unwrap();
+    let digest = loaded.commitment().unwrap();
+    assert!(loaded.matches(&policy));
+    for case in 0..6 {
+        let mut changed = policy.clone();
+        match case {
+            0 => changed.port += 1,
+            1 => changed.limits.maximum_ms -= 1,
+            2 => changed.limits.maximum_messages -= 1,
+            3 => changed.limits.maximum_bytes -= 1,
+            4 => changed.limits.maximum_message -= 1,
+            _ => {
+                let ca = PKey::from_ec_key(EcKey::generate(&group).unwrap()).unwrap();
+                changed.root = certificate(&ca, None, "different-fixture-root")
+                    .to_der()
+                    .unwrap();
+                changed.root_hash = sha256(&changed.root);
+            }
+        }
+        assert!(!loaded.matches(&changed));
+        assert_ne!(
+            Loaded::new(Origin::Testnet, &changed)
+                .unwrap()
+                .commitment()
+                .unwrap(),
+            digest
+        );
+    }
+    assert_ne!(
+        Loaded::new(Origin::Mainnet, &policy)
+            .unwrap()
+            .commitment()
+            .unwrap(),
+        digest
+    );
+    let (port, bounds) = loaded.open(Arc::new(Time(AtomicU64::new(NOW)))).unwrap();
+    assert_eq!(
+        port.commitment(),
+        route_commitment(
+            Origin::Testnet,
+            Target::new(3, policy.port).unwrap(),
+            &Trust::from_der(&policy.root, policy.root_hash).unwrap()
+        )
+    );
+    assert!(bounds == policy.limits);
+    let mut changed = policy.clone();
+    changed.root_hash = [1; 32];
+    assert!(Loaded::new(Origin::Testnet, &changed).is_err());
+    let mut encoded = serde_json::to_value(&policy).unwrap();
+    encoded["host"] = serde_json::json!("arbitrary.example");
+    assert!(serde_json::from_value::<super::Policy>(encoded).is_err());
+}
 fn peer(
     acceptor: SslAcceptor,
     work: impl FnOnce(&mut openssl::ssl::SslStream<TcpStream>) + Send + 'static,
@@ -415,6 +488,36 @@ fn journal_rejoin_accepts_an_advanced_head_but_rejects_cross_capture_and_bad_ord
     )
     .unwrap();
     assert!(q.record(Kind::Text, vec![1], NOW).is_err());
+    for kind in [
+        Kind::Text,
+        Kind::Binary,
+        Kind::Ping,
+        Kind::Pong,
+        Kind::Closed,
+    ] {
+        let temp = support::Temp::new();
+        let (mut j, g, mut q, mut a) = prepared(&temp, limits());
+        let ledger = j.state().unwrap().ledger().clone();
+        assert!(q.record_unverified(Kind::Opened, vec![]).is_err());
+        a.append(
+            &mut j,
+            &g,
+            id(10),
+            q.record(Kind::Opened, vec![], NOW).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            q.record_unverified(kind, vec![0; limits().maximum_message + 1])
+                .is_err()
+        );
+        let record = q.record_unverified(kind, vec![1, 2, 3]).unwrap();
+        a.append(&mut j, &g, id(11), record).unwrap();
+        assert!(q.record(Kind::Text, vec![], NOW).is_err());
+        assert!(q.record_unverified(kind, vec![]).is_err());
+        assert_eq!(records(&j)[1]["clock_sample"], "unverified_after_read");
+        assert_eq!(records(&j)[1]["body"], serde_json::json!([1, 2, 3]));
+        assert_eq!(j.state().unwrap().ledger(), &ledger);
+    }
 }
 #[test]
 fn actual_tls_peer_checks_exact_subscribe_masking_fragmentation_controls_and_raw_binary() {
@@ -592,7 +695,7 @@ fn malformed_frames_and_fragment_growth_cannot_escape_bounds_or_produce_success(
 }
 #[test]
 fn resource_clock_and_sink_failures_are_bounded_and_never_relabelled_success() {
-    for case in 0..4 {
+    for case in 0..5 {
         let temp = support::Temp::new();
         let l = Limits {
             maximum_ms: if case == 0 { 400 } else { 1500 },
@@ -602,7 +705,6 @@ fn resource_clock_and_sink_failures_are_bounded_and_never_relabelled_success() {
         let (mut j, g, q, mut a) = prepared(&temp, l);
         let (acceptor, trust) = certificates(host(Origin::Testnet));
         let time = Arc::new(Time(AtomicU64::new(NOW)));
-        let t = time.clone();
         let (socket, worker) = peer(acceptor, move |s| {
             upgrade(s, "", true);
             let _ = client_frame(s);
@@ -610,9 +712,6 @@ fn resource_clock_and_sink_failures_are_bounded_and_never_relabelled_success() {
                 let mut x = [0];
                 let _ = s.read(&mut x);
             } else {
-                if case == 2 {
-                    t.0.store(NOW - 1, Ordering::SeqCst);
-                }
                 frame(s, 1, true, b"private-frame");
                 if case == 1 {
                     let _ = s.write_all(b"\x81\x01x");
@@ -626,7 +725,12 @@ fn resource_clock_and_sink_failures_are_bounded_and_never_relabelled_success() {
             if case == 3 && calls == 2 {
                 Err(Error)
             } else {
-                normal(r)
+                let retained = normal(r);
+                if calls == 1 && matches!(case, 2 | 4) {
+                    time.0
+                        .store(if case == 2 { NOW - 1 } else { 0 }, Ordering::SeqCst);
+                }
+                retained
             }
         });
         drop(normal);
@@ -636,6 +740,20 @@ fn resource_clock_and_sink_failures_are_bounded_and_never_relabelled_success() {
             assert!(result.is_err());
             assert_eq!(calls, 2);
             assert_eq!(rs.len(), 1);
+        } else if matches!(case, 2 | 4) {
+            result.unwrap();
+            assert_eq!(rs.len(), 2);
+            assert_eq!(rs[1]["kind"], "Text");
+            assert_eq!(rs[1]["body"], serde_json::json!(b"private-frame".to_vec()));
+            assert_eq!(rs[1]["received_at"], NOW);
+            assert_eq!(rs[1]["clock_sample"], "unverified_after_read");
+            assert!(
+                j.transactions()
+                    .flat_map(|t| &t.inputs)
+                    .all(|i| i.event.is_none() && i.source_cut.is_none())
+            );
+            let reopened = temp.open();
+            assert_eq!(records(&reopened), rs);
         } else {
             result.unwrap();
             assert_eq!(
