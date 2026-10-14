@@ -1,7 +1,8 @@
 # ADR 0030 — Venue-directed escrow ingress and shared payout protection
 
-Date: 2026-10-15. Status: user-approved product direction and implementation
-contract; not implemented, deployed, migrated or live-qualified by this ADR.
+Date: 2026-10-15. Status: user-approved product direction; P23B implements the
+local program/client boundary on its dependent branch. P23C's journal join,
+deployment, migration and live qualification are not completed by this ADR.
 Owns [P23A–P23C](../implementation/PLAN.md#p23a). Extends B04/B05 without changing
 the individual-entitlement, pooled-execution, RF1/RF2 or operator-assisted recovery
 contracts in [BASELINE](../implementation/BASELINE.md).
@@ -95,6 +96,73 @@ introduced. Transaction/network fees and account rent need explicit payer handli
 they must not silently reduce recorded collateral or redefine the full amount.
 
 ## One ledger, explicit pending ownership
+
+### P23B concrete local ABI
+
+The immutable `VaultConfig` remains the pool/asset custody domain. One new
+`VenueRoute` PDA (`["venue_route", config]`) binds that config to a nonzero
+32-byte venue identity and the config's immutable broker owner/native account.
+Governance registers it once in normal mode. A config cannot be relabeled for
+another venue or share a second route; another risk cohort uses another config.
+The program enforces the funding-wallet destination, not native venue credit.
+
+`VenueEscrow` uses `["venue_escrow", route, owner]`; its classic SPL token account
+uses `["escrow_tokens", escrow]` with the escrow PDA as authority. Registration
+requires the existing customer record and owner's signature. `EscrowBatch` uses
+`["escrow_batch", escrow, deposit_operation]`. All bumps are canonical.
+
+New instructions are `register_venue_route(domain, epoch, venue)`,
+`open_venue_escrow(domain)`, `deposit_escrow(auth, amount)`,
+`sweep_escrow(auth, expected_sequence)` and `refund_escrow(domain)`. The sweep's
+`auth.operation` is a separately persisted operator movement identity; it cannot
+be squatted by the owner's deposit operation. There is no sweep amount argument:
+the program uses the full stored batch amount. The permanent operator receipt
+uses the existing `["receipt", config, sweep_operation]` namespace and kind `4`,
+binding owner, immutable broker recipient, amount and funding sequence. The batch
+stores that operation/sequence and terminal slot; refund records the owner's
+actual recipient and terminal slot, with zero movement operation/sequence.
+
+New schema-1 layouts (serialized size excludes the 8-byte discriminator):
+
+| Account | Ordered stored fields | Size |
+| --- | --- | --- |
+| VenueRoute | schema/bump u8; config Pubkey; venue [u8;32]; native_account Pubkey | 98 |
+| VenueEscrow | schema/bump/tokens_bump u8; route/owner Pubkey; pending u64 | 75 |
+| EscrowBatch | schema/bump/state u8; escrow Pubkey; operation [u8;32]; amount/epoch/expires_at_slot u64; terminal_operation [u8;32]; destination Pubkey; sequence/terminal_slot u64 | 171 |
+
+Batch state values are `0 Pending`, `1 Swept`, `2 Refunded`. Amount, consent epoch,
+deadline and original operation never change. No close/reinitialize/update/drain
+instruction exists. Each token movement requires backing for **all** recorded
+pending batches, not just the selected one. A token impairment blocks consumption
+without deleting claims. Surplus has no batch and cannot be swept or refunded.
+
+Deposit/open/route registration require normal mode. Sweep additionally checks
+both current movement authorization and original deposit consent epoch/deadline,
+the shared gross release cap and funding sequence. Refund checks the fixed domain
+but deliberately not the current epoch, deadline or mode. Only sweep increases
+legacy `config.deposited`/`customer.deposited` attribution and shared release
+counters; pending deposit/refund change neither attribution nor paid counters.
+These are public custody totals, not spendable ledger credits. P23C still owns
+qualified finalized recognition, native-credit restrictions and journal semantics.
+
+The three new layouts and appended error codes leave all existing layouts,
+instruction constructors and receipt kinds unchanged. This is a local ABI only:
+no live deployment or migration is authorized by P23B.
+
+Rent payers are explicit: governance creates the route; the owner opens the
+escrow/token account and each batch; funds authority creates the sweep receipt.
+Refund creates no account and can use an independently selected transaction fee
+payer. None of these lamports is deducted from the recorded SPL batch amount.
+
+The signed-SBF tests in `clients/vault/tests/vault.test.ts` use the existing fresh
+local harness and typed builders. They cover both terminal orderings and concurrent
+competition; repeated IDs/open attempts; two owners and the same wallet/ID on a
+second route/mint; source/recipient/signature/token-program substitution;
+original versus operator expiry and rotation; shared legacy/escrow gross caps;
+real frozen-token CPI rollback/retry; synthetic backing impairment and arithmetic
+exhaustion; surplus isolation; active recovery refunds; and unchanged legacy layouts.
+Fixture-only state edits isolate adverse expiry/backing/counter states; they are
+not reachable owner mutation APIs or evidence about a native venue.
 
 The financial kernel and protected journal remain authoritative. Escrow monitoring
 and UI projections must not become a second balance database.

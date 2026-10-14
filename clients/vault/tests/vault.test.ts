@@ -13,6 +13,9 @@ import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createMint, createAccount, min
   freezeAccount, thawAccount, approve, transfer, burn } from '@solana/spl-token';
 import { customerAddress, depositReceiptAddress, identity, movement, receiptAddress, u64, vaultAddresses, vaultProgram } from '../src/index.ts';
 import { fundingInstruction, verifyFundingWire } from '../src/funding.ts';
+import { venueRouteAddress, venueEscrowAddresses, escrowBatchAddress, registerVenueRouteInstruction,
+  openVenueEscrowInstruction, depositEscrowInstruction, sweepEscrowInstruction, refundEscrowInstruction,
+  ESCROW_PENDING, ESCROW_SWEPT, ESCROW_REFUNDED } from '../src/escrow.ts';
 import { buildRecoveryTree, recoveryAddress, recoveryReceiptAddress, recoveryClaimWire, recoveryStatementWire,
   recoveryContextHash, recoveryLeaf, type RecoveryClaim, type RecoveryStatement } from '../src/recovery.ts';
 import { custodySnapshot,custodyWire,decryptKit,independentClaim,recoveryKeyAuthorization,retrieveKit,verifyManifest,type ExpectedCustody,type Snapshot } from '../src/claims.ts';
@@ -582,6 +585,308 @@ test('failed freeze epoch increment restores mode and successful governance hand
   await send(await rotate(governance.publicKey, 1n), [governance, newGovernance, f.funds, f.recovery]);
   await rejectsAtomic(f, await rotate(governance.publicKey, 2n), [governance, newGovernance, f.funds, f.recovery]);
   await send(await rotate(newGovernance.publicKey, 2n), [newGovernance, f.funds, f.recovery]);
+});
+
+async function escrowFixture(existing?: Fixture) {
+  const f=existing??await fixture();
+  const context = {domain:f.domain,pool:f.pool,mint:f.mint,config:f.config,owner:f.owner.publicKey};
+  const addresses = venueEscrowAddresses(programId,f.config,f.owner.publicKey);
+  const common = {config:f.config,mint:f.mint,...addresses,tokenProgram:TOKEN_PROGRAM_ID,systemProgram:SystemProgram.programId};
+  await send(await registerVenueRouteInstruction(program,context,governance.publicKey,1n,id('pacifica')),[governance]);
+  await send(await openVenueEscrowInstruction(program,context),[f.owner]);
+  const operations = new Set<string>();
+  const batch = (a:ReturnType<typeof movement>) => {
+    // Raw harness intentionally permits malformed IDs to exercise SBF, unlike the typed client.
+    const b = PublicKey.findProgramAddressSync([Buffer.from('escrow_batch'),addresses.escrow.toBuffer(),Buffer.from(a.operation)],programId)[0];
+    operations.add(b.toBase58()); return b;
+  };
+  const deposit = (a=f.auth('escrow-deposit'),amount=100n,overrides={}) => program.methods.depositEscrow(a,u64(amount))
+    .accountsStrict({...common,owner:f.owner.publicKey,customer:f.customer,source:f.source,batch:batch(a),...overrides}).instruction();
+  const sweep = (b=f.auth('escrow-deposit'),a=f.auth('escrow-sweep'),sequence=0n,overrides={}) => program.methods.sweepEscrow(a,u64(sequence))
+    .accountsStrict({...common,funds:f.funds.publicKey,customer:f.customer,brokerTokens:f.brokerTokens,batch:batch(b),receipt:f.receipt(a),...overrides}).instruction();
+  const refund = (b=f.auth('escrow-deposit'),overrides={},domain=f.domain) => program.methods.refundEscrow(identity(domain))
+    .accountsStrict({config:f.config,mint:f.mint,...addresses,tokenProgram:TOKEN_PROGRAM_ID,owner:f.owner.publicKey,
+      destination:f.source,batch:batch(b),...overrides}).instruction();
+  const state = async () => ({custody:await f.state(),escrow:await program.account.venueEscrow.fetch(addresses.escrow),
+    tokens:(await getAccount(connection,addresses.escrowTokens)).amount,
+    batches:await Promise.all([...operations].map(b=>program.account.escrowBatch.fetchNullable(new PublicKey(b))))});
+  const rejects = async (ix:TransactionInstruction,signers:Keypair[],absent?:PublicKey,error?:RegExp) => {
+    const before=await state();
+    if(error)await assert.rejects(send(ix,signers),error);else await assert.rejects(send(ix,signers));
+    assert.deepEqual(await state(),before);
+    if(absent)assert.equal(await connection.getAccountInfo(absent),null);
+  };
+  return {f,context,...addresses,batch,deposit,sweep,refund,state,rejects};
+}
+
+test('P23B typed builders execute exact deposit/sweep/return/payout; pending is not credited',async()=>{
+  const e=await escrowFixture(),{f}=e,a=f.auth('typed-deposit'),s=f.auth('typed-sweep');
+  const auth=(m:ReturnType<typeof movement>)=>({epoch:BigInt(m.epoch.toString()),operation:Uint8Array.from(m.operation),expiresAtSlot:BigInt(m.expiresAtSlot.toString())});
+  await send(await depositEscrowInstruction(program,e.context,auth(a),100n,f.source),[f.owner]);
+  const pending=await e.state();assert.equal(pending.tokens,100n);assert.equal(pending.escrow.pending.toString(),'100');
+  assert.equal(pending.custody.customer.deposited.toString(),'0');assert.equal(pending.custody.config.deposited.toString(),'0');
+  await transfer(connection,governance,f.source,e.escrowTokens,f.owner,17n);
+  await send(await sweepEscrowInstruction(program,e.context,Uint8Array.from(a.operation),auth(s),f.funds.publicKey,f.brokerTokens,0n),[f.funds]);
+  const swept=await program.account.escrowBatch.fetch(e.batch(a)),receipt=await program.account.movementReceipt.fetch(f.receipt(s));
+  assert.equal(swept.state,ESCROW_SWEPT);assert.equal(swept.amount.toString(),'100');assert(swept.destination.equals(f.brokerTokens));
+  assert.deepEqual(swept.terminalOperation,s.operation);assert.equal(swept.sequence.toString(),'1');assert(swept.terminalSlot.gtn(0));
+  assert.equal(receipt.kind,4);assert(receipt.owner.equals(f.owner.publicKey));assert.equal(receipt.amount.toString(),'100');
+  const state=await e.state();assert.equal(state.tokens,17n);assert.equal(state.escrow.pending.toString(),'0');
+  assert.equal(state.custody.broker,100n);assert.equal(state.custody.vault,0n);assert.equal(state.custody.customer.deposited.toString(),'100');
+  // Profit has independent backing; return/payout retain their original counters and recipient.
+  await mintTo(connection,governance,f.mint,f.brokerTokens,governance,20n);
+  await send(await f.returned(f.auth('escrow-return'),120n),[f.broker]);
+  await send(await f.payout(f.auth('escrow-profit'),120n),[f.funds]);
+  assert.equal((await f.state()).customer.paid.toString(),'120');
+  await e.rejects(await e.refund(a),[f.owner],undefined,/EscrowConsumed/);
+  await e.rejects(await e.sweep(a,f.auth('surplus-sweep'),1n),[f.funds],f.receipt(f.auth('surplus-sweep')),/EscrowConsumed/);
+  assert.equal((await e.state()).tokens,17n);
+});
+
+for(const winner of ['sweep','refund'] as const)test(`P23B ${winner} wins: terminal batch cannot replay, refund, sweep or redeposit`,async()=>{
+  const e=await escrowFixture(),{f}=e,a=f.auth('race-batch');await send(await e.deposit(a),[f.owner]);
+  const sweep=await e.sweep(a),refund=await e.refund(a);
+  await send(winner==='sweep'?sweep:refund,[winner==='sweep'?f.funds:f.owner]);
+  await e.rejects(winner==='sweep'?refund:sweep,[winner==='sweep'?f.owner:f.funds],undefined,/EscrowConsumed/);
+  await e.rejects(await e.refund(a),[f.owner],undefined,/EscrowConsumed/);
+  await e.rejects(await e.sweep(a,f.auth('new-sweep'),winner==='sweep'?1n:0n),[f.funds],f.receipt(f.auth('new-sweep')),/EscrowConsumed/);
+  await e.rejects(await e.deposit(a),[f.owner]);
+  const state=await e.state(),b=await program.account.escrowBatch.fetch(e.batch(a));
+  assert.equal(state.tokens,0n);assert.equal(state.escrow.pending.toString(),'0');
+  assert.equal(b.state,winner==='sweep'?ESCROW_SWEPT:ESCROW_REFUNDED);
+  assert.equal(state.custody.customer.paid.toString(),'0');assert.equal(state.custody.customer.payoutSequence.toString(),'0');
+  if(winner==='refund'){assert(b.destination.equals(f.source));assert.equal(b.sequence.toString(),'0');assert.deepEqual(b.terminalOperation,Array(32).fill(0));}
+});
+
+test('P23B competing signed sweep/refund transactions permit exactly one winner',async()=>{
+  const e=await escrowFixture(),{f}=e;await send(await e.deposit(),[f.owner]);
+  const results=await Promise.allSettled([send(await e.sweep(),[f.funds]),send(await e.refund(),[f.owner])]);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+  const state=await e.state();assert.equal(state.tokens,0n);assert.equal(state.escrow.pending.toString(),'0');
+  assert.equal(state.custody.source+state.custody.broker,1_000_000n);
+});
+
+test('P23B two owners/batches/routes cannot substitute custody or squat operator identities',async()=>{
+  const e=await escrowFixture(),{f}=e,other=keys();await fund(other);
+  const otherCustomer=customerAddress(programId,f.config,other.publicKey),otherSource=await createAccount(connection,governance,f.mint,other.publicKey);
+  await mintTo(connection,governance,f.mint,otherSource,governance,300n);
+  await send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({config:f.config,owner:other.publicKey,customer:otherCustomer,systemProgram:SystemProgram.programId}).instruction(),[other]);
+  const c={...e.context,owner:other.publicKey},otherAddresses=venueEscrowAddresses(programId,f.config,other.publicKey);
+  await send(await openVenueEscrowInstruction(program,c),[other]);
+  const a=f.auth('one'),b=f.auth('two'),s=f.auth('same-op');
+  await send(await e.deposit(a,100n),[f.owner]);await send(await e.deposit(b,200n),[f.owner]);
+  await send(await depositEscrowInstruction(program,c,{epoch:1n,operation:Uint8Array.from(a.operation),expiresAtSlot:(1n<<64n)-1n},300n,otherSource),[other]);
+  const otherBatch=escrowBatchAddress(programId,otherAddresses.escrow,Uint8Array.from(a.operation));
+  await e.rejects(await e.refund(a,{batch:otherBatch}),[f.owner]);
+  await e.rejects(await e.sweep(a,s,0n,{customer:otherCustomer}),[f.funds]);
+  const second=await escrowFixture();
+  await e.rejects(await e.sweep(a,s,0n,{route:second.route}),[f.funds]);
+  // The same wallet also has a separate escrow/counter on another route/mint.
+  const secondContext={...second.context,owner:f.owner.publicKey},secondAddresses=venueEscrowAddresses(programId,second.f.config,f.owner.publicKey);
+  const secondCustomer=customerAddress(programId,second.f.config,f.owner.publicKey),secondSource=await createAccount(connection,governance,second.f.mint,f.owner.publicKey);
+  await send(await program.methods.registerCustomer(identity(second.f.domain)).accountsStrict({config:second.f.config,owner:f.owner.publicKey,
+    customer:secondCustomer,systemProgram:SystemProgram.programId}).instruction(),[f.owner]);
+  await send(await openVenueEscrowInstruction(program,secondContext),[f.owner]);
+  await mintTo(connection,governance,second.f.mint,secondSource,governance,40n);
+  const secondAuth={epoch:1n,operation:Uint8Array.from(a.operation),expiresAtSlot:(1n<<64n)-1n};
+  await send(await depositEscrowInstruction(program,secondContext,secondAuth,40n,secondSource),[f.owner]);
+  await e.rejects(await e.refund(a,{batch:escrowBatchAddress(programId,secondAddresses.escrow,secondAuth.operation)}),[f.owner]);
+  await send(await sweepEscrowInstruction(program,secondContext,secondAuth.operation,
+    {...secondAuth,operation:id('second-route-sweep')},second.f.funds.publicKey,second.f.brokerTokens,0n),[second.f.funds]);
+  assert.equal((await program.account.customerCounter.fetch(secondCustomer)).deposited.toString(),'40');
+  assert.equal((await getAccount(connection,second.f.brokerTokens)).amount,40n);
+  await e.rejects(await e.refund(a,{escrowTokens:otherAddresses.escrowTokens}),[f.owner]);
+  // Same owner operation is legitimate in another batch scope, but not another
+  // batch in this scope. Deposit IDs cannot consume the operator receipt namespace.
+  await send(await e.deposit(s,10n),[f.owner]);await send(await e.sweep(a,s),[f.funds]);
+  await e.rejects(await e.sweep(b,s,1n),[f.funds]);
+  await send(await e.refund(b),[f.owner]);
+  assert.equal((await program.account.venueEscrow.fetch(otherAddresses.escrow)).pending.toString(),'300');
+  assert.equal((await getAccount(connection,otherAddresses.escrowTokens)).amount,300n);
+  assert.equal((await e.state()).tokens,10n);assert.equal((await e.state()).custody.broker,100n);
+});
+
+test('P23B route registration is governed, immutable and cannot relabel a config',async()=>{
+  const f=await fixture(),c={domain:f.domain,pool:f.pool,mint:f.mint,config:f.config,owner:f.owner.publicKey},route=venueRouteAddress(programId,f.config);
+  await rejectsAtomic(f,await registerVenueRouteInstruction(program,c,f.outsider.publicKey,1n,id('pacifica')),[f.outsider],route);
+  await rejectsAtomic(f,await program.methods.registerVenueRoute(identity(f.domain),u64(1n),Array(32).fill(0))
+    .accountsStrict({config:f.config,route,governance:governance.publicKey,systemProgram:SystemProgram.programId}).instruction(),[governance],route,/Domain/);
+  await send(await registerVenueRouteInstruction(program,c,governance.publicKey,1n,id('pacifica')),[governance]);
+  const before=await program.account.venueRoute.fetch(route);
+  await assert.rejects(send(await registerVenueRouteInstruction(program,c,governance.publicKey,1n,id('other-venue')),[governance]));
+  assert.deepEqual(await program.account.venueRoute.fetch(route),before);assert(before.nativeAccount.equals(f.broker.publicKey));
+  const ix=await openVenueEscrowInstruction(program,c);
+  ix.keys.find(k=>k.pubkey.equals(f.owner.publicKey))!.isSigner=false;
+  await assert.rejects(send(ix,[f.outsider]),/AccountNotSigner/);
+  assert.equal(await connection.getAccountInfo(venueEscrowAddresses(programId,f.config,f.owner.publicKey).escrow),null);
+});
+
+for(const kind of ['deposit','sweep','refund'] as const)test(`P23B ${kind} rejects hostile accounts and non-signing authorities atomically`,async()=>{
+  const e=await escrowFixture(),{f}=e,a=f.auth('bad-accounts');
+  if(kind!=='deposit')await send(await e.deposit(a),[f.owner]);
+  const signer=kind==='sweep'?f.funds:f.owner,otherMint=await createMint(connection,governance,governance.publicKey,null,6);
+  const build=(overrides={})=>kind==='deposit'?e.deposit(a,100n,overrides):kind==='sweep'?e.sweep(a,f.auth('bad-sweep'),0n,overrides):e.refund(a,overrides);
+  for(const overrides of [{mint:otherMint},{tokenProgram:TOKEN_2022_PROGRAM_ID},{tokenProgram:SystemProgram.programId},
+    {route:f.config},{escrow:f.customer},{escrowTokens:f.source},{batch:f.customer},
+    kind==='deposit'?{source:f.foreignTokens}:kind==='sweep'?{brokerTokens:f.foreignTokens}:{destination:f.foreignTokens}]){
+    await e.rejects(await build(overrides),[signer]);
+  }
+  await e.rejects(await build(kind==='sweep'?{funds:f.recovery.publicKey}:{owner:f.outsider.publicKey}),[kind==='sweep'?f.recovery:f.outsider]);
+  const ix=await build();ix.keys.find(k=>k.pubkey.equals(signer.publicKey))!.isSigner=false;
+  await e.rejects(ix,[f.outsider],undefined,/AccountNotSigner/);
+});
+
+test('P23B deposit consent bounds and expiry reject without creating a batch',async()=>{
+  const e=await escrowFixture(),{f}=e,a=f.auth('bad-consent');
+  for(const [auth,amount] of [[a,0n],[{...a,domain:identity(id('wrong'))},1n],[{...a,epoch:u64(2n)},1n],
+    [{...a,expiresAtSlot:u64(0n)},1n],[{...a,operation:Array(32).fill(0)},1n]] as const){
+    // Zero identity intentionally bypasses the typed builder to reach SBF validation.
+    const batch=PublicKey.findProgramAddressSync([Buffer.from('escrow_batch'),e.escrow.toBuffer(),Buffer.from(auth.operation)],programId)[0];
+    await e.rejects(await e.deposit(auth,amount,{batch}),[f.owner],batch);
+  }
+  await approve(connection,governance,f.source,f.outsider.publicKey,f.owner,1n);
+  await e.rejects(await e.deposit(),[f.owner],e.batch(f.auth('escrow-deposit')),/TokenAuthority/);
+});
+
+test('P23B sweep validates original consent plus operator deadline, gross cap and sequence',async()=>{
+  const e=await escrowFixture(),{f}=e,a=f.auth('consent');await send(await e.deposit(a,400_000n),[f.owner]);
+  const s=f.auth('sweep');
+  await e.rejects(await e.sweep(a,{...s,expiresAtSlot:u64(0n)}),[f.funds],f.receipt(s),/Expired/);
+  await e.rejects(await e.sweep(a,s,1n),[f.funds],f.receipt(s),/Counter/);
+  await send(await e.sweep(a,s),[f.funds]);
+  await send(await f.returned(f.auth('return-cap'),400_000n),[f.broker]);
+  const b=f.auth('above-cap');await send(await e.deposit(b,100_001n),[f.owner]);
+  await e.rejects(await e.sweep(b,f.auth('cap'),1n),[f.funds],f.receipt(f.auth('cap')),/Bound/);
+  // Legacy release and escrow sweep share the same gross budget and sequence.
+  await e.rejects(await f.release(f.auth('legacy-cap'),100_001n,1n),[f.funds],f.receipt(f.auth('legacy-cap')),/Bound/);
+  await send(await e.refund(b),[f.owner]);
+  const c=f.auth('expired-batch');await send(await e.deposit(c),[f.owner]);
+  const stored=await program.account.escrowBatch.fetch(e.batch(c));
+  // Test fixture only: isolate an expired original consent, while the new operator wire is fresh.
+  const data=await program.coder.accounts.encode('escrowBatch',{...stored,expiresAtSlot:u64(0n)});
+  await rpc('surfnet_setAccount',[e.batch(c).toBase58(),{data:data.toString('hex')}]);
+  await e.rejects(await e.sweep(c,f.auth('fresh-but-expired'),1n),[f.funds],f.receipt(f.auth('fresh-but-expired')),/Expired/);
+  await send(await e.refund(c),[f.owner]);
+});
+
+test('P23B rotation invalidates original consent; new epoch cannot revive it; refund survives active recovery',async()=>{
+  const e=await escrowFixture(),{f}=e,a=f.auth('before-rotation');await send(await e.deposit(a),[f.owner]);
+  await send(await program.methods.rotate(identity(f.domain),u64(1n),u64(500_000n),u64(200_000n)).accountsStrict({
+    config:f.config,governance:governance.publicKey,newGovernance:governance.publicKey,newFunds:f.funds.publicKey,newRecovery:f.recovery.publicKey}).instruction(),[governance,f.funds,f.recovery]);
+  await e.rejects(await e.sweep(a,f.auth('stale-wire')),[f.funds],f.receipt(f.auth('stale-wire')),/Domain/);
+  await e.rejects(await e.sweep(a,f.auth('fresh-wire',2n)),[f.funds],f.receipt(f.auth('fresh-wire',2n)),/Domain/);
+  const b=f.auth('new-batch',2n);await send(await e.deposit(b,200n),[f.owner]);
+  await send(await f.deposit(f.auth('separate-trading-estate',2n),100n),[f.owner]);
+  await send(await f.freeze(2n),[f.recovery]);
+  await e.rejects(await e.deposit(f.auth('frozen',3n)),[f.owner],e.batch(f.auth('frozen',3n)),/Mode/);
+  await e.rejects(await e.sweep(b,f.auth('frozen-sweep',3n)),[f.funds],f.receipt(f.auth('frozen-sweep',3n)),/Mode/);
+  // Independently funded trading recovery cannot seize escrow backing or gate its refunds.
+  const r=await recoveryFixture(f);await send(await r.stage(),[governance]);await send(await r.activate(),[f.recovery]);
+  const recoveryBefore=await program.account.recoveryEpoch.fetch(r.address);
+  assert.equal((await f.state()).vault,100n);
+  await e.rejects(await e.refund(a,{},id('wrong-refund-domain')),[f.owner],undefined,/Domain/);
+  await send(await refundEscrowInstruction(program,e.context,Uint8Array.from(a.operation),f.source),[f.owner]);
+  await send(await e.refund(b),[f.owner]);
+  assert.equal((await e.state()).tokens,0n);assert.equal((await f.state()).customer.deposited.toString(),'100');
+  assert.deepEqual(await program.account.recoveryEpoch.fetch(r.address),recoveryBefore);
+  await send(await r.claim(),[f.owner]);assert.equal((await f.state()).customer.paid.toString(),'100');
+});
+
+for(const kind of ['deposit','sweep','refund'] as const)test(`P23B frozen SPL CPI rolls back ${kind}, batch and all counters; same identity succeeds after thaw`,async()=>{
+  const e=await escrowFixture(),{f}=e;
+  if(kind!=='deposit')await send(await e.deposit(),[f.owner]);
+  const target=kind==='deposit'?f.source:kind==='sweep'?f.brokerTokens:f.source;
+  await freezeAccount(connection,governance,target,f.mint,governance);
+  const ix=kind==='deposit'?await e.deposit():kind==='sweep'?await e.sweep():await e.refund();
+  await e.rejects(ix,[kind==='sweep'?f.funds:f.owner],kind==='deposit'?e.batch(f.auth('escrow-deposit')):
+    kind==='sweep'?f.receipt(f.auth('escrow-sweep')):undefined,/Tokenkeg.*invoke.*Account is frozen/);
+  await thawAccount(connection,governance,target,f.mint,governance);
+  await send(ix,[kind==='sweep'?f.funds:f.owner]);
+});
+
+test('P23B underbacked escrow cannot consume one claim using another batch; repair restores exact obligation',async()=>{
+  const e=await escrowFixture(),{f}=e,a=f.auth('small'),b=f.auth('large');
+  await send(await e.deposit(a,10n),[f.owner]);await send(await e.deposit(b,100n),[f.owner]);
+  const info=(await connection.getAccountInfo(e.escrowTokens))!,data=Buffer.from(info.data);data.writeBigUInt64LE(50n,64);
+  // Synthetic token impairment cannot otherwise be induced by an owner against PDA-held classic SPL.
+  await rpc('surfnet_setAccount',[e.escrowTokens.toBase58(),{data:data.toString('hex')}]);
+  await e.rejects(await e.sweep(a),[f.funds],f.receipt(f.auth('escrow-sweep')),/EscrowBacking/);
+  await e.rejects(await e.refund(a),[f.owner],undefined,/EscrowBacking/);
+  await e.rejects(await e.deposit(f.auth('repair-is-not-deposit'),1n),[f.owner],e.batch(f.auth('repair-is-not-deposit')),/EscrowBacking/);
+  await rpc('surfnet_setAccount',[e.escrowTokens.toBase58(),{data:info.data.toString('hex')}]);
+  await send(await e.sweep(a),[f.funds]);await send(await e.refund(b),[f.owner]);
+  assert.equal((await e.state()).tokens,0n);
+});
+
+for(const field of ['fundingSequence','deposited','epochReleased'] as const)test(`P23B checked ${field} overflow rolls back terminal consumption`,async()=>{
+  const e=await escrowFixture(),{f}=e;await send(await e.deposit(),[f.owner]);
+  const stored=await program.account.vaultConfig.fetch(f.config),max=(1n<<64n)-1n;
+  const data=await program.coder.accounts.encode('vaultConfig',{...stored,[field]:u64(max)});
+  await rpc('surfnet_setAccount',[f.config.toBase58(),{data:data.toString('hex')}]);
+  await e.rejects(await e.sweep(f.auth('escrow-deposit'),f.auth('overflow'),field==='fundingSequence'?max:0n),[f.funds],f.receipt(f.auth('overflow')),/Arithmetic/);
+  await send(await e.refund(),[f.owner]);
+});
+
+test('P23B typed client rejects malformed routes/amounts/identities before network or signing',async()=>{
+  const config=keys().publicKey,mint=keys().publicKey,owner=keys().publicKey,domain=id('client-domain'),pool=id('client-pool');
+  const c={config:vaultAddresses(programId,domain,pool,mint).config,mint,owner,domain,pool};
+  const a={epoch:1n,operation:id('client-op'),expiresAtSlot:100n};
+  for(const value of [0n,-1n,1n<<64n,1.5])await assert.rejects(depositEscrowInstruction(program,c,a,value as bigint,owner));
+  await assert.rejects(openVenueEscrowInstruction(program,{...c,config}));
+  await assert.rejects(depositEscrowInstruction(program,c,{...a,epoch:0n},1n,owner));
+  await assert.rejects(depositEscrowInstruction(program,c,{...a,operation:Buffer.alloc(32)},1n,owner));
+  await assert.rejects(depositEscrowInstruction(program,c,{...a,expiresAtSlot:0n},1n,owner));
+  const precise=await depositEscrowInstruction(program,c,a,9007199254740993n,owner);
+  assert.equal(precise.data.readBigUInt64LE(88),9007199254740993n);
+  const wire=await sweepEscrowInstruction(program,c,a.operation,a,owner,mint,0n);
+  assert.equal(wire.data.length,96); // discriminator + Movement(80) + sequence(8); no amount argument.
+  assert(wire.keys.some(k=>k.pubkey.equals(owner)&&k.isSigner));
+});
+
+test('P23B preserves all legacy account layouts and appends rather than renumbers errors',()=>{
+  const layouts={CustomerCounter:'7f1b3f7a856523896c2488bb5fbc407beda9676d38e4b128bf3346855e879f61',
+    MovementReceipt:'0a9efe5ef87d114ff8a47ae5c2c7f3a1b2eac71addd5d0bfd5928a712ff8c3f8',
+    RecoveryClaimReceipt:'5164e901a6efe56c06a7ad233a09df2aa52ab6d5ee0452b7273930785b1a8f58',
+    RecoveryEpoch:'5bdb9ce5ac9e1fd17f621d43d2789493ae48605d291599a23bc4b9c4db7c07c6',
+    VaultConfig:'ad3354dc229cfffa02fef9161d3a78eca8f4952abcdb1c61c5b830c3976129c0'};
+  for(const [name,hash] of Object.entries(layouts))assert.equal(createHash('sha256').update(JSON.stringify(idl.types!.find(t=>t.name===name))).digest('hex'),hash);
+  const errors=['Domain','Authority','RoleAlias','Mint','TokenAuthority','Mode','Bound','Counter','Expired','Recipient','Arithmetic',
+    'RecoveryQualification','RecoveryProof','RecoveryBacking','RecoveryTotal','EscrowConsumed','EscrowBacking'];
+  assert.deepEqual(idl.errors!.map(e=>[e.name,e.code]),errors.map((name,index)=>[name,6000+index]));
+  for(const [name,size] of [['venueRoute',106],['venueEscrow',83],['escrowBatch',179]] as const)
+    assert.equal(program.coder.accounts.size(name),size);
+});
+
+test('P23B escrow open requires registration, cannot reset pending custody, and tolerates prefunded PDAs',async()=>{
+  const e=await escrowFixture(),{f}=e;await send(await e.deposit(),[f.owner]);
+  await e.rejects(await openVenueEscrowInstruction(program,e.context),[f.owner]);
+  const other=keys();await fund(other);const c={...e.context,owner:other.publicKey},addresses=venueEscrowAddresses(programId,f.config,other.publicKey);
+  await assert.rejects(send(await openVenueEscrowInstruction(program,c),[other]));
+  assert.equal(await connection.getAccountInfo(addresses.escrow),null);
+  await send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({config:f.config,owner:other.publicKey,
+    customer:customerAddress(programId,f.config,other.publicKey),systemProgram:SystemProgram.programId}).instruction(),[other]);
+  for(const target of [addresses.escrow,addresses.escrowTokens])await send(SystemProgram.transfer({fromPubkey:other.publicKey,toPubkey:target,lamports:1}),[other]);
+  await send(await openVenueEscrowInstruction(program,c),[other]);
+  assert.equal((await program.account.venueEscrow.fetch(addresses.escrow)).pending.toString(),'0');
+  assert.equal((await getAccount(connection,addresses.escrowTokens)).amount,0n);
+});
+
+test('P23B customer attribution overflow cannot consume a batch or alter paid history',async()=>{
+  const e=await escrowFixture(),{f}=e;await send(await e.deposit(),[f.owner]);
+  const c=await program.account.customerCounter.fetch(f.customer);
+  const data=await program.coder.accounts.encode('customerCounter',{...c,deposited:u64((1n<<64n)-1n)});
+  await rpc('surfnet_setAccount',[f.customer.toBase58(),{data:data.toString('hex')}]);
+  await e.rejects(await e.sweep(),[f.funds],f.receipt(f.auth('escrow-sweep')),/Arithmetic/);
+  await send(await e.refund(),[f.owner]);assert.equal((await f.state()).customer.paid.toString(),'0');
+});
+
+test('P23B pending counter overflow rejects a new deposit without consuming its operation',async()=>{
+  const e=await escrowFixture(),{f}=e,max=(1n<<64n)-1n;
+  const escrow=await program.account.venueEscrow.fetch(e.escrow),tokens=(await connection.getAccountInfo(e.escrowTokens))!;
+  const data=await program.coder.accounts.encode('venueEscrow',{...escrow,pending:u64(max)}),tokenData=Buffer.from(tokens.data);tokenData.writeBigUInt64LE(max,64);
+  await rpc('surfnet_setAccount',[e.escrow.toBase58(),{data:data.toString('hex')}]);
+  await rpc('surfnet_setAccount',[e.escrowTokens.toBase58(),{data:tokenData.toString('hex')}]);
+  await e.rejects(await e.deposit(f.auth('pending-overflow'),1n),[f.owner],e.batch(f.auth('pending-overflow')),/Arithmetic/);
 });
 
 async function recoveryFixture(f: Fixture, supplied?: RecoveryClaim[]) {

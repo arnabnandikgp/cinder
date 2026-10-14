@@ -28,7 +28,7 @@
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
 | [P23A — Venue-directed custody contract](PLAN.md#p23a) | in progress | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | [#64](https://github.com/arnabnandikgp/cinder/pull/64), ready/open against `product/tee-v1` |
-| [P23B — Atomic escrow program/client](PLAN.md#p23b) | open | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | — |
+| [P23B — Atomic escrow program/client](PLAN.md#p23b) | in progress | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | Local branch stacked above #64; verification in progress |
 | [P23C — Escrow funding integration](PLAN.md#p23c) | open | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
@@ -39,6 +39,33 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P23B atomic escrow program/client — 2026-10-15
+
+Current branch: `tee/p23b-venue-escrow`, native stack above
+`tee/venue-escrow-foundation` / PR #64 at
+`a5f72299728bdc314be5efaa779f658a5a606cf2`. The new Anchor module, typed unsigned
+client and generated IDL add immutable venue-route registration, owner escrow
+opening, exact batch deposit, full sweep and pending-owner refund. Original
+layouts/constructors and payment counters remain unchanged. The ABI/seeds,
+pending-ownership meaning and operator receipt kind 4 are in ADR 0030.
+
+SBF compilation and IDL generation pass. Legacy IDL account/instruction equality
+was checked against the parent. Full signed-SBF lifecycle/recovery/escrow suite
+is running; no final acceptance or CI/review pass is claimed yet. Initial local
+compile checks caught a handler re-export collision and an asynchronous fixture
+parameter initializer; both were corrected without disabling lints/checks.
+Separate checksum-verified Anchor 1.2.0 and wasm-bindgen 0.2.129 macOS tools are
+in a temporary directory; global Anchor/Node tools and dependency locks are unchanged.
+
+No funds, configured wallet, RPC/venue endpoint, deployment or AWS resource is
+used. P23C still owns journal recognition/native-credit restrictions and the
+joined new-custody workflow. All earlier missing-credit/live gates and residuals
+remain deferred. The unrelated untracked files listed below are preserved.
+
+Next: finish the default vault suite, review the escrow boundary, record exact
+source/check results and publish one dependent P23B PR. Do not merge either
+phase automatically or claim local escrow tests qualify native credits.
 
 ### Approved venue-directed custody revision — 2026-10-15
 
@@ -5153,10 +5180,10 @@ Merge: none; in progress.
 
 ## P23B — Atomic escrow program/client
 
-Work: not started; scoped in PLAN and ADR 0030.
-Verification: not run; requires compiled local SBF, typed client and existing payout/recovery regressions.
-Unexpected: none yet.
-Next: extend the same custody executable with permanent batch state and exclusive full-sweep/refund instructions after P23A's contract is verified.
+Work: immutable route/escrow/batch accounts and five instructions added to the existing Anchor 1.2 executable; unsigned typed client, generated IDL/types/errors and signed local race/failure/conservation tests added. No journal/API/deployment changes.
+Verification: SBF build/IDL generation and legacy ABI equality pass; default vault suite in progress. Final offline/CI/review receipts pending.
+Unexpected: isolated pinned tools had to be reprovisioned; strict checks caught a glob naming collision and an async fixture initializer, corrected without suppressions. Surplus remains deliberately non-consumable; all pending obligations must be backed before any batch release.
+Next: complete owning suite and documentation checks, review the source, then publish one PR stacked above #64; P23C joins the journal afterward.
 PR: none.
 Merge: none.
 

@@ -14,7 +14,9 @@ export const CinderVaultErrorCode = {
   RecoveryQualification: 6011,
   RecoveryProof: 6012,
   RecoveryBacking: 6013,
-  RecoveryTotal: 6014
+  RecoveryTotal: 6014,
+  EscrowConsumed: 6015,
+  EscrowBacking: 6016
 };
 
 export type CinderVaultErrorName = keyof typeof CinderVaultErrorCode;
