@@ -8,14 +8,26 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 ## Venue-directed custody revision — 2026-10-15
 
 [ADR 0030](../architecture/0030-venue-directed-escrow.md) records the user's
-approved custody revision, not an implemented/live result. Existing P15/P16/P17
+approved custody revision, not a live result. Existing P15/P16/P17
 program/controller/counter sources and W01/W03–W05/W09 supply the reusable
-invariants. P23B/P23C must add actual escrow SBF/client/journal/Runtime acceptance;
+invariants. New escrow SBF/client acceptance belongs to P23B; the journal/Runtime
+join belongs to P23C;
 old M1/M2/P22 or P23 receipts cannot be relabeled as that evidence. Public Solana
 PDA and Pacifica withdrawal documentation were checked for authority/request
 shape on October 15; no fresh native, RPC or AWS financial test was performed.
 The missing-credit investigation and residual test-fund inventory remain deferred
 and preserved. PLAN/TRACKER carry the bounded implementation sequence and checks.
+
+P23B adds the local program/client boundary at source
+`c3dac67da407698b3caead80387783f1b3874d47`:
+`programs/cinder-vault/src/escrow.rs`, `clients/vault/src/escrow.ts` and the `P23B`
+cases in `clients/vault/tests/vault.test.ts`. The new accounts/ABI are specified
+in ADR 0030; generated IDL/types/error constants remain checked against actual
+source. The same existing offline runner compiles SBF and executes the added
+cases alongside old custody, codec, HTTP/WebSocket lifecycle and recovery tests.
+The initial adverse-state fixture failures are recorded in TRACKER; final test
+counts and publication/CI/review receipts belong there. This does not promote old
+live M1/M2 results into new escrow evidence or supply the pending P23C journal join.
 
 ## P21A initial web-channel qualification
 

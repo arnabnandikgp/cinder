@@ -50,9 +50,16 @@ opening, exact batch deposit, full sweep and pending-owner refund. Original
 layouts/constructors and payment counters remain unchanged. The ABI/seeds,
 pending-ownership meaning and operator receipt kind 4 are in ADR 0030.
 
-SBF compilation and IDL generation pass. Legacy IDL account/instruction equality
-was checked against the parent. Full signed-SBF lifecycle/recovery/escrow suite
-is running; no final acceptance or CI/review pass is claimed yet. Initial local
+Source checkpoint `c3dac67da407698b3caead80387783f1b3874d47` passes the DEFAULT
+`scripts/check-vault.mjs`: 88 tests (24 new P23B cases), zero failures/skips,
+including the existing joined HTTP/WebSocket lifecycle/recovery groups. Locked
+native Clippy, SBF frame guard, generated IDL/types/errors equality and strict
+TypeScript checks pass. Legacy IDL account/instruction equality was separately
+checked against the parent; permanent layout/error regressions now guard it.
+All 80 offline contracts and workspace/dependency guards pass. A clean export
+without `work/` or unrelated files separately passed contracts; the final
+documentation/publication receipts get their own clean-export guard below.
+Hosted CI and independent review remain pending, not inherited. Initial local
 compile checks caught a handler re-export collision and an asynchronous fixture
 parameter initializer; both were corrected without disabling lints/checks.
 The first execution also caught fixture-only SDK capitalization, Surfpool input
@@ -67,8 +74,18 @@ used. P23C still owns journal recognition/native-credit restrictions and the
 joined new-custody workflow. All earlier missing-credit/live gates and residuals
 remain deferred. The unrelated untracked files listed below are preserved.
 
-Next: finish the default vault suite, review the escrow boundary, record exact
-source/check results and publish one dependent P23B PR. Do not merge either
+Qualification command used pinned Node 24.21.0 via npm's offline execution cache,
+Rust 1.97.1, `CINDER_ANCHOR_TOOL` selecting the separate Anchor 1.2.0 binary,
+`CINDER_WASM_BINDGEN` selecting separate 0.2.129, and
+`CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`:
+`node scripts/check-vault.mjs` and `node scripts/check.mjs --group=contracts`.
+The full final vault run took about 10 minutes. The first execution had 79/88
+passes: nine failures were exclusively the fixture encoding/capitalization/rent
+issues above. All 88 pass after corrections; custody checks were not weakened.
+Self-review checked route/owner/schema/token-program/PDA bindings, permanent batch
+state, exact amounts, shared cap/counters and CPI atomicity. This is not an audit.
+
+Next: publish one dependent P23B PR and record actual CI/review. Do not merge either
 phase automatically or claim local escrow tests qualify native credits.
 
 ### Approved venue-directed custody revision — 2026-10-15
@@ -5185,9 +5202,9 @@ Merge: none; in progress.
 ## P23B — Atomic escrow program/client
 
 Work: immutable route/escrow/batch accounts and five instructions added to the existing Anchor 1.2 executable; unsigned typed client, generated IDL/types/errors and signed local race/failure/conservation tests added. No journal/API/deployment changes.
-Verification: SBF build/IDL generation and legacy ABI equality pass; default vault suite in progress. Final offline/CI/review receipts pending.
-Unexpected: isolated pinned tools had to be reprovisioned; strict checks caught a glob naming collision and an async fixture initializer, corrected without suppressions. Surplus remains deliberately non-consumable; all pending obligations must be backed before any batch release.
-Next: complete owning suite and documentation checks, review the source, then publish one PR stacked above #64; P23C joins the journal afterward.
+Verification: source c3dac67da407698b3caead80387783f1b3874d47 passes the complete default vault runner: 88 tests, zero failures/skips, strict native/SBF/IDL/TypeScript guards and original lifecycle/recovery regressions. All 80 contracts, workspace/dependency guards and a clean-source contracts export pass. Source self-review completed; hosted CI/independent review are pending.
+Unexpected: isolated pinned tools reprovisioned; compile and fixture-only naming/encoding/rent errors corrected without suppressions or relaxed custody checks. First run 79/88, final run 88/88. Surplus remains non-consumable; all pending obligations must be backed before any batch release.
+Next: publish the dependent PR, record its actual CI/review; P23C joins the journal afterward. No automatic merge or live run.
 PR: none.
 Merge: none.
 
