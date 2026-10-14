@@ -28,7 +28,7 @@
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
 | [P23A — Venue-directed custody contract](PLAN.md#p23a) | in progress | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | [#64](https://github.com/arnabnandikgp/cinder/pull/64), ready/open against `product/tee-v1` |
-| [P23B — Atomic escrow program/client](PLAN.md#p23b) | in progress | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | Local branch stacked above #64; verification in progress |
+| [P23B — Atomic escrow program/client](PLAN.md#p23b) | in progress | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | [#65](https://github.com/arnabnandikgp/cinder/pull/65), ready/open above #64; offline checks pass |
 | [P23C — Escrow funding integration](PLAN.md#p23c) | open | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
@@ -85,8 +85,19 @@ issues above. All 88 pass after corrections; custody checks were not weakened.
 Self-review checked route/owner/schema/token-program/PDA bindings, permanent batch
 state, exact amounts, shared cap/counters and CPI atomicity. This is not an audit.
 
-Next: publish one dependent P23B PR and record actual CI/review. Do not merge either
-phase automatically or claim local escrow tests qualify native credits.
+P23B is ready/open as [PR #65](https://github.com/arnabnandikgp/cinder/pull/65),
+base `tee/venue-escrow-foundation`, in native two-layer stack #66 over
+`product/tee-v1`. Initial published head:
+`b6b6ed853d22523a7d0e244c1f91b2897d5222d9`. Clean staged-source tree
+`94c9316bb4592ffb822320d272e10166f852512a` passed all 80 contracts and the
+documentation/workspace guards without ignored research. This publication receipt
+changes documentation only and receives another clean-source guard before push.
+At first inspection, hosted contracts passed and seven code jobs were running;
+no hosted vault/Linux or independent review pass is inherited from local results.
+
+Next: P23C's journal/controller join is the next bounded dependent code slice;
+handle #64/#65's actual review/CI before any separately authorized merge. Do not
+merge either phase automatically or claim local escrow tests qualify native credits.
 
 ### Approved venue-directed custody revision — 2026-10-15
 
@@ -5204,8 +5215,8 @@ Merge: none; in progress.
 Work: immutable route/escrow/batch accounts and five instructions added to the existing Anchor 1.2 executable; unsigned typed client, generated IDL/types/errors and signed local race/failure/conservation tests added. No journal/API/deployment changes.
 Verification: source c3dac67da407698b3caead80387783f1b3874d47 passes the complete default vault runner: 88 tests, zero failures/skips, strict native/SBF/IDL/TypeScript guards and original lifecycle/recovery regressions. All 80 contracts, workspace/dependency guards and a clean-source contracts export pass. Source self-review completed; hosted CI/independent review are pending.
 Unexpected: isolated pinned tools reprovisioned; compile and fixture-only naming/encoding/rent errors corrected without suppressions or relaxed custody checks. First run 79/88, final run 88/88. Surplus remains non-consumable; all pending obligations must be backed before any batch release.
-Next: publish the dependent PR, record its actual CI/review; P23C joins the journal afterward. No automatic merge or live run.
-PR: none.
+Next: P23C joins the journal afterward; follow #64/#65's actual review/CI before any separately authorized merge. No automatic merge or live run.
+PR: https://github.com/arnabnandikgp/cinder/pull/65
 Merge: none.
 
 ## P23C — Escrow funding integration
