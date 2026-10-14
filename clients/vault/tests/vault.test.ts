@@ -865,7 +865,8 @@ test('P23B escrow open requires registration, cannot reset pending custody, and 
   assert.equal(await connection.getAccountInfo(addresses.escrow),null);
   await send(await program.methods.registerCustomer(identity(f.domain)).accountsStrict({config:f.config,owner:other.publicKey,
     customer:customerAddress(programId,f.config,other.publicKey),systemProgram:SystemProgram.programId}).instruction(),[other]);
-  for(const target of [addresses.escrow,addresses.escrowTokens])await send(SystemProgram.transfer({fromPubkey:other.publicKey,toPubkey:target,lamports:1}),[other]);
+  const prefund=await connection.getMinimumBalanceForRentExemption(0);
+  for(const target of [addresses.escrow,addresses.escrowTokens])await send(SystemProgram.transfer({fromPubkey:other.publicKey,toPubkey:target,lamports:prefund}),[other]);
   await send(await openVenueEscrowInstruction(program,c),[other]);
   assert.equal((await program.account.venueEscrow.fetch(addresses.escrow)).pending.toString(),'0');
   assert.equal((await getAccount(connection,addresses.escrowTokens)).amount,0n);

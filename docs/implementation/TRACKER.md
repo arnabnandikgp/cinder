@@ -55,6 +55,10 @@ was checked against the parent. Full signed-SBF lifecycle/recovery/escrow suite
 is running; no final acceptance or CI/review pass is claimed yet. Initial local
 compile checks caught a handler re-export collision and an asynchronous fixture
 parameter initializer; both were corrected without disabling lints/checks.
+The first execution also caught fixture-only SDK capitalization, Surfpool input
+encoding and below-rent prefunding errors. Tests now use camel-cased coder names,
+the existing hex mutation format and an actual rent-exempt system prefunding
+transfer. These are test corrections, not relaxed custody gates.
 Separate checksum-verified Anchor 1.2.0 and wasm-bindgen 0.2.129 macOS tools are
 in a temporary directory; global Anchor/Node tools and dependency locks are unchanged.
 
