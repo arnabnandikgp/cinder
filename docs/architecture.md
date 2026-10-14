@@ -6,6 +6,13 @@ and maps it to the implementation sequence; it is not a deployment claim.
 [PLAN](implementation/PLAN.md) controls phase scope; [TRACKER](implementation/TRACKER.md)
 records actual completion. An older research proposal does not override those files.
 
+Custody direction updated 2026-10-15: [ADR 0030](architecture/0030-venue-directed-escrow.md)
+approves customer/venue/asset escrow ingress and venue-specific PDA payouts.
+P23A–P23C implement that change; the currently merged source still uses the prior
+common-vault ingress. Approval, implementation, migration and live qualification
+remain separate. The flow sections below show the new target; historical ADRs
+and receipts keep their own route/source semantics.
+
 ## 1. System purpose and current implementation boundary
 
 Cinder is a private, programmatic perpetual-futures broker over existing venue
@@ -43,7 +50,10 @@ implementation is a separate workstream, not the template for this architecture.
 | Attested client channel and runnable service | TLS 1.3/pinned-root verification and actual local SDK/relay/API/journal processes; fixture attestation/time/witness only | P19 |
 | Actual Nitro runtime | Merged bounded actual hardware qualification; later changed-image/native workflows still need fresh P23 evidence | P20 |
 | Confidential web API | Merged: shared browser/Node attestation and Noise core, HTTP/WebSocket commands, signed private reads and bounded subscriptions; offline only, changed-image/native qualification remains P23 | P21A |
-| Adversarial/live qualification and release review | Planned acceptance gates; local P21 ports do not qualify live custody/native effects | P22–P24 |
+| Offline joined acceptance | Merged SDK/service/controller/SBF fault suites with explicit native fixtures | P22 |
+| Live qualification | Code stack merged; full actual funding/trading/payout/recovery acceptance deferred | P23 |
+| Venue-directed escrow revision | Approved contract; program/client and journal join not yet implemented | P23A–P23C |
+| Release review | Production policy, governance, independent assurance and customer-funds gates remain open | P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one
 native account, multiple linear-perp markets, private customer books, house and
@@ -102,7 +112,7 @@ state. Reconciliation connects these domains; none substitutes for the others.
 
 ### Code ownership
 
-The off-chain workspace has six Rust crates:
+The off-chain workspace has eight Rust crates:
 
 - `cinder-kernel`: dependency-free, `no_std`, checked integer types and pure state
   transitions. No clock, database, signer, network or venue SDK imports.
@@ -118,6 +128,10 @@ The off-chain workspace has six Rust crates:
 - `cinder-api`: customer signatures, scoped Cinder grants and private projections
   over the same journal. It cannot sign native pooled-account commands. Its
   exact-integer SDK lives in `clients/private`; transport qualification remains P19.
+- `cinder-service`: assembled confidential runtime, bounded network/storage/key
+  ports and financial scheduling; it is not a plaintext host backend.
+- `cinder-web-channel`: shared pinned Noise/attestation context for native and
+  browser/WASM private channels; the opaque relay remains outside the enclave.
 
 The isolated `programs/` Anchor workspace owns public Solana custody, not private
 financial accounting. Its generated typed client is `clients/vault/`; neither
@@ -171,6 +185,8 @@ See [PLAN's application assembly ladder](implementation/PLAN.md#application-asse
 | House book | Protocol capital, explicit house exposures, income and obligations | A residual bucket for unexplained differences or customer assets |
 | Suspense | Named observations awaiting attribution/resolution | Spendable profit or permission to erase a missing customer's claim |
 | Solana vault | Program-enforced custody of tokens currently on Solana | PDA authority over an ordinary signed HTTP venue account |
+| Customer/venue/asset ingress escrow (approved next design) | Pending owner-attributed batches and exclusive full sweep/refund | Native account per user, spendable margin before credit, or independent withdrawal after handoff |
+| Venue-specific PDA payout vault (approved next use) | Qualified returned payout/recovery backing and shared payment counters | An auto-swept deposit destination or automatic access to funds still at a venue |
 | Broker wallet tokens | Separate intermediate custody on the allowlisted route | Vault payout liquidity, venue margin, a second customer deposit, or automatic recovery access |
 | Transit receivable | One evidenced transfer leg between locations | Another deposit, immediately spendable tokens, or guaranteed recovery |
 
@@ -361,18 +377,20 @@ the P05-only protector/public chain still cannot detect complete valid rollback.
 
 ### Deposit and working-collateral allocation
 
-The target customer experience starts with a Solana wallet. A qualified final
-deposit into the program vault credits its customer once. Wrong-owner, wrong-mint,
-duplicate or incomplete receipts must not produce another claim. Unknown ownership
-uses suspense/refund handling; a deposit may repay an existing debt under the
-approved recovery policy rather than become entirely free cash.
+The approved next customer experience starts with an owner-signed deposit into
+their selected venue/asset escrow. That exact batch is pending ingress, not
+available trading collateral. The owner can reclaim it until the sweep commits.
+Owner refund and funds-authorized sweep share atomic batch consumption, so both
+cannot succeed. Full sweep means the recorded batch amount, not draining a changing
+token balance. Unsolicited transfers supply neither credit nor sweep authority.
 
-The funds controller allocates marginal working collateral through the supported,
-allowlisted broker route to the venue. Source debit moves assets into a transfer
-receivable; linked arrival consumes that receivable and establishes native cash.
-It never credits the customer again. Finality, fees, partial arrivals, failed
-returns, bootstrap exceptions and impairment need explicit states. P03 has only
-the fee-free full-debit/full-arrival algebra; P08/P16 supply that full lifecycle.
+A qualified finalized sweep to the immutable Cinder venue funding wallet recognizes
+the attributable deposit once, retains the funding restriction and applies existing
+debt-recovery rules. Broker debit then creates transit; qualified venue credit
+establishes native cash without another customer deposit. Wrong-owner/mint/route,
+duplicate, partial or unknown evidence must not fabricate credit or new risk.
+P23B/P23C implement this [ADR 0030](architecture/0030-venue-directed-escrow.md)
+extension; P15/P16's existing common-vault route remains explicitly historical.
 
 Useful collateral remains on the venue between orders. An order need not trigger
 a wasteful vault-to-venue round trip each time. Conversely an unconfirmed transfer
@@ -428,6 +446,12 @@ the source debit is not yet a customer payout. Only qualified final payment
 discharges the matching entitlement and advances its durable paid counter once.
 Payout destinations are authenticated and constrained, not an arbitrary venue
 `to` field. Unknown/outgoing effects remain reserved through restart.
+
+Under ADR 0030, qualified venue returns pass through the allowlisted funding
+wallet to the venue-specific PDA payout vault, then its constrained TEE-authorized
+instruction pays the registered user wallet. No return goes to the auto-swept
+ingress escrow or bypasses shared normal/recovery counters. This is the approved
+target, not fresh native withdrawal or new-escrow implementation evidence.
 
 ## 7. Risk, house protection and forced events
 
@@ -543,6 +567,13 @@ Open positions and unresolved native withdrawals prevent pretending marked equit
 is fixed payable cash. Operators must not choose a more favorable stale snapshot
 after a loss. Venue inaccessibility preserves obligations and blocks unsupported
 payment promises; it does not turn inaccessible balances into Solana vault tokens.
+
+ADR 0030's pending unswept batches remain owner-refundable, with no corresponding
+trading/recovery credit. Final claim backing must exclude those segregated assets.
+Swept-but-uncredited ingress remains an attributed obligation with restricted or
+uncertain backing; it cannot be erased because the venue has not credited it.
+P23C tests this new ingress/payout join; existing P17/P21 receipts qualify only
+their historical route. Payment counters are never reset by the custody revision.
 
 Three records have different jobs:
 

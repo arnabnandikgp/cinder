@@ -5,6 +5,18 @@ Snapshot: 2026-09-30. This is a curated map, not an archive upload. The original
 broken public links. [BASELINE](BASELINE.md) and [CONFORMANCE](CONFORMANCE.md) carry
 the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
+## Venue-directed custody revision — 2026-10-15
+
+[ADR 0030](../architecture/0030-venue-directed-escrow.md) records the user's
+approved custody revision, not an implemented/live result. Existing P15/P16/P17
+program/controller/counter sources and W01/W03–W05/W09 supply the reusable
+invariants. P23B/P23C must add actual escrow SBF/client/journal/Runtime acceptance;
+old M1/M2/P22 or P23 receipts cannot be relabeled as that evidence. Public Solana
+PDA and Pacifica withdrawal documentation were checked for authority/request
+shape on October 15; no fresh native, RPC or AWS financial test was performed.
+The missing-credit investigation and residual test-fund inventory remain deferred
+and preserved. PLAN/TRACKER carry the bounded implementation sequence and checks.
+
 ## P21A initial web-channel qualification
 
 [ADR 0021](../architecture/0021-confidential-web-api.md) and the

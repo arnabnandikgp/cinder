@@ -27,15 +27,120 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), ready/open |
+| [P23A — Venue-directed custody contract](PLAN.md#p23a) | in progress | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | Local branch `tee/venue-escrow-foundation`; publication pending |
+| [P23B — Atomic escrow program/client](PLAN.md#p23b) | open | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | — |
+| [P23C — Escrow funding integration](PLAN.md#p23c) | open | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | — |
+| [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-08. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-15. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### Approved venue-directed custody revision — 2026-10-15
+
+The user approved customer/venue/asset escrow ingress, full consented batch sweeps,
+owner refunds before committed handoff and withdrawals to the registered wallet.
+The subsequent clarification retains venue-specific PDA payout/recovery custody:
+normal payouts are TEE-authorized; the Solana program executes the constrained
+payment and shares normal/recovery counters. No additional common deposit vault
+or per-user native venue account is introduced.
+
+Current branch: `tee/venue-escrow-foundation`, based on `product/tee-v1` at
+`8b93adb12c0df2bf4c8b6ace757aadc1c034b7d8`. P23A records the contract in ADR 0030
+and updates contributor context and the baseline/architecture/plan/evidence map.
+P23B and P23C are the next bounded code PRs; no escrow code, deployment, history
+migration or counter reset is claimed by this foundation. Old P15/P16/P17/P22
+and P23 receipts remain evidence for their own route/source, not new-custody passes.
+
+The prior stack is merged. P23 is still in progress, with its existing seven live
+groups unchanged. The Pacifica missing-credit investigation and dependent live
+financial activity remain deferred. The unresolved 80 faucet USDP at the native
+vault and the separate broker's last-verified 20 USDP are preserved, not credited,
+returned or written off. New custody does not supply native credit, complete order
+history, funding boundaries, final withdrawal evidence or venue-backed recovery.
+
+Preserve the existing unrelated untracked qualification example, user-journey
+document and `stays/`. This branch retains the preceding local merge receipt in
+TRACKER rather than dropping it. No website/public-docs repo, wallet, RPC/venue
+endpoint or AWS resource is modified.
+
+Local verification uses Node 24.21.0 and Rust 1.97.1. The offline contracts group
+passes all 80 tests, workspace/dependency boundaries and the 30-phase documentation
+guard after the guide/architecture wording was tightened. Staged source tree
+`092a3c5e52d37ea0cb4a2141691f9cdbbc2b5188` separately passes the 30-phase/54-document
+guard and all 13 plan-checker regressions in a clean export without `work/` or
+unrelated user files. This is docs-only evidence,
+not another financial, SBF, browser, hardware or native acceptance run.
+The default Node was 26.11.1 and the initial pinned npm lookup was not cached;
+the exact Node 24.21.0 runtime was fetched into npm's execution cache without
+replacing global tools. No Rust/application dependency or lockfile changed.
+
+Next: verify/publish P23A as a docs-only PR against `product/tee-v1`, then implement
+the P23B Anchor/client boundary. Update this receipt with exact source, checks,
+PR/CI/review and dependencies before handoff; do not call an unmerged phase closed.
+Self-service onboarding and Standard terminal integration follow P23C under
+separate product scope. No new live invocation follows from this approval.
+
+### Verified stack merge and fixed remaining scope — 2026-10-08
+
+The authorized native stack merge completed into `product/tee-v1`. GitHub
+independently reports all eight PRs merged between 16:48:52 and 16:49:01 UTC:
+
+| PR | Actual squash merge |
+| --- | --- |
+| #55 | `d72b1664745ac951eb116343a83e41adfe4deed5` |
+| #56 | `1100720970df59bb118cbebbf892630c09430187` |
+| #58 | `1100374941dc34f6ca426e0b213da2e6517a07df` |
+| #59 | `a754de3231a8533f3516bf3e5b04612f3c409463` |
+| #60 | `e8a125efd20a35cd124816a8552f5735a5689b11` |
+| #61 | `71aa48637a65218a644ca8b64437800d04374c32` |
+| #62 | `4f45558af4873bbc9b832cac7171174b45a7c781` |
+| #63 | `8b93adb12c0df2bf4c8b6ace757aadc1c034b7d8` |
+
+Final reviewed source `c43df01ec9a2c2e2ecc14c95fbf7597f67ecf28c` has an
+identical tracked tree to the merged tip. All eight hosted jobs succeed on that
+source: contracts, strict lint/build, Rust regressions, SDK/relay, complete browser
+qualification, retained-history growth, ARM64 package and SBF/Surfpool. CodeRabbit's
+four findings on predecessor `9f80c90` were addressed and resolved; its final-head
+status was review-rate-limited, not a new completed review. The five fixed parent
+threads on #59/#61/#62 were resolved after their corrections actually landed.
+
+Local `cinder-tee` switched to `product/tee-v1` and fast-forwarded to the actual
+merged tip. Legacy `main`, ignored evidence and unrelated untracked user files
+were preserved. This merge bookkeeping is local for the next authorized PR,
+not an unreviewed direct trunk push. No venue/RPC/AWS action occurred.
+
+No independently completable deliverable from this implementation/review/CI
+merge scope remains. Full live P23 acceptance is different. The following is
+the fixed grouping of existing PLAN requirements, not seven new milestones:
+
+| Remaining live work | Missing result / dependency |
+| --- | --- |
+| Fresh deployed deposit/top-up | Actual owner deposit into a fresh devnet vault, enclave-authorized vault → broker → Pacifica original deposit, and eligible native credit on the current measured financial application. Directly blocked by the parked credit problem. |
+| Bounded native trading lifecycle | Current risk/capital/market policy, authority/grids and execution scheduler connection; actual orders, partial fills, cancels, closes and qualified late-event coverage. Credit blocks the funded run; provider/completeness and measured activation remain separate gaps. |
+| Native perp funding and fee allocation | Qualify actual hourly boundary, signs, precision/rounding and gross customer allocation against net venue events, then connect those observations to exact engine events. Requires positions; a displayed funding total is not this result. |
+| Ordinary withdrawal and customer payout | Original native withdrawal/ACK/payment evidence, safe lost-ACK treatment, finalized broker → vault return and exactly-once payment to the registered customer. The earlier diagnostic native round trip did not execute this complete customer workflow. |
+| Financial fault/restart acceptance | Run the existing lost-reply, restart/fencing and duplicate-event assertions with actual financial state on the current measured path. Earlier read-only hardware faults and offline financial tests remain valid within their own scope. |
+| Venue-backed operator-assisted recovery | Fence actual authority, settle/reconcile a qualified final cut, return reachable funds, fund/freeze final claims, deliver kits independently and execute actual devnet claims. Local compiled-program acceptance is not this actual venue-backed run. |
+| Financial closeout | Reconcile the future run's original operations, positions/orders, movements, fees and resource costs, and independently clean up owned resources. Preserve current unresolved 80 faucet USDP at the native vault and the separate broker's last-verified 20 USDP; deferral is not credit, return or write-off. |
+
+All remain relevant to a real financial demonstration; none is a prerequisite
+for an explicitly isolated simulated-venue demonstration. Missing guarantees
+must be qualified or reported as specific capability blockers, not invented to
+force a live pass. Trading remains disabled; the current manifest authorizes
+only its bounded original ingress, not withdrawal/payout/recovery activation.
+Frontend/self-service onboarding, another venue, routing features and production
+calibration are not additions to P23's merge scope.
+
+Next: report this fixed status to the user. Keep the credit investigation and
+dependent live financial runs deferred; do not start a new live invocation,
+fixture-backed terminal or later product phase without the corresponding scope.
+P23 remains `in progress`, not fully live-qualified merely because the stack merged.
+Historical handoffs below retain their dates and do not override this receipt.
 
 ### Current-head review closeout — 2026-10-08
 
@@ -5030,6 +5135,33 @@ Publication is authorized for the completed corrections and this evidence only,
 via the existing one-layer stack/ready PR #55 against `product/tee-v1`; normal
 offline checks pass, but a new head needs its own hosted CI/review. The next local
 diagnosis is not part of this checkpoint and is not a durability redesign.
+
+## P23A — Venue-directed custody contract
+
+Work: ADR 0030 and the approved B04/B05 revision, architecture/context entrypoints, three bounded custody slices and evidence/test targets are recorded on tee/venue-escrow-foundation; old merge receipts and user files are preserved.
+Verification: pinned Node 24.21.0/Rust 1.97.1 offline contracts group passes 80/80 with no skips, the 30-phase plan/link guard and workspace dependency boundaries. Clean staged-source export 092a3c5e52d37ea0cb4a2141691f9cdbbc2b5188 passes the 30-phase/54-document guard and 13/13 plan-checker tests without work or unrelated user files. Hosted checks/review remain pending; no escrow implementation, SBF, AWS or live qualification is claimed.
+Unexpected: new user/venue escrows require explicit pending-owner versus accepted trading-credit treatment; a raw token balance cannot authorize sweep or erase refund rights. The common-vault source and historical receipts remain labeled rather than silently reinterpreted.
+Next: complete foundation checks and publication, then implement P23B's atomic program/client boundary before the P23C journal join; keep native-credit/live activity deferred.
+PR: none; publication pending against product/tee-v1.
+Merge: none; in progress.
+
+## P23B — Atomic escrow program/client
+
+Work: not started; scoped in PLAN and ADR 0030.
+Verification: not run; requires compiled local SBF, typed client and existing payout/recovery regressions.
+Unexpected: none yet.
+Next: extend the same custody executable with permanent batch state and exclusive full-sweep/refund instructions after P23A's contract is verified.
+PR: none.
+Merge: none.
+
+## P23C — Escrow funding integration
+
+Work: not started; scoped in PLAN and ADR 0030.
+Verification: not run; owning journal/controller/SDK/Runtime and SBF acceptance cases remain required.
+Unexpected: none yet.
+Next: join qualified sweep receipts and pending ownership to the current financial journal after P23B; retain qualified native credit and payout/recovery gates.
+PR: none.
+Merge: none.
 
 ## P24 — Release safety case
 

@@ -11,37 +11,26 @@ It is not an architectural template for this branch.
 
 ## Current status
 
-Research and bounded prototypes support starting implementation. They are not a
-production deployment, audit, universal solvency proof, or guarantee of exit
-without operator assistance. The planning foundation and pinned workspace are
-merged, including exact financial primitives and canonical event identities.
-P03's joined ledger and the reviewed P04–P16 stack are merged into `product/tee-v1`.
-P04–P14 add funding/fee accounting,
-evidence containment, atomic replay, AEAD ciphertext replication and writer fencing
-against a trusted witness port, plus bound order intents and terminal-history
-reconciliation, partial funds movements, queued collateral-aware payouts and
-joined bounded margin/capital/liquidity admission under synthetic policies, plus
-bounded liquidation, close exceptions, RF1/RF2 ADL restoration and bounded Pacifica
-observation codecs with durable provenance and explicit qualification gaps, plus
-a scoped native signing boundary and shared API-credit admission tested offline.
-Independent witness/Nitro qualification, live native qualification and deployed
-services remain later phases.
-P15/P16 add the Anchor 1.2 custody vault and a durable vault/broker/venue funding
-coordinator with original-attempt reconciliation and offline signed SBF tests.
-P17 extends the same vault with immutable final recovery statements, separate
-operator activation, owner-signed claims and shared lifetime payout counters.
-P21 joins the sealed accepted journal, returned backing, recipient-encrypted kits
-and independent claims, tested through HTTP/WebSocket outages and compiled local SBF.
-Native/witness ports are explicit offline fixtures; passing membership checks is
-not evidence of complete liabilities, full solvency or deployed recovery availability.
-P18 adds protected-journal wallet/agent authorization, account-private operation
-views and an exact-integer client SDK. P19 adds a runnable TLS 1.3 relay/service
-slice and attestation-gated Node channel, tested with explicit local fixtures.
-P20's bounded hardware qualification is merged; it does not establish live native
-trading or qualify a later changed image. The merged P21A stack adds shared browser/
-Node confidential HTTP/WebSocket, signed bounded reads and private subscriptions,
-tested offline. No public endpoint, plaintext fallback or live trading readiness
-is implied; changed-image/native qualification remains P23.
+The financial engine, protected journal, venue adapter, Solana custody/recovery,
+private HTTP/WebSocket SDK and joined offline acceptance are merged through P22.
+Bounded Nitro hardware qualification is recorded for its exact image and scope.
+P23's implementation stack is merged, but the complete live deposit, trading,
+funding, withdrawal and venue-backed recovery workflow remains unqualified. The
+Pacifica missing-credit investigation is deferred; see the current tracker handoff.
+
+The approved next custody model is [venue-directed escrow](docs/architecture/0030-venue-directed-escrow.md):
+customers deposit to their venue/asset escrow, may reclaim an unswept batch, and
+authorize its full sweep through Cinder's supported venue funding route. Returns
+use a venue-specific PDA payout/recovery vault and shared payment counters, ending
+at the registered user's wallet. P23A–P23C implement that revision; current code
+still uses the previous common-vault ingress. No deployment or history migration
+is implied. Self-service onboarding and a backend-connected trading terminal
+remain separate product integration work.
+
+Tests, implementation, hardware evidence and production readiness are distinct.
+There is no audit, universal solvency proof, unconditional exit guarantee or
+customer-funds release implied by this repository. Use the tracker, plan and
+baseline below for actual status, approved contracts and remaining gates.
 
 ## Start here
 
@@ -90,8 +79,9 @@ offline with the same command used in CI:
 node scripts/check.mjs
 ```
 
-The six local crates are `cinder-kernel`, `cinder-ports`, `cinder-test-support`,
-`cinder-journal`, `cinder-pacifica` and `cinder-api`. Storage, cryptography and native JSON/signing
+The eight local crates are `cinder-kernel`, `cinder-ports`, `cinder-test-support`,
+`cinder-journal`, `cinder-pacifica`, `cinder-api`, `cinder-service` and
+`cinder-web-channel`. Storage, cryptography and native JSON/signing
 dependencies stay outside the dependency-free kernel. No check uses live endpoints.
 Node runs repository/SDK checks, not the financial runtime.
 

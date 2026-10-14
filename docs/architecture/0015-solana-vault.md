@@ -1,5 +1,10 @@
 # ADR 0015 — Public custody vault, private entitlement authorization
 
+Historical implemented boundary: [ADR 0030](0030-venue-directed-escrow.md) now
+approves venue-directed escrow ingress and reuse of this payout/recovery authority.
+P23B/P23C must implement and qualify that extension; this document and its tests
+remain evidence for the earlier common-vault ingress, not proof of new escrows.
+
 Date: 2026-09-30. Scope: [P15](../implementation/PLAN.md#p15).
 Approved contract: B04–B07, F01/F09, S01, R01–R03. This is an offline-tested
 program boundary, not an approved deployment or claim that the vault controls a

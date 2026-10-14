@@ -1,111 +1,113 @@
 # Cinder TEE contributor guide
 
-This worktree is the clean private-broker product, not the Phoenix/PER proof of
-concept. Pacifica is the first venue; AWS Nitro is the TEE target. Do not import
-legacy code, account invariants, toolchain pins or website work by default.
+Work in `cinder-tee`, based on `product/tee-v1`, never legacy `main`.
+Cinder is a private perp broker: individual customer entitlements over pooled
+venue execution, Pacifica first, AWS Nitro. BULK is paused. Phoenix/PER,
+the website/demo and Mintlify docs are separate workstreams, not backend templates.
 
-## Resume safely
+## Product context
 
-1. Confirm worktree, branch, `git status` and current user instructions. Preserve
-   unrelated changes and ignored local research; never stage the whole directory.
-2. Read [TRACKER](docs/implementation/TRACKER.md), the selected phase of
-   [PLAN](docs/implementation/PLAN.md), and [BASELINE](docs/implementation/BASELINE.md).
-3. Consult [EVIDENCE](docs/implementation/EVIDENCE.md). Local `work/` sources are
-   optional provenance, not a prerequisite a fresh checkout must magically have.
-   Promote needed sanitized contracts/tests in the owning phase. If a necessary
-   detail is missing, report it; do not invent it or import a historical venue rule.
-4. Implement one bounded phase on its own branch. Keep its scope, dependencies,
-   test evidence, deviations and exact next step current in the tracker.
-5. Run offline checks before pushing. Do not call a phase closed until its
-   acceptance criteria pass, relevant reviews are resolved and its PR is merged.
-6. On PR publication, review/fix push and merge, refresh the owning phase and tip
-   handoff with actual heads/bases, CI/review evidence and the next action. Dated
-   earlier results are not checks for a new head; preserve them without stale claims.
+- Merged foundation/API/custody/recovery/offline acceptance reaches P22. P23's
+  code stack is merged; its full live financial acceptance remains incomplete.
+  Hardware evidence qualifies its exact source/image/scope, not later changes.
+- Approved next custody: [ADR 0030](docs/architecture/0030-venue-directed-escrow.md),
+  customer/venue/asset escrow → full identified-batch sweep → allowlisted funding
+  wallet → venue credit. Unswept batches are owner-refundable. Returns use a
+  venue-specific PDA payout vault, shared normal/recovery counters and user-wallet
+  destination. P23A records this; P23B/P23C implement it. Approval is not current
+  code, migration, deployment or general self-custody of venue collateral.
+- Missing-credit investigation/live financial runs remain deferred until reopened.
+  Self-service onboarding and backend-connected terminal need separate scope;
+  paper UI behavior and marketing promises are not native qualification.
 
-## Non-negotiable boundaries
+## Repo map
 
-- One authoritative financial state and journal. Research projections are not
-  separate ledgers whose assets can be added together.
-- Private individual entitlements over pooled execution; no internal crossing,
-  per-user native accounts by default, or hidden customer-loss mutualization.
-- Exact units, signed basis, explicit rounding and checked arithmetic. No
-  floating-point money, invented precision or uncollectible debt counted as cash.
-- Persist operation/attempt identity before signature exposure. Commit postings,
-  consumed-event keys and reservations atomically. A timeout is not a rejection.
-- Real adverse events must be recorded even when admission would reject them.
-  A cancel acknowledgement is not proof all fills have arrived.
-- Separate customer assets, house capital, coverage commitments and liquidity.
-  Never count reserve designation as new assets or loss absorption as a second loss.
-- RF1/RF2 economics and their limitations are approved; do not reopen them casually.
-  Numerical limits, final coverage/priority and production proof targets are not
-  approved merely because the accounting examples pass.
-- Recovery is operator-assisted. No heartbeat-only payout, stale claim root,
-  competing ordinary payout path or assertion that a Merkle proof proves solvency.
-- Encrypted external persistence needs authenticated freshness. Nitro has no
-  durable private disk. Host plaintext must not carry private customer data or keys.
-- Native account authority is a capability boundary. An app's trading-only policy
-  cannot narrow a venue credential that natively permits money movement.
-- P19 owns a runnable parent-relay/private-service slice with SDK process tests;
-  P20 assembles and qualifies the Nitro application. P22/P23 join offline/live
-  workflows respectively. A library interface, fixture or image build is not a
-  deployed service, and the parent must never become a plaintext financial backend.
-  Self-service private onboarding and terminal UX require separate explicit scope.
+| Location | Responsibility |
+| --- | --- |
+| `crates/kernel` | Dependency-free `no_std` money, ledger, positions, risk and allocation |
+| `crates/journal` | One atomic accepted history, replay/holds, encrypted replication/freshness |
+| `crates/api`, `clients/private` | Owner/agent auth, private views, confidential browser/Node SDK |
+| `crates/pacifica` | Venue observations, native signing and funding coordination |
+| `crates/service`, `crates/web-channel`, `services/web-relay` | Enclave runtime, shared Noise core, opaque host relay |
+| `programs/cinder-vault`, `clients/vault` | Anchor custody/recovery, generated IDL/types, chain client |
+| `crates/ports`, `crates/test-support`, `scripts`, `tools` | Typed boundaries, explicit fixtures, checks, scoped qualification |
+| `docs/architecture.md`, `docs/architecture`, `docs/operations` | System design, decisions, operating procedures |
 
-## Permissions, evidence and reviews
+## Resume and hand off
 
-- Offline fixtures are the default. Live venue tests, devnet funding/deployment,
-  AWS use and mainnet/customer funds are distinct approval gates. Check the
-  current authorized manifest; historical experiment permission is not blanket
-  authority for implementation deployments. Never print credentials/signed wires.
-- Stop for a material new economic/security decision; record it in the tracker
-  with alternatives. Do not expand scope to make a milestone appear complete.
-- A review/check request does not authorize fixes, deployment, merge or messaging.
-  Respect the user's current request and available tool permissions.
-- No automatic subagent delegation. Use a review agent only when explicitly
-  authorized; preserve focused findings and their disposition.
-- Label evidence as documented, observed, tested, derived, assumed or unresolved.
-  Passing tests are not a machine proof, independent audit or mainnet qualification.
-- Normal PR checks must work offline without `work/`, venue APIs or RPC secrets.
-  Linux/native/hardware tests belong in the phases that actually need them.
-- Default TEE trunk: `product/tee-v1`; never target legacy `main` accidentally.
-  Follow the shallow, bottom-up stack process in PLAN. No automatic merges.
+1. Check branch, `git status` and current user instructions. Preserve unrelated
+   changes/ignored research; never stage the whole directory.
+2. Read [TRACKER](docs/implementation/TRACKER.md)'s opening table/current handoff
+   and owning phase, [PLAN](docs/implementation/PLAN.md),
+   [BASELINE](docs/implementation/BASELINE.md) and relevant ADRs.
+3. Consult [EVIDENCE](docs/implementation/EVIDENCE.md) for provenance. `work/` is
+   optional ignored research, never a checkout/CI prerequisite. Promote only
+   needed sanitized contracts/fixtures; report missing facts instead of inventing them.
+4. Implement one bounded PR-sized slice on its branch. Record scope/dependencies,
+   deviations, exact checked source/commands/results, review/CI and one next action.
+5. A phase closes only after acceptance, relevant review and merge. Refresh the
+   owning phase/tip on publication, fix and merge; old green heads stay historical.
+   Follow PLAN's shallow bottom-up stack workflow; no automatic merge.
 
-## Workspace checks
+## Invariants that must survive every change
 
-Use Rust 1.97.1 from `rust-toolchain.toml` and Node 24.21.0 from `.node-version`.
-See [development setup](docs/development.md) and
-[ADR 0001](docs/architecture/0001-workspace.md). Do not install/replace global
-toolchains implicitly or inherit the legacy Phoenix versions.
+- One authoritative financial ledger/journal. No independent additive balances,
+  internal crossing, per-user native accounts by default or hidden loss mutualization.
+- Checked integer money, signed basis and explicit rounding/precision. No floating
+  money, invented native precision or uncollectible debt counted as cash.
+- Persist operation/attempt identity before signature exposure. Atomically commit
+  postings, consumed keys and holds. Timeouts/response loss are not rejection or resend authority.
+- Record real adverse events even when new admission is frozen. Cancel ACK does
+  not prove all fills arrived. Unexplained differences remain visible/contained.
+- Separate customer assets, house capital, coverage commitments and liquidity;
+  never count designation as new assets or absorption as a second loss.
+- RF1/RF2 economics are approved; do not reopen them casually. Numerical limits,
+  coverage/priority, capital calibration and production assurance remain separate gates.
+- Escrow sweep/refund is exclusive and exact-batch. No raw-balance sweep, trading
+  before qualified credit, duplicate deposit, post-sweep refund or auto-swept payout return.
+- Recovery is operator-assisted. No heartbeat-only payout, stale root, competing
+  ordinary payout, reset paid counters or claim that Merkle inclusion proves solvency.
+- Nitro has no durable private disk. External persistence is authenticated ciphertext
+  with fresh-head/rollback protection; host plaintext contains no private records or keys.
+- Private decryption/auth/accounting/signing stay in the enclave. Host relays ciphertext
+  and bounded metadata. Library interfaces, fixtures and image builds are not live services.
+- Native credentials retain their actual powers; a trading-only app policy cannot
+  narrow a venue key that permits money movement. Keep role/key separation explicit.
+
+## Checks and toolchains
+
+Use Rust **1.97.1** and Node **24.21.0** from repo pins. The isolated program/client
+pin Anchor language/SPL/CLI and `@anchor-lang/core` **1.2.0**. Setup, Agave/SBF,
+Surfpool and IDL details live in [development](docs/development.md) and
+[vault setup](programs/README.md); never replace global tools implicitly.
 
 ```sh
 node scripts/check.mjs
-node scripts/check.mjs --properties
-node scripts/check-vault.mjs # P15+: isolated Anchor/SBF + offline Surfpool check
+node scripts/check.mjs --properties # focused iteration; full runner includes these
+node scripts/check-vault.mjs        # owning program/client slice, offline local SBF
 git diff --check
 ```
 
-The full runner already includes the property tests; the focused command is for
-iteration, not an additional proof. After toolchain installation and explicit
-`cargo fetch --locked`, Cargo checks are locked/offline. P05 introduces pinned
-storage/hash dependencies outside the kernel; update the dependency policy only
-with a reviewed architecture/dependency change. Never deploy with `test-hooks` or
-the journal tests' insecure fixture protection.
+Cargo is locked/offline after explicit dependency hydration. Review dependency
+policy changes; keep kernel `no_std` and free of I/O, clocks, SDKs and test doubles.
+Never deploy `test-hooks`, fixture trust, insecure journal protection or fixed test
+identities. Use `NO_DNA=1` for Anchor/Surfpool; do not inherit a configured wallet.
+Routine macOS checks plus hosted Linux CI suffice unless the phase requires more.
+For CI failures allow two locally verified, evidence-based fixes before Linux
+reproduction. Needed Linux tests use the container skill/Apple containers,
+source-only read-only exports, no network and container-local output; never mount
+ignored research, wallets/cloud configuration or unrelated user work.
 
-Routine PRs use pinned local macOS checks and hosted Linux CI; a local Linux
-container run is not a pre-PR requirement. If CI fails, inspect its logs, test
-the proposed fix locally and allow two evidence-based fix-and-push attempts
-before falling back to local Linux reproduction if the failure persists. Do not
-make speculative pushes just to consume that allowance. Explicit Linux/SBF/Nitro
-qualification required by an owning phase remains a separate acceptance gate.
+## Authority and evidence
 
-Keep the kernel dependency-free and `no_std`; no I/O, clocks, venue SDKs or test
-doubles may leak into it. Extend the dependency guard only with an explicit
-architecture decision. Test-support is not a production service or durable store.
-The separate `programs/` workspace pins Anchor language/SPL/CLI 1.2.0, with
-`@anchor-lang/core` 1.2.0 in `clients/vault/`. Its setup and isolated SBF/toolchain
-pins are in [vault setup](programs/README.md). Use `NO_DNA=1` for Anchor/Surfpool
-commands; never inherit a configured wallet or deploy the fixed test identity.
-For Linux checks, export only intended tracked/staged source, mount it read-only
-with networking disabled, and write build outputs to container-local temporary
-storage. Never mount ignored research or wallet/cloud directories. Use Apple
-containers if a Linux test is needed; follow the available container skill.
+Offline fixtures are the default. Each live venue/RPC/devnet/AWS deployment/run
+needs current scoped approval; past experiment permission is not standing authority.
+Mainnet/customer funds are a separate gate. Never print credentials or signed wires.
+Stop for material new economics/security or scope changes; record alternatives.
+Read-only review/status requests do not authorize fixes, deployment or messages.
+No automatic subagents; use a review agent only with explicit authorization.
+Label documented/observed/tested/derived/assumed/unresolved evidence accurately;
+tests are not an audit, mathematical proof or mainnet qualification.
+
+Keep this guide a stable entrypoint. Update product/code boundaries as they change;
+session logs, counts, PR receipts and pending decisions belong in TRACKER.
