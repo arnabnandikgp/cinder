@@ -27,7 +27,7 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23A — Venue-directed custody contract](PLAN.md#p23a) | in progress | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | Local branch `tee/venue-escrow-foundation`; publication pending |
+| [P23A — Venue-directed custody contract](PLAN.md#p23a) | in progress | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | [#64](https://github.com/arnabnandikgp/cinder/pull/64), ready/open against `product/tee-v1` |
 | [P23B — Atomic escrow program/client](PLAN.md#p23b) | open | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | — |
 | [P23C — Escrow funding integration](PLAN.md#p23c) | open | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | — |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
@@ -79,9 +79,15 @@ The default Node was 26.11.1 and the initial pinned npm lookup was not cached;
 the exact Node 24.21.0 runtime was fetched into npm's execution cache without
 replacing global tools. No Rust/application dependency or lockfile changed.
 
-Next: verify/publish P23A as a docs-only PR against `product/tee-v1`, then implement
-the P23B Anchor/client boundary. Update this receipt with exact source, checks,
-PR/CI/review and dependencies before handoff; do not call an unmerged phase closed.
+P23A is published as ready PR [#64](https://github.com/arnabnandikgp/cinder/pull/64),
+one native stack layer based on `product/tee-v1`. Initial published source is
+`956ff1cd5e1c9237564b6ffe87729ba6065a84c0`; the publication-receipt update is
+documentation only and gets its own offline/clean-export checks before push.
+Hosted CI and independent review are pending, not inherited from the old stack;
+the phase stays in progress and no merge is authorized by this receipt.
+
+Next: implement the P23B Anchor/client boundary as the next bounded dependent PR,
+then P23C's journal/controller join. Do not call an unmerged phase closed.
 Self-service onboarding and Standard terminal integration follow P23C under
 separate product scope. No new live invocation follows from this approval.
 
@@ -5141,8 +5147,8 @@ diagnosis is not part of this checkpoint and is not a durability redesign.
 Work: ADR 0030 and the approved B04/B05 revision, architecture/context entrypoints, three bounded custody slices and evidence/test targets are recorded on tee/venue-escrow-foundation; old merge receipts and user files are preserved.
 Verification: pinned Node 24.21.0/Rust 1.97.1 offline contracts group passes 80/80 with no skips, the 30-phase plan/link guard and workspace dependency boundaries. Clean staged-source export 092a3c5e52d37ea0cb4a2141691f9cdbbc2b5188 passes the 30-phase/54-document guard and 13/13 plan-checker tests without work or unrelated user files. Hosted checks/review remain pending; no escrow implementation, SBF, AWS or live qualification is claimed.
 Unexpected: new user/venue escrows require explicit pending-owner versus accepted trading-credit treatment; a raw token balance cannot authorize sweep or erase refund rights. The common-vault source and historical receipts remain labeled rather than silently reinterpreted.
-Next: complete foundation checks and publication, then implement P23B's atomic program/client boundary before the P23C journal join; keep native-credit/live activity deferred.
-PR: none; publication pending against product/tee-v1.
+Next: implement P23B's atomic program/client boundary as the next bounded dependent PR before the P23C journal join; keep native-credit/live activity deferred and handle #64's fresh CI/review before any authorized merge.
+PR: https://github.com/arnabnandikgp/cinder/pull/64
 Merge: none; in progress.
 
 ## P23B — Atomic escrow program/client
