@@ -6,6 +6,12 @@ assessment. Pacifica's missing-credit work remains deferred. The current custody
 model is [venue-directed escrow](../architecture/0030-venue-directed-escrow.md);
 the proposed implementation sequence is [SECOND-VENUE](../implementation/SECOND-VENUE.md).
 
+Subsequent P27 [codec foundation](../architecture/0032-bulk-codec-foundation.md)
+adds offline integer/wire/fill tests, not activation. The separately approved
+October 15 public-testnet probe made three unsigned metadata GETs; all returned
+HTTP 502 Cloudflare origin errors. No usable current schema or financial evidence
+was obtained. This limited observation is not proof of a global venue outage.
+
 ## Evidence and source pins
 
 - Official client: [`56f6676611a0c05dbd187d406dced26168516070`](https://github.com/Bulk-trade/bulk-client/tree/56f6676611a0c05dbd187d406dced26168516070),

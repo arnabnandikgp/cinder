@@ -29,6 +29,10 @@ is implied. [P25 backend onboarding](docs/architecture/0031-backend-onboarding.m
 adds opt-in fresh-wallet account discovery and unsigned escrow preparation;
 frontend integration and deployment remain separate work.
 
+[BULK candidate work](docs/venues/bulk.md) adds only offline exact wire/fill
+codecs, not a second enabled venue. Current native environment, accounting and
+funding/return evidence remain qualification gates; no cross-venue margin follows.
+
 Tests, implementation, hardware evidence and production readiness are distinct.
 There is no audit, universal solvency proof, unconditional exit guarantee or
 customer-funds release implied by this repository. Use the tracker, plan and
