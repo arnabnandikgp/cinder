@@ -14,9 +14,10 @@ the website/demo and Mintlify docs are separate workstreams, not backend templat
   customer/venue/asset escrow → full identified-batch sweep → allowlisted funding
   wallet → venue credit. Unswept batches are owner-refundable. Returns use a
   venue-specific PDA payout vault, shared normal/recovery counters and user-wallet
-  destination. P23A records this; P23B adds the local Anchor/client boundary;
-  P23C joins the journal/Runtime/private SDK in offline qualification. None implies migration, deployment,
-  native credit qualification or general self-custody of venue collateral.
+  destination. P23A–P23C are merged: custody contract, local Anchor/client boundary
+  and journal/Runtime/private SDK integration, qualified offline. None implies
+  migration, deployment, native credit qualification or general self-custody of
+  venue collateral.
 - Missing-credit investigation/live financial runs remain deferred until reopened.
   Self-service onboarding and backend-connected terminal need separate scope;
   paper UI behavior and marketing promises are not native qualification.

@@ -7,6 +7,16 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P23A–P23C merged as #64/#65/#67 at `09494db`, `b162d8f` and `7e04a94`.
+The exact verified source heads and full merge hashes are recorded in TRACKER.
+All eight hosted offline jobs passed per layer, including complete local-SBF,
+browser and retained-growth suites; the merged tip is tree-identical to checked
+source `2e1559df71306196bf88337540865f02ecd6c933`. Review corrections include
+never-exposed expiry cancellation with red-first regressions, authority and
+generated instruction documentation, and the revision-23 genesis case. Original
+threads were resolved; automatic new-head CodeRabbit re-review was rate-limited,
+not additional independent assurance. No live qualification follows from closure.
+
 [ADR 0030](../architecture/0030-venue-directed-escrow.md) records the user's
 approved custody revision, not a live result. Existing P15/P16/P17
 program/controller/counter sources and W01/W03–W05/W09 supply the reusable

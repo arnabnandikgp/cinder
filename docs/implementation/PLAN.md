@@ -6,9 +6,10 @@ Updated 2026-10-15. Canonical scope and acceptance criteria; actual progress liv
 P00 establishes this foundation; it does not implement or deploy the broker.
 
 Post-hackathon custody revision: the user approved [ADR 0030](../architecture/0030-venue-directed-escrow.md).
-Complete P23A (contract/context), P23B (Anchor/client escrow boundary) and P23C
-(journal/coordinator/offline integration) before resuming P23 on the changed route.
-These are three PR-sized custody slices, not new live-test milestones. Existing
+P23A (contract/context), P23B (Anchor/client escrow boundary) and P23C
+(journal/coordinator/offline integration) are complete and merged; actual merge
+receipts are in TRACKER. These are three PR-sized custody slices, not new
+live-test milestones. Resuming P23 on the changed route needs separate scope. Existing
 financial economics and P23's seven remaining live groups stay intact; the
 Pacifica credit investigation remains deferred. Onboarding/terminal integration
 follows the custody contract under separate explicit scope.
@@ -941,7 +942,7 @@ W03–W05/W09 and current primary PDA/withdrawal docs linked in ADR 0030.
 - [x] Approved contract versus implemented/live behavior is clearly separated in all entrypoints.
 - [x] Batch ownership, sweep/refund races, attribution timing, pending restrictions, payout counters and recovery exclusions have explicit rules and test targets.
 - [x] Prior economics, public-privacy limits, unresolved test-fund inventory and separate G01–G05 gates are preserved.
-- [ ] Offline plan/link/contract checks pass; PR/review and the exact next slice are recorded before phase closure.
+- [x] Offline plan/link/contract checks pass; PR/review and the exact next slice are recorded before phase closure.
 
 <a id="p23b"></a>
 ## P23B — Atomic venue escrow program and typed client
@@ -962,7 +963,7 @@ ADR 0030 program/client case matrix and locally compiled instruction execution.
 - [x] Exact full-batch deposit/sweep/refund executes on compiled local SBF; no raw balance-based credit or arbitrary recipient/route.
 - [x] Both sweep/refund orderings, duplicate/recreated IDs, two owners/batches/routes, wrong mint/authority/broker, expiry/freeze/epoch/cap/sequence and transfer-failure cases pass with conservation.
 - [x] Terminal batch consumption survives replay; unsolicited surplus cannot authorize another sweep or payout; existing normal/recovery tests remain passing.
-- [ ] Tracked generated IDL/types match source, client checks pass, no live activity occurs and review/CI evidence is recorded before merge.
+- [x] Tracked generated IDL/types match source, client checks pass, no live activity occurs and review/CI evidence is recorded before merge.
 
 <a id="p23c"></a>
 ## P23C — Escrow funding and payout integration over one journal
@@ -984,7 +985,7 @@ ADR 0030 accounting/qualification cases, W01/W03–W05/W09 and original P23 rece
 - [x] Durable intent precedes signing; cancellation/exposure races, response loss, duplicate/conflicting receipt, restart, partial/missing native credit and route/capacity restrictions pass without uncertain resends.
 - [x] Qualified return and ordinary/recovery payouts share final-payment counters; unswept refunds stay segregated and swept-but-uncredited liabilities remain visible.
 - [x] Joined offline SDK/service/compiled-SBF workflows and old-route regressions pass; status fields distinguish pending, funding in progress and available collateral; no live credit or changed-image qualification is claimed.
-- [ ] Exact source/CI/review and remaining P23 live dependencies are recorded; frontend/onboarding and fresh AWS/venue/chain activation stay separately scoped.
+- [x] Exact source/CI/review and remaining P23 live dependencies are recorded; frontend/onboarding and fresh AWS/venue/chain activation stay separately scoped.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
