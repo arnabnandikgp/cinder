@@ -29,7 +29,7 @@
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
 | [P23A — Venue-directed custody contract](PLAN.md#p23a) | in progress | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | [#64](https://github.com/arnabnandikgp/cinder/pull/64), ready/open against `product/tee-v1` |
 | [P23B — Atomic escrow program/client](PLAN.md#p23b) | in progress | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | [#65](https://github.com/arnabnandikgp/cinder/pull/65), ready/open above #64; offline checks pass |
-| [P23C — Escrow funding integration](PLAN.md#p23c) | in progress | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | Local `tee/p23c-connect`, above #65 |
+| [P23C — Escrow funding integration](PLAN.md#p23c) | in progress | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | [#67](https://github.com/arnabnandikgp/cinder/pull/67), ready/open above #65; CI/review pending |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -40,7 +40,7 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P23C escrow connection — implemented; publication checks
+### P23C escrow connection — #67 ready/open
 
 Branch `tee/p23c-connect` starts at #65 head
 `504fefc332d86c91577b27389856dc2420e6b8c2`, above #64/#65 in native stack #66.
@@ -67,8 +67,16 @@ HTTP/WebSocket groups, including all eleven read families and subscriptions.
 Engine 24, v2 sweep codec, `ingress` read family 10 and new explicit Runtime mode
 are documented in ADR 0030. Existing live funding manifests reject activation.
 
-Next: publish one dependent PR and record its actual CI/review state. Do not
-merge predecessors or close unreviewed phases.
+Published as [#67](https://github.com/arnabnandikgp/cinder/pull/67) in native stack
+#66: #64 → #65 → #67. Initial published head is
+`60f0a9fb4e89cab3c6b360b28e2387f835ad31d6`; this follow-up changes only handoff
+metadata. Final publication contract guards pass 80/80 from a clean source export.
+Current exact PR head/check state is also recorded in its description. Hosted CI
+and review remain pending; technical completion is not merge or live qualification.
+
+Next: handle actual #67 CI/review and review predecessors before any separately
+authorized bottom-up merge. Do not resume missing-credit/live tests, onboard users
+or connect the terminal under this PR's offline authority.
 
 ### P23B atomic escrow program/client — 2026-10-15
 
@@ -5337,8 +5345,21 @@ Existing live manifests reject the new escrow funding mode. Unknown or partial
 native allocation remains restricted, not magically recovered. No user source or
 research was removed; only a rebuildable incremental cache was reclaimed.
 
-Next: finish final checks, publish above #65 and record actual CI/review state.
-PR: none.
+Publication: #67 is ready/open above #65 in native stack #66, initially at
+`60f0a9fb4e89cab3c6b360b28e2387f835ad31d6`. Final plan/link/contracts/workspace
+checks pass 80/80 on that export. This metadata follow-up changes no executable.
+At the predecessor check, #64 head
+`a5f72299728bdc314be5efaa779f658a5a606cf2` and #65 head
+`504fefc332d86c91577b27389856dc2420e6b8c2` are ready/open with all eight hosted
+jobs and CodeRabbit status successful. Empty reviewDecision/status success is not
+a disposition of individual findings; predecessor reviews were not silently
+resolved or merged during P23C. #67 CI/review is newly pending. The PR description
+records its current exact head and check snapshot after publication.
+
+Next: address actual CI/review, keeping the phase in progress until reviewed and
+authorized merge. Live activation, onboarding and missing-credit investigation
+stay separately scoped.
+PR: https://github.com/arnabnandikgp/cinder/pull/67.
 Merge: none.
 
 ## P24 — Release safety case
