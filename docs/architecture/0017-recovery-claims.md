@@ -1,5 +1,10 @@
 # ADR 0017 — Immutable final recovery in the custody program
 
+[ADR 0030](0030-venue-directed-escrow.md) retains this shared payment protection
+for venue-specific payout vaults. Its future ingress escrows are separately
+refundable before sweep, not additional recovery claims. This ADR's current
+implementation is not evidence that the new escrow/recovery join is complete.
+
 Status: implemented for offline review; not deployed, live-qualified or independently
 audited. Date: 2026-10-01. Owns PLAN P17. Extends [ADR 0015](0015-solana-vault.md);
 the financial ledger remains [P03–P16](../implementation/TRACKER.md).

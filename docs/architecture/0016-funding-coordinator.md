@@ -1,5 +1,10 @@
 # ADR 0016 — Durable funding over one financial journal
 
+Historical implemented route: [ADR 0030](0030-venue-directed-escrow.md) approves
+customer/venue/asset escrow ingress for new funding. P23C owns its journal/receipt
+integration. The original-wire, no-double-credit and return/payout protections
+below remain requirements; existing tests do not qualify the new route.
+
 Date: 2026-09-30. Scope: [P16](../implementation/PLAN.md#p16).
 Depends on P08 funds, P14 shared API credits and P15 custody. This is an
 offline-tested coordinator and chain codec, not a live deployment, RPC trust

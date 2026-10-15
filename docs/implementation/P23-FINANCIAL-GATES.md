@@ -5,6 +5,13 @@ or live authorization. [The runbook](../operations/live-qualification.md),
 [ADR 0024](../architecture/0024-confidential-chain-ports.md),
 [PLAN](PLAN.md#p23) and BASELINE remain authoritative.
 
+2026-10-15 custody revision: [ADR 0030](../architecture/0030-venue-directed-escrow.md)
+and P23A–P23C implement customer/venue/asset escrows before the changed live route
+is qualified. This map retains its dated common-vault receipts and unresolved
+residuals; it is not an escrow pass. The missing-credit investigation stays
+deferred. New ingress must preserve original identity, full-credit restrictions,
+native capability gates and shared normal/recovery payment consumption.
+
 **Current priority, 2026-10-08:** the user has deferred the current missing-credit
 investigation. Do not repeat deposit initialization, poll these credits or spend
 another AWS session trying to bypass that prerequisite. Preserve the retained
