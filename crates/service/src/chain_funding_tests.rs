@@ -1057,8 +1057,8 @@ pub(crate) fn retain_at<B: Backend, P: Protection>(
     rpc.attempt = attempt;
     rpc.contract = Some(contract);
 }
-#[cfg(feature = "local-fixture")]
 impl Fake {
+    #[cfg(feature = "local-fixture")]
     pub(crate) fn time(&self, at: u64) {
         self.0.lock().unwrap().at = at;
     }
