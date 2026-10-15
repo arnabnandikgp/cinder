@@ -320,7 +320,7 @@ test('funding codec executes the selected release, return and payout rails in SB
       program:bytes(programId),domain:bytes(f.domain),pool:bytes(f.pool),config:bytes(f.config),vault:bytes(f.vault),
       mint:bytes(f.mint),funds:bytes(f.funds.publicKey),broker:bytes(f.broker.publicKey),broker_tokens:bytes(f.brokerTokens),
       decimals:6,venue_program:bytes(f.outsider.publicKey),venue_vault:bytes(f.foreignTokens),epoch:'1',
-      operation:auth.operation,customer:bytes(f.owner.publicKey),amount:amount.toString(),sequence:'0',paid:'0',
+      operation:auth.operation,customer:rail==='Payout'?bytes(f.owner.publicKey):bytes(Buffer.alloc(32)),amount:amount.toString(),sequence:'0',paid:'0',
       recipient_tokens:rail==='Payout'?bytes(f.source):bytes(Buffer.alloc(32)),expires_at_slot:auth.expiresAtSlot.toString()};
     const contract=Buffer.from(JSON.stringify(Object.fromEntries(Object.keys(c).sort().map(k=>[k,c[k]]))));
     const built=await fundingInstruction(program,contract), signer=rail==='Return'?f.broker:f.funds;

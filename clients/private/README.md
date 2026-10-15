@@ -64,7 +64,7 @@ npm dependencies.
 
 ## Confidential browser/Node HTTP and WebSocket
 
-P23C appends `query: { kind: 'ingress' }` to signed private reads, with the same
+P23C appends `query: { family: 'ingress', limit: 64 }` to signed private reads, with the same
 account/agent authorization, paging and encrypted HTTP/WebSocket carrier. It shows
 pending/refunded batches and recognized funding/credited/returned lifecycle, not
 a second balance. `credited` is historical funding completion, not current free
