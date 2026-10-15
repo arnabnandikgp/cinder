@@ -5215,7 +5215,19 @@ Merge: none; in progress.
 Work: immutable route/escrow/batch accounts and five instructions added to the existing Anchor 1.2 executable; unsigned typed client, generated IDL/types/errors and signed local race/failure/conservation tests added. No journal/API/deployment changes.
 Verification: source c3dac67da407698b3caead80387783f1b3874d47 passes the complete default vault runner: 88 tests, zero failures/skips, strict native/SBF/IDL/TypeScript guards and original lifecycle/recovery regressions. All 80 contracts, workspace/dependency guards and a clean-source contracts export pass. Source self-review completed; hosted CI/independent review are pending.
 Unexpected: isolated pinned tools reprovisioned; compile and fixture-only naming/encoding/rent errors corrected without suppressions or relaxed custody checks. First run 79/88, final run 88/88. Surplus remains non-consumable; all pending obligations must be backed before any batch release.
-Next: P23C joins the journal afterward; follow #64/#65's actual review/CI before any separately authorized merge. No automatic merge or live run.
+Review follow-up (2026-10-15): user approved fixing and merging #64/#65/#67.
+CodeRabbit #4279140796 is valid terminology clarification: name
+`open_venue_escrow` for the owner/customer precondition and governance for
+`register_venue_route`. The public `deposit_escrow` doc-comment nit is also fixed;
+Anchor 1.2 regenerated the IDL/types from source. A structural comparison to
+parent `504fefc332d86c91577b27389856dc2420e6b8c2` proves the IDL differs only by
+that instruction's documentation, with no ABI, layout or runtime behavior change.
+Strict client TypeScript and all 80 offline contracts/plan/workspace guards pass.
+New hosted checks/review and dependent restack are required before merge; old
+green heads remain historical. No wallet, external transaction or AWS was used.
+Next: restack P23C on this correction, fix its expiry/test reviews, verify the
+current heads and execute the user-authorized bottom-up merge. Do not expand
+this approval to onboarding or live qualification.
 PR: https://github.com/arnabnandikgp/cinder/pull/65
 Merge: none.
 

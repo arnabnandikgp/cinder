@@ -31,6 +31,7 @@ pub mod cinder_vault {
     pub fn open_venue_escrow(ctx: Context<OpenVenueEscrow>, domain: [u8; 32]) -> Result<()> {
         escrow::open(ctx, domain)
     }
+    /// Owner-signed exact pending batch; no customer credit or custody-counter change before sweep.
     pub fn deposit_escrow(ctx: Context<DepositEscrow>, auth: Movement, amount: u64) -> Result<()> {
         escrow::deposit_batch(ctx, auth, amount)
     }

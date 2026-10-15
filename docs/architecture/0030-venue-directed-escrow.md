@@ -107,8 +107,9 @@ another venue or share a second route; another risk cohort uses another config.
 The program enforces the funding-wallet destination, not native venue credit.
 
 `VenueEscrow` uses `["venue_escrow", route, owner]`; its classic SPL token account
-uses `["escrow_tokens", escrow]` with the escrow PDA as authority. Registration
-requires the existing customer record and owner's signature. `EscrowBatch` uses
+uses `["escrow_tokens", escrow]` with the escrow PDA as authority.
+`open_venue_escrow` requires the existing customer record and owner's signature;
+`register_venue_route` requires governance authorization. `EscrowBatch` uses
 `["escrow_batch", escrow, deposit_operation]`. All bumps are canonical.
 
 New instructions are `register_venue_route(domain, epoch, venue)`,

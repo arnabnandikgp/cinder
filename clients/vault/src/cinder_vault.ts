@@ -574,6 +574,9 @@ export type CinderVault = {
     },
     {
       "name": "depositEscrow",
+      "docs": [
+        "Owner-signed exact pending batch; no customer credit or custody-counter change before sweep."
+      ],
       "discriminator": [
         226,
         112,
