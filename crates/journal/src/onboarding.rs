@@ -91,9 +91,9 @@ impl State {
                 self.registrations.push(b.clone());
             }
             Action::Notice(n) => {
-                if self.frozen
-                    || self.recovery.is_some()
-                    || self.deposit_notices.len() >= 128
+                // Existing owners may report already-sent originals during
+                // containment/recovery. This neither enrolls nor credits anyone.
+                if self.deposit_notices.len() >= 128
                     || n.operation == [0; 32]
                     || n.signature == [0; 64]
                     || !self.registrations.iter().any(|b| b.account == n.account)

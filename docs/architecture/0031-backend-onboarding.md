@@ -29,6 +29,11 @@ and release commitments remain immutable; replay reconstructs additional
 participants. All-user risk, projections, funds and recovery use this combined
 inventory. Frozen/recovery mode refuses new registrations. Existing owners can
 reconnect and rediscover their current epoch without resetting grants or counters.
+Their authenticated original-deposit hints remain recordable during stale or
+faulted risk admission, freeze and recovery (including dispatch seal). Hints are
+observation metadata, not risk admission or recovery-payment authority. They
+advance the accepted head, invalidating an older prepared cut without changing
+financial books; source qualification and all signing/payment gates still apply.
 Duplicate and concurrent requests resolve against accepted state, not a signup
 database. Unknown/stale writes remain unavailable until reconciled. Engine
 revision changes require a new history or separately designed migration.

@@ -474,6 +474,78 @@ fn revoke_advances_epoch_and_rediscovery_never_resets_it_or_restores_agent_autho
 }
 
 #[test]
+fn existing_owner_deposit_hints_remain_recordable_during_freeze_and_recovery() {
+    for mode in 0..3 {
+        let t = Temp::new();
+        let s = service();
+        let mut j =
+            Journal::create(SqliteBackend::create(&t.db).unwrap(), cipher(), config()).unwrap();
+        s.initialize(&mut j, 1).unwrap();
+        let a = SigningKey::from_bytes(&[33; 32]);
+        let d = open(&s, &mut j, &a, 2);
+        let mut tx = support::transaction(j.head(), 70, vec![], vec![]);
+        tx.at = 3;
+        if mode == 0 {
+            tx.controls
+                .push(Control::Funds(cinder_journal::funds::Action::Freeze));
+        } else {
+            tx.controls
+                .push(Control::Recovery(cinder_journal::recovery::Action::Begin {
+                    expected_version: j.state().unwrap().ledger().version(),
+                    authority_epoch: 9,
+                    valid_until: 900,
+                    fence: [71; 32],
+                }));
+            if mode == 2 {
+                tx.controls
+                    .push(Control::Recovery(cinder_journal::recovery::Action::Seal {
+                        expected_version: j.state().unwrap().ledger().version(),
+                    }));
+            }
+        }
+        assert_eq!(j.commit(tx).unwrap().receipt.controls, None);
+        let ledger = j.state().unwrap().ledger().clone();
+        let r = request(
+            &a,
+            [8; 32],
+            Command::Deposit {
+                epoch: d.epoch,
+                operation: [72; 32],
+                signature: [73; 64],
+            },
+        );
+        assert!(matches!(
+            s.handle(&mut j, &Channel([8; 32]), &r.encode().unwrap(), 4),
+            Ok(Response::Discovery(_))
+        ));
+        assert_eq!(j.state().unwrap().ledger(), &ledger);
+        assert!(j.state().unwrap().escrows().is_empty());
+        let head = j.head();
+        s.handle(&mut j, &Channel([8; 32]), &r.encode().unwrap(), 5)
+            .unwrap();
+        assert_eq!(j.head(), head);
+        let b = SigningKey::from_bytes(&[34; 32]);
+        assert!(
+            s.handle(
+                &mut j,
+                &Channel([8; 32]),
+                &request(&b, [8; 32], Command::Open).encode().unwrap(),
+                6
+            )
+            .is_err()
+        );
+        drop(j);
+        let mut j = Journal::open(
+            SqliteBackend::open(&t.db, Migration::None).unwrap(),
+            cipher(),
+            config(),
+        )
+        .unwrap();
+        assert_eq!(open(&s, &mut j, &a, 7).pending_deposits, vec![[72; 32]]);
+    }
+}
+
+#[test]
 fn freeze_and_complete_recovery_key_registry_refuse_new_accounts_without_hiding_existing_owners() {
     for registry in [false, true] {
         let t = Temp::new();

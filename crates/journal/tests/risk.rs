@@ -218,6 +218,67 @@ fn onboarded_empty_book_preserves_financial_cuts_and_joins_risk_and_book_history
     let s = t.open();
     assert_eq!(s.customer_book_history(id).unwrap(), history);
 }
+#[test]
+fn onboarding_hints_bypass_stale_or_faulted_admission_without_enabling_registration() {
+    for stale in [false, true] {
+        let t = Temp::new();
+        let mut s = setup(&t, 1000, 2000, 5000, 0, 0);
+        let wallet = [77; 32];
+        let account = cinder_journal::onboarding::account(config().domain, wallet).unwrap();
+        let registration = |wallet, tokens| {
+            Control::Onboarding(cinder_journal::onboarding::Action::Register(
+                cinder_journal::onboarding::Binding {
+                    account: cinder_journal::onboarding::account(config().domain, wallet).unwrap(),
+                    wallet,
+                    tokens,
+                },
+            ))
+        };
+        assert_eq!(
+            commit(&mut s, vec![], vec![registration(wallet, [78; 32])])
+                .receipt
+                .controls,
+            None
+        );
+        let mut tx = transaction(s.head(), 80, vec![], vec![]);
+        if stale {
+            tx.at = 101;
+        } else {
+            let mut raw = input(receipt(80, Owner::House, 1));
+            raw.event = None;
+            tx.inputs.push(raw);
+        }
+        assert_eq!(s.commit(tx).unwrap().receipt.controls, None);
+        let ledger = s.state().unwrap().ledger().clone();
+        let mut tx = transaction(
+            s.head(),
+            81,
+            vec![],
+            vec![Control::Onboarding(
+                cinder_journal::onboarding::Action::Notice(cinder_journal::onboarding::Notice {
+                    account,
+                    operation: [81; 32],
+                    signature: [82; 64],
+                }),
+            )],
+        );
+        if stale {
+            tx.at = 101;
+        }
+        assert_eq!(s.commit(tx).unwrap().receipt.controls, None);
+        assert_eq!(s.state().unwrap().ledger(), &ledger);
+        assert_eq!(s.state().unwrap().deposit_notices().len(), 1);
+        let mut tx = transaction(s.head(), 82, vec![], vec![registration([79; 32], [80; 32])]);
+        if stale {
+            tx.at = 101;
+        }
+        assert!(s.commit(tx).unwrap().receipt.controls.is_some());
+        assert_eq!(s.state().unwrap().registrations().len(), 1);
+        drop(s);
+        assert_eq!(t.open().state().unwrap().deposit_notices().len(), 1);
+    }
+}
+
 fn selection(s: &Store, n: u8, lev: u64) -> Control {
     let x = Selection {
         request: request(n),

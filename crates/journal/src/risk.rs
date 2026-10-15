@@ -1118,6 +1118,9 @@ impl State {
             return Ok(());
         }
         let admission = controls.iter().any(|c| match c {
+            // A signed original locator is observation metadata, not new risk.
+            // Registration remains an admission decision even for an empty book.
+            Control::Onboarding(a) => matches!(a, crate::onboarding::Action::Register(_)),
             Control::Escrow(a) => matches!(
                 a,
                 crate::escrow::Action::Prepare { .. } | crate::escrow::Action::Fund { .. }

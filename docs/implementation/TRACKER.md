@@ -41,6 +41,36 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P25 review corrections and second-venue direction — 2026-10-15
+
+The user approved finishing relevant #68 review corrections, reassessing BULK
+under the current escrow/key-controlled funding route and planning the minimum
+multi-venue boundary. No frontend, live venue/RPC, AWS or mainnet/customer-funds
+work. Existing Pacifica missing-credit investigations remain deferred.
+
+All eight hosted checks passed on #68 head `9a113877d129c6bc0249cc28613fdf55d89e3466`.
+Codex comments #4285322427/#4285322433 and CodeRabbit's outside-diff finding in
+review #5536177975 are valid. Signed existing-owner deposit hints must bypass
+new-risk admission and remain recordable during freeze/recovery; registration
+still requires admission. All three recovery settlement/flat-return/house-capacity
+iterations must include accepted ledger participants, not genesis customers only.
+Five new tests failed against the reviewed source before fixes. After correction,
+all nine API onboarding and 43 journal risk/recovery tests pass, including restart,
+post-genesis opposing positions, unsettled funding, debt and house-fee capacity.
+Clean tracked-source tree `b9447cceb4540b70fdd95dc35cf069ec3396a7b4`
+passes strict default/all-feature all-target lint/build, all three Rust profiles
+(646/646/583 passed, only the expected 10/10/9 ignored entries) and all 80
+contract/inventory guards. Both fresh-wallet HTTP/WebSocket local-SBF workflows
+also pass with strict generated ABI checks. These are offline results, not native
+or hardware qualification. The workspace SDK/relay runner passes 45 tests after
+the clean export's missing installed TypeScript dependency was identified; no
+code changed for that environment issue. New-head CI/review disposition follows.
+
+Next: publish these verified corrections and reply to the three findings, then continue the independent BULK
+source-pinned assessment while hosted CI runs. Do not inherit old green checks or
+silently treat present SDK documentation as live financial evidence. No automatic
+merge or reopened Pacifica run.
+
 ### Backend-only onboarding — P25, 2026-10-15
 
 The user approved self-service backend/SDK preparation through the point of
@@ -5520,7 +5550,8 @@ Verification: final clean tracked-source checkpoint 49ab31a passes strict defaul
 
 Reproduction: macOS ARM64, pinned Rust 1.97.1/Node 24.21.0; Cargo locked/offline with incremental/dev/test debug data disabled. `node scripts/check.mjs --group=lint`, `--group=rust` and `--group=contracts` ran in a tracked-only source export, excluding unrelated user examples/research while reusing the normal build cache. `node scripts/check.mjs --group=client`, `node tools/web-channel/build-sdk.mjs`, `node tools/web-channel/check-http.mjs` and `node scripts/check-vault.mjs --onboarding-only` run in the ordinary workspace with explicit local test tools. The full vault command was `node scripts/check-vault.mjs`; Anchor 1.2.0, Surfpool 1.5.0, Agave/SBF 3.1.10 and bindgen 0.2.129 were selected explicitly. No ambient wallet, remote fork, container, AWS, venue or public-chain run. SDK/SBF tests use synthetic trust and disposable local assets only. Ignored local logs are not checkout/CI dependencies; retained test sources and manifest entries reproduce the workflows.
 Unexpected: empty registration must preserve the financial ledger version while advancing the accepted journal head; actual Runtime/risk/projection/recovery tests verify this. Dynamic participant routing cannot mutate the immutable release contract or fence an unrelated in-flight owner. The existing complete immutable recovery-key registry seals enrollment rather than silently omit future claimants. Public signature hints and negative caches require owner/operation isolation, not global first-reporter ownership. A pre-existing release-profile CMS test incorrectly required a padding error for every wrong recipient; the test-only correction follows documented OpenSSL semantics and preserves production role/hash verification.
-Next: await the current #68 head's hosted checks and external review, then address relevant findings before any separately authorized merge. The publication handoff is docs-only and the PR description records the current exact head/check snapshot. No frontend, AWS or credit investigation.
+Review follow-up (2026-10-15): two Codex inline findings and CodeRabbit's outside-diff recovery inventory finding are confirmed. Five red-first regressions reproduce the old errors. Existing-owner hints now remain observable through stale/faulted admission, freeze and recovery seal without credit; registration retains its gates. Recovery checks use the accepted participant inventory for gross settlement and house return-fee capacity. Focused 9 API and 43 journal risk/recovery tests pass. Clean tracked-source tree b9447cc passes strict all-target lint/build, 646/646/583 Rust cases (expected ignored 10/10/9) and 80 contract guards; 45 SDK/relay tests and both fresh-wallet actual-local-SBF carriers pass. New-head CI and review disposition remain pending; prior head's eight green jobs remain historical. The first clean-export client invocation passed relay tests but lacked the ignored installed TypeScript package, so failed before SDK compilation; the successful workspace invocation uses existing locked dependencies, not a product correction.
+Next: finish verification, push/respond to the three findings and continue the authorized source-pinned BULK reassessment; merge remains separately authorized. No frontend, AWS or Pacifica credit investigation.
 PR: https://github.com/arnabnandikgp/cinder/pull/68.
 Merge: none.
 

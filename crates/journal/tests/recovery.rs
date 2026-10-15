@@ -351,6 +351,191 @@ fn recovery_cut_includes_post_genesis_customer_liabilities_and_paid_basis() {
     assert_eq!(s.recovery_cut(s.head(), check).unwrap(), cut);
 }
 
+fn registered_pair(s: &mut Store) -> [AccountId; 2] {
+    let accounts =
+        [77, 79].map(|n| cinder_journal::onboarding::account(config().domain, [n; 32]).unwrap());
+    for (i, n) in [77, 79].into_iter().enumerate() {
+        commit(
+            s,
+            vec![],
+            vec![Control::Onboarding(
+                cinder_journal::onboarding::Action::Register(cinder_journal::onboarding::Binding {
+                    account: accounts[i],
+                    wallet: [n; 32],
+                    tokens: [n + 1; 32],
+                }),
+            )],
+        );
+    }
+    let attempts = [77, 79].map(attempt);
+    for (i, mut a) in attempts.into_iter().enumerate() {
+        a.request.account = accounts[i];
+        commit(
+            s,
+            vec![
+                bind(a, if i == 0 { Side::Buy } else { Side::Sell }),
+                fill(
+                    77 + i as u64,
+                    FillTarget::Customer(a),
+                    if i == 0 { 1 } else { -1 },
+                    100,
+                ),
+            ],
+            vec![],
+        );
+    }
+    accounts
+}
+fn close_registered_pair(s: &mut Store, accounts: [AccountId; 2], price: u64) {
+    for (i, account) in accounts.into_iter().enumerate() {
+        let mut a = attempt(80 + i as u8);
+        a.request.account = account;
+        commit(
+            s,
+            vec![
+                bind(a, if i == 0 { Side::Sell } else { Side::Buy }),
+                fill(
+                    80 + i as u64,
+                    FillTarget::Customer(a),
+                    if i == 0 { -1 } else { 1 },
+                    price,
+                ),
+            ],
+            vec![],
+        );
+    }
+}
+fn begin_recovery(s: &mut Store) {
+    let expected_version = s.state().unwrap().ledger().version();
+    commit(
+        s,
+        vec![],
+        vec![Control::Recovery(cinder_journal::recovery::Action::Begin {
+            expected_version,
+            authority_epoch: 9,
+            valid_until: 100,
+            fence: [88; 32],
+        })],
+    );
+}
+
+#[test]
+fn post_genesis_gross_positions_cannot_pass_a_net_flat_recovery_cut() {
+    let t = Temp::new();
+    let mut s = setup(&t);
+    registered_pair(&mut s);
+    assert_eq!(
+        s.state().unwrap().ledger().venue().positions()[0].quantity(),
+        q(0)
+    );
+    freeze(&mut s);
+    let check = final_check(&mut s, 90);
+    assert_eq!(s.recovery_cut(s.head(), check), Err(CutError::NotSettled));
+}
+
+#[test]
+fn post_genesis_unsettled_funding_blocks_recovery_seal_until_actual_settlement() {
+    let t = Temp::new();
+    let mut s = setup(&t);
+    let accounts = registered_pair(&mut s);
+    let version = s.state().unwrap().ledger().version();
+    commit(
+        &mut s,
+        vec![
+            event(
+                83,
+                Location::Venue,
+                Change::Economics(EconomicChange::FundingBoundary {
+                    market: q(0).unit(),
+                    expected_version: version,
+                }),
+            ),
+            event(
+                84,
+                Location::Venue,
+                Change::Economics(EconomicChange::FundingInputs {
+                    boundary: key(83, Location::Venue),
+                    rate: Some(FundingRate {
+                        numerator: cash(1),
+                        denominator: 1,
+                        rounding: Rounding::TowardZero,
+                    }),
+                    native: Some(cash(0)),
+                }),
+            ),
+        ],
+        vec![],
+    );
+    close_registered_pair(&mut s, accounts, 100);
+    begin_recovery(&mut s);
+    let seal = |s: &Store| {
+        Control::Recovery(cinder_journal::recovery::Action::Seal {
+            expected_version: s.state().unwrap().ledger().version(),
+        })
+    };
+    let tx = transaction(&s, vec![], vec![seal(&s)]);
+    assert_eq!(
+        s.commit(tx).unwrap().receipt.controls,
+        Some(ControlError::Unqualified)
+    );
+    assert!(!s.state().unwrap().recovery_sealed());
+    commit(
+        &mut s,
+        vec![event(
+            85,
+            Location::Venue,
+            Change::Economics(EconomicChange::FundingSettlement {
+                boundary: key(83, Location::Venue),
+                native: cash(0),
+            }),
+        )],
+        vec![],
+    );
+    let control = seal(&s);
+    commit(&mut s, vec![], vec![control]);
+    assert!(s.state().unwrap().recovery_sealed());
+    let check = final_check(&mut s, 90);
+    assert_eq!(s.recovery_cut(s.head(), check).unwrap().accounts().len(), 4);
+}
+
+#[test]
+fn post_genesis_positive_claims_are_not_house_return_fee_capacity() {
+    let t = Temp::new();
+    let mut s = setup(&t);
+    let accounts = registered_pair(&mut s);
+    close_registered_pair(&mut s, accounts, 200);
+    let ledger = s.state().unwrap().ledger();
+    assert_eq!(
+        ledger.book(Owner::Customer(accounts[0])).unwrap().cash(),
+        cash(100)
+    );
+    assert_eq!(
+        ledger.book(Owner::Customer(accounts[1])).unwrap().cash(),
+        cash(-100)
+    );
+    begin_recovery(&mut s);
+    let reserve = Control::Reserve {
+        request: request(90),
+        reservations: vec![Reservation {
+            resource: Resource::House,
+            amount: cash(1),
+        }],
+    };
+    let tx = transaction(&s, vec![], vec![reserve.clone()]);
+    assert_eq!(
+        s.commit(tx).unwrap().receipt.controls,
+        Some(ControlError::Capacity)
+    );
+    assert!(s.state().unwrap().holds().is_empty());
+    drop(s);
+    let mut s = reopen(&t);
+    let tx = transaction(&s, vec![], vec![reserve]);
+    assert_eq!(
+        s.commit(tx).unwrap().receipt.controls,
+        Some(ControlError::Capacity)
+    );
+}
+
 #[test]
 fn ordinary_payment_and_rail_fee_are_not_subtracted_twice() {
     let t = Temp::new();
