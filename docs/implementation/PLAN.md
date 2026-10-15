@@ -959,9 +959,9 @@ Do not add an HTTP signer, plaintext host keeper, new token standard or deployme
 Evidence: P15/P17 signed SBF regressions, W04/W05, exact IDL/type generation,
 ADR 0030 program/client case matrix and locally compiled instruction execution.
 
-- [ ] Exact full-batch deposit/sweep/refund executes on compiled local SBF; no raw balance-based credit or arbitrary recipient/route.
-- [ ] Both sweep/refund orderings, duplicate/recreated IDs, two owners/batches/routes, wrong mint/authority/broker, expiry/freeze/epoch/cap/sequence and transfer-failure cases pass with conservation.
-- [ ] Terminal batch consumption survives replay; unsolicited surplus cannot authorize another sweep or payout; existing normal/recovery tests remain passing.
+- [x] Exact full-batch deposit/sweep/refund executes on compiled local SBF; no raw balance-based credit or arbitrary recipient/route.
+- [x] Both sweep/refund orderings, duplicate/recreated IDs, two owners/batches/routes, wrong mint/authority/broker, expiry/freeze/epoch/cap/sequence and transfer-failure cases pass with conservation.
+- [x] Terminal batch consumption survives replay; unsolicited surplus cannot authorize another sweep or payout; existing normal/recovery tests remain passing.
 - [ ] Tracked generated IDL/types match source, client checks pass, no live activity occurs and review/CI evidence is recorded before merge.
 
 <a id="p23c"></a>

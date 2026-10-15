@@ -4,6 +4,8 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 
 mod recovery;
 pub use recovery::*;
+mod escrow;
+pub use escrow::*;
 
 // Local development identity only. G03/G05 must approve a fresh deployment identity.
 declare_id!("FMu4FVg4kWABgsPg8Q5Q8Z3wieTtVgtG2gapCSdGT7RX");
@@ -15,6 +17,36 @@ const SCHEMA: u8 = 1;
 #[program]
 pub mod cinder_vault {
     use super::*;
+
+    /// Bind this config to one immutable venue and native broker identity.
+    pub fn register_venue_route(
+        ctx: Context<RegisterVenueRoute>,
+        domain: [u8; 32],
+        epoch: u64,
+        venue: [u8; 32],
+    ) -> Result<()> {
+        escrow::register(ctx, domain, epoch, venue)
+    }
+    /// Pending owner custody, not native credit or a native subaccount.
+    pub fn open_venue_escrow(ctx: Context<OpenVenueEscrow>, domain: [u8; 32]) -> Result<()> {
+        escrow::open(ctx, domain)
+    }
+    /// Owner-signed exact pending batch; no customer credit or custody-counter change before sweep.
+    pub fn deposit_escrow(ctx: Context<DepositEscrow>, auth: Movement, amount: u64) -> Result<()> {
+        escrow::deposit_batch(ctx, auth, amount)
+    }
+    /// Always moves the full stored batch, never the raw escrow balance.
+    pub fn sweep_escrow(
+        ctx: Context<SweepEscrow>,
+        auth: Movement,
+        expected_sequence: u64,
+    ) -> Result<()> {
+        escrow::sweep(ctx, auth, expected_sequence)
+    }
+    /// Eligible unswept batches remain owner-refundable after freeze or expiry.
+    pub fn refund_escrow(ctx: Context<RefundEscrow>, domain: [u8; 32]) -> Result<()> {
+        escrow::refund(ctx, domain)
+    }
 
     /// Only this executable's actual loader upgrade authority can bootstrap custody.
     pub fn initialize(
@@ -604,4 +636,8 @@ pub enum VaultError {
     RecoveryBacking,
     #[msg("Final recovery claim count and declared total disagree")]
     RecoveryTotal,
+    #[msg("Escrow batch is no longer pending")]
+    EscrowConsumed,
+    #[msg("Escrow tokens cannot back all pending owner batches")]
+    EscrowBacking,
 }

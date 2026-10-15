@@ -9,7 +9,8 @@ replaces common-vault ingress for new accounts with customer/venue/asset escrows
 full identified-batch sweeps and owner refunds before handoff. Venue returns use
 the route's PDA payout vault and existing normal/recovery payment protection;
 withdrawals end at the user's wallet, never the ingress escrow. P23A–P23C own
-implementation. This is not current code, a migration or live authority; the old
+implementation. P23B adds the local program/client boundary, not the P23C journal
+join, a migration or live authority; the old
 route and its dated evidence remain explicit. The October 8 demo addenda below
 describe their historical old-route scope, not standing escrow activation.
 
@@ -57,7 +58,7 @@ changed-image live authority.
 | B01 | Private, programmatic broker over existing perp liquidity; Pacifica first, Nitro runtime | BULK paused; no Phoenix/PER inheritance, website, token, staking or multi-venue launch in this sequence |
 | B02 | Individual customer entitlements over pooled external execution; initial pooled account, justified risk cohorts later | Not LP shares or a separate native account per user. No internal crossing; external account netting is not internal matching. Native isolation, fee aggregation and cohort thresholds need evidence |
 | B03 | Actual attributed fills determine customer basis/PnL; selectable leverage under a market cap | No native-account-equivalence, uninterrupted exposure or best/lowest-fee guarantee; numerical caps and pricing remain gates |
-| B04 | New ingress: wallet → customer/venue/asset escrow → allowlisted venue funding wallet → venue. Return: venue → funding wallet → venue-specific PDA payout vault → registered user wallet | ADR 0030 is approved but not yet implemented; never refund after sweep or bypass normal/recovery counters. The key-controlled funding wallet remains a custody boundary; a PDA cannot sign ordinary native HTTP actions |
+| B04 | New ingress: wallet → customer/venue/asset escrow → allowlisted venue funding wallet → venue. Return: venue → funding wallet → venue-specific PDA payout vault → registered user wallet | ADR 0030's local program/client exists in P23B; P23C journal/Runtime integration remains. Never refund after sweep or bypass normal/recovery counters. The key-controlled funding wallet remains a custody boundary; a PDA cannot sign ordinary native HTTP actions |
 | B05 | Sweep each fully consented deposit batch as collateral, not perp notional; retain useful credited collateral at the selected venue between orders | Unswept ingress is owner-refundable and not trading cash. A qualified finalized sweep recognizes the attributable deposit once with funding restrictions; qualified venue credit completes movement, not a second customer credit. No trading before credit/risk checks; legacy receipts retain their original semantics |
 | B06 | Private balances, positions, orders and trading history; public deposits and payouts | Not private transfers. Minimize metadata, logs and proof leakage, including during recovery |
 | B07 | Operator-assisted recovery: fence, reconcile, settle/return assets, finalize claims, fund vault, authorize activation | Heartbeat failure is an alarm, not payment authority. User claims can bypass the trading API only after authorized activation; not unconditional operator-free exit |

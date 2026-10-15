@@ -5,6 +5,16 @@ This isolated Anchor **1.2.0** workspace contains `cinder-vault`. The
 accounts, instructions, authority assumptions and financial/privacy boundaries.
 It does not deploy or control a native venue account.
 
+[ADR 0030](../docs/architecture/0030-venue-directed-escrow.md) adds the local
+venue-directed escrow boundary: immutable route, per-owner escrow, permanent
+exact batch, funds-authorized full sweep and owner refund while still pending.
+The default suite tests this against compiled SBF, both race orderings, authority
+and route substitution, freeze/rotation, cap/sequence/overflow, real SPL transfer
+failures, donations and existing normal/recovery payments. The unsigned builders
+are in `clients/vault/src/escrow.ts`. New escrow deposits do not enter the legacy
+common-vault rail or imply native credit; P23C owns journal/Runtime integration.
+No account layout migration or new deployment is included.
+
 From the repository root, with Node 24.21.0, Rust 1.97.1/rustfmt/Clippy,
 Anchor CLI 1.2.0, Agave/SBF 3.1.10/platform-tools 1.52, Surfpool 1.5.0,
 OpenSSL development headers/pkg-config and **wasm-bindgen CLI 0.2.129**:
