@@ -275,7 +275,7 @@ Joined fixtures exercise actual SDK/carriers, protected journal and compiled SBF
 the venue/native observations remain explicit test doubles. Static configured
 owner deposit locators are reused; automatic onboarding/discovery and a backend-
 connected terminal are not introduced here. See [private ingress reads](private-read-contract.md)
-and the [P23C handoff](../implementation/TRACKER.md#p23c--escrow-funding-integration).
+and the [P23C handoff](../implementation/TRACKER.md).
 
 ## Ordinary payouts and recovery
 

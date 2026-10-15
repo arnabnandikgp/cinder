@@ -612,40 +612,6 @@ fn receipt_restrictions(
     }
     Ok(result)
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn gross_restrictions_include_unabsorbed_debt_and_absorbed_replenishment_without_double_counting()
-     {
-        let account = AccountId::new([1; 32]).unwrap();
-        let unit = cinder_kernel::amounts::AssetUnit {
-            asset: AssetId::new([3; 32]).unwrap(),
-            precision: PrecisionVersion::new(1).unwrap(),
-        };
-        for (before, after, customer, house) in [
-            (100, 200, 100, 0),
-            (-20, 80, 80, 20),
-            (0, 80, 80, 20),
-            (-200, -100, 0, 100),
-            (-40, 0, 0, 100),
-        ] {
-            let rs =
-                receipt_restrictions(account, QuoteAtoms::new(unit, 100), before, after).unwrap();
-            let held = |resource| {
-                rs.iter()
-                    .filter(|r| r.resource == resource)
-                    .map(|r| r.amount.atoms())
-                    .sum::<i128>()
-            };
-            assert_eq!(held(Resource::Location(Location::Broker)), 100);
-            assert_eq!(held(Resource::Customer(account)), customer);
-            assert_eq!(held(Resource::House), house);
-            assert_eq!(customer + house, 100);
-        }
-        assert!(receipt_restrictions(account, QuoteAtoms::new(unit, 100), 0, 101).is_err());
-    }
-}
 fn encode_batch(w: &mut Writer, b: &Batch) {
     w.item(&b.request);
     w.raw(&b.route);
@@ -814,5 +780,40 @@ pub(crate) fn encode_state(w: &mut Writer, state: &State) {
         w.option(&e.handoff_slot, |w, s| w.u64(*s));
         w.option(&e.funding, |w, k| w.item(k));
         w.option(&e.returning, |w, k| w.item(k));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn gross_restrictions_include_unabsorbed_debt_and_absorbed_replenishment_without_double_counting()
+     {
+        let account = AccountId::new([1; 32]).unwrap();
+        let unit = cinder_kernel::amounts::AssetUnit {
+            asset: AssetId::new([3; 32]).unwrap(),
+            precision: PrecisionVersion::new(1).unwrap(),
+        };
+        for (before, after, customer, house) in [
+            (100, 200, 100, 0),
+            (-20, 80, 80, 20),
+            (0, 80, 80, 20),
+            (-200, -100, 0, 100),
+            (-40, 0, 0, 100),
+        ] {
+            let rs =
+                receipt_restrictions(account, QuoteAtoms::new(unit, 100), before, after).unwrap();
+            let held = |resource| {
+                rs.iter()
+                    .filter(|r| r.resource == resource)
+                    .map(|r| r.amount.atoms())
+                    .sum::<i128>()
+            };
+            assert_eq!(held(Resource::Location(Location::Broker)), 100);
+            assert_eq!(held(Resource::Customer(account)), customer);
+            assert_eq!(held(Resource::House), house);
+            assert_eq!(customer + house, 100);
+        }
+        assert!(receipt_restrictions(account, QuoteAtoms::new(unit, 100), 0, 101).is_err());
     }
 }
