@@ -7,6 +7,19 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+Second-venue desk assessment P26 promotes the sanitized [BULK map](../venues/bulk.md)
+and [minimum implementation direction](SECOND-VENUE.md). Official client pin
+`56f6676611a0c05dbd187d406dced26168516070` is compared with historical
+`2df898d7af1cf0625649896293a3137dc1d6de43`; signing-library pin is
+`ec7212cf1c1269b4dce4dce23c69a310a73b9766`. October 15 documentation captures,
+hashes and detailed findings remain ignored in
+`work/venues/bulk/reassessment-2026-10-15/`. No third-party source/dependency is
+promoted into the build, and no native/RPC/wallet/cloud invocation occurred.
+Current schema, SDK presence and scheduled-upgrade notes are not deployed
+qualification. The old PDA-to-HTTP prerequisite is removed by the approved
+custody model, not evidence of new native authority. Credit/return, key-power,
+precision, history completeness and test-bridge gates remain explicit.
+
 [ADR 0031](../architecture/0031-backend-onboarding.md) adds a separately approved
 backend-only product slice (P25). The retained source is implementation and local
 fixtures, not a promotion of testnet credentials or assumed native credit.
