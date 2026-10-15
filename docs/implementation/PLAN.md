@@ -19,6 +19,11 @@ wallet ownership, private account discovery and unsigned escrow preparation.
 Its number is a new stable ID, not a requirement to execute after P24. Frontend,
 AWS/deployment and deferred native-credit/live financial work remain out of scope.
 
+Second-venue direction approved 2026-10-15: P26 reassesses BULK under the current
+signer-wallet escrow route and records the minimum multi-venue ownership boundary.
+It does not enable BULK, cross-venue margin, frontend or live activity. Detailed
+next slices and their separate qualification gates live in [SECOND-VENUE](SECOND-VENUE.md).
+
 ## How work advances
 
 Each phase below is one reviewable PR by default, not an assertion about equal
@@ -1017,6 +1022,27 @@ contract and exact-source checks belong to the owning handoff and ADR 0031.
 - [x] SDK discovery and unsigned escrow preparation require no customer-specific startup edits; local compiled-program tests cover registration, opening, exact deposits and eligible refunds without public-chain activity.
 - [x] Signed original deposit locators are durable hints only; private lifecycle and risk/funding/recovery account inventory use the same journal; unknown/partial credit cannot become trading collateral.
 - [ ] Fresh-wallet SDK/API acceptance, owner isolation, reconnects, generated ABI preservation and existing regression/CI checks pass; tracker records exact source, limitations and PR/review state before merge.
+
+<a id="p26"></a>
+## P26 — Second-venue assessment and implementation boundary
+
+Depends on: P25.
+
+Deliver: source-pinned BULK candidate map under the present custody model,
+historical/current SDK comparison, venue-specific accounting/authority/fees and
+funding-return evidence requirements. Identify actual single-venue seams in the
+code and propose the smallest test-first two-unit composition that retains one
+accepted financial history. No new adapter runtime, dependency, frontend or live
+invocation in this slice. Do not redo financial economics or resume deferred
+Pacifica credit tests.
+Evidence: B02–B08/F01–F14, ADR 0030/0031, [BULK qualification map](../venues/bulk.md),
+[second-venue sequence](SECOND-VENUE.md), existing P13–P18/P22 ownership/fault tests
+and date-pinned primary SDK/documentation.
+
+- [x] Current official source pins and historical comparison distinguish documented, implemented and unverified deployed behavior; no old experiment is relabeled as a new pass.
+- [x] Financial/custody capability map covers exact precision, identity, cash/funding/fees, native margin and ADL, credit/returns and key powers; missing evidence has an explicit disabled treatment.
+- [x] Minimum unit-scoped ownership/routing/recovery boundary and bounded next qualification are specified without a second balance database, generic plugin framework or inherited live authority.
+- [ ] Documentation/plan/link guards pass; tracker records exact source, review/CI, predecessor status and next action before authorized merge.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates

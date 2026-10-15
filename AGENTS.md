@@ -2,7 +2,8 @@
 
 Work in `cinder-tee`, based on `product/tee-v1`, never legacy `main`.
 Cinder is a private perp broker: individual customer entitlements over pooled
-venue execution, Pacifica first, AWS Nitro. BULK is paused. Phoenix/PER,
+venue execution, Pacifica first, AWS Nitro. BULK activation is paused; a scoped
+second-venue desk assessment is approved (PLAN P26). Phoenix/PER,
 the website/demo and Mintlify docs are separate workstreams, not backend templates.
 
 ## Product context
