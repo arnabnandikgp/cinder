@@ -64,7 +64,7 @@ minimum is one accepted history with explicitly partitioned execution units,
 not an additive universal balance or a generic adapter rewrite.
 
 The docs-only assessment passes all 80 contract/inventory checks, the 32-phase /
-58-document plan/link guard and workspace boundaries using pinned Node 24.21.0.
+57-document tracked-tree plan/link guard and workspace boundaries using pinned Node 24.21.0.
 `git diff --check` passes. No executable changed after #68's checked corrections.
 Published as [#69](https://github.com/arnabnandikgp/cinder/pull/69) above #68 in
 native stack #70, source head `7de4bd95b7991fe7ce85fa3f03b250129a91469a`.
@@ -77,6 +77,14 @@ Next: review this bounded assessment and the concrete next
 qualification scope and unit-state design before implementation/live activation.
 No frontend, automatic routing/cross-margin, live activity or reopened Pacifica
 credit investigation. P23/P24 gates remain unchanged; no automatic merge.
+
+Review follow-up: Codex #4286064566 correctly identifies that the workspace's
+58-document result included the unrelated untracked user-journey document.
+Committed-source reproduction must report 32 phases / 57 documents. The count is
+corrected here and below; no user document is added or removed. Verify this fix
+from a tracked-only export, not the ordinary workspace. The user subsequently
+authorized merging #68/#69 after checks, then the next bounded adapter slice;
+live testnet/RPC/AWS activity still requires its separate scoped approval.
 
 ### P25 review corrections and second-venue direction — 2026-10-15
 
@@ -5595,7 +5603,7 @@ Merge: none.
 ## P26 — Second-venue assessment and implementation boundary
 
 Work: reassessed BULK against current escrow/key-owned funding, pinned official client/signing repos and current documentation, compared historical SDK and mapped capability/evidence gaps. Added tracked venue assessment and minimum test-first two-unit direction; no adapter code/dependency, live invocation or frontend.
-Verification: primary-source desk analysis only; pinned Node 24.21.0 `node scripts/check.mjs --group=contracts` passes 80 cases plus the 32-phase/58-document plan/link guard and workspace boundaries; `git diff --check` passes. No executable changed. Sources and selected hashes retained privately in work/venues/bulk/reassessment-2026-10-15, not checkout dependencies. Historical live evidence remains historical.
+Verification: primary-source desk analysis only; pinned Node 24.21.0 `node scripts/check.mjs --group=contracts` passes 80 cases plus the 32-phase/57-document tracked-tree plan/link guard and workspace boundaries; `git diff --check` passes. No executable changed. Sources and selected hashes retained privately in work/venues/bulk/reassessment-2026-10-15, not checkout dependencies. Historical live evidence remains historical. Codex #4286064566's count correction excludes the unrelated untracked user-journey doc; reproduce from a tracked-only source export.
 Unexpected: documented history coverage and Solana builders were already present at the old pin, not new completeness/bridge evidence. Current account schema/agent wording and market grids require requalification; activity rows do not document original Solana signature correlation. Fee-tree aggregation makes risk cohorts promising without proving commercial permission or key isolation.
 Next: new-head hosted CI/review for #69 above verified-correction #68; review bounded native-read qualification and exact unit ownership/schema before implementing the next slice. Merge and live actions remain separately authorized; do not reopen Pacifica credit.
 PR: https://github.com/arnabnandikgp/cinder/pull/69.
