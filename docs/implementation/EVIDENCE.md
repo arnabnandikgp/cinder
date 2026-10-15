@@ -33,6 +33,7 @@ P23C promotes the exact-batch pending/handoff/credit contract into
 `journal::escrow`, `pacifica::funding::escrow` and the service's original-wire
 chain qualifiers. `escrow-deposit-public.json` is a reproducible disposable-key
 Anchor owner-deposit vector, not a transaction submitted to a public chain.
+Its SHA-256 is `05ee323d00d273bf2511513d9648c393f20ac8afe4de42c03e294f571c262de3`.
 The permanent acceptance-manifest `escrow` case requires both P23C HTTP/WebSocket
 SDK → service → protected journal → compiled SBF workflows. It also retains
 the P22 legacy route and P21 independent-claims workflows. Controller/RPC tests

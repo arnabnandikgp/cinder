@@ -980,10 +980,10 @@ changed journal/wire semantics; do not migrate histories or counters implicitly.
 Evidence: P16/P22 controller, crash/race and joined HTTP/WebSocket/SBF suites,
 ADR 0030 accounting/qualification cases, W01/W03–W05/W09 and original P23 receipts.
 
-- [ ] Unswept ingress/refunds are not spendable trading credit or duplicate recovery claims; finalized handoff recognizes the correct owner once, including fees/debt treatment.
-- [ ] Durable intent precedes signing; cancellation/exposure races, response loss, duplicate/conflicting receipt, restart, partial/missing native credit and route/capacity restrictions pass without uncertain resends.
-- [ ] Qualified return and ordinary/recovery payouts share final-payment counters; unswept refunds stay segregated and swept-but-uncredited liabilities remain visible.
-- [ ] Joined offline SDK/service/compiled-SBF workflows and old-route regressions pass; status fields distinguish pending, funding in progress and available collateral; no live credit or changed-image qualification is claimed.
+- [x] Unswept ingress/refunds are not spendable trading credit or duplicate recovery claims; finalized handoff recognizes the correct owner once, including fees/debt treatment.
+- [x] Durable intent precedes signing; cancellation/exposure races, response loss, duplicate/conflicting receipt, restart, partial/missing native credit and route/capacity restrictions pass without uncertain resends.
+- [x] Qualified return and ordinary/recovery payouts share final-payment counters; unswept refunds stay segregated and swept-but-uncredited liabilities remain visible.
+- [x] Joined offline SDK/service/compiled-SBF workflows and old-route regressions pass; status fields distinguish pending, funding in progress and available collateral; no live credit or changed-image qualification is claimed.
 - [ ] Exact source/CI/review and remaining P23 live dependencies are recorded; frontend/onboarding and fresh AWS/venue/chain activation stay separately scoped.
 
 <a id="p24"></a>

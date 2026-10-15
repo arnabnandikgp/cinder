@@ -40,7 +40,7 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P23C escrow connection — offline verification in progress
+### P23C escrow connection — implemented; publication checks
 
 Branch `tee/p23c-connect` starts at #65 head
 `504fefc332d86c91577b27389856dc2420e6b8c2`, above #64/#65 in native stack #66.
@@ -56,14 +56,19 @@ existing consumption counters. Native missing credit and earlier residuals remai
 deferred; neither demo assumptions nor old hardware evidence are upgraded.
 
 The connected slices are implemented. The eight focused original-chain/controller
-tests and separate recovery-return/shared-counter test pass; broad Rust and the
-initial full 90-test SBF suite passed before final hardening. Final exact-source
-full-suite verification is running, not inherited from that earlier result.
+tests include recovery-return/shared-counter qualification. Final native checks
+pass: all-feature Rust 623 tests, shipping-default Rust 562 tests, strict
+default/all-feature lint/build, 80 contract checks and 42 SDK/relay tests. The
+92-case SBF run passed 91, including both new escrow lifecycles and old recovery;
+one stale legacy codec fixture failed and now passes its focused actual-SBF rerun.
+This is combined full-plus-focused evidence, not a claim that the original full
+command exited successfully. Isolated Node and Chrome each pass all 26 private
+HTTP/WebSocket groups, including all eleven read families and subscriptions.
 Engine 24, v2 sweep codec, `ingress` read family 10 and new explicit Runtime mode
 are documented in ADR 0030. Existing live funding manifests reject activation.
 
-Next: complete final verification, record its exact source/checks and publish one
-dependent PR. Do not merge predecessors or close unreviewed phases.
+Next: publish one dependent PR and record its actual CI/review state. Do not
+merge predecessors or close unreviewed phases.
 
 ### P23B atomic escrow program/client — 2026-10-15
 
@@ -5268,11 +5273,46 @@ strongly zero-effect native funding through the original return rail. Full nativ
 funding returns and final customer payouts retain the existing shared counters.
 Engine revision 24 explicitly rejects old histories; no migration/deployment.
 
-Verification: final exact-source offline suite underway. Initial full local
-vault run passed 90/90, including both new P23C and existing P21/P22/P23B cases;
-it preceded final hardening and is not the final source receipt. Eight focused
-service escrow tests now pass, including expired original/no-retained-wire
-closure, freeze priority, forecast conservation and return/counter qualification.
+Verification: core checkpoint `9b4ded9a97c86b9549be8d786a31cfda050807a5`;
+test-fixture/docs correction `a437e7b0d82000661c4dde772559146c5adec28a`.
+The latter changes only the legacy internal-transfer fixture's owner field and
+README query syntax; no financial/controller code changed after the checked core.
+Pinned Rust 1.97.1 / Node 24.21.0; Cargo locked/offline, incremental/debuginfo off.
+Clean git-archive export excludes `work/` and unrelated untracked files.
+
+- `node scripts/check.mjs --group=contracts`: 80 pass, plus plan/link, automatic
+  discovery and dependency/workspace guards.
+- `node scripts/check.mjs --group=lint`: default/all-feature strict all-target
+  Clippy/build and formatting pass. No warning suppression.
+- `RUST_TEST_THREADS=2 cargo test --workspace --all-features --locked --offline
+  --no-fail-fast`: 623 pass, 10 exact named hardware/parent-worker skips, doctests
+  included; every workspace acceptance-manifest test verified executed.
+- Same command without `--all-features`: 562 pass, nine named skips, doctests
+  included. Fixture authority is not needed for the default escrow tests.
+- `node scripts/check.mjs --group=client`: 15 relay and 27 private SDK tests pass,
+  no failures/skips; new ingress codec/ownership included.
+- `node scripts/check-vault.mjs`: locked SBF/frame guard, generated IDL/type/error
+  equality and strict TypeScript pass; full 92-case run has 91 pass/one failure,
+  zero skips. Both P23C HTTP/WebSocket workflows and existing P21 independent SBF
+  claims pass. A legacy internal-transfer test incorrectly supplied a customer
+  field which the Rust schema already forbids. Fixed the fixture, not the gate.
+  `node --test --test-reporter=tap --test-name-pattern='^funding codec executes '
+  clients/vault/tests/vault.test.ts` passes 1/1 on a fresh offline localhost
+  Surfpool with the same compiled SBF. All 92 cases are covered across those runs;
+  do not report the earlier full command as green. Vault TypeScript recheck passes.
+- `node tools/web-channel/check-http.mjs`: isolated Node 24.21.0 and actual
+  Chrome 155.0.8059.41 each pass 26 private HTTP/WebSocket process groups, all
+  eight commands, eleven reads, subscriptions, queue/revoke/freshness/restart.
+  Earlier `--standard-only` preparation also passed shared native/WASM tests and
+  14 attestation groups in each Node/Chrome client. Its interrupted full command
+  is not reported green; the later Runtime growth matrix remains hosted CI.
+  No fresh Nitro quote/hardware is claimed.
+
+Commands use `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
+CARGO_PROFILE_TEST_DEBUG=0` and the separate checksum-verified Anchor 1.2.0 /
+wasm-bindgen 0.2.129 selected by `CINDER_ANCHOR_TOOL`/`CINDER_WASM_BINDGEN`.
+No dependencies/locks or global tools changed. Root-workspace release-profile
+execution and Linux/ARM64 checks remain hosted-CI work, not claimed locally.
 
 Unexpected: handoff must be a single atomic control candidate because journal
 observations intentionally survive rejected control proposals. Restricting only
@@ -5283,6 +5323,13 @@ the forecast once; a recovery return is not pending venue ingress. First-seen
 finalized refunds retain inventory/refund atomically. Recovery custody evidence
 must not predate the actual retained sweep slot. These are offline correctness
 hardening, not changed financial economics or relaxed external qualification.
+Prepublication checks also caught test-module ordering, a missing explicit
+documentation anchor, the tracked legacy example's new optional field and shared
+test helpers incorrectly gated to fixture builds. All are corrected. A parallel
+host run exhausted the Mac's disk and a Runtime boot test then refused; its complete
+bounded-parallel rerun passes. The first web run timed out waiting for a fixture
+notification under that load; isolated verification is recorded separately below.
+No timeout, authentication, freshness, capacity or financial gate was relaxed.
 
 Boundary: static configured deposit locators remain; no self-service onboarding,
 frontend, native-credit investigation, AWS/chain/venue run or fresh live activation.
