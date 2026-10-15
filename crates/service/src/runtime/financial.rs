@@ -51,21 +51,32 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                 .as_ref()
                 .filter(|p| p.initial_setup.is_some())
                 .map(|p| (&*gateway, p));
-            prepare_next_ingress(store, funding, demo, now)?;
-            store
-                .state()
-                .map_err(|_| Error)?
-                .funds()
-                .iter()
-                .find(|o| !o.terminal && o.attempt.is_some())
-                .and_then(|o| {
-                    o.attempt.map(|attempt| {
-                        (
-                            attempt,
-                            o.intent.source == cinder_kernel::ledger::Location::Venue,
-                        )
+            // This explicit new-history controller does not borrow the shipping
+            // demo allocation gate. Those old measured compositions stay closed.
+            let sweep = if !self.gates.funding {
+                funding.prepare_next_escrow(store, now).map_err(|_| Error)?
+            } else {
+                None
+            };
+            if let Some(attempt) = sweep {
+                Some((attempt, false))
+            } else {
+                prepare_next_ingress(store, funding, demo, now)?;
+                store
+                    .state()
+                    .map_err(|_| Error)?
+                    .funds()
+                    .iter()
+                    .find(|o| !o.terminal && o.attempt.is_some())
+                    .and_then(|o| {
+                        o.attempt.map(|attempt| {
+                            (
+                                attempt,
+                                o.intent.source == cinder_kernel::ledger::Location::Venue,
+                            )
+                        })
                     })
-                })
+            }
         };
         if let Some((attempt, native)) = next {
             if self.gates.funding {
@@ -143,6 +154,15 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                     demo_deposit,
                     ..
                 } = &mut *active;
+                // RPC/code/counter reads may outlive the original deadline.
+                // Close only an unexposed escrow before physical-plan exposure;
+                // this is ordinary cleanup, not a financial supervisor failure.
+                if funding
+                    .cancel_expired_escrow_sweep(store, now, attempt)
+                    .map_err(|_| Error)?
+                {
+                    return Ok(());
+                }
                 let demo = demo_deposit
                     .as_ref()
                     .filter(|p| p.initial_setup.is_some())

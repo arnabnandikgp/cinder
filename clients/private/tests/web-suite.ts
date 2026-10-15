@@ -62,7 +62,7 @@ export async function runHttp(core: WebCore, signer: MessageSigner, harness: Har
     }
     checks.push('all eight signed commands use one handler; private errors and ownership');
     checks.push('real Cinder agent signatures, owner-only payouts/admin and live revocation');
-    checks.push('all ten bounded signed read families reach the real journal');
+    checks.push(`all ${READ_FAMILIES.length} bounded signed read families reach the real journal`);
     ch.close();
     await harness.control('restart'); ch = await connect(); api = client(ch);
     const after = await api.request(request(47,{kind:'operation',target:id(40)},2n)); check(after.kind==='receipt' && after.outcome==='dispatched','retained journal after crash');

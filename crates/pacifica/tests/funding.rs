@@ -1214,6 +1214,9 @@ fn good_setup() -> Setup {
 }
 fn prepare(j: &mut Store, n: u8, rail: Rail, net: i128, fee: i128) {
     let (source, destination) = match rail {
+        Rail::Sweep => {
+            panic!("Exact batch ingress uses the escrow controller, not a legacy funds mandate")
+        }
         Rail::Release => (Location::Vault, Destination::Location(Location::Broker)),
         Rail::Deposit => (Location::Broker, Destination::Location(Location::Venue)),
         Rail::Withdraw => (Location::Venue, Destination::Location(Location::Broker)),
@@ -1284,6 +1287,7 @@ fn expose(j: &mut Store, c: &Controller, n: u8, rail: Rail, signature: u8) -> Pl
 fn chain(p: &Plan, n: u8) -> ChainReceipt {
     let r = route();
     let (program, from, to) = match p.rail() {
+        Rail::Sweep => (r.program, p.sweep().unwrap().tokens, r.broker_tokens),
         Rail::Release => (r.program, r.vault, r.broker_tokens),
         Rail::Deposit => (r.venue_program, r.broker_tokens, r.venue_vault),
         Rail::Return => (r.program, r.broker_tokens, r.vault),

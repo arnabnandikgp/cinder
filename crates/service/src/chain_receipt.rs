@@ -67,6 +67,12 @@ pub fn keys(target: &Target, deployment: &Deployment) -> Result<Vec<[u8; 32]>, E
     if let Some(customer) = target.customer_counter {
         keys.push(customer);
     }
+    if let Some(s) = &target.sweep {
+        keys.extend([s.route, s.escrow]);
+        if target.receipt != Some(s.batch) {
+            keys.push(s.batch);
+        }
+    }
     let mut seen = std::collections::BTreeSet::new();
     if keys.iter().any(|k| !seen.insert(*k)) {
         return Err(Error);
@@ -231,6 +237,7 @@ fn movement(account: &Account, t: &Target) -> Result<(), Error> {
     let b = discriminated(account, t.program, "MovementReceipt", 161)?;
     let (kind, owner, sequence) = match t.rail {
         Rail::Release => (1, t.funds, t.sequence.checked_add(1).ok_or(Error)?),
+        Rail::Sweep => (4, t.customer, t.sequence.checked_add(1).ok_or(Error)?),
         Rail::Return => (2, t.broker, 0),
         Rail::Payout => (3, t.customer, t.sequence.checked_add(1).ok_or(Error)?),
         _ => return Err(Error),
@@ -252,8 +259,12 @@ fn customer(account: &Account, t: &Target) -> Result<(), Error> {
     let b = discriminated(account, t.program, "CustomerCounter", 97)?;
     if word(b, 8)? != t.config
         || word(b, 40)? != t.customer
-        || number(b, 81)? < t.paid.checked_add(t.amount).ok_or(Error)?
-        || number(b, 89)? < t.sequence.checked_add(1).ok_or(Error)?
+        || if t.rail == Rail::Sweep {
+            number(b, 73)? < t.amount
+        } else {
+            number(b, 81)? < t.paid.checked_add(t.amount).ok_or(Error)?
+                || number(b, 89)? < t.sequence.checked_add(1).ok_or(Error)?
+        }
     {
         return Err(Error);
     }
@@ -313,7 +324,7 @@ pub fn counters(
     } else {
         (
             0,
-            if rail == Rail::Release {
+            if matches!(rail, Rail::Release | Rail::Sweep) {
                 number(b, 301)?
             } else {
                 0
@@ -487,6 +498,9 @@ fn recognize_inner(
         if let Some(key) = t.customer_counter {
             customer(get(&accounts, key)?, &t)?;
         }
+        if t.rail == Rail::Sweep {
+            crate::escrow_deposit::swept(&accounts, &t, finalized.slot)?;
+        }
     } else {
         // Failure is atomic but still charged SOL. Reject contradictory token
         // effects; do not reinterpret a missing/unknown transaction as failure.
@@ -524,7 +538,7 @@ fn recognize_inner(
         .map_err(|_| Error)?,
     )
     .map_err(|_| Error)?;
-    let sequence = if succeeded && matches!(t.rail, Rail::Release | Rail::Payout) {
+    let sequence = if succeeded && matches!(t.rail, Rail::Release | Rail::Payout | Rail::Sweep) {
         Some(t.sequence.checked_add(1).ok_or(Error)?)
     } else {
         None
@@ -698,6 +712,7 @@ pub(crate) mod tests {
             field(&mut r, 40, &t.operation);
             field(&mut r, 72, &t.epoch.to_le_bytes());
             let (kind, owner, sequence) = match t.rail {
+                Rail::Sweep => (4, t.customer, t.sequence + 1),
                 Rail::Release => (1, t.funds, t.sequence + 1),
                 Rail::Return => (2, t.broker, 0),
                 Rail::Payout => (3, t.customer, t.sequence + 1),
@@ -709,20 +724,78 @@ pub(crate) mod tests {
             field(&mut r, 113, &t.destination);
             field(&mut r, 145, &t.amount.to_le_bytes());
             field(&mut r, 153, &sequence.to_le_bytes());
-            values.push(Some(account(receipt, t.program, r, false)));
+            if t.sweep.is_none() || t.rail == Rail::Sweep {
+                values.push(Some(account(receipt, t.program, r, false)));
+            }
         }
         if let Some(counter) = t.customer_counter {
             let mut c = vec![0; 97];
             field(&mut c, 0, &sha256(b"account:CustomerCounter")[..8]);
             field(&mut c, 8, &t.config);
             field(&mut c, 40, &t.customer);
-            if t.rail == Rail::Deposit {
+            if t.rail == Rail::Sweep || t.rail == Rail::Deposit && t.sweep.is_none() {
                 field(&mut c, 73, &t.amount.to_le_bytes());
-            } else {
+            } else if t.rail == Rail::Payout {
                 field(&mut c, 81, &(t.paid + t.amount).to_le_bytes());
                 field(&mut c, 89, &(t.sequence + 1).to_le_bytes());
             }
             values.push(Some(account(counter, t.program, c, false)));
+        }
+        if let Some(s) = &t.sweep {
+            let pending = t.rail == Rail::Deposit;
+            let mut r = vec![0; 106];
+            field(&mut r, 0, &sha256(b"account:VenueRoute")[..8]);
+            r[8] = 1;
+            field(&mut r, 10, &t.config);
+            field(&mut r, 42, &[4; 32]);
+            field(&mut r, 74, &t.broker);
+            values.push(Some(account(s.route, t.program, r, false)));
+            let mut e = vec![0; 83];
+            field(&mut e, 0, &sha256(b"account:VenueEscrow")[..8]);
+            e[8] = 1;
+            field(&mut e, 11, &s.route);
+            field(&mut e, 43, &t.customer);
+            if pending {
+                field(&mut e, 75, &t.amount.to_le_bytes());
+            }
+            values.push(Some(account(s.escrow, t.program, e, false)));
+            let mut b = vec![0; 179];
+            field(&mut b, 0, &sha256(b"account:EscrowBatch")[..8]);
+            b[8] = 1;
+            b[10] = u8::from(!pending);
+            field(&mut b, 11, &s.escrow);
+            field(&mut b, 43, &s.operation);
+            field(&mut b, 75, &t.amount.to_le_bytes());
+            field(&mut b, 83, &t.epoch.to_le_bytes());
+            field(
+                &mut b,
+                91,
+                &s.expires_at_slot.parse::<u64>().unwrap().to_le_bytes(),
+            );
+            if !pending {
+                field(&mut b, 99, &t.operation);
+                field(&mut b, 131, &t.broker_tokens);
+                field(&mut b, 163, &(t.sequence + 1).to_le_bytes());
+                field(&mut b, 171, &200u64.to_le_bytes());
+            }
+            values.push(Some(account(s.batch, t.program, b, false)));
+            if pending {
+                let a = values
+                    .iter_mut()
+                    .flatten()
+                    .find(|a| a.key == s.tokens)
+                    .unwrap();
+                let mut b = a.data.as_bytes().to_vec();
+                field(&mut b, 64, &t.amount.to_le_bytes());
+                a.data = PrivateBytes::new(b).unwrap();
+            }
+            let order = keys(&t, &deployment).unwrap();
+            values.sort_by_key(|a| {
+                order
+                    .iter()
+                    .position(|k| *k == a.as_ref().unwrap().key)
+                    .unwrap()
+            });
         }
         let pre = json!([
             row(&t, t.source, t.source_owner, t.amount + 100),

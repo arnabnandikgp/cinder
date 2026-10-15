@@ -16,6 +16,15 @@ The tests deliberately sign/submit only to the check-owned offline localhost
 Surfpool, using fresh in-memory identities. That fixture is not a production
 wallet implementation. [Vault contract](../../docs/architecture/0015-solana-vault.md).
 
+`src/escrow.ts` builds immutable venue-route registration, owner escrow opening,
+exact batch deposit, full sweep and owner refund instructions. An unswept batch
+is refundable to its owner; it is not trading collateral. Only a qualified sweep
+handoff is recognized in the journal, and native credit remains a separate gate.
+`src/funding.ts` accepts explicit v2 sweep contracts with canonical original batch
+metadata; legacy rails retain v1 and reject sweep metadata. Later ordinary and
+recovery payouts use the PDA payout vault and user-wallet recipient, never the
+auto-swept ingress escrow. See [ADR 0030](../../docs/architecture/0030-venue-directed-escrow.md).
+
 `src/recovery.ts` packages already-final positive claims, hashes the domain-bound
 statement, constructs ordered Merkle paths and encodes Anchor recovery arguments.
 It is not an entitlement calculator, full-solvency verifier or automatic activation

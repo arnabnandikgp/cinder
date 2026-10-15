@@ -108,17 +108,12 @@ export async function nodeSuite(suite, { pattern, cwd, env } = {}) {
     suite === "vault"
       ? manifest.cases
           .filter((c) => c.runner === "vault")
-          .filter(
-            (c) =>
-              !pattern ||
-              (pattern === "^P22 " ? c.id === "normal" : c.id === "recovery"),
-          )
           .flatMap((c) =>
             ["http", "websocket"].map(
               (carrier) =>
-                `${c.id === "normal" ? "P22" : "P21"} ${carrier} ${c.test}`,
+                `${c.prefix ?? (c.id === "normal" ? "P22" : "P21")} ${carrier} ${c.test}`,
             ),
-          )
+          ).filter(name=>!pattern||new RegExp(pattern).test(name))
       : [];
   await checked(
     process.execPath,

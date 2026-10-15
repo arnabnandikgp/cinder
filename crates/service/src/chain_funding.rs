@@ -242,6 +242,7 @@ pub enum Outcome {
 /// Unreleased original-deposit evidence from the configured, bounded chain port.
 /// No host can construct it and no RPC result alone credits the customer.
 pub(crate) struct DepositRead {
+    escrow: bool,
     locator: crate::customer_deposit::Locator,
     result: DepositResult,
 }
@@ -265,6 +266,7 @@ impl DepositRead {
     pub(crate) fn complete<B: Backend, P: Protection>(
         self,
         j: &mut Journal<B, P>,
+        funding: &Controller,
     ) -> Result<Outcome, Error> {
         j.verified_state().map_err(|_| Error)?;
         match self.result {
@@ -279,16 +281,30 @@ impl DepositRead {
                     proof,
                     maximum_fee,
                 } = *evidence;
-                crate::customer_deposit::recognize(
-                    j,
-                    &self.locator,
-                    deposit,
-                    tx,
-                    accounts,
-                    &deployment,
-                    proof,
-                    maximum_fee,
-                )?;
+                if self.escrow {
+                    crate::escrow_deposit::recognize(
+                        j,
+                        funding,
+                        &self.locator,
+                        deposit,
+                        tx,
+                        accounts,
+                        &deployment,
+                        proof,
+                        maximum_fee,
+                    )?;
+                } else {
+                    crate::customer_deposit::recognize(
+                        j,
+                        &self.locator,
+                        deposit,
+                        tx,
+                        accounts,
+                        &deployment,
+                        proof,
+                        maximum_fee,
+                    )?;
+                }
                 Ok(Outcome::Settled)
             }
         }
@@ -303,6 +319,21 @@ fn rail<B: Backend, P: Protection>(
     j: &mut Journal<B, P>,
     attempt: AttemptKey,
 ) -> Result<(Rail, bool), Error> {
+    if j.verified_state()
+        .map_err(|_| Error)?
+        .escrows()
+        .iter()
+        .any(|e| {
+            e.attempt == Some(attempt)
+                && matches!(
+                    e.status,
+                    cinder_journal::escrow::Status::Prepared
+                        | cinder_journal::escrow::Status::Exposed
+                )
+        })
+    {
+        return Ok((Rail::Sweep, false));
+    }
     let o = j
         .verified_state()
         .map_err(|_| Error)?
@@ -330,10 +361,15 @@ impl<T: Transport> Port<T> {
     ) -> Result<Outcome, Error> {
         let locator = self.loaded.configuration.deposits.get(index).ok_or(Error)?;
         j.verified_state().map_err(|_| Error)?;
-        if crate::customer_deposit::recorded(j, locator)? {
+        if if funding.escrow_routing().is_some() {
+            crate::escrow_deposit::recorded(j, locator)?
+        } else {
+            crate::customer_deposit::recorded(j, locator)?
+        } {
             return Ok(Outcome::Settled);
         }
-        self.collect_deposit(funding.route(), index)?.complete(j)
+        self.collect_deposit(funding.route(), funding.escrow_routing().is_some(), index)?
+            .complete(j, funding)
     }
     /// Only configured identity metadata is handed to I/O. Native/chain signing
     /// keys never leave their existing controllers, and no journal guard is
@@ -341,6 +377,7 @@ impl<T: Transport> Port<T> {
     pub(crate) fn collect_deposit(
         &mut self,
         route: &cinder_pacifica::funding::Route,
+        escrow: bool,
         index: usize,
     ) -> Result<DepositRead, Error> {
         let locator = self
@@ -353,6 +390,7 @@ impl<T: Transport> Port<T> {
         let rejected = |port: &mut Self| {
             port.rejected_deposits[index] = true;
             DepositRead {
+                escrow,
                 locator: locator.clone(),
                 result: DepositResult::Rejected,
             }
@@ -363,6 +401,7 @@ impl<T: Transport> Port<T> {
         }
         let Some(tx) = self.client.finalized(locator.validate()?, now)? else {
             return Ok(DepositRead {
+                escrow,
                 locator,
                 result: DepositResult::Pending,
             });
@@ -370,7 +409,12 @@ impl<T: Transport> Port<T> {
         if tx.meta.get("err") != Some(&serde_json::Value::Null) {
             return Ok(rejected(self));
         }
-        let Ok(deposit) = chain::inspect_customer_deposit(
+        let inspect = if escrow {
+            chain::inspect_escrow_deposit
+        } else {
+            chain::inspect_customer_deposit
+        };
+        let Ok(deposit) = inspect(
             route,
             self.loaded.endpoint.network,
             locator.account,
@@ -398,6 +442,7 @@ impl<T: Transport> Port<T> {
         let keys = chain_receipt::effect_keys(deposit.target(), d)?;
         let accounts = self.client.accounts(&keys, tx.slot, proof.at())?;
         Ok(DepositRead {
+            escrow,
             locator,
             result: DepositResult::Found(Box::new(DepositEvidence {
                 deposit,

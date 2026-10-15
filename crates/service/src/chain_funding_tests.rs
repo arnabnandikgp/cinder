@@ -27,6 +27,8 @@ use std::{
 pub(crate) mod allocation_tests;
 #[path = "chain_demo_tests.rs"]
 pub(crate) mod demo_tests;
+#[path = "chain_escrow_tests.rs"]
+pub(crate) mod escrow_tests;
 
 struct Fixed;
 impl Clock for Fixed {
@@ -194,10 +196,16 @@ pub(crate) fn seed<B: Backend, P: Protection>(j: Journal<B, P>) -> (Journal<B, P
     seed_at(j, Location::Vault)
 }
 fn seed_at<B: Backend, P: Protection>(
-    mut j: Journal<B, P>,
+    j: Journal<B, P>,
     customer_location: Location,
 ) -> (Journal<B, P>, Controller) {
-    let c = controller();
+    seed_with_controller(j, customer_location, controller())
+}
+fn seed_with_controller<B: Backend, P: Protection>(
+    mut j: Journal<B, P>,
+    customer_location: Location,
+    c: Controller,
+) -> (Journal<B, P>, Controller) {
     let t = tx(
         &j,
         1,
@@ -349,6 +357,7 @@ struct Rpc {
     failed_deposit: bool,
     fail_rpc: bool,
     bad_deltas: bool,
+    escrow_refunded: bool,
 }
 #[derive(Clone)]
 pub(crate) struct Fake(Arc<Mutex<Rpc>>);
@@ -422,6 +431,7 @@ pub(crate) fn fake(n: u8) -> Fake {
         failed_deposit: false,
         fail_rpc: false,
         bad_deltas: false,
+        escrow_refunded: false,
     })))
 }
 impl Transport for Fake {
@@ -480,6 +490,15 @@ impl Transport for Fake {
                 } else {
                     let deposit =
                         chain::inspect_customer_deposit(&route(), [1; 32], [1; 32], [41; 32], &w)
+                            .or_else(|_| {
+                                chain::inspect_escrow_deposit(
+                                    &route(),
+                                    [1; 32],
+                                    [1; 32],
+                                    [41; 32],
+                                    &w,
+                                )
+                            })
                             .unwrap();
                     chain_receipt::tests::fixture_target(
                         deposit.into_target(),
@@ -489,6 +508,13 @@ impl Transport for Fake {
                     )
                 };
                 for mut a in c.accounts.values.into_iter().flatten() {
+                    if s.escrow_refunded && a.data.as_bytes().len() == 179 {
+                        let mut b = a.data.as_bytes().to_vec();
+                        b[10] = 2;
+                        b[131..163].copy_from_slice(&route().beneficiaries[0].tokens);
+                        b[171..179].copy_from_slice(&200u64.to_le_bytes());
+                        a.data = PrivateBytes::new(b).unwrap();
+                    }
                     if s.frozen && a.data.as_bytes().len() == 333 {
                         let mut b = a.data.as_bytes().to_vec();
                         b[268..276].copy_from_slice(&2u64.to_le_bytes());
@@ -710,19 +736,19 @@ fn collected_deposit_rejoins_later_writer_cut_without_repoll_or_duplicate_credit
     let c = controller();
     let f = fake(10);
     let mut p = deposit(&f, &c);
-    let first = p.collect_deposit(c.route(), 0).unwrap();
-    let second = p.collect_deposit(c.route(), 0).unwrap();
+    let first = p.collect_deposit(c.route(), false, 0).unwrap();
+    let second = p.collect_deposit(c.route(), false, 0).unwrap();
     let calls = f.0.lock().unwrap().requests.len();
     let mut unrelated = tx(&j, 200, vec![], vec![]);
     unrelated.at = 500;
     unrelated.evidence = vec![PrivateBytes::new(b"unrelated accepted command".to_vec()).unwrap()];
     j.commit(unrelated).unwrap();
-    assert!(first.complete(&mut j).unwrap() == Outcome::Settled);
+    assert!(first.complete(&mut j, &c).unwrap() == Outcome::Settled);
     assert_eq!(j.transactions().last().unwrap().at, 500);
     assert_eq!(j.transactions().last().unwrap().inputs[0].observed_at, 100);
     let state = j.state().unwrap().clone();
     let head = j.head();
-    assert!(second.complete(&mut j).unwrap() == Outcome::Settled);
+    assert!(second.complete(&mut j, &c).unwrap() == Outcome::Settled);
     assert_eq!(j.head(), head);
     assert_eq!(j.state().unwrap(), &state);
     assert_eq!(f.0.lock().unwrap().requests.len(), calls);
@@ -1031,8 +1057,8 @@ pub(crate) fn retain_at<B: Backend, P: Protection>(
     rpc.attempt = attempt;
     rpc.contract = Some(contract);
 }
-#[cfg(feature = "local-fixture")]
 impl Fake {
+    #[cfg(feature = "local-fixture")]
     pub(crate) fn time(&self, at: u64) {
         self.0.lock().unwrap().at = at;
     }

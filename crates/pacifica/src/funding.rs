@@ -23,6 +23,8 @@ const MAGIC: &[u8] = b"CINDER-PACIFICA-FUNDING-1\0";
 pub mod chain;
 /// Explicit transaction-linked, zero-fee testnet deposit confirmation policy.
 pub mod demo;
+/// Explicit new-history exact-batch ingress; never an implicit legacy migration.
+pub mod escrow;
 /// Strict documented setup/transfer wire parsing; not a financial certificate.
 pub mod evidence;
 pub mod recovery;
@@ -97,6 +99,8 @@ pub enum Rail {
     Return,
     /// P15 authorized payout to the registered customer's token account.
     Payout,
+    /// Full original owner escrow batch to the immutable broker destination.
+    Sweep,
 }
 /// Exact P15 public-counter preconditions and a chain slot deadline. Slots are
 /// never compared with injected millisecond time or native causal cuts.
@@ -131,6 +135,8 @@ pub struct Setup {
 /// if the opaque UUID/operation hash were ever to collide.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sweep: Option<chain::Escrow>,
     rail: Rail,
     attempt: Vec<u8>,
     abstract_action: Vec<u8>,
@@ -151,6 +157,10 @@ impl std::fmt::Debug for Plan {
     }
 }
 impl Plan {
+    /// Original public escrow identities, present only for a v2 Sweep contract.
+    pub fn sweep(&self) -> Option<&chain::Escrow> {
+        self.sweep.as_ref()
+    }
     /// Exact physical rail.
     pub fn rail(&self) -> Rail {
         self.rail
@@ -260,15 +270,18 @@ impl ChainAction {
     pub fn encode(&self) -> Result<PrivateBytes, Error> {
         let r = &self.route;
         let p = &self.plan;
-        let body = json!({"schema":"cinder-vault-funding-v1", "rail":p.rail,
+        let mut body = json!({"schema":if p.rail==Rail::Sweep {"cinder-vault-funding-v2"} else {"cinder-vault-funding-v1"}, "rail":p.rail,
             "network":self.network,"program":r.program,"domain":r.domain,"pool":r.pool,
             "config":r.config,"vault":r.vault,"mint":r.mint,"funds":r.funds,
             "broker":r.broker,"broker_tokens":r.broker_tokens,"decimals":r.decimals,
             "venue_program":r.venue_program,"venue_vault":r.venue_vault,
-            "epoch":p.epoch.to_string(),"operation":p.operation,"customer":if p.rail==Rail::Payout {p.customer} else {[0;32]},
+            "epoch":p.epoch.to_string(),"operation":p.operation,"customer":if matches!(p.rail,Rail::Payout|Rail::Sweep) {p.customer} else {[0;32]},
             "amount":p.gross.to_string(),"sequence":p.counters.sequence.to_string(),
             "paid":p.counters.paid.to_string(),"recipient_tokens":p.counters.recipient_tokens,
             "expires_at_slot":p.counters.expires_at_slot.to_string()});
+        if let Some(sweep) = &p.sweep {
+            body["sweep"] = serde_json::to_value(sweep).map_err(|_| Error::Codec)?;
+        }
         Ok(PrivateBytes::new(
             serde_json::to_vec(&body).map_err(|_| Error::Codec)?,
         )?)
@@ -372,10 +385,13 @@ impl std::fmt::Debug for WithdrawalCompletion {
 }
 #[derive(Serialize, Deserialize)]
 enum Record {
+    Ingress {
+        raw: Vec<u8>,
+    },
     Bind,
     Setup(Setup),
     DemoSetup(setup::Qualification),
-    Plan(Plan),
+    Plan(Box<Plan>),
     Chain {
         attempt: Vec<u8>,
         signature: Vec<u8>,
@@ -473,6 +489,7 @@ pub struct FundingNeed {
 /// Separately scoped owner-directed withdrawal signer and physical funds controller.
 /// Trading Gateway is used only for its common budget/fencing, not its key.
 pub struct Controller {
+    escrow: Option<escrow::Routing>,
     profile: Profile,
     route: Route,
     key: SigningKey,
@@ -511,6 +528,21 @@ impl Controller {
         let venue_usable = available(Location::Venue)?;
         let broker_usable = available(Location::Broker)?;
         let mut pending_ingress = 0_u64;
+        for e in state.escrows().iter().filter(|e| {
+            matches!(
+                e.status,
+                cinder_journal::escrow::Status::Prepared | cinder_journal::escrow::Status::Exposed
+            ) || e.status == cinder_journal::escrow::Status::Funding
+                && e.returning.is_none()
+                && (e.funding.is_none()
+                    || state.funds().iter().any(|o| {
+                        Some(o.intent.request) == e.funding && !o.terminal && o.attempt.is_none()
+                    }))
+        }) {
+            pending_ingress = pending_ingress
+                .checked_add(u64::try_from(e.batch.amount.atoms()).map_err(|_| Error::Limit)?)
+                .ok_or(Error::Limit)?;
+        }
         // Prepared mandates already reserve physical liquidity, even before the
         // chain-specific plan is exposed. Count that allocation exactly once.
         for m in state.ledger().movements().iter().filter(|m| {
@@ -638,6 +670,7 @@ impl Controller {
         h.update(profile.commitment()?);
         h.update(serde_json::to_vec(&route).map_err(|_| Error::Codec)?);
         Ok(Self {
+            escrow: None,
             profile,
             route,
             key,
@@ -783,7 +816,7 @@ impl Controller {
                                 return Err(Error::Qualification);
                             }
                         }
-                        Record::Plan(plan) => result.plans.push(plan),
+                        Record::Plan(plan) => result.plans.push(*plan),
                         Record::Chain {
                             attempt,
                             signature,
@@ -1007,6 +1040,7 @@ impl Controller {
             .find(|b| b.account == dispatch.attempt.request.account.bytes())
             .ok_or(Error::Qualification)?;
         let (source, destination) = match rail {
+            Rail::Sweep => return Err(Error::Qualification),
             Rail::Release => (Location::Vault, Destination::Location(Location::Broker)),
             Rail::Deposit => (Location::Broker, Destination::Location(Location::Venue)),
             Rail::Withdraw => (Location::Venue, Destination::Location(Location::Broker)),
@@ -1053,6 +1087,7 @@ impl Controller {
             return Err(Error::Qualification);
         }
         Ok(Plan {
+            sweep: None,
             rail,
             attempt: a.key.encode(),
             abstract_action: a.message.as_bytes().to_vec(),
@@ -1100,7 +1135,12 @@ impl Controller {
         dispatch: Dispatch,
         plan: Plan,
     ) -> Result<ChainAction, Error> {
-        let mut tx = self.tx(j, dispatch.commit, dispatch.at, Record::Plan(plan.clone()))?;
+        let mut tx = self.tx(
+            j,
+            dispatch.commit,
+            dispatch.at,
+            Record::Plan(Box::new(plan.clone())),
+        )?;
         tx.controls.push(Control::Expose(dispatch.attempt));
         if plan.rail == Rail::Deposit {
             tx.controls
@@ -1171,7 +1211,7 @@ impl Controller {
             &self.profile,
             self.route.withdrawal_cost,
         )?;
-        let retained = self.evidence(Record::Plan(plan.clone()))?;
+        let retained = self.evidence(Record::Plan(Box::new(plan.clone())))?;
         tx.evidence.push(retained.clone());
         tx.controls.push(Control::Expose(dispatch.attempt));
         exposure(j.commit(tx)?, &plan)?;
@@ -1469,10 +1509,8 @@ impl Controller {
             return Err(Error::Qualification);
         }
         let history = self.history(j, at)?;
-        j.state()?
-            .qualified_funds_delivery(attempt)
-            .map_err(|_| Error::Qualification)?;
-        if matches!(p.rail, Rail::Release | Rail::Deposit)
+        self.qualified_chain_delivery(j.state()?, attempt, p.rail)?;
+        if matches!(p.rail, Rail::Release | Rail::Deposit | Rail::Sweep)
             && if let Some(ref demo) = p.demo_setup {
                 !self.demo_setup_current(&history, demo, at, true)
             } else {
@@ -1531,9 +1569,7 @@ impl Controller {
             return Err(Error::Qualification);
         }
         checked(result)?;
-        j.verified_state()?
-            .qualified_funds_delivery(wire.attempt)
-            .map_err(|_| Error::Qualification)?;
+        self.qualified_chain_delivery(j.verified_state()?, wire.attempt, p.rail)?;
         Ok(ChainDelivery {
             wire: wire.wire,
             network: action.network,
@@ -1561,6 +1597,11 @@ impl Controller {
             return Err(Error::Qualification);
         }
         let plan = plans[0];
+        // An unknown exposed escrow capability cannot use the legacy funds
+        // zero-movement/unsent certificate as fabricated sweep failure evidence.
+        if plan.rail == Rail::Sweep {
+            return self.close_unsent_escrow(j, id, at, plan, &history);
+        }
         if at < plan.expires_at || history.wires.iter().any(|(a, _, _)| *a == plan.attempt) {
             return Ok(false);
         }
@@ -1709,6 +1750,9 @@ impl Controller {
         r: ChainReceipt,
     ) -> Result<(), Error> {
         let plan = self.existing(j, r.attempt, at)?;
+        if plan.rail == Rail::Sweep {
+            return self.observe_sweep(j, id, at, plan, r);
+        }
         if plan.rail == Rail::Withdraw {
             return Err(Error::Qualification);
         }
@@ -1741,7 +1785,7 @@ impl Controller {
                 self.route.vault,
                 plan.counters.recipient_tokens,
             ),
-            Rail::Withdraw => return Err(Error::Qualification),
+            Rail::Withdraw | Rail::Sweep => return Err(Error::Qualification),
         };
         if r.network != self.profile.config.domain.network.bytes()
             || r.mint != self.route.mint
@@ -1844,6 +1888,18 @@ impl Controller {
                 .any(|o| o.attempt == Some(r.attempt) && o.terminal)
             {
                 self.terminal(&mut tx, &plan, r.amount, receipts, coverage)?;
+                if plan.rail == Rail::Return && r.succeeded {
+                    for entry in j
+                        .state()?
+                        .escrows()
+                        .iter()
+                        .filter(|e| e.returning == Some(r.attempt.request))
+                    {
+                        tx.controls.push(Control::Escrow(
+                            cinder_journal::escrow::Action::FinishReturn(entry.batch.request),
+                        ));
+                    }
+                }
             }
         }
         let committed = j.commit(tx)?;
@@ -1970,6 +2026,17 @@ impl Controller {
                             .iter()
                             .any(|(a, _, ok)| a == &p.attempt && !ok)
                 });
+            for entry in j
+                .state()?
+                .escrows()
+                .iter()
+                .filter(|e| e.funding == Some(c.attempt.request))
+            {
+                tx.controls
+                    .push(Control::Escrow(cinder_journal::escrow::Action::Finish(
+                        entry.batch.request,
+                    )));
+            }
             tx.controls
                 .push(Control::Funds(funds::Action::NativeCreditReady(
                     others_final && self.ready(&history, at),

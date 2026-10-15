@@ -133,6 +133,17 @@ test('read page decoding distinguishes unknown, explicit zero and settled fundin
   const bad=unknown.slice();bad[44]=2;assert.throws(()=>decodeResponse(page([bad])));
   wire.fill(0);assert.deepEqual(parsed.revision,id(11));assert.deepEqual(b.market,id(7));
 });
+test('ingress rows distinguish inventory, funding restriction and credited history with strict semantics',()=>{
+  const number=(n:bigint,width:number)=>Buffer.from(n.toString(16).padStart(width*2,'0'),'hex');
+  const row=(status:number,recognized:boolean,restricted:bigint)=>Buffer.concat([Buffer.from(id(10)),Buffer.from(id(20)),Buffer.from([status]),number(100n,16),Buffer.from([Number(recognized)]),number(restricted,16)]);
+  const page=(value:Buffer)=>new Uint8Array(Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x01'),Buffer.from([3,1,10]),Buffer.from(id(11)),Buffer.alloc(40),number(124n,8),number(1n,8),number(BigInt(value.length),4),value]));
+  for(const [status,name,recognized,restricted] of [[0,'pending',false,0n],[4,'refunded',false,0n],[5,'funding',true,100n],[6,'credited',true,0n],[7,'returned',true,0n]] as const){
+    const parsed=decodeResponse(page(row(status,recognized,restricted)));assert(parsed.kind==='page'&&parsed.family==='ingress');
+    const r=parsed.rows[0];assert(r.kind==='ingress');assert.equal(r.status,name);assert.equal(r.restricted,restricted);assert.equal(r.recognized,recognized);
+  }
+  for(const value of [row(7,false,0n),row(0,true,0n),row(4,false,1n),row(5,false,100n),row(5,true,101n),row(6,true,1n)])assert.throws(()=>decodeResponse(page(value)));
+  const valid=page(row(5,true,100n));for(let n=0;n<valid.length;n++)assert.throws(()=>decodeResponse(valid.slice(0,n)));
+});
 test('subscription return before first next closes both semantic and transport iterators',async()=>{
   let started=false,closed=0;
   const transport=privateIterable(async function*(){started=true;yield new Uint8Array(1);},()=>{closed++;});

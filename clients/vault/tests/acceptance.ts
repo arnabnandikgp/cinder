@@ -38,6 +38,7 @@ import {
   vaultAddresses,
 } from "../src/index.ts";
 import { fundingInstruction, verifyFundingWire } from "../src/funding.ts";
+import {depositEscrowInstruction,openVenueEscrowInstruction,registerVenueRouteInstruction,venueEscrowAddresses,escrowBatchAddress} from '../src/escrow.ts';
 import {
   PrivateClient,
   type Command,
@@ -164,6 +165,7 @@ async function stop(child: ChildProcessWithoutNullStreams | undefined) {
 export async function runAcceptance(
   e: Environment,
   carrier: "http" | "websocket",
+  escrow = false,
 ) {
   const { program, connection, governance, programData } = e,
     owner = Keypair.generate(),
@@ -263,7 +265,13 @@ export async function runAcceptance(
     [],
     setupConfirm,
   );
+  const escrowContext={domain,pool,mint,config,owner:owner.publicKey};
+  if(escrow){
+    await e.send(await registerVenueRouteInstruction(program,escrowContext,governance.publicKey,1n,tag(4)),[governance]);
+    await e.send(await openVenueEscrowInstruction(program,escrowContext),[owner]);
+  }
   const binding = {
+    ...(escrow?{escrow:{route:bytes(venueEscrowAddresses(program.programId,config,owner.publicKey).route),venue:bytes(tag(4))}}:{}),
     account: broker.publicKey.toBase58(),
     broker_seed: bytes(broker.secretKey.subarray(0, 32)),
     keys: [],
@@ -403,7 +411,7 @@ export async function runAcceptance(
     { filled: number; complete: boolean; cuts: number[] }
   >();
   const boundary = async (label: string) => {
-    process.stdout.write(`P22 ${carrier}: ${label}\n`);
+    process.stdout.write(`${escrow?'P23C':'P22'} ${carrier}: ${label}\n`);
     const got = (await ask({ op: "oracle" })) as Oracle;
     assert.equal(
       (got as unknown as { error?: string }).error,
@@ -517,7 +525,7 @@ export async function runAcceptance(
   // is deliberately no native SBF deployment or HTTP action in this offline run.
   const chain = async (
     id: number,
-    rail: "Release" | "Deposit" | "Return" | "Payout",
+    rail: "Release" | "Deposit" | "Return" | "Payout" | "Sweep",
     amount: bigint,
     sequence = 0,
     paid = 0,
@@ -593,11 +601,11 @@ export async function runAcceptance(
             : bytes(program.programId),
         mint: bytes(mint),
         source:
-          rail === "Return" || rail === "Deposit"
+          rail==='Sweep'?bytes(venueEscrowAddresses(program.programId,config,owner.publicKey).escrowTokens):rail === "Return" || rail === "Deposit"
             ? bytes(brokerTokens)
             : bytes(vault),
         destination:
-          rail === "Release"
+          rail === "Release" || rail==='Sweep'
             ? bytes(brokerTokens)
             : rail === "Deposit"
               ? bytes(venueVault)
@@ -609,7 +617,7 @@ export async function runAcceptance(
         epoch: rail === "Deposit" ? null : Number(auth.epoch),
         config: rail === "Deposit" ? null : bytes(config),
         paid: rail === "Payout" ? paid + Number(amount) : null,
-        sequence: rail === "Release" || rail === "Payout" ? sequence + 1 : null,
+        sequence: rail === "Release" || rail === "Payout" || rail==='Sweep' ? sequence + 1 : null,
       };
     if (rail !== "Deposit") {
       const onchain = await program.account.movementReceipt.fetch(
@@ -711,7 +719,7 @@ export async function runAcceptance(
     await restart();
     await boundary("empty customer, explicit house");
     const deposit = movement(domain, 1n, tag(80), (1n << 64n) - 1n);
-    const ix = await program.methods
+    const ix = escrow?await depositEscrowInstruction(program,escrowContext,{epoch:1n,operation:tag(80),expiresAtSlot:(1n<<64n)-1n},1000n,source):await program.methods
       .deposit(deposit, u64(1000n))
       .accountsStrict({
         config,
@@ -745,7 +753,7 @@ export async function runAcceptance(
       ).value.err,
       null,
     );
-    const deposited = await program.account.movementReceipt.fetch(
+    const deposited = escrow?await program.account.escrowBatch.fetch(escrowBatchAddress(program.programId,venueEscrowAddresses(program.programId,config,owner.publicKey).escrow,tag(80))):await program.account.movementReceipt.fetch(
       depositReceiptAddress(
         program.programId,
         config,
@@ -754,7 +762,7 @@ export async function runAcceptance(
       ),
     );
     assert.equal(deposited.amount.toString(), "1000");
-    const credit = {
+    const credit = escrow?{op:'escrow-deposit',operation:80,wire:bytes(tx.serialize()),slot:await connection.getSlot('finalized')}:{
       op: "deposit",
       amount: 1000,
       signature: bytes(tx.signature!),
@@ -762,6 +770,17 @@ export async function runAcceptance(
     };
     await ask(credit);
     await ask(credit);
+    const ingress=async(status:string)=>{
+      const page=await api.request(request(readId++,{kind:'read',query:{family:'ingress',limit:64}}));
+      assert(page.kind==='page'&&page.family==='ingress');assert.equal(page.rows.length,1);
+      const row=page.rows[0];assert(row.kind==='ingress');assert.equal(row.status,status);assert.equal(row.amount,1000n);
+      return row;
+    };
+    if(escrow){
+      await boundary('pending escrow is not spendable or a pool claim');await ingress('pending');
+      await chain(80,'Sweep',1000n);brokerAmount=1000n;held=1000n;c=flat(1000n);
+      await boundary('real SBF full-batch handoff credits and restricts once');await ingress('funding');
+    }else{
     c = flat(1000n);
     vaultAmount = 1000n;
     await boundary("deposit credited once");
@@ -769,21 +788,24 @@ export async function runAcceptance(
     vaultAmount -= 60n;
     brokerAmount += 60n;
     await boundary("actual SBF release, not notional");
-    const depositSig = await chain(82, "Deposit", 60n);
-    brokerAmount -= 60n;
-    transit += 60n;
+    }
+    const working=escrow?1000n:60n;
+    const depositSig = await chain(82, "Deposit", working);
+    brokerAmount -= working;
+    transit += working;
     await boundary("native debit remains transit");
     await ask({
       op: "credit",
       id: 82,
       signature: bytes(depositSig),
       event: 90,
-      amount: 30,
+      amount: Number(working/2n),
       final_credit: false,
     });
-    transit -= 30n;
-    v.cash = String(BigInt(v.cash) + 30n);
+    transit -= working/2n;
+    v.cash = String(BigInt(v.cash) + working/2n);
     await boundary("partial native credit");
+    if(escrow)assert.equal((await ingress('funding')).restricted,1000n);
     const order: Command = {
       kind: "order",
       market: tag(7),
@@ -806,11 +828,12 @@ export async function runAcceptance(
       id: 82,
       signature: bytes(depositSig),
       event: 91,
-      amount: 30,
+      amount: Number(working/2n),
       final_credit: true,
     });
-    transit -= 30n;
-    v.cash = String(BigInt(v.cash) + 30n);
+    transit -= working/2n;
+    v.cash = String(BigInt(v.cash) + working/2n);
+    if(escrow){held=0n;await ingress('credited');}
     await reconcile(92);
     await boundary("complete native credit");
     const placed = await api.request(request(41, order));
@@ -851,7 +874,7 @@ export async function runAcceptance(
     await streamedPosition(0n, 0n);
     await trade(41, 100, 1n, 100n, 1n, 0n);
     c = { ...c, cash: "999", quantity: "1", basis: "100" };
-    v = { ...v, cash: "1059", quantity: "1", basis: "100" };
+    v = { ...v, cash: String(BigInt(v.cash)-1n), quantity: "1", basis: "100" };
     expectedOrders.set(41, { filled: 1, complete: false, cuts: [100] });
     await boundary("partial actual attributed fill");
     await streamedPosition(1n, 100n);
@@ -867,7 +890,7 @@ export async function runAcceptance(
     await boundary("cancel keeps unresolved fill holds");
     await trade(41, 101, 1n, 100n, 1n, 0n);
     c = { ...c, cash: "998", quantity: "2", basis: "200" };
-    v = { ...v, cash: "1058", quantity: "2", basis: "200" };
+    v = { ...v, cash: String(BigInt(v.cash)-1n), quantity: "2", basis: "200" };
     expectedOrders.set(41, { filled: 2, complete: false, cuts: [100, 101] });
     await boundary("late fill after cancellation");
     await streamedPosition(2n, 200n);
@@ -904,7 +927,7 @@ export async function runAcceptance(
       undefined,
     );
     c.cash = "994";
-    v.cash = "1054";
+    v.cash = String(BigInt(v.cash)-4n);
     await reconcile(130);
     await boundary("funding recognized and settled once");
     const close: Command = {
@@ -921,7 +944,7 @@ export async function runAcceptance(
     await boundary("bounded private close");
     await trade(43, 140, -2n, 110n, 2n, 20n);
     c = flat(1012n);
-    v = flat(1072n);
+    v = flat(BigInt(v.cash)+18n);
     expectedOrders.set(43, { filled: -2, complete: false, cuts: [140] });
     await boundary("close realizes perp PnL, not trade notional");
     await ask({
@@ -960,7 +983,8 @@ export async function runAcceptance(
       "inaccessible funds allowed payout",
     );
     await boundary("backed claim, insufficient local payout cash");
-    await ask({ op: "withdraw", id: 83, amount: 72 });
+    const returning=escrow?1012n:72n;
+    await ask({ op: "withdraw", id: 83, amount: Number(returning) });
     // Fake venue settles its native ledger; mint is fixture liquidity, NOT a
     // Pacifica bridge receipt. Actual return/payout then consume those tokens.
     const paymentBlock = await connection.getLatestBlockhash();
@@ -969,7 +993,7 @@ export async function runAcceptance(
       feePayer: governance.publicKey,
       ...paymentBlock,
     }).add(
-      createMintToInstruction(mint, brokerTokens, governance.publicKey, 72n),
+      createMintToInstruction(mint, brokerTokens, governance.publicKey, returning),
     );
     paymentTx.sign(governance);
     const payment = await connection.sendRawTransaction(paymentTx.serialize(), {
@@ -992,15 +1016,15 @@ export async function runAcceptance(
     await ask({
       op: "withdrawal",
       id: 83,
-      amount: 72,
+      amount: Number(returning),
       signature: bytes(paymentTx.signature!),
       slot: await connection.getSlot("finalized"),
     });
     v.cash = "1000";
-    brokerAmount = 72n;
+    brokerAmount = returning;
     await reconcile(160);
     await boundary("unknown withdrawal reconciles to original UUID");
-    await chain(84, "Return", 72n);
+    await chain(84, "Return", returning);
     brokerAmount = 0n;
     vaultAmount = 1012n;
     await boundary("actual SBF return without customer recredit");

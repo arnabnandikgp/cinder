@@ -261,6 +261,17 @@ impl Controller {
             }
         }
         let mut funding_sequence = 0_u64;
+        if j.state()
+            .map_err(|e| BindingError::Adapter(Error::Journal(e)))?
+            .escrows()
+            .iter()
+            .any(|e| {
+                e.handoff_slot
+                    .is_some_and(|slot| slot > observed.finalized_slot)
+            })
+        {
+            return Err(BindingError::Mismatch);
+        }
         let mut paid = vec![(0_u64, 0_u64); r.beneficiaries.len()];
         let mut seen = Vec::new();
         for plan in &history.plans {
@@ -276,7 +287,7 @@ impl Controller {
                 continue;
             }
             match plan.rail {
-                Rail::Release => {
+                Rail::Release | Rail::Sweep => {
                     if plan.counters.sequence != funding_sequence {
                         return Err(BindingError::Mismatch);
                     }

@@ -1,8 +1,9 @@
 # ADR 0030 — Venue-directed escrow ingress and shared payout protection
 
 Date: 2026-10-15. Status: user-approved product direction; P23B implements the
-local program/client boundary on its dependent branch. P23C's journal join,
-deployment, migration and live qualification are not completed by this ADR.
+local program/client boundary on its dependent branch. P23C adds the offline
+journal/controller/Runtime/SDK join. Deployment, migration and live qualification
+are not completed by this ADR; exact checks and review state are in TRACKER.
 Owns [P23A–P23C](../implementation/PLAN.md#p23a). Extends B04/B05 without changing
 the individual-entitlement, pooled-execution, RF1/RF2 or operator-assisted recovery
 contracts in [BASELINE](../implementation/BASELINE.md).
@@ -143,8 +144,8 @@ the shared gross release cap and funding sequence. Refund checks the fixed domai
 but deliberately not the current epoch, deadline or mode. Only sweep increases
 legacy `config.deposited`/`customer.deposited` attribution and shared release
 counters; pending deposit/refund change neither attribution nor paid counters.
-These are public custody totals, not spendable ledger credits. P23C still owns
-qualified finalized recognition, native-credit restrictions and journal semantics.
+These are public custody totals, not spendable ledger credits. P23C's journal
+owns qualified finalized recognition and native-credit restrictions below.
 
 The three new layouts and appended error codes leave all existing layouts,
 instruction constructors and receipt kinds unchanged. This is a local ABI only:
@@ -210,6 +211,76 @@ exposure. A possibly exposed sweep that races with cancellation remains uncertai
 until qualified original chain evidence determines its outcome. Never treat a
 missing transaction or UI timeout as proof that refund/sweep failed or may be
 resigned. Late facts remain recordable during freezes.
+
+### P23C journal and runtime contract
+
+`Controller::new_escrow` is an explicit new-history composition, bound to the
+canonical route and actual configured venue. It cannot reinterpret a legacy or
+demo controller's accepted history. Journal engine revision **24** appends
+`Control::Escrow` (tag 13) and `AttemptKind::Escrow` (tag 6); transaction envelope
+version 8 remains unchanged. Older engine histories reject without migration.
+The additional chain contract is `cinder-vault-funding-v2`, with exact original
+batch/PDA/deadline metadata and a 96-byte, amount-free sweep instruction. Legacy
+rails keep their v1 contract and cannot borrow sweep fields or authority.
+
+`journal::escrow::Entry` is replay-derived lifecycle metadata, not another balance
+book. Pending inventory consumes its operation identity but adds no ledger cash,
+active financial hold or recovery claim. Qualified handoff atomically applies the
+existing kernel receipt and its restrictions within one control candidate. Its
+economic key binds the immutable route and batch, independent of lookup/commit
+IDs. The actual finalized Solana handoff slot is retained; it is not a native
+venue global causal frontier.
+
+For a gross deposit `d`, let `c_before` and `c_after` be that customer's cash around
+the kernel receipt. The retained restrictions are:
+
+```text
+customer restriction = max(c_after, 0) - max(c_before, 0)
+house restriction    = d - customer restriction
+broker restriction   = d
+```
+
+The house residual includes both repayment of unabsorbed customer debt and
+replenishment after prior absorption. These are restrictions, not extra postings;
+customer plus house restriction equals `d`. The original kernel receipt remains
+the sole owner of debt/recovery accounting. Accepting the exact full native
+funding intent replaces the broker restriction with the existing funds hold;
+customer/house restrictions persist until strong, full, zero-fee native completion.
+Partial credit, a setup-ready flag or weaker demo assurance cannot release them.
+Unsolved native credit keeps funding pending and blocks new native risk.
+
+Original intent precedes counter reads/signing. Fresh chain/code/token/batch
+checks run outside the Runtime journal writer; their result rejoins and rechecks
+the original authority/state before signature delivery. The original signed wire
+is persisted before send. A lost reply is reconciled with that wire, never signed
+again. A never-exposed `Prepared` sweep that reaches its dispatch deadline is
+durably cancelled to the existing terminal/refundable state, before normal
+admission/freshness checks. The Runtime repeats this check after pre-exposure
+RPC work; cancellation neither changes balances nor authorizes a replacement
+attempt. Exposed attempts never take that cancellation path.
+Expiry can close an exposed-but-unsent plan only when the trusted controller
+checks the independently verified current head and proves no signed wire was
+retained; expiry with a retained wire does not establish zero execution. Exposed
+reconciliation has priority over queued new work and continues during freeze.
+Finalized original owner refunds are recordable before or after inventory discovery.
+
+Fenced recovery can recall a swept batch still at the broker, using the existing
+Broker → Vault return rail. If native funding was accepted, it must first be
+terminal with no effects; an exposed attempt additionally needs strong no-later-
+execution closure. Unknown or partially credited native funding cannot use this
+shortcut. A full qualified return releases restrictions and marks `returned`,
+without adding another deposit or incrementing customer-paid counters. The same
+funding sequence and ordinary/recovery payout counters remain authoritative.
+Recovery custody observations cannot predate a retained handoff's finalized slot.
+
+The confidential Runtime configuration selects this mode explicitly with `escrow`.
+Existing demo/financial live manifests reject activation of the new composition:
+the offline controller/Runtime tests are not a new live release authorization.
+Joined fixtures exercise actual SDK/carriers, protected journal and compiled SBF;
+the venue/native observations remain explicit test doubles. Static configured
+owner deposit locators are reused; automatic onboarding/discovery and a backend-
+connected terminal are not introduced here. See [private ingress reads](private-read-contract.md)
+and the [P23C handoff](../implementation/TRACKER.md).
 
 ## Ordinary payouts and recovery
 

@@ -144,6 +144,8 @@ pub enum AttemptKind {
     Order,
     /// Cancel only the bound original order.
     Cancel,
+    /// Exact-batch escrow handoff before ordinary native funding.
+    Escrow,
 }
 impl fmt::Debug for Attempt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -154,6 +156,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Qualified exact-batch ingress in this same journal and ledger.
+    Escrow(crate::escrow::Action),
     /// Operator-qualified recovery-only cutover and irreversible dispatch seal.
     Recovery(crate::recovery::Action),
     /// Trusted source qualification for one exact retained input; not an admin reset.
@@ -287,6 +291,7 @@ pub struct State {
     pub(crate) restoration_limit: Option<(PolicyVersion, QuoteAtoms)>,
     pub(crate) selections: Vec<crate::risk::Selection>,
     pub(crate) funds: Vec<crate::funds::Operation>,
+    pub(crate) escrows: Vec<crate::escrow::Entry>,
     pub(crate) funds_observations: Vec<crate::funds::Observation>,
     pub(crate) funds_receipts: Vec<(EventKey, Option<u64>)>,
     pub(crate) frozen: bool,
@@ -333,6 +338,7 @@ impl State {
             restoration_limit: None,
             selections: Vec::new(),
             funds: Vec::new(),
+            escrows: Vec::new(),
             funds_observations: Vec::new(),
             funds_receipts: Vec::new(),
             frozen: false,
@@ -366,6 +372,10 @@ impl State {
     /// Funding setup/credit fence for native risk; receipts and cleanup remain separate.
     pub fn native_funding_ready(&self) -> bool {
         self.native_funding_ready
+            && !self
+                .escrows
+                .iter()
+                .any(|e| e.status == crate::escrow::Status::Funding)
     }
     /// Recheck the current financial/authority cut before the original funds
     /// capability is delivered. This grants no retry/resend authorization.
@@ -481,6 +491,7 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Escrow(action) => self.escrow_action(action)?,
             Control::Recovery(action) => self.recovery_action(action)?,
             Control::ResolveRaw(resolution) => self.resolve_raw(resolution)?,
             Control::Restoration(action) => self.restoration_action(action)?,
@@ -525,6 +536,9 @@ impl State {
             }
             Control::Release(request) => {
                 self.request(*request)?;
+                if self.escrows.iter().any(|e| e.batch.request == *request) {
+                    return Err(ControlError::Unqualified);
+                }
                 if self.funds.iter().any(|o| o.intent.request == *request) {
                     return Err(ControlError::Unqualified);
                 }
@@ -552,6 +566,7 @@ impl State {
                 expires_at,
             } => {
                 if self.orders.iter().any(|o| o.intent.request == key.request)
+                    || self.escrows.iter().any(|e| e.batch.request == key.request)
                     || self.funds.iter().any(|o| o.intent.request == key.request)
                     || self.attempts.iter().any(|a| a.key.request == key.request)
                 {
@@ -575,6 +590,7 @@ impl State {
                 self.close_exposure(attempt)?;
                 self.restoration_exposure(attempt)?;
                 self.funds_exposure(attempt)?;
+                self.escrow_exposure(attempt)?;
                 self.exposure_qualified(attempt)?;
                 let a = self
                     .attempts
@@ -596,11 +612,12 @@ impl State {
                 }
                 a.possibly_exposed = true;
                 a.exposed_at = Some(self.now);
+                self.escrow_exposed(*key);
             }
         }
         Ok(())
     }
-    fn exposure_qualified(&self, attempt: &Attempt) -> Result<(), ControlError> {
+    pub(crate) fn exposure_qualified(&self, attempt: &Attempt) -> Result<(), ControlError> {
         if self.recovery_sealed() {
             return Err(ControlError::Unqualified);
         }
@@ -614,7 +631,7 @@ impl State {
         if matches!(
             attempt.kind,
             AttemptKind::Order | AttemptKind::Generic | AttemptKind::Restoration
-        ) && !self.native_funding_ready
+        ) && !self.native_funding_ready()
         {
             return Err(ControlError::Unqualified);
         }
@@ -660,7 +677,13 @@ impl State {
             .ledger
             .observations()
             .len()
-            .saturating_add(tx.inputs.len());
+            .saturating_add(tx.inputs.len())
+            .saturating_add(
+                tx.controls
+                    .iter()
+                    .filter(|c| matches!(c, Control::Escrow(crate::escrow::Action::Handoff { .. })))
+                    .count(),
+            );
         let cells = observations.saturating_mul(
             self.config
                 .markets
@@ -833,6 +856,7 @@ impl State {
                             .and_then(|()| candidate.close_exposure(a))
                             .and_then(|()| candidate.restoration_exposure(a))
                             .and_then(|()| candidate.funds_exposure(a))
+                            .and_then(|()| candidate.escrow_exposure(a))
                             .and_then(|()| candidate.exposure_qualified(a))
                             .err();
                         if controls.is_some() {

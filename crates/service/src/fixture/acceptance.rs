@@ -21,6 +21,12 @@ use serde_json::{Value, json};
 #[serde(tag = "op", rename_all = "kebab-case", deny_unknown_fields)]
 #[allow(missing_docs)] // Test message fields mirror the documented controller ports.
 pub enum Command {
+    /// Actual original owner wire and SBF batch, qualified by the private harness.
+    EscrowDeposit {
+        operation: u8,
+        wire: Vec<u8>,
+        slot: u64,
+    },
     /// Qualified local SBF deposit receipt, not a synthetic opening balance.
     Deposit {
         amount: u64,
@@ -228,7 +234,14 @@ impl Native {
         amount: u64,
         at: u64,
     ) -> Result<(), Error> {
+        if rail == Rail::Sweep {
+            return self
+                .controller
+                .prepare_escrow_sweep(j, recovery::commit_id()?, at, attempt(id)?, at + 60_000)
+                .map_err(|_| Error);
+        }
         let (source, destination) = match rail {
+            Rail::Sweep => return Err(Error),
             Rail::Release => (Location::Vault, Destination::Location(Location::Broker)),
             Rail::Deposit => (Location::Broker, Destination::Location(Location::Venue)),
             Rail::Withdraw => (Location::Venue, Destination::Location(Location::Broker)),
@@ -253,14 +266,33 @@ impl Native {
                 authority_epoch: 1,
                 expires_at: at + 60_000,
             };
-            tx.controls.push(Control::Funds(funds::Action::Accept {
-                approval: orders::Approval {
-                    account: user(),
-                    intent_hash: intent.digest().map_err(|_| Error)?,
-                    authority_epoch: 1,
-                },
-                intent: Box::new(intent),
-            }));
+            let approval = orders::Approval {
+                account: user(),
+                intent_hash: intent.digest().map_err(|_| Error)?,
+                authority_epoch: 1,
+            };
+            if rail == Rail::Deposit && self.controller.escrow_routing().is_some() {
+                let entry = j
+                    .state()
+                    .map_err(|_| Error)?
+                    .escrows()
+                    .iter()
+                    .find(|e| {
+                        e.status == cinder_journal::escrow::Status::Funding && e.funding.is_none()
+                    })
+                    .ok_or(Error)?;
+                tx.controls
+                    .push(Control::Escrow(cinder_journal::escrow::Action::Fund {
+                        request: entry.batch.request,
+                        intent: Box::new(intent),
+                        approval,
+                    }));
+            } else {
+                tx.controls.push(Control::Funds(funds::Action::Accept {
+                    intent: Box::new(intent),
+                    approval,
+                }));
+            }
         }
         tx.controls.push(Control::Funds(funds::Action::Prepare {
             attempt: a,
@@ -309,6 +341,37 @@ impl Native {
     pub(super) fn control(&mut self, j: &mut Store, command: Command) -> Result<Value, Error> {
         let at = FixtureClock.now()?;
         match command {
+            Command::EscrowDeposit {
+                operation,
+                wire,
+                slot,
+            } => {
+                if slot == 0 {
+                    return Err(Error);
+                }
+                let deposit = funding::chain::inspect_escrow_deposit(
+                    self.controller.route(),
+                    config().domain.network.bytes(),
+                    user().bytes(),
+                    [operation; 32],
+                    &wire,
+                )
+                .map_err(|_| Error)?;
+                let t = deposit.target();
+                let s = t.sweep.as_ref().ok_or(Error)?;
+                let b = cinder_journal::escrow::Batch {
+                    request: attempt(operation)?.request,
+                    route: s.route,
+                    batch: s.batch,
+                    operation: [operation; 32],
+                    owner: t.customer,
+                    amount: cash(i128::from(t.amount)),
+                    epoch: t.epoch,
+                    expires_at_slot: s.expires_at_slot.parse().map_err(|_| Error)?,
+                    signature: t.verified.signature,
+                };
+                self.controller.observe_escrow_deposit(j,recovery::commit_id()?,at,b,PrivateBytes::new(b"actual signed local SBF escrow deposit; private harness qualifies batch state".to_vec()).map_err(|_|Error)?).map_err(|_|Error)?;
+            }
             Command::Deposit {
                 amount,
                 signature,
@@ -360,19 +423,17 @@ impl Native {
                 counters,
             } => {
                 self.prepare(j, id, rail, amount, at)?;
-                let action = self
-                    .controller
-                    .expose_chain(
-                        j,
-                        Dispatch {
-                            attempt: attempt(id)?,
-                            commit: recovery::commit_id()?,
-                            at,
-                        },
-                        rail,
-                        counters,
-                    )
-                    .map_err(|_| Error)?;
+                let dispatch = Dispatch {
+                    attempt: attempt(id)?,
+                    commit: recovery::commit_id()?,
+                    at,
+                };
+                let action = if rail == Rail::Sweep {
+                    self.controller.expose_escrow_sweep(j, dispatch, counters)
+                } else {
+                    self.controller.expose_chain(j, dispatch, rail, counters)
+                }
+                .map_err(|_| Error)?;
                 let contract = action.encode().map_err(|_| Error)?.as_bytes().to_vec();
                 self.pending.insert(id, action);
                 return Ok(json!({"contract":contract}));

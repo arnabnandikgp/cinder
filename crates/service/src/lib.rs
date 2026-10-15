@@ -16,6 +16,7 @@ pub mod customer_deposit;
 /// Governed one-time demo allocation; not a customer signature or live activation.
 pub mod demo_funding;
 pub mod egress;
+mod escrow_deposit;
 #[cfg(feature = "local-fixture")]
 pub mod fixture;
 /// Bounded native transfer capture with TLS terminating inside the enclave.

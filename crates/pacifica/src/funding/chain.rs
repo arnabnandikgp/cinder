@@ -80,6 +80,8 @@ pub struct Simulation {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Contract {
+    #[serde(default)]
+    sweep: Option<Escrow>,
     schema: String,
     rail: Rail,
     network: [u8; 32],
@@ -103,6 +105,46 @@ struct Contract {
     paid: String,
     recipient_tokens: [u8; 32],
     expires_at_slot: String,
+}
+/// Public original batch identities bound into the v2 exact sweep contract.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Escrow {
+    /// Immutable venue-route PDA.
+    pub route: [u8; 32],
+    /// Owner's canonical escrow PDA.
+    pub escrow: [u8; 32],
+    /// Canonical classic SPL escrow token account.
+    pub tokens: [u8; 32],
+    /// Permanent original batch PDA.
+    pub batch: [u8; 32],
+    /// Original owner's operation, not operator sweep operation.
+    pub operation: [u8; 32],
+    /// Original deposit's sweep deadline as an exact decimal slot.
+    pub expires_at_slot: String,
+}
+impl Escrow {
+    /// Canonical addresses only; program existence/state still needs qualification.
+    pub fn derive(
+        route: &super::Route,
+        owner: [u8; 32],
+        operation: [u8; 32],
+        expires_at_slot: u64,
+    ) -> Result<Self, Error> {
+        if owner == [0; 32] || operation == [0; 32] || expires_at_slot == 0 {
+            return Err(Error::Qualification);
+        }
+        let venue_route = pda(route.program, &[b"venue_route", &route.config])?;
+        let escrow = pda(route.program, &[b"venue_escrow", &venue_route, &owner])?;
+        Ok(Self {
+            route: venue_route,
+            escrow,
+            tokens: pda(route.program, &[b"escrow_tokens", &escrow])?,
+            batch: pda(route.program, &[b"escrow_batch", &escrow, &operation])?,
+            operation,
+            expires_at_slot: expires_at_slot.to_string(),
+        })
+    }
 }
 #[derive(Clone, Copy)]
 struct Meta {
@@ -287,6 +329,8 @@ pub fn prepare(
 /// Expected finalized effects of an independently verified ORIGINAL chain wire.
 /// No signing/delivery capability, native credit or finality is granted here.
 pub struct Target {
+    /// Original exact-batch identities; absent on explicit legacy routes.
+    pub sweep: Option<Escrow>,
     /// Exact original wire and verified signature/contract binding.
     pub verified: VerifiedWire,
     /// Physical rail; native owner HTTP withdrawal is never accepted by this codec.
@@ -397,6 +441,10 @@ pub fn inspect(contract: &[u8], attempt: AttemptKey, wire: &[u8]) -> Result<Targ
         .verify_strict(&message, &Signature::from_bytes(&signature))
         .map_err(|_| Error::Qualification)?;
     let (source, destination, source_owner, destination_owner) = match c.rail {
+        Rail::Sweep => {
+            let s = c.sweep.as_ref().ok_or(Error::Qualification)?;
+            (s.tokens, c.broker_tokens, s.escrow, c.broker)
+        }
         Rail::Release => (c.vault, c.broker_tokens, c.config, c.broker),
         Rail::Return => (c.broker_tokens, c.vault, c.broker, c.config),
         Rail::Payout => (c.vault, c.recipient_tokens, c.config, c.customer),
@@ -409,6 +457,7 @@ pub fn inspect(contract: &[u8], attempt: AttemptKey, wire: &[u8]) -> Result<Targ
         _ => return Err(Error::Qualification),
     };
     Ok(Target {
+        sweep: c.sweep.clone(),
         verified: VerifiedWire {
             attempt,
             binding: Sha256::digest(contract).into(),
@@ -436,7 +485,7 @@ pub fn inspect(contract: &[u8], attempt: AttemptKey, wire: &[u8]) -> Result<Targ
         } else {
             Some(pda(c.program, &[b"receipt", &c.config, &c.operation])?)
         },
-        customer_counter: if c.rail == Rail::Payout {
+        customer_counter: if matches!(c.rail, Rail::Payout | Rail::Sweep) {
             Some(pda(c.program, &[b"customer", &c.config, &c.customer])?)
         } else {
             None
@@ -483,6 +532,26 @@ pub fn inspect_customer_deposit(
     operation: [u8; 32],
     wire: &[u8],
 ) -> Result<CustomerDeposit, Error> {
+    inspect_owner_deposit(route, network, account, operation, wire, false)
+}
+/// Original owner-signed exact-batch deposit; no sweep/signing/credit capability.
+pub fn inspect_escrow_deposit(
+    route: &super::Route,
+    network: [u8; 32],
+    account: [u8; 32],
+    operation: [u8; 32],
+    wire: &[u8],
+) -> Result<CustomerDeposit, Error> {
+    inspect_owner_deposit(route, network, account, operation, wire, true)
+}
+fn inspect_owner_deposit(
+    route: &super::Route,
+    network: [u8; 32],
+    account: [u8; 32],
+    operation: [u8; 32],
+    wire: &[u8],
+    escrow: bool,
+) -> Result<CustomerDeposit, Error> {
     let b = route
         .beneficiaries
         .iter()
@@ -499,7 +568,7 @@ pub fn inspect_customer_deposit(
         return Err(Error::Qualification);
     }
     let n = usize::from(wire[68]);
-    if !(10..=11).contains(&n) {
+    if !(if escrow { 12..=13 } else { 10..=11 }).contains(&n) {
         return Err(Error::Codec);
     }
     let hash_at = 69 + n * 32;
@@ -531,17 +600,24 @@ pub fn inspect_customer_deposit(
         _ => return Err(Error::Codec),
     };
     let ix = wire.get(at..).ok_or(Error::Codec)?;
-    if ix.len() != 108
-        || ix[1] != 9
-        || ix[11] != 96
+    let metas = if escrow { 11 } else { 9 };
+    let start = 3 + metas;
+    if ix.len() != start + 96
+        || usize::from(ix[1]) != metas
+        || ix[2 + metas] != 96
         || keys.get(usize::from(ix[0])) != Some(&route.program)
     {
         return Err(Error::Codec);
     }
-    let d = &ix[12..];
+    let d = &ix[start..];
     let epoch = u64::from_le_bytes(d[40..48].try_into().map_err(|_| Error::Codec)?);
     let amount = u64::from_le_bytes(d[88..96].try_into().map_err(|_| Error::Codec)?);
-    if d[..8] != Sha256::digest(b"global:deposit")[..8]
+    if d[..8]
+        != Sha256::digest(if escrow {
+            b"global:deposit_escrow".as_slice()
+        } else {
+            b"global:deposit".as_slice()
+        })[..8]
         || d[8..40] != route.domain
         || d[48..80] != operation
         || epoch != route.epoch
@@ -558,24 +634,54 @@ pub fn inspect_customer_deposit(
         return Err(Error::Qualification);
     }
     let customer = pda(route.program, &[b"customer", &config, &b.wallet])?;
-    let receipt = pda(route.program, &[b"deposit", &config, &b.wallet, &operation])?;
+    let sweep = if escrow {
+        Some(Escrow::derive(
+            route,
+            b.wallet,
+            operation,
+            u64::from_le_bytes(d[80..88].try_into().map_err(|_| Error::Codec)?),
+        )?)
+    } else {
+        None
+    };
+    let receipt = if let Some(s) = &sweep {
+        s.batch
+    } else {
+        pda(route.program, &[b"deposit", &config, &b.wallet, &operation])?
+    };
     let token = named(TOKEN)?;
-    let expected = [
-        (config, true),
-        (customer, true),
-        (b.wallet, true),
-        (b.tokens, true),
-        (route.vault, true),
-        (route.mint, false),
-        (receipt, true),
-        (token, false),
-        (SYSTEM, false),
-    ];
+    let expected = if let Some(s) = &sweep {
+        vec![
+            (config, false),
+            (s.route, false),
+            (customer, false),
+            (b.wallet, true),
+            (s.escrow, true),
+            (s.tokens, true),
+            (b.tokens, true),
+            (route.mint, false),
+            (s.batch, true),
+            (token, false),
+            (SYSTEM, false),
+        ]
+    } else {
+        vec![
+            (config, true),
+            (customer, true),
+            (b.wallet, true),
+            (b.tokens, true),
+            (route.vault, true),
+            (route.mint, false),
+            (receipt, true),
+            (token, false),
+            (SYSTEM, false),
+        ]
+    };
     let readonly = usize::from(wire[67]);
-    if readonly != 4 + usize::from(units != 0) {
+    if readonly != (if escrow { 7 } else { 4 }) + usize::from(units != 0) {
         return Err(Error::Qualification);
     }
-    for ((key, writable), index) in expected.iter().zip(&ix[2..11]) {
+    for ((key, writable), index) in expected.iter().zip(&ix[2..2 + metas]) {
         let i = usize::from(*index);
         if keys.get(i) != Some(key) || (i < n - readonly) != *writable {
             return Err(Error::Qualification);
@@ -608,6 +714,7 @@ pub fn inspect_customer_deposit(
     Ok(CustomerDeposit {
         account,
         target: Target {
+            sweep: sweep.clone(),
             verified: VerifiedWire {
                 attempt,
                 binding: Sha256::digest(wire).into(),
@@ -620,9 +727,9 @@ pub fn inspect_customer_deposit(
             mint: route.mint,
             decimals: route.decimals,
             source: b.tokens,
-            destination: route.vault,
+            destination: sweep.as_ref().map_or(route.vault, |s| s.tokens),
             source_owner: b.wallet,
-            destination_owner: config,
+            destination_owner: sweep.as_ref().map_or(config, |s| s.escrow),
             config,
             domain: route.domain,
             pool: route.pool,
@@ -661,7 +768,12 @@ fn parse(bytes: &[u8]) -> Result<Contract, Error> {
     // rejects alternate JSON, whitespace, numeric spelling and invalid UTF-8.
     let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| Error::Codec)?;
     if serde_json::to_vec(&value).map_err(|_| Error::Codec)? != bytes
-        || c.schema != "cinder-vault-funding-v1"
+        || c.rail != Rail::Sweep && value.get("sweep").is_some()
+        || if c.rail == Rail::Sweep {
+            c.schema != "cinder-vault-funding-v2" || c.sweep.is_none()
+        } else {
+            c.schema != "cinder-vault-funding-v1" || c.sweep.is_some()
+        }
         || c.decimals > 18
         || c.rail == Rail::Withdraw
         || [
@@ -688,9 +800,14 @@ fn parse(bytes: &[u8]) -> Result<Contract, Error> {
     }
     integer(&c.sequence)?;
     integer(&c.paid)?;
-    if c.rail != Rail::Payout
+    if !matches!(c.rail, Rail::Payout | Rail::Sweep)
         && (c.customer != [0; 32] || c.recipient_tokens != [0; 32] || integer(&c.paid)? != 0)
         || c.rail == Rail::Payout && (c.customer == [0; 32] || c.recipient_tokens == [0; 32])
+    {
+        return Err(Error::Qualification);
+    }
+    if c.rail == Rail::Sweep
+        && (c.customer == [0; 32] || c.recipient_tokens != [0; 32] || integer(&c.paid)? != 0)
     {
         return Err(Error::Qualification);
     }
@@ -821,6 +938,42 @@ fn instruction(c: &Contract) -> Result<(Instruction, [u8; 32]), Error> {
                 meta(SYSTEM, false),
                 meta(pda(c.venue_program, &[b"__event_authority"])?, false),
                 meta(c.venue_program, false),
+            ],
+        )
+    } else if c.rail == Rail::Sweep {
+        let s = c.sweep.as_ref().ok_or(Error::Qualification)?;
+        let route = pda(c.program, &[b"venue_route", &config])?;
+        let escrow = pda(c.program, &[b"venue_escrow", &route, &c.customer])?;
+        if s.route != route
+            || s.escrow != escrow
+            || s.tokens != pda(c.program, &[b"escrow_tokens", &escrow])?
+            || s.operation == [0; 32]
+            || s.batch != pda(c.program, &[b"escrow_batch", &escrow, &s.operation])?
+            || integer(&c.expires_at_slot)? > integer(&s.expires_at_slot)?
+        {
+            return Err(Error::Qualification);
+        }
+        data.extend_from_slice(&Sha256::digest(b"global:sweep_escrow")[..8]);
+        data.extend_from_slice(&c.domain);
+        data.extend_from_slice(&integer(&c.epoch)?.to_le_bytes());
+        data.extend_from_slice(&c.operation);
+        data.extend_from_slice(&integer(&c.expires_at_slot)?.to_le_bytes());
+        data.extend_from_slice(&integer(&c.sequence)?.to_le_bytes());
+        (
+            c.program,
+            vec![
+                meta(config, true),
+                meta(route, false),
+                meta(signer, true),
+                meta(escrow, true),
+                meta(pda(c.program, &[b"customer", &config, &c.customer])?, true),
+                meta(s.batch, true),
+                meta(s.tokens, true),
+                meta(c.broker_tokens, true),
+                meta(c.mint, false),
+                meta(pda(c.program, &[b"receipt", &config, &c.operation])?, true),
+                meta(token, false),
+                meta(SYSTEM, false),
             ],
         )
     } else {
@@ -1047,6 +1200,7 @@ mod tests {
                 setup_max_age: 1000,
             },
             plan: Plan {
+                sweep: c.sweep.clone(),
                 rail: c.rail,
                 attempt: attempt.encode(),
                 abstract_action: vec![],

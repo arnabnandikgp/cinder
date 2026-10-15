@@ -7,7 +7,7 @@ export interface Grant {
   maximumOrders: bigint; expiresAt: bigint;
 }
 export const READ = 1, TRADE = 2, CANCEL = 4;
-export const READ_FAMILIES = ['account','positions','operations','openOrders','fills','funding','movements','grants','markets','updates'] as const;
+export const READ_FAMILIES = ['account','positions','operations','openOrders','fills','funding','movements','grants','markets','updates','ingress'] as const;
 export type ReadFamily = typeof READ_FAMILIES[number];
 export interface ReadQuery { family: ReadFamily; cursor?: Uint8Array; limit: number }
 export type Command =
@@ -40,6 +40,7 @@ export interface AccountRow {
   accountingEquity?: bigint;
 }
 export type ReadRow = AccountRow
+  | {kind:'ingress';request:Id;route:Id;status:'pending'|'prepared'|'exposed'|'failed'|'refunded'|'funding'|'credited'|'returned';amount:bigint;recognized:boolean;restricted:bigint}
   | (Position & { kind: 'position'; valuation?: { mark: bigint; pnl: bigint }; leverage?: { cap: bigint; selected: bigint } })
   | { kind: 'operation'; committedAt: bigint; command: Command; receipt: Receipt }
   | { kind: 'fill'; request: Id; market: Id; precision: number; lots: bigint; price: bigint; fee: bigint; observedAt?: bigint }
@@ -181,6 +182,13 @@ function accountRow(r: Reader): AccountRow {
 function readRow(family: ReadFamily, bytes: Uint8Array): ReadRow {
   const r=new Reader(bytes,'');let out:ReadRow;
   switch(family){
+    case 'ingress':{
+      const request=r.take(32),route=r.take(32),status=(['pending','prepared','exposed','failed','refunded','funding','credited','returned'] as const)[Number(r.n(1))];
+      const amount=r.n(16,true),recognized=r.boolean(),restricted=r.n(16,true);
+      if(!status||!request.some(x=>x)||!route.some(x=>x)||amount<=0n||restricted<0n||restricted>amount
+        ||recognized!==(status==='funding'||status==='credited'||status==='returned')||status!=='funding'&&restricted!==0n)fail();
+      out={kind:'ingress',request,route,status,amount,recognized,restricted};break;
+    }
     case 'account':out=accountRow(r);break;
     case 'positions':{const p=position(r);const valuation=r.boolean()?{mark:r.n(8),pnl:r.n(16,true)}:undefined;
       const leverage=r.boolean()?{cap:r.n(8),selected:r.n(8)}:undefined;

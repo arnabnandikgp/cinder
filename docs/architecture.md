@@ -391,7 +391,14 @@ debt-recovery rules. Broker debit then creates transit; qualified venue credit
 establishes native cash without another customer deposit. Wrong-owner/mint/route,
 duplicate, partial or unknown evidence must not fabricate credit or new risk.
 P23B/P23C implement this [ADR 0030](architecture/0030-venue-directed-escrow.md)
-extension; P15/P16's existing common-vault route remains explicitly historical.
+extension in offline qualification; P15/P16's existing common-vault route remains
+explicitly historical. Engine revision 24 and the explicit escrow controller/v2
+sweep contract reject incompatible histories rather than migrating them. Private
+`ingress` reads expose lifecycle without a second balance. Existing live manifests
+do not authorize the new funding mode; activation and exact-source native/Nitro
+qualification remain separate. Fenced, strongly zero-effect native allocations
+can return through the same payout vault without another deposit or customer
+payment; unknown/partially credited funding remains contained, not assumed returned.
 
 Useful collateral remains on the venue between orders. An order need not trigger
 a wasteful vault-to-venue round trip each time. Conversely an unconfirmed transfer

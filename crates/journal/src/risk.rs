@@ -1118,6 +1118,10 @@ impl State {
             return Ok(());
         }
         let admission = controls.iter().any(|c| match c {
+            Control::Escrow(a) => matches!(
+                a,
+                crate::escrow::Action::Prepare { .. } | crate::escrow::Action::Fund { .. }
+            ),
             Control::Recovery(_)
             | Control::ResolveRaw(_)
             | Control::Collateral(_)

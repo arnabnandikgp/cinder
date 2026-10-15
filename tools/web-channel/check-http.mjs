@@ -64,7 +64,7 @@ try{
   await browserHarness.assertPrivate();
   console.log(`Node ${process.version}: ${nodeChecks.length} HTTP/WebSocket/private SDK process groups passed`);
   console.log(`${execFileSync(chrome,['--version'],{encoding:'utf8'}).trim()}: ${r.checks.length} HTTP/WebSocket/private SDK process groups passed`);
-  console.log('All eight commands, ten reads, live private subscriptions, restart/gap/queue/revocation and parent observation: synthetic offline fixtures only.');
+  console.log('All eight commands, eleven reads, live private subscriptions, restart/gap/queue/revocation and parent observation: synthetic offline fixtures only.');
 }finally{
   clearTimeout(timer);await stopChild(browser,{group:true});await browserHarness?.close();
   server.closeAllConnections();if(server.listening)await new Promise(resolve=>server.close(resolve));

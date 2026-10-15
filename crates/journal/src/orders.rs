@@ -288,7 +288,7 @@ impl State {
                 if self.liquidation.is_some() {
                     self.close_limit(i.quantity.unit())?;
                 }
-                if self.frozen || !self.native_funding_ready {
+                if self.frozen || !self.native_funding_ready() {
                     return Err(ControlError::Unqualified);
                 }
                 self.request(i.request)?;
@@ -513,7 +513,10 @@ impl State {
     }
 
     pub(crate) fn order_exposure(&self, attempt: &Attempt) -> Result<(), ControlError> {
-        if matches!(attempt.kind, AttemptKind::Generic | AttemptKind::Funds) {
+        if matches!(
+            attempt.kind,
+            AttemptKind::Generic | AttemptKind::Funds | AttemptKind::Escrow
+        ) {
             return Ok(());
         }
         let order = self
