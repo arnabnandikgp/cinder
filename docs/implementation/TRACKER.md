@@ -32,7 +32,7 @@
 | [P23C — Escrow funding integration](PLAN.md#p23c) | closed | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | [#67](https://github.com/arnabnandikgp/cinder/pull/67), merged `7e04a94` |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
 | [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | in progress | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), CI/review pending |
-| [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | in progress | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | publication pending, above #68 |
+| [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | in progress | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), above #68; CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-15. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -66,10 +66,14 @@ not an additive universal balance or a generic adapter rewrite.
 The docs-only assessment passes all 80 contract/inventory checks, the 32-phase /
 58-document plan/link guard and workspace boundaries using pinned Node 24.21.0.
 `git diff --check` passes. No executable changed after #68's checked corrections.
+Published as [#69](https://github.com/arnabnandikgp/cinder/pull/69) above #68 in
+native stack #70, source head `7de4bd95b7991fe7ce85fa3f03b250129a91469a`.
+This follow-up only records publication; #69 needs its own hosted checks/review.
 An ignored, unapproved read proposal limits the next native check to twelve
 unsigned public-testnet GETs; it permits no wallet, POST, funds, RPC or AWS.
+Its SHA-256 is `854a573000038aa351a87e07fe5e3638a27cf39120a7493a8f22670236233cd7`.
 
-Next: publish this bounded assessment, then review the concrete next
+Next: review this bounded assessment and the concrete next
 qualification scope and unit-state design before implementation/live activation.
 No frontend, automatic routing/cross-margin, live activity or reopened Pacifica
 credit investigation. P23/P24 gates remain unchanged; no automatic merge.
@@ -5593,8 +5597,8 @@ Merge: none.
 Work: reassessed BULK against current escrow/key-owned funding, pinned official client/signing repos and current documentation, compared historical SDK and mapped capability/evidence gaps. Added tracked venue assessment and minimum test-first two-unit direction; no adapter code/dependency, live invocation or frontend.
 Verification: primary-source desk analysis only; pinned Node 24.21.0 `node scripts/check.mjs --group=contracts` passes 80 cases plus the 32-phase/58-document plan/link guard and workspace boundaries; `git diff --check` passes. No executable changed. Sources and selected hashes retained privately in work/venues/bulk/reassessment-2026-10-15, not checkout dependencies. Historical live evidence remains historical.
 Unexpected: documented history coverage and Solana builders were already present at the old pin, not new completeness/bridge evidence. Current account schema/agent wording and market grids require requalification; activity rows do not document original Solana signature correlation. Fee-tree aggregation makes risk cohorts promising without proving commercial permission or key isolation.
-Next: finish doc guards/publication; review bounded native-read qualification and exact unit ownership/schema before implementing the next slice. Merge and live actions remain separately authorized; do not reopen Pacifica credit.
-PR: none.
+Next: new-head hosted CI/review for #69 above verified-correction #68; review bounded native-read qualification and exact unit ownership/schema before implementing the next slice. Merge and live actions remain separately authorized; do not reopen Pacifica credit.
+PR: https://github.com/arnabnandikgp/cinder/pull/69.
 Merge: none.
 
 ## P24 — Release safety case
