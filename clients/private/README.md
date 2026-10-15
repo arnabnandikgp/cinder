@@ -64,6 +64,45 @@ npm dependencies.
 
 ## Confidential browser/Node HTTP and WebSocket
 
+### Backend onboarding
+
+On a deployment explicitly configured for ADR 0031's fresh, zero-customer history,
+the owner no longer needs a preconfigured private account ID:
+
+```ts
+const enrollment = new OnboardingClient(channel, walletSigner, {
+  domain: approvedDomain, policy: approvedPolicy,
+});
+const account = await enrollment.open(authExpiry);
+if (account.kind === 'error') throw new Error(account.code);
+const client = new PrivateClient(channel, walletSigner, {
+  domain: approvedDomain, policy: approvedPolicy, account: account.account,
+});
+// account.epoch is the current PRIVATE authentication epoch, recovered on reconnect.
+// account.custody.epoch is the separate SOLANA program epoch for deposit consent.
+```
+
+`open` creates one empty account or returns the current one; it deposits nothing,
+resets no epoch and grants no trading capacity. `pendingDeposits` contains only
+this owner's reported originals awaiting qualified inventory, never spendable
+amounts. `custody.maximumDeposit` is an exact mint-atom batch cap, not leverage or
+perp notional. After the caller signs/submits its own prepared deposit, report its
+original bytes with `reportDeposit({epoch: account.epoch, expiresAt: authExpiry,
+operation, signature})`. This retains a discovery hint, not a credit receipt.
+Qualified inventory/funding progress is read through `family: 'ingress'` as before.
+
+`clients/vault/src/onboarding.ts` supplies unsigned `prepareVenueEscrow`,
+`prepareEscrowDeposit` and `prepareEscrowRefund`. Use an explicit Anchor provider;
+the helper checks existing registration/escrow state and never reinitializes paid
+counters, signs/sends a transaction, chooses an RPC or pays rent. The canonical
+owner recipient ATA must exist for refunds/payouts. Rebuild a stale setup plan
+after checking chain state; do not blindly resend initialization transactions.
+The existing complete recovery-key registry seals further enrollment in V1.
+See [ADR 0031](../../docs/architecture/0031-backend-onboarding.md) for bounded
+capacity, fresh-history compatibility and qualification limits.
+
+### Existing private operations
+
 P23C appends `query: { family: 'ingress', limit: 64 }` to signed private reads, with the same
 account/agent authorization, paging and encrypted HTTP/WebSocket carrier. It shows
 pending/refunded batches and recognized funding/credited/returned lifecycle, not
@@ -96,7 +135,7 @@ after [tool preparation](../../tools/web-channel/README.md). It generates ignore
 `pkg/sdk.js`, `pkg/channel.js` and `pkg/channel_bg.wasm`. Fixture trust is separate
 test code, not a public SDK option.
 
-No package release, terminal/onboarding, live endpoint or fresh Nitro qualification
+No package release, terminal integration, live endpoint or fresh Nitro qualification
 is claimed. See [ADR 0021](../../docs/architecture/0021-confidential-web-api.md).
 
 Pass `transport: 'websocket'` in the same connection options for encrypted socket

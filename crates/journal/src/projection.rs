@@ -43,22 +43,22 @@ impl<B: Backend, P: Protection> Journal<B, P> {
 pub(crate) fn capture(
     before: &State,
     after: &State,
-    config: &Config,
+    _config: &Config,
     at: u64,
 ) -> Result<Vec<(AccountId, BookChange)>, Error> {
     let mut changes = Vec::new();
-    for id in &config.customers {
-        let a = before
-            .ledger()
-            .book(Owner::Customer(*id))
-            .map_err(|_| Error::Invalid)?;
+    for id in after.ledger().customer_ids() {
+        // Registration adds an empty book, not an economic movement.
+        let Ok(a) = before.ledger().book(Owner::Customer(id)) else {
+            continue;
+        };
         let b = after
             .ledger()
-            .book(Owner::Customer(*id))
+            .book(Owner::Customer(id))
             .map_err(|_| Error::Invalid)?;
         if a != b {
             changes.push((
-                *id,
+                id,
                 BookChange {
                     at,
                     before: a.clone(),

@@ -1191,12 +1191,16 @@ mod tests {
             b"private role material"
         );
         let response = json!({"KeyId":"expected","EncryptionAlgorithm":"SYMMETRIC_DEFAULT","CiphertextForRecipient":STANDARD.encode(der)});
-        assert!(
-            Recipient::new()
-                .unwrap()
-                .decrypt(&response, "expected")
-                .is_err()
-        );
+        // CMS without a recipient certificate intentionally tries a random
+        // content key when no recipient matches (Bleichenbacher protection).
+        // Random CBC plaintext can have valid padding, so a decrypt error is
+        // not guaranteed. Require failure to recover the expected material,
+        // matching release's subsequent Manifest::unwrap plaintext-hash check.
+        // https://docs.openssl.org/3.5/man3/CMS_decrypt/
+        let expected_hash = sha256(b"private role material");
+        if let Ok(wrong) = Recipient::new().unwrap().decrypt(&response, "expected") {
+            assert_ne!(sha256(&wrong), expected_hash);
+        }
         assert_eq!(
             old.decrypt(&response, "expected").unwrap().as_slice(),
             b"private role material"

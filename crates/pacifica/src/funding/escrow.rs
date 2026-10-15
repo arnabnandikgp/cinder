@@ -25,13 +25,13 @@ impl Controller {
             return Ok(false);
         }
         let attempt = plan.attempt()?;
-        let e = j
-            .verified_state()?
+        let state = j.verified_state()?;
+        let e = state
             .escrows()
             .iter()
             .find(|e| e.attempt == Some(attempt))
             .ok_or(Error::Qualification)?;
-        self.validate_batch(&e.batch)?;
+        self.validate_batch(state, &e.batch)?;
         if history.chains.iter().any(|(a, _, _)| *a == plan.attempt) || e.receipt.is_some() {
             return Err(Error::Qualification);
         }
@@ -77,10 +77,10 @@ impl Controller {
         self.escrow.as_ref()
     }
 
-    fn validate_batch(&self, batch: &Batch) -> Result<chain::Escrow, Error> {
+    fn validate_batch(&self, state: &State, batch: &Batch) -> Result<chain::Escrow, Error> {
         let routing = self.escrow.as_ref().ok_or(Error::Qualification)?;
-        let b = self
-            .route
+        let route = self.effective_route(state)?;
+        let b = route
             .beneficiaries
             .iter()
             .find(|b| b.account == batch.request.account.bytes())
@@ -131,7 +131,7 @@ impl Controller {
         if !self.history(j, at)?.bound || raw.as_bytes().is_empty() {
             return Err(Error::Qualification);
         }
-        self.validate_batch(&batch)?;
+        self.validate_batch(j.state()?, &batch)?;
         if let Some(e) = j
             .state()?
             .escrows()
@@ -177,7 +177,7 @@ impl Controller {
             .iter()
             .find(|e| e.batch.request == request)
             .ok_or(Error::Qualification)?;
-        self.validate_batch(&e.batch)?;
+        self.validate_batch(j.state()?, &e.batch)?;
         if raw.as_bytes().is_empty() {
             return Err(Error::Qualification);
         }
@@ -212,7 +212,7 @@ impl Controller {
             .iter()
             .find(|e| e.batch.request == attempt.request)
             .ok_or(Error::Qualification)?;
-        let s = self.validate_batch(&e.batch)?;
+        let s = self.validate_batch(j.state()?, &e.batch)?;
         let message=PrivateBytes::new(serde_json::to_vec(&json!({"schema":"cinder-escrow-intent-v2","contract":self.contract,
             "batch":s,"amount":e.batch.amount.atoms().to_string(),"epoch":e.batch.epoch.to_string(),"expires_at":expires_at.to_string()})).map_err(|_|Error::Codec)?)?;
         let mut tx = self.tx(j, id, at, Record::Ingress { raw: vec![] })?;
@@ -241,7 +241,7 @@ impl Controller {
             .iter()
             .find(|e| e.attempt == Some(dispatch.attempt))
             .ok_or(Error::Qualification)?;
-        let s = self.validate_batch(&e.batch)?;
+        let s = self.validate_batch(j.state()?, &e.batch)?;
         let a = state
             .attempts()
             .iter()
@@ -317,7 +317,7 @@ impl Controller {
             .iter()
             .find(|e| e.batch.request == original)
             .ok_or(Error::Qualification)?;
-        self.validate_batch(&entry.batch)?;
+        self.validate_batch(j.state()?, &entry.batch)?;
         let epoch = j.state()?.recovery_epoch().ok_or(Error::Qualification)?;
         let intent = funds::Intent {
             request: attempt.request,
@@ -395,7 +395,7 @@ impl Controller {
         // Verify the accepted head before mutation; a cached projection cannot
         // establish that an unobserved competing writer never exposed this key.
         self.history(j, at)?;
-        self.validate_batch(&batch)?;
+        self.validate_batch(j.state()?, &batch)?;
         let mut hash = Sha256::new();
         hash.update(b"CINDER-ESCROW-EXPIRED-2\0");
         hash.update(self.contract);
@@ -440,7 +440,7 @@ impl Controller {
             .min_by_key(|e| u8::from(e.status != Status::Exposed))
             .cloned();
         let Some(e) = candidate else { return Ok(None) };
-        self.validate_batch(&e.batch)?;
+        self.validate_batch(j.state()?, &e.batch)?;
         if e.status == Status::Exposed {
             return Ok(e.attempt);
         }
@@ -533,7 +533,7 @@ impl Controller {
             .iter()
             .find(|e| e.attempt == Some(r.attempt))
             .ok_or(Error::Qualification)?;
-        let s = self.validate_batch(&e.batch)?;
+        let s = self.validate_batch(j.state()?, &e.batch)?;
         if plan.sweep.as_ref() != Some(&s)
             || r.network != self.profile.config.domain.network.bytes()
             || r.program != self.route.program

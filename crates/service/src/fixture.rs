@@ -339,7 +339,17 @@ impl FixtureHandler {
     /// Key arrives through harness stdin, never parent disk/logs. Reuse on restart
     /// is a test harness responsibility, not a production key-release design.
     pub fn open(root: &Path, key: Zeroizing<[u8; 32]>, wallet: [u8; 32]) -> Result<Self, Error> {
-        Self::open_inner(root, key, wallet, [81; 32], None, false).map(|(handler, _)| handler)
+        Self::open_inner(root, key, wallet, [81; 32], None, false, None).map(|(handler, _)| handler)
+    }
+    /// Fresh zero-customer AEAD fixture. Its policy comes only from private test
+    /// stdin, never a relay request or a shipping configuration fallback.
+    pub fn open_onboarding(
+        root: &Path,
+        key: Zeroizing<[u8; 32]>,
+        policy: cinder_api::onboarding::Policy,
+    ) -> Result<Self, Error> {
+        Self::open_inner(root, key, [0; 32], [0; 32], None, false, Some(policy))
+            .map(|(handler, _)| handler)
     }
     /// Same service/journal with SBF customer custody and synthetic venue house capital.
     /// Only the explicit joined offline harness may choose this fixture setup.
@@ -361,6 +371,7 @@ impl FixtureHandler {
             route.beneficiaries[0].tokens,
             Some(controller),
             false,
+            None,
         )?;
         let mut store = h.store.lock().map_err(|_| Error)?;
         if fresh {
@@ -392,8 +403,15 @@ impl FixtureHandler {
             return Err(Error);
         }
         let tokens = binding.route.beneficiaries[0].tokens;
-        let (mut h, fresh) =
-            Self::open_inner(root, key, wallet, tokens, Some(&native.controller), true)?;
+        let (mut h, fresh) = Self::open_inner(
+            root,
+            key,
+            wallet,
+            tokens,
+            Some(&native.controller),
+            true,
+            None,
+        )?;
         if fresh {
             native.activate(&mut *h.store.lock().map_err(|_| Error)?)?;
         }
@@ -420,6 +438,7 @@ impl FixtureHandler {
         tokens: [u8; 32],
         controller: Option<&cinder_pacifica::funding::Controller>,
         acceptance: bool,
+        onboarding: Option<cinder_api::onboarding::Policy>,
     ) -> Result<(Self, bool), Error> {
         let fresh = !root.join("accepted").exists();
         if fresh {
@@ -449,27 +468,41 @@ impl FixtureHandler {
         )
         .map_err(|_| Error)?;
         let cipher = RecordCipher::new(key, 1, [42; 32]).map_err(|_| Error)?;
+        let mut configuration = config();
+        if onboarding.is_some() {
+            configuration.customers.clear();
+        }
         let mut store = if fresh {
-            Journal::create(backend, cipher, config())
+            Journal::create(backend, cipher, configuration)
         } else {
-            Journal::open(backend, cipher, config())
+            Journal::open(backend, cipher, configuration)
         }
         .map_err(|_| Error)?;
-        let service = Service::new(
-            Contract {
-                owners: vec![OwnerBinding {
-                    account: user(),
-                    wallet,
-                    tokens,
-                }],
-                maximum_auth_lifetime: 120_000,
-                maximum_grant_lifetime: 3_600_000,
-            },
-            Holds(acceptance),
-        )
+        let contract = Contract {
+            owners: vec![OwnerBinding {
+                account: user(),
+                wallet,
+                tokens,
+            }],
+            maximum_auth_lifetime: 120_000,
+            maximum_grant_lifetime: 3_600_000,
+        };
+        let is_onboarding = onboarding.is_some();
+        let service = if let Some(policy) = onboarding {
+            Service::new_onboarding(
+                Contract {
+                    owners: vec![],
+                    ..contract
+                },
+                Holds(false),
+                policy,
+            )
+        } else {
+            Service::new(contract, Holds(acceptance))
+        }
         .map_err(|_| Error)?;
         let now = FixtureClock.now()?;
-        if fresh {
+        if fresh && !is_onboarding {
             seed(&mut store, now, controller.is_some(), !acceptance)?;
             if let Some(c) = controller {
                 c.bind(&mut store, recovery::commit_id()?, now)

@@ -50,7 +50,13 @@ export type ReadRow = AccountRow
   | { kind: 'market'; market: Id; precision: number; quote: Id; quotePrecision: number; numerator: bigint; denominator: bigint; modes: number; leverageCap?: bigint }
   | { kind: 'receipt'; receipt: Receipt };
 export interface ReadPage { kind: 'page'; family: ReadFamily; revision: Id; next: Uint8Array; evaluatedAt: bigint; rows: ReadRow[] }
-export type Response = Receipt | View | ReadPage | { kind: 'error'; code: ErrorCode };
+/** Owner-only bootstrap metadata. None of these fields is a balance or credit. */
+export interface Discovery {
+  kind: 'discovery'; account: Id; epoch: bigint; recipient: Id; pendingDeposits: Id[];
+  custody: { maximumAccounts: number; domain: Id; pool: Id; venue: Id; program: Id;
+    config: Id; route: Id; mint: Id; decimals: number; epoch: bigint; maximumDeposit: bigint };
+}
+export type Response = Receipt | View | ReadPage | Discovery | { kind: 'error'; code: ErrorCode };
 export interface MessageSigner { publicKey: Id; signMessage(message: Uint8Array): Promise<Uint8Array> }
 export interface ChannelContext extends Domain { binding: Id; expiresAt: bigint }
 /** Trusted port, NOT evidence of encryption/attestation. P19 supplies the verified
@@ -225,6 +231,15 @@ export function decodeResponse(bytes: Uint8Array): Response {
     out = { kind: 'receipt', id: requestId, digest, policy, outcome, filled: r.n(8, true), paid: r.n(16, true),
       railFees: r.n(16, true), feeCap: r.n(16, true), possiblyExposed: r.boolean(), allowPartial: r.boolean() };
     if (out.paid < 0n || out.railFees < 0n || out.feeCap < 0n) fail();
+  } else if (tag === 4n) {
+    const account=r.take(32),epoch=r.n(8),recipient=r.take(32),maximumAccounts=Number(r.n(2));
+    const domain=r.take(32),pool=r.take(32),venue=r.take(32),program=r.take(32),config=r.take(32),route=r.take(32),mint=r.take(32);
+    const decimals=Number(r.n(1)),custodyEpoch=r.n(8),maximumDeposit=r.n(8);
+    if(!epoch||!custodyEpoch||!maximumDeposit||maximumAccounts<1||maximumAccounts>1024||decimals>18
+      ||[account,recipient,domain,pool,venue,program,config,route,mint].some(x=>!x.some(b=>b)))fail();
+    const count=r.count();if(count>128)fail();const pendingDeposits=Array.from({length:count},()=>id(r.take(32)));
+    if(new Set(pendingDeposits.map(x=>Array.from(x).join(','))).size!==count)fail();
+    out={kind:'discovery',account,epoch,recipient,pendingDeposits,custody:{maximumAccounts,domain,pool,venue,program,config,route,mint,decimals,epoch:custodyEpoch,maximumDeposit}};
   } else if (tag === 3n) {
     if(r.n(1)!==1n)fail();const family=READ_FAMILIES[Number(r.n(1))];if(!family)fail();
     const revision=r.take(32),next=r.take(40),evaluatedAt=r.n(8),count=r.count();if(count>64||!revision.some(x=>x))fail();
@@ -237,6 +252,49 @@ export function decodeResponse(bytes: Uint8Array): Response {
   } else fail();
   r.done(); return out;
 }
+/** Wallet-only bootstrap; an agent signer cannot act on an owner's account.
+ * Requests use the same attested encrypted channel, never a public signup API. */
+export class OnboardingClient {
+  readonly #channel: ConfidentialChannel; readonly #signer: MessageSigner;
+  readonly #domain: Domain; readonly #policy: number;
+  constructor(channel: ConfidentialChannel, signer: MessageSigner, config: {domain: Domain; policy: number}) {
+    this.#channel=channel;this.#signer=signer;
+    this.#domain={network:id(config.domain.network),deployment:id(config.domain.deployment)};
+    if(!Number.isInteger(config.policy)||config.policy<1||config.policy>0xffffffff)fail();
+    this.#policy=config.policy;
+  }
+  /** Create once or retrieve current epoch. Does not reset grants or paid counters. */
+  open(expiresAt:bigint):Promise<Discovery|{kind:'error';code:ErrorCode}>{return this.#exchange(expiresAt);}
+  /** Record an original signature for qualification; this is NOT a credit ACK. */
+  reportDeposit(input:{expiresAt:bigint;epoch:bigint;operation:Id;signature:Uint8Array}) {
+    return this.#exchange(input.expiresAt,input);
+  }
+  async #exchange(expiresAt:bigint,notice?:{epoch:bigint;operation:Id;signature:Uint8Array}):Promise<Discovery|{kind:'error';code:ErrorCode}>{
+    const ctx=this.#channel.context(),wallet=id(this.#signer.publicKey);
+    if(!equal(ctx.network,this.#domain.network)||!equal(ctx.deployment,this.#domain.deployment)||expiresAt>ctx.expiresAt)fail();
+    const w=new Writer('CINDER-ONBOARD\0\x00\x01');w.key(this.#domain.network);w.key(this.#domain.deployment);w.n(BigInt(this.#policy),4);
+    w.key(wallet);w.key(ctx.binding);w.n(expiresAt,8);
+    if(notice){
+      if(notice.epoch<=0n||!(notice.signature instanceof Uint8Array)||notice.signature.length!==64||!notice.signature.some(x=>x))fail();
+      w.n(1n,1);w.n(notice.epoch,8);w.key(notice.operation);w.chunks.push(new Uint8Array(notice.signature));
+    }else w.n(0n,1);
+    const message=w.end(),wire=new Uint8Array(message.length+64);
+    try{
+      const toSign=message.slice();let signature:Uint8Array;
+      try{signature=await this.#signer.signMessage(toSign);}finally{toSign.fill(0);}
+      if(!(signature instanceof Uint8Array)||signature.length!==64)fail();wire.set(message);wire.set(signature,message.length);
+      const reply=await this.#channel.exchange(wire);
+      try{
+        const result=decodeResponse(reply);if(result.kind==='error')return result;if(result.kind!=='discovery')fail();
+        const identity=new Uint8Array([...utf8.encode('CINDER-ACCOUNT-1\0'),...this.#domain.network,...this.#domain.deployment,...wallet]);
+        try{const expected=new Uint8Array(await crypto.subtle.digest('SHA-256',identity));if(!equal(result.account,expected))fail();}finally{identity.fill(0);}
+        return result;
+      }finally{reply.fill(0);}
+    }catch{throw new Error('Private onboarding unavailable; reconnect and retrieve the same owner account before proceeding');}
+    finally{message.fill(0);wire.fill(0);wallet.fill(0);}
+  }
+}
+
 export class PrivateClient {
   readonly #domain: Domain; readonly #account: Id; readonly #policy: number;
   readonly #channel: ConfidentialChannel; readonly #signer: MessageSigner;

@@ -3,6 +3,7 @@
 //! The confidential-channel and admission ports are trusted runtime interfaces,
 //! not proof of attestation. P19/P20 qualify their actual implementations.
 mod authorization;
+pub mod onboarding;
 mod publication;
 pub mod reads;
 mod records;
@@ -169,6 +170,8 @@ pub struct View {
 /// Returned only inside the same established confidential channel.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Response {
+    /// Owner-only bootstrap metadata, through the same confidential carrier.
+    Discovery(Box<onboarding::Discovery>),
     /// Bounded authorized projection of retained state/evidence, not a spend permit.
     Read(reads::Page),
     /// Fresh authenticated snapshot; polling/reconnect always obtains a full snapshot.
@@ -181,6 +184,10 @@ impl Response {
     pub fn encode(&self) -> Result<PrivateBytes, Error> {
         let mut w = Writer::new(b"CINDER-API-REPLY\0\x00\x01");
         match self {
+            Self::Discovery(d) => {
+                w.byte(4);
+                d.encode(&mut w);
+            }
             Self::Read(p) => {
                 w.byte(3);
                 p.encode(&mut w)?;
@@ -252,6 +259,7 @@ struct Record {
 }
 /// Runtime handler has no independently authoritative balances or replay database.
 pub struct Service<A> {
+    onboarding: Option<onboarding::Policy>,
     contract: Contract,
     admission: A,
     // Derived interpretation only: no balances, cached freshness or authority.
@@ -260,7 +268,14 @@ pub struct Service<A> {
 impl<A: Admission> Service<A> {
     /// Construct with explicit governed owner bindings and server-side admission port.
     pub fn new(contract: Contract, admission: A) -> Result<Self, Error> {
-        if contract.owners.is_empty()
+        Self::construct(contract, admission, None)
+    }
+    fn construct(
+        contract: Contract,
+        admission: A,
+        onboarding: Option<onboarding::Policy>,
+    ) -> Result<Self, Error> {
+        if contract.owners.is_empty() && onboarding.is_none()
             || contract.owners.len() > 1024
             || contract.maximum_auth_lifetime == 0
             || contract.maximum_grant_lifetime == 0
@@ -279,6 +294,7 @@ impl<A: Admission> Service<A> {
             }
         }
         Ok(Self {
+            onboarding,
             contract,
             admission,
             records: Mutex::new(None),
@@ -297,11 +313,27 @@ impl<A: Admission> Service<A> {
             w.raw(&b.wallet);
             w.raw(&b.tokens);
         }
+        if let Some(policy) = &self.onboarding {
+            w.raw(b"ONBOARD-1\0");
+            policy.encode(&mut w);
+        }
         Sha256::digest(&*w.0).into()
     }
     /// Commitment to this loaded API contract, using the journal's exact domain
     /// and policy. This is a release-manifest component, not a solvency proof.
     pub fn release_commitment(&self, config: &Config) -> Result<[u8; 32], Error> {
+        if let Some(p) = &self.onboarding
+            && (p.custody_domain != config.domain.deployment.bytes()
+                || p.venue != config.venue.bytes()
+                || self.contract.owners.len() > usize::from(p.maximum_accounts)
+                || config
+                    .markets
+                    .len()
+                    .saturating_mul(usize::from(p.maximum_accounts) + 3)
+                    > 4096)
+        {
+            return Err(Error::Invalid);
+        }
         if config.customers.len() != self.contract.owners.len()
             || self
                 .contract
@@ -376,12 +408,15 @@ impl<A: Admission> Service<A> {
         bytes: &PrivateBytes,
         now: u64,
     ) -> Result<Response, Error> {
+        if bytes.as_bytes().starts_with(onboarding::MAGIC) {
+            return self.onboard(journal, channel, bytes, now);
+        }
         let req = Request::decode(bytes.as_bytes())?;
-        let owner =
-            authorization::envelope(&self.contract, journal.configuration(), channel, &req, now)?;
+        authorization::envelope(&self.contract, journal.configuration(), channel, &req, now)?;
         journal.verified_state().map_err(|_| Error::Unavailable)?;
         let state = journal.state().map_err(|_| Error::Unavailable)?;
         authorization::authority(state, &req, now)?;
+        let owner = self.binding(state, req.account)?;
         let records = self.records(journal)?;
         let is_owner = req.signer == owner.wallet;
         if !is_owner {
@@ -400,7 +435,7 @@ impl<A: Admission> Service<A> {
             }
             return self.receipt(state, old).map(Response::Receipt);
         }
-        let controls = self.controls(journal, &req, owner, &records, is_owner, now)?;
+        let controls = self.controls(journal, &req, &owner, &records, is_owner, now)?;
         let mut tx = empty(journal, commit_id(&req)?, now);
         let fingerprint = self.fingerprint(req.domain, req.policy);
         tx.evidence.push(

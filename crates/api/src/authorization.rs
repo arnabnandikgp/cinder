@@ -1,7 +1,7 @@
 //! Pure checks shared by mutation and read interpretation. Callers must qualify
 //! time and accepted-state freshness separately; these functions do no I/O.
 use crate::{
-    ConfidentialChannel, Contract, Error, OwnerBinding,
+    ConfidentialChannel, Contract, Error,
     records::Records,
     wire::{self, Command, Request},
 };
@@ -9,18 +9,13 @@ use cinder_journal::model::State;
 use cinder_kernel::ledger::Config;
 use ed25519_dalek::{Signature, VerifyingKey};
 
-pub(crate) fn envelope<'a>(
-    contract: &'a Contract,
+pub(crate) fn envelope(
+    contract: &Contract,
     config: &Config,
     channel: &impl ConfidentialChannel,
     req: &Request,
     now: u64,
-) -> Result<&'a OwnerBinding, Error> {
-    let owner = contract
-        .owners
-        .iter()
-        .find(|b| b.account == req.account)
-        .ok_or(Error::Unauthorized)?;
+) -> Result<(), Error> {
     if channel.domain() != req.domain
         || req.domain != config.domain
         || req.policy != config.policy
@@ -36,7 +31,7 @@ pub(crate) fn envelope<'a>(
     let key = VerifyingKey::from_bytes(&req.signer).map_err(|_| Error::Unauthorized)?;
     key.verify_strict(&req.message(), &Signature::from_bytes(&req.signature))
         .map_err(|_| Error::Unauthorized)?;
-    Ok(owner)
+    Ok(())
 }
 
 pub(crate) fn authority(state: &State, req: &Request, now: u64) -> Result<(), Error> {

@@ -15,7 +15,14 @@ fn run() -> Result<(), cinder_service::Error> {
     let recovery_web = args.len() == 4 && args[3] == "--recovery-web";
     let acceptance_web = args.len() == 4 && args[3] == "--acceptance-web";
     let runtime_web = args.len() == 4 && args[3] == "--runtime-web";
-    if args.len() != 3 && !web && !recovery_web && !acceptance_web && !runtime_web {
+    let onboarding_web = args.len() == 4 && args[3] == "--onboarding-web";
+    if args.len() != 3
+        && !web
+        && !recovery_web
+        && !acceptance_web
+        && !runtime_web
+        && !onboarding_web
+    {
         return Err(Error);
     }
     let listen: SocketAddr = args[0].parse().map_err(|_| Error)?;
@@ -33,7 +40,28 @@ fn run() -> Result<(), cinder_service::Error> {
             wallet,
         );
     }
-    let handler = if acceptance_web {
+    let handler = if onboarding_web {
+        let b = read_binding()?;
+        let r = &b.route;
+        let escrow = b.escrow.as_ref().ok_or(Error)?;
+        FixtureHandler::open_onboarding(
+            Path::new(&args[1]),
+            key,
+            cinder_api::onboarding::Policy {
+                maximum_accounts: 64,
+                custody_domain: r.domain,
+                pool: r.pool,
+                venue: escrow.venue,
+                program: r.program,
+                config: r.config,
+                route: escrow.route,
+                mint: r.mint,
+                decimals: r.decimals,
+                epoch: r.epoch,
+                maximum_deposit: r.maximum_movement,
+            },
+        )?
+    } else if acceptance_web {
         FixtureHandler::open_acceptance(Path::new(&args[1]), key, wallet, &read_binding()?)?
     } else if recovery_web {
         let binding = read_binding()?;
@@ -58,7 +86,7 @@ fn run() -> Result<(), cinder_service::Error> {
     } else {
         stop_on_stdin()
     };
-    if web || recovery_web || acceptance_web {
+    if web || recovery_web || acceptance_web || onboarding_web {
         cinder_service::web::Server::new(
             policy(),
             Arc::new(FixtureClock),

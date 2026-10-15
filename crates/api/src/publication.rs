@@ -73,9 +73,9 @@ impl<A: Admission> Service<A> {
         if !is_read(&req.command) {
             return Err(Error::Invalid);
         }
-        let owner =
-            authorization::envelope(&self.contract, source.configuration(), channel, &req, now)?;
+        authorization::envelope(&self.contract, source.configuration(), channel, &req, now)?;
         authorization::authority(source.state().map_err(|_| Error::Unavailable)?, &req, now)?;
+        let owner = self.binding(source.state().map_err(|_| Error::Unavailable)?, req.account)?;
         let records = self.records(source)?;
         let is_owner = req.signer == owner.wallet;
         if !is_owner {

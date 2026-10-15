@@ -690,6 +690,41 @@ impl Controller {
     pub fn route(&self) -> &Route {
         &self.route
     }
+    /// Participant routing derived from this accepted journal state. Only the
+    /// explicit escrow composition accepts newly registered owners; immutable
+    /// release policy, keys and physical route are not changed by enrollment.
+    pub fn effective_route(&self, state: &State) -> Result<Route, Error> {
+        let mut route = self.route.clone();
+        if !state.registrations().is_empty() && self.escrow.is_none() {
+            return Err(Error::Qualification);
+        }
+        for b in state.registrations() {
+            if route.beneficiaries.iter().any(|old| {
+                old.account == b.account.bytes() || old.wallet == b.wallet || old.tokens == b.tokens
+            }) {
+                return Err(Error::Qualification);
+            }
+            route.beneficiaries.push(Beneficiary {
+                account: b.account.bytes(),
+                wallet: b.wallet,
+                tokens: b.tokens,
+            });
+        }
+        if route.beneficiaries.len() != state.ledger().customer_ids().count() {
+            return Err(Error::Qualification);
+        }
+        Ok(route)
+    }
+    /// One immutable participant snapshot for external I/O. Concurrent additions
+    /// cannot invalidate this owner's already-bound route or fence the worker.
+    pub fn route_for(&self, state: &State, account: AccountId) -> Result<Route, Error> {
+        let mut route = self.effective_route(state)?;
+        route.beneficiaries.retain(|b| b.account == account.bytes());
+        if route.beneficiaries.len() != 1 {
+            return Err(Error::Qualification);
+        }
+        Ok(route)
+    }
     /// Sign only this broker's exact prepared deposit/return message. No seed
     /// export, arbitrary message signing or HTTP master-key fallback is offered.
     pub fn sign_chain(
@@ -962,7 +997,7 @@ impl Controller {
             || u64::try_from(operation.intent.net.atoms()).map_err(|_| Error::Limit)?
                 > self.route.maximum_movement
             || !self
-                .route
+                .effective_route(j.state()?)?
                 .beneficiaries
                 .iter()
                 .any(|b| b.account == dispatch.attempt.request.account.bytes())
@@ -1033,8 +1068,8 @@ impl Controller {
             .find(|m| m.mandate.attempt == a.key)
             .ok_or(Error::Qualification)?;
         let m = &movement.mandate;
-        let beneficiary = self
-            .route
+        let route = self.effective_route(state)?;
+        let beneficiary = route
             .beneficiaries
             .iter()
             .find(|b| b.account == dispatch.attempt.request.account.bytes())

@@ -27,10 +27,11 @@
 | [P21B — Public documentation](PLAN.md#p21b) | closed | Copy-ready MDX guides and structured method references describe implemented contracts and actual environment availability, not planned endpoints or unverified guarantees. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` (tracked delivery receipt only) |
 | [P21 — Recovery integration](PLAN.md#p21) | closed | Fenced and reconciled funds back final claims; users obtain claim packages without the ordinary trading API. | [#52](https://github.com/arnabnandikgp/cinder/pull/52), merged `1c2c3eb` |
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
-| [P23A — Venue-directed custody contract](PLAN.md#p23a) | in progress | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | [#64](https://github.com/arnabnandikgp/cinder/pull/64), ready/open against `product/tee-v1` |
-| [P23B — Atomic escrow program/client](PLAN.md#p23b) | in progress | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | [#65](https://github.com/arnabnandikgp/cinder/pull/65), ready/open above #64; offline checks pass |
-| [P23C — Escrow funding integration](PLAN.md#p23c) | in progress | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | [#67](https://github.com/arnabnandikgp/cinder/pull/67), ready/open above #65; CI/review pending |
+| [P23A — Venue-directed custody contract](PLAN.md#p23a) | closed | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | [#64](https://github.com/arnabnandikgp/cinder/pull/64), merged `09494db` |
+| [P23B — Atomic escrow program/client](PLAN.md#p23b) | closed | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | [#65](https://github.com/arnabnandikgp/cinder/pull/65), merged `b162d8f` |
+| [P23C — Escrow funding integration](PLAN.md#p23c) | closed | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | [#67](https://github.com/arnabnandikgp/cinder/pull/67), merged `7e04a94` |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
+| [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | in progress | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-15. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -40,7 +41,147 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P23C escrow connection — #67 ready/open
+### P25 review corrections and second-venue direction — 2026-10-15
+
+The user approved finishing relevant #68 review corrections, reassessing BULK
+under the current escrow/key-controlled funding route and planning the minimum
+multi-venue boundary. No frontend, live venue/RPC, AWS or mainnet/customer-funds
+work. Existing Pacifica missing-credit investigations remain deferred.
+
+All eight hosted checks passed on #68 head `9a113877d129c6bc0249cc28613fdf55d89e3466`.
+Codex comments #4285322427/#4285322433 and CodeRabbit's outside-diff finding in
+review #5536177975 are valid. Signed existing-owner deposit hints must bypass
+new-risk admission and remain recordable during freeze/recovery; registration
+still requires admission. All three recovery settlement/flat-return/house-capacity
+iterations must include accepted ledger participants, not genesis customers only.
+Five new tests failed against the reviewed source before fixes. After correction,
+all nine API onboarding and 43 journal risk/recovery tests pass, including restart,
+post-genesis opposing positions, unsettled funding, debt and house-fee capacity.
+Clean tracked-source tree `b9447cceb4540b70fdd95dc35cf069ec3396a7b4`
+passes strict default/all-feature all-target lint/build, all three Rust profiles
+(646/646/583 passed, only the expected 10/10/9 ignored entries) and all 80
+contract/inventory guards. Both fresh-wallet HTTP/WebSocket local-SBF workflows
+also pass with strict generated ABI checks. These are offline results, not native
+or hardware qualification. The workspace SDK/relay runner passes 45 tests after
+the clean export's missing installed TypeScript dependency was identified; no
+code changed for that environment issue. New-head CI/review disposition follows.
+
+Next: publish these verified corrections and reply to the three findings, then continue the independent BULK
+source-pinned assessment while hosted CI runs. Do not inherit old green checks or
+silently treat present SDK documentation as live financial evidence. No automatic
+merge or reopened Pacifica run.
+
+### Backend-only onboarding — P25, 2026-10-15
+
+The user approved self-service backend/SDK preparation through the point of
+frontend integration, explicitly excluding frontend work and live deployment.
+Branch `tee/backend-onboarding` carries the verified predecessor merge-receipt
+commit `496902f` above merged trunk `7e04a94`. P25 is a separate product-integration
+phase; P23's deferred live acceptance and P24's release gates are not expanded.
+Implemented [ADR 0031](../architecture/0031-backend-onboarding.md): explicit
+zero-configured-customer composition; wallet-signed confidential account
+creation/retrieval; one atomic empty book, immutable owner/ATA and initial epoch;
+current-epoch rediscovery without resetting grants/counters; journal-derived
+authorization, risk, projections, funding routes and recovery inventory. The
+immutable genesis/release policy does not grow or rebind when owners enroll.
+Engine revision 25 intentionally rejects older histories; no migration/reset.
+
+`OnboardingClient` uses the existing confidential HTTP/WebSocket channel.
+Unsigned Solana helpers check existing customer/escrow state and prepare setup,
+exact deposit and eligible owner refund through the generated ABI. Durable
+owner-signed original-signature hints feed the existing qualified chain observer;
+a hint never creates money, inventory or trading permission. Negative caches and
+hint uniqueness are owner/operation-scoped, preventing a wrong-owner report of a
+public signature from suppressing its rightful deposit. Both regressions failed
+before the correction and pass after it.
+
+Fresh-wallet local SDK → opaque relay → service → compiled SBF acceptance passes
+on both carriers, including restart, zero credit and unswept refund. API tests
+cover capacity, replay/domain/session/signature refusal, concurrent and uncertain
+commits, epoch revocation and recovery enrollment fencing. Actual Runtime and
+risk/recovery tests include post-genesis participants. Implementation checkpoint:
+`91cd6b5a61a2d8806417a04f4881cfb9d7d32042`, tree
+`e958d3388d8b21112fbf55cf49ad513593ac5bb1`. Follow-up
+`49ab31a9ac31d0eef5736bf20e92bb7e53aeb83b`, tree
+`0600b8ee31f63b248d14744053a49e63c67eb823`, changes only one existing CMS
+test, not production code. Exact final command/results follow in P25 below.
+
+The broad run exposed a pre-existing flaky wrong-recipient CMS assertion in the
+release profile. OpenSSL's documented no-certificate path may return random CBC
+plaintext with valid padding instead of an error. The test now requires failure
+to recover the expected plaintext hash; production `Manifest::unwrap` still
+requires the exact measured role prefix and body hash. The real key-release,
+decrypt flags, trust and algorithm selection did not change. The corrected
+recipient and manifest-validation focused tests pass. The repeated whole Rust
+runner now also passes all three profiles, not merely the focused correction.
+
+Boundaries: V1's complete immutable recovery-key registry seals enrollment;
+incremental key enrollment/rotation remains separate work. Capacity is governed,
+and original reports are capped at 128 per history, not an open-production
+anti-Sybil policy. The canonical recipient ATA must exist before refund/payout;
+helpers neither sign/send nor automatically pay rent/create it. Existing live
+manifests still reject escrow funding activation. No frontend, AWS, public-chain,
+venue, configured-wallet or missing-credit work occurred; unrelated untracked
+qualification example, user-journey document and `stays/` remain untouched.
+
+Local acceptance is complete; exact counts, commands and the full-plus-focused
+SBF boundary are in the owning P25 entry. Published as
+[#68](https://github.com/arnabnandikgp/cinder/pull/68), one native-stack layer above
+`product/tee-v1`, initially at `47f6f817301585fb581c81e6d8118b134879ec01`.
+All eight hosted jobs started on that head; CI/review remain pending, not
+inherited from the predecessor stack. CodeRabbit status success on the initial
+draft was not a completed code review; no review was submitted at that check.
+This publication handoff changes no executable. The PR description records its
+current exact head/check snapshot after publication. Next: review the new-head
+CI and substantive findings before a separately authorized merge. P25 remains
+in progress; P23 live and P24 remain open independently. No frontend/live work.
+
+### Verified escrow stack merge — 2026-10-15
+
+The user authorized review corrections and the #64 → #65 → #67 merge only.
+`gh stack merge --yes --squash` completed into `product/tee-v1`. GitHub independently
+confirmed all three `MERGED` at 07:25:04 UTC; their actual receipts are:
+
+| PR | Exact verified head | Actual squash merge |
+| --- | --- | --- |
+| [#64](https://github.com/arnabnandikgp/cinder/pull/64) | `a5f72299728bdc314be5efaa779f658a5a606cf2` | `09494db2054c5e30a0da8f3db025db13c3839589` |
+| [#65](https://github.com/arnabnandikgp/cinder/pull/65) | `9821246b07153394e659b4fea73eb260951fcc34` | `b162d8f0f265b5b51c3571c74a7e8ea768d303e9` |
+| [#67](https://github.com/arnabnandikgp/cinder/pull/67) | `2e1559df71306196bf88337540865f02ecd6c933` | `7e04a94b782077dc120dcb3e70b086d33e0b67e2` |
+
+Premerge checks at 07:24:15 UTC verified those exact heads/bases, ready/clean
+mergeability, zero unresolved review threads and all eight hosted jobs successful
+on every layer: contracts/inventory, Rust lint/build, Rust regressions, SDK/relay,
+browser qualification, retained-history growth, ARM64 default package and full
+Anchor SBF/Surfpool. The final hosted vault runs are green, not merely the earlier
+local full-plus-focused result. The merged tip has the identical tracked tree to
+the verified #67 head (`git diff --exit-code`), before this receipt-only update.
+
+All four unique review items are addressed: #65's authority wording and generated
+deposit documentation; #67's expired never-exposed sweep cancellation (reported
+by both Codex and CodeRabbit) and revision-23 genesis test. The three inline
+threads were replied to and resolved after the fixes were pushed. CodeRabbit's
+automatic new-head pass was **rate-limited**, not a new completed independent
+review. Original findings, regressions and exact-source CI were checked directly.
+The trunk has no classic branch protection and no effective rules; all eight
+jobs were checked explicitly, without changing repository governance.
+
+P23A–P23C are closed for their approved offline scope. P23 live acceptance stays
+in progress; missing credit, live financial workflows and residual test funds
+remain deferred and unchanged. No AWS, public-chain, venue, wallet, onboarding or
+frontend work was started. Unrelated untracked qualification example,
+user-journey document and `stays/` remain untouched.
+
+This docs-only receipt is prepared on local `tee/p23-merge-receipts` for the next
+authorized PR; it is not a direct trunk push or a new implementation phase.
+Receipt verification: pinned Node 24.21.0 / Rust 1.97.1,
+`node scripts/check.mjs --group=contracts` passes all 80 tests with no skips,
+the 30-phase/55-document plan/link guard and workspace/dependency guards.
+`git diff --check` also passes. No executable changed after the merged CI source.
+Next: obtain the user's next scoped direction. Do not treat this merge as live
+activation or authority to resume deferred investigations. Entries below are
+dated historical handoffs; this section supersedes their pending merge state.
+
+### Historical P23C escrow connection — before review merge
 
 Branch `tee/p23c-connect` starts at #65 head
 `504fefc332d86c91577b27389856dc2420e6b8c2`, above #64/#65 in native stack #66.
@@ -89,7 +230,7 @@ Next: finish lint/contracts, push the restacked corrections, record/resolve the
 addressed threads and wait for the actual new-head CI/review before the approved
 bottom-up merge. No onboarding, frontend, AWS or live qualification is authorized.
 
-### P23B atomic escrow program/client — 2026-10-15
+### Historical P23B atomic escrow program/client — 2026-10-15
 
 Current branch: `tee/p23b-venue-escrow`, native stack above
 `tee/venue-escrow-foundation` / PR #64 at
@@ -148,7 +289,7 @@ Next: P23C's journal/controller join is the next bounded dependent code slice;
 handle #64/#65's actual review/CI before any separately authorized merge. Do not
 merge either phase automatically or claim local escrow tests qualify native credits.
 
-### Approved venue-directed custody revision — 2026-10-15
+### Historical approved venue-directed custody revision — 2026-10-15
 
 The user approved customer/venue/asset escrow ingress, full consented batch sweeps,
 owner refunds before committed handoff and withdrawals to the registered wallet.
@@ -5255,9 +5396,10 @@ diagnosis is not part of this checkpoint and is not a durability redesign.
 Work: ADR 0030 and the approved B04/B05 revision, architecture/context entrypoints, three bounded custody slices and evidence/test targets are recorded on tee/venue-escrow-foundation; old merge receipts and user files are preserved.
 Verification: pinned Node 24.21.0/Rust 1.97.1 offline contracts group passes 80/80 with no skips, the 30-phase plan/link guard and workspace dependency boundaries. Clean staged-source export 092a3c5e52d37ea0cb4a2141691f9cdbbc2b5188 passes the 30-phase/54-document guard and 13/13 plan-checker tests without work or unrelated user files. Hosted checks/review remain pending; no escrow implementation, SBF, AWS or live qualification is claimed.
 Unexpected: new user/venue escrows require explicit pending-owner versus accepted trading-credit treatment; a raw token balance cannot authorize sweep or erase refund rights. The common-vault source and historical receipts remain labeled rather than silently reinterpreted.
-Next: implement P23B's atomic program/client boundary as the next bounded dependent PR before the P23C journal join; keep native-credit/live activity deferred and handle #64's fresh CI/review before any authorized merge.
+Closure (2026-10-15): all eight hosted jobs pass on exact head `a5f72299728bdc314be5efaa779f658a5a606cf2`; no unresolved inline review findings. The authorized stack merge completed; current handoff records source/merge receipts. P23B/P23C also merged without promoting old live evidence.
+Next: follow the next user-authorized scope; native-credit/live activity remains deferred.
 PR: https://github.com/arnabnandikgp/cinder/pull/64
-Merge: none; in progress.
+Merge: 09494db2054c5e30a0da8f3db025db13c3839589.
 
 ## P23B — Atomic escrow program/client
 
@@ -5274,11 +5416,13 @@ that instruction's documentation, with no ABI, layout or runtime behavior change
 Strict client TypeScript and all 80 offline contracts/plan/workspace guards pass.
 New hosted checks/review and dependent restack are required before merge; old
 green heads remain historical. No wallet, external transaction or AWS was used.
-Next: restack P23C on this correction, fix its expiry/test reviews, verify the
-current heads and execute the user-authorized bottom-up merge. Do not expand
-this approval to onboarding or live qualification.
+Closure (2026-10-15): exact corrected head `9821246b07153394e659b4fea73eb260951fcc34`
+passes all eight hosted jobs, including complete SBF/Surfpool. Authority thread
+replied/resolved; generated documentation nit included. Dependent restack and
+authorized merge completed. New-head CodeRabbit was rate-limited, not a fresh audit.
+Next: follow the next user-authorized scope; onboarding/live qualification stays separate.
 PR: https://github.com/arnabnandikgp/cinder/pull/65
-Merge: none.
+Merge: b162d8f0f265b5b51c3571c74a7e8ea768d303e9.
 
 ## P23C — Escrow funding integration
 
@@ -5387,10 +5531,28 @@ a disposition of individual findings; predecessor reviews were not silently
 resolved or merged during P23C. #67 CI/review is newly pending. The PR description
 records its current exact head and check snapshot after publication.
 
-Next: address actual CI/review, keeping the phase in progress until reviewed and
-authorized merge. Live activation, onboarding and missing-credit investigation
-stay separately scoped.
+Closure (2026-10-15): exact corrected/restacked head
+`2e1559df71306196bf88337540865f02ecd6c933` passes all eight hosted jobs, including
+complete SBF/Surfpool and retained-growth qualification. Both duplicate expiry
+threads were replied/resolved and the genesis nit is included. Automatic
+CodeRabbit re-review was rate-limited, not a new full review. The authorized merge
+completed; merged code is tree-identical to that checked source. Earlier pending
+publication text above is historical, not an outstanding CI or merge requirement.
+Next: follow the next user-authorized scope. Live activation, onboarding and
+missing-credit investigation stay separately scoped; P23 live is not closed.
 PR: https://github.com/arnabnandikgp/cinder/pull/67.
+Merge: 7e04a94b782077dc120dcb3e70b086d33e0b67e2.
+
+## P25 — Backend onboarding and escrow preparation
+
+Work: implemented ADR 0031's opt-in fresh-history account creation/discovery, journal-owned empty participant inventory/authority, canonical owner ATA, Runtime/release binding, signed no-credit deposit hints, dynamic risk/funding/recovery ownership and unsigned SDK escrow setup/deposit/refund. Existing configured mode and generated program ABI remain unchanged; engine revision is 25. No frontend or live activity.
+Verification: final clean tracked-source checkpoint 49ab31a passes strict default/all-feature all-target Clippy/build, formatting, all-profile Rust regressions (641 all-feature debug, 641 all-feature release, 578 shipping-default debug), 80 contract/inventory/plan/workspace checks and Node/actual-Chrome 26 HTTP/WebSocket process groups each. Only the exact expected ignored hardware/child-worker entries remain (10/10/9 by Rust profile); they are not counted as hardware passes. Focused onboarding passes 8/8 and default escrow controller 13/13, including both red-first owner-isolation regressions. Checkpoint 91cd6b5 passes 45 SDK/relay tests and both fresh-wallet local-SBF carrier workflows after the final production correction; 49ab31a changes only a test, not production. Earlier full local SBF passes 94/94 before the owner-isolation correction. This is combined full-plus-focused SBF evidence, not a final-source full-run claim; hosted CI will run the whole suite on the published head.
+
+Reproduction: macOS ARM64, pinned Rust 1.97.1/Node 24.21.0; Cargo locked/offline with incremental/dev/test debug data disabled. `node scripts/check.mjs --group=lint`, `--group=rust` and `--group=contracts` ran in a tracked-only source export, excluding unrelated user examples/research while reusing the normal build cache. `node scripts/check.mjs --group=client`, `node tools/web-channel/build-sdk.mjs`, `node tools/web-channel/check-http.mjs` and `node scripts/check-vault.mjs --onboarding-only` run in the ordinary workspace with explicit local test tools. The full vault command was `node scripts/check-vault.mjs`; Anchor 1.2.0, Surfpool 1.5.0, Agave/SBF 3.1.10 and bindgen 0.2.129 were selected explicitly. No ambient wallet, remote fork, container, AWS, venue or public-chain run. SDK/SBF tests use synthetic trust and disposable local assets only. Ignored local logs are not checkout/CI dependencies; retained test sources and manifest entries reproduce the workflows.
+Unexpected: empty registration must preserve the financial ledger version while advancing the accepted journal head; actual Runtime/risk/projection/recovery tests verify this. Dynamic participant routing cannot mutate the immutable release contract or fence an unrelated in-flight owner. The existing complete immutable recovery-key registry seals enrollment rather than silently omit future claimants. Public signature hints and negative caches require owner/operation isolation, not global first-reporter ownership. A pre-existing release-profile CMS test incorrectly required a padding error for every wrong recipient; the test-only correction follows documented OpenSSL semantics and preserves production role/hash verification.
+Review follow-up (2026-10-15): two Codex inline findings and CodeRabbit's outside-diff recovery inventory finding are confirmed. Five red-first regressions reproduce the old errors. Existing-owner hints now remain observable through stale/faulted admission, freeze and recovery seal without credit; registration retains its gates. Recovery checks use the accepted participant inventory for gross settlement and house return-fee capacity. Focused 9 API and 43 journal risk/recovery tests pass. Clean tracked-source tree b9447cc passes strict all-target lint/build, 646/646/583 Rust cases (expected ignored 10/10/9) and 80 contract guards; 45 SDK/relay tests and both fresh-wallet actual-local-SBF carriers pass. New-head CI and review disposition remain pending; prior head's eight green jobs remain historical. The first clean-export client invocation passed relay tests but lacked the ignored installed TypeScript package, so failed before SDK compilation; the successful workspace invocation uses existing locked dependencies, not a product correction.
+Next: finish verification, push/respond to the three findings and continue the authorized source-pinned BULK reassessment; merge remains separately authorized. No frontend, AWS or Pacifica credit investigation.
+PR: https://github.com/arnabnandikgp/cinder/pull/68.
 Merge: none.
 
 ## P24 — Release safety case

@@ -142,10 +142,8 @@ impl State {
             && self.recovery.is_some()
             && flat(self.ledger.venue())
             && self
-                .config
-                .customers
-                .iter()
-                .copied()
+                .ledger
+                .customer_ids()
                 .map(Owner::Customer)
                 .chain([Owner::House, Owner::Suspense])
                 .all(|o| self.ledger.book(o).is_ok_and(flat))
@@ -155,10 +153,8 @@ impl State {
     // conservative house fee capacity. No customer claim or debt becomes capital.
     pub(crate) fn recovery_return_capacity(&self) -> Result<(), ControlError> {
         let positive = self
-            .config
-            .customers
-            .iter()
-            .copied()
+            .ledger
+            .customer_ids()
             .map(Owner::Customer)
             .chain([Owner::Suspense])
             .try_fold(0_i128, |sum, o| {
@@ -330,7 +326,8 @@ impl Cut {
     pub fn head(&self) -> Head {
         self.head
     }
-    /// Trusted immutable journal domain, pool, units and complete customer inventory.
+    /// Immutable genesis domain, units and source policy. `accounts` carries the
+    /// complete accepted participant inventory, including post-genesis customers.
     pub fn configuration(&self) -> &Config {
         &self.configuration
     }
@@ -338,7 +335,7 @@ impl Cut {
     pub fn check(&self) -> &EventKey {
         &self.check
     }
-    /// All customers in immutable configuration order, not a caller-selected subset.
+    /// All customers in accepted participant order, not a caller-selected subset.
     pub fn accounts(&self) -> &[AccountCut] {
         &self.accounts
     }
@@ -435,11 +432,8 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             return Err(CutError::UnresolvedEvidence);
         }
         l.check_bridge().map_err(|_| CutError::UnresolvedEvidence)?;
-        for owner in self
-            .configuration()
-            .customers
-            .iter()
-            .copied()
+        for owner in l
+            .customer_ids()
             .map(Owner::Customer)
             .chain([Owner::House, Owner::Suspense])
         {
@@ -488,8 +482,9 @@ impl<B: Backend, P: Protection> Journal<B, P> {
         let zero = QuoteAtoms::new(self.configuration().quote, 0);
         let mut total = zero;
         let mut deficits = zero;
-        let mut accounts = Vec::with_capacity(self.configuration().customers.len());
-        for account in &self.configuration().customers {
+        let participants: Vec<_> = l.customer_ids().collect();
+        let mut accounts = Vec::with_capacity(participants.len());
+        for account in &participants {
             let cash = l
                 .book(Owner::Customer(*account))
                 .map_err(|_| CutError::UnresolvedEvidence)?

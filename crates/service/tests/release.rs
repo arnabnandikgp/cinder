@@ -143,6 +143,7 @@ fn runtime_configuration() -> cinder_service::runtime::Configuration {
     let p = profile(&config());
     let c = contract();
     cinder_service::runtime::Configuration {
+        onboarding: None,
         ledger: cinder_journal::wire::encode_config(&config()).unwrap(),
         owners: c
             .owners
@@ -248,6 +249,64 @@ fn escrow_configuration_is_explicit_binds_actual_route_and_changes_application_c
         cfg.escrow = Some(wrong);
         assert!(cfg.construct(runtime_keys()).is_err());
     }
+}
+
+#[test]
+fn zero_customer_onboarding_is_opt_in_binds_capacity_and_requires_the_actual_escrow_route() {
+    let configuration = || {
+        let mut c = runtime_configuration();
+        let mut ledger = config();
+        ledger.customers.clear();
+        c.ledger = cinder_journal::wire::encode_config(&ledger).unwrap();
+        c.owners.clear();
+        c.route.beneficiaries.clear();
+        c.route.config = cinder_pacifica::funding::chain::pda(
+            c.route.program,
+            &[
+                b"cinder_vault",
+                &c.route.domain,
+                &c.route.pool,
+                &c.route.mint,
+            ],
+        )
+        .unwrap();
+        c.escrow = Some(cinder_pacifica::funding::escrow::Routing {
+            route: cinder_pacifica::funding::chain::pda(
+                c.route.program,
+                &[b"venue_route", &c.route.config],
+            )
+            .unwrap(),
+            venue: ledger.venue.bytes(),
+        });
+        c.onboarding = Some(cinder_service::runtime::Onboarding {
+            maximum_accounts: 64,
+        });
+        c
+    };
+    let hash = configuration()
+        .construct(runtime_keys())
+        .unwrap()
+        .commitment();
+    let mut c = configuration();
+    c.onboarding.as_mut().unwrap().maximum_accounts = 63;
+    assert_ne!(c.construct(runtime_keys()).unwrap().commitment(), hash);
+    for n in [0, 1025] {
+        let mut c = configuration();
+        c.onboarding.as_mut().unwrap().maximum_accounts = n;
+        assert!(c.construct(runtime_keys()).is_err());
+    }
+    let mut c = configuration();
+    c.onboarding = None;
+    assert!(c.construct(runtime_keys()).is_err());
+    let mut c = configuration();
+    c.escrow = None;
+    assert!(c.construct(runtime_keys()).is_err());
+    let mut c = configuration();
+    c.route.config = [99; 32];
+    c.escrow.as_mut().unwrap().route =
+        cinder_pacifica::funding::chain::pda(c.route.program, &[b"venue_route", &c.route.config])
+            .unwrap();
+    assert!(c.construct(runtime_keys()).is_err());
 }
 
 #[cfg(feature = "local-fixture")]

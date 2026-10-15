@@ -31,6 +31,21 @@ impl ApplicationContract {
         let execution_hash = execution.release_commitment(config).map_err(|_| Error)?;
         let funding_hash = funding.release_commitment(config).map_err(|_| Error)?;
         let route = funding.route();
+        if let Some(p) = api.onboarding_policy()
+            && (funding
+                .escrow_routing()
+                .is_none_or(|r| r.route != p.route || r.venue != p.venue)
+                || p.program != route.program
+                || p.config != route.config
+                || p.mint != route.mint
+                || p.pool != route.pool
+                || p.custody_domain != route.domain
+                || p.epoch != route.epoch
+                || p.decimals != route.decimals
+                || p.maximum_deposit != route.maximum_movement)
+        {
+            return Err(Error);
+        }
         if execution.agent_key() == route.broker
             || execution.agent_key() == route.funds
             || api.owner_bindings().iter().any(|owner| {

@@ -368,6 +368,31 @@ impl Ledger {
     pub fn version(&self) -> u64 {
         self.version
     }
+    /// Accepted participant inventory, including journal-authorized onboarding.
+    /// This iterator is not authentication or authority to add a customer.
+    pub fn customer_ids(&self) -> impl Iterator<Item = AccountId> + '_ {
+        self.customers.iter().map(|(id, _)| *id)
+    }
+    /// Trusted controller proposal: add one empty book, never an opening asset
+    /// or entitlement. Existing books/counters cannot be reset by registration.
+    pub fn register_customer(&mut self, account: AccountId) -> Result<(), LedgerError> {
+        if self.customers.iter().any(|(id, _)| *id == account)
+            || self.customers.len() >= 1024
+            || self
+                .config
+                .markets
+                .len()
+                .saturating_mul(self.customers.len() + 4)
+                > 4096
+        {
+            return Err(LedgerError::Configuration);
+        }
+        self.customers.push((account, Book::empty(&self.config)));
+        self.config.customers.push(account);
+        // No economics changed: native financial cuts remain valid. The journal
+        // head still advances atomically for participant metadata and authority.
+        Ok(())
+    }
     /// Immutable entitlement projection; cannot be used as a second asset input.
     pub fn book(&self, owner: Owner) -> Result<&Book, LedgerError> {
         match owner {
