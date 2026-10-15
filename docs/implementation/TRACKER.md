@@ -31,7 +31,7 @@
 | [P23B — Atomic escrow program/client](PLAN.md#p23b) | closed | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | [#65](https://github.com/arnabnandikgp/cinder/pull/65), merged `b162d8f` |
 | [P23C — Escrow funding integration](PLAN.md#p23c) | closed | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | [#67](https://github.com/arnabnandikgp/cinder/pull/67), merged `7e04a94` |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
-| [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | in progress | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | Local `tee/backend-onboarding`; no PR yet |
+| [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | in progress | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-15. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -95,9 +95,16 @@ venue, configured-wallet or missing-credit work occurred; unrelated untracked
 qualification example, user-journey document and `stays/` remain untouched.
 
 Local acceptance is complete; exact counts, commands and the full-plus-focused
-SBF boundary are in the owning P25 entry. Next: publish one backend-only PR and
-record its actual head/CI/review state. No automatic merge. P23 live and P24
-remain open independently.
+SBF boundary are in the owning P25 entry. Published as
+[#68](https://github.com/arnabnandikgp/cinder/pull/68), one native-stack layer above
+`product/tee-v1`, initially at `47f6f817301585fb581c81e6d8118b134879ec01`.
+All eight hosted jobs started on that head; CI/review remain pending, not
+inherited from the predecessor stack. CodeRabbit status success on the initial
+draft was not a completed code review; no review was submitted at that check.
+This publication handoff changes no executable. The PR description records its
+current exact head/check snapshot after publication. Next: review the new-head
+CI and substantive findings before a separately authorized merge. P25 remains
+in progress; P23 live and P24 remain open independently. No frontend/live work.
 
 ### Verified escrow stack merge — 2026-10-15
 
@@ -5513,8 +5520,8 @@ Verification: final clean tracked-source checkpoint 49ab31a passes strict defaul
 
 Reproduction: macOS ARM64, pinned Rust 1.97.1/Node 24.21.0; Cargo locked/offline with incremental/dev/test debug data disabled. `node scripts/check.mjs --group=lint`, `--group=rust` and `--group=contracts` ran in a tracked-only source export, excluding unrelated user examples/research while reusing the normal build cache. `node scripts/check.mjs --group=client`, `node tools/web-channel/build-sdk.mjs`, `node tools/web-channel/check-http.mjs` and `node scripts/check-vault.mjs --onboarding-only` run in the ordinary workspace with explicit local test tools. The full vault command was `node scripts/check-vault.mjs`; Anchor 1.2.0, Surfpool 1.5.0, Agave/SBF 3.1.10 and bindgen 0.2.129 were selected explicitly. No ambient wallet, remote fork, container, AWS, venue or public-chain run. SDK/SBF tests use synthetic trust and disposable local assets only. Ignored local logs are not checkout/CI dependencies; retained test sources and manifest entries reproduce the workflows.
 Unexpected: empty registration must preserve the financial ledger version while advancing the accepted journal head; actual Runtime/risk/projection/recovery tests verify this. Dynamic participant routing cannot mutate the immutable release contract or fence an unrelated in-flight owner. The existing complete immutable recovery-key registry seals enrollment rather than silently omit future claimants. Public signature hints and negative caches require owner/operation isolation, not global first-reporter ownership. A pre-existing release-profile CMS test incorrectly required a padding error for every wrong recipient; the test-only correction follows documented OpenSSL semantics and preserves production role/hash verification.
-Next: publish one backend-only PR and record actual CI/review state. No automatic merge, frontend, AWS or credit investigation.
-PR: none.
+Next: await the current #68 head's hosted checks and external review, then address relevant findings before any separately authorized merge. The publication handoff is docs-only and the PR description records the current exact head/check snapshot. No frontend, AWS or credit investigation.
+PR: https://github.com/arnabnandikgp/cinder/pull/68.
 Merge: none.
 
 ## P24 — Release safety case
