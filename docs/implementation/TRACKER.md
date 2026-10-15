@@ -69,9 +69,21 @@ Fresh-wallet local SDK → opaque relay → service → compiled SBF acceptance 
 on both carriers, including restart, zero credit and unswept refund. API tests
 cover capacity, replay/domain/session/signature refusal, concurrent and uncertain
 commits, epoch revocation and recovery enrollment fencing. Actual Runtime and
-risk/recovery tests include post-genesis participants. Final full regression
-commands/results and exact checked source will be recorded in the owning P25
-entry before publication; current broad runs are not a hardware/live receipt.
+risk/recovery tests include post-genesis participants. Implementation checkpoint:
+`91cd6b5a61a2d8806417a04f4881cfb9d7d32042`, tree
+`e958d3388d8b21112fbf55cf49ad513593ac5bb1`. Follow-up
+`49ab31a9ac31d0eef5736bf20e92bb7e53aeb83b`, tree
+`0600b8ee31f63b248d14744053a49e63c67eb823`, changes only one existing CMS
+test, not production code. Exact final command/results follow in P25 below.
+
+The broad run exposed a pre-existing flaky wrong-recipient CMS assertion in the
+release profile. OpenSSL's documented no-certificate path may return random CBC
+plaintext with valid padding instead of an error. The test now requires failure
+to recover the expected plaintext hash; production `Manifest::unwrap` still
+requires the exact measured role prefix and body hash. The real key-release,
+decrypt flags, trust and algorithm selection did not change. The corrected
+recipient and manifest-validation focused tests pass. The repeated whole Rust
+runner now also passes all three profiles, not merely the focused correction.
 
 Boundaries: V1's complete immutable recovery-key registry seals enrollment;
 incremental key enrollment/rotation remains separate work. Capacity is governed,
@@ -82,9 +94,10 @@ manifests still reject escrow funding activation. No frontend, AWS, public-chain
 venue, configured-wallet or missing-credit work occurred; unrelated untracked
 qualification example, user-journey document and `stays/` remain untouched.
 
-Next: complete exact-source lint/Rust/SDK/browser/full-SBF checks, record their
-results and publish one backend-only PR. Review/CI/merge remain outstanding;
-P23 live and P24 remain open independently.
+Local acceptance is complete; exact counts, commands and the full-plus-focused
+SBF boundary are in the owning P25 entry. Next: publish one backend-only PR and
+record its actual head/CI/review state. No automatic merge. P23 live and P24
+remain open independently.
 
 ### Verified escrow stack merge — 2026-10-15
 
@@ -5496,9 +5509,11 @@ Merge: 7e04a94b782077dc120dcb3e70b086d33e0b67e2.
 ## P25 — Backend onboarding and escrow preparation
 
 Work: implemented ADR 0031's opt-in fresh-history account creation/discovery, journal-owned empty participant inventory/authority, canonical owner ATA, Runtime/release binding, signed no-credit deposit hints, dynamic risk/funding/recovery ownership and unsigned SDK escrow setup/deposit/refund. Existing configured mode and generated program ABI remain unchanged; engine revision is 25. No frontend or live activity.
-Verification: focused API onboarding passes 8/8; shipping-default escrow controller passes 13/13, including two red-first wrong-owner signature/negative-cache regressions. Both compiled-SBF SDK carrier workflows pass. Broad final checks are running; exact source/results follow before publication. Existing Nitro-only tests are not promoted to local or changed-image passes.
-Unexpected: empty registration must preserve the financial ledger version while advancing the accepted journal head; actual Runtime/risk/projection/recovery tests verify this. Dynamic participant routing cannot mutate the immutable release contract or fence an unrelated in-flight owner. The existing complete immutable recovery-key registry seals enrollment rather than silently omit future claimants. Public signature hints and negative caches require owner/operation isolation, not global first-reporter ownership.
-Next: finish final regressions and publish one backend-only PR, then record actual CI/review state. No automatic merge, frontend, AWS or credit investigation.
+Verification: final clean tracked-source checkpoint 49ab31a passes strict default/all-feature all-target Clippy/build, formatting, all-profile Rust regressions (641 all-feature debug, 641 all-feature release, 578 shipping-default debug), 80 contract/inventory/plan/workspace checks and Node/actual-Chrome 26 HTTP/WebSocket process groups each. Only the exact expected ignored hardware/child-worker entries remain (10/10/9 by Rust profile); they are not counted as hardware passes. Focused onboarding passes 8/8 and default escrow controller 13/13, including both red-first owner-isolation regressions. Checkpoint 91cd6b5 passes 45 SDK/relay tests and both fresh-wallet local-SBF carrier workflows after the final production correction; 49ab31a changes only a test, not production. Earlier full local SBF passes 94/94 before the owner-isolation correction. This is combined full-plus-focused SBF evidence, not a final-source full-run claim; hosted CI will run the whole suite on the published head.
+
+Reproduction: macOS ARM64, pinned Rust 1.97.1/Node 24.21.0; Cargo locked/offline with incremental/dev/test debug data disabled. `node scripts/check.mjs --group=lint`, `--group=rust` and `--group=contracts` ran in a tracked-only source export, excluding unrelated user examples/research while reusing the normal build cache. `node scripts/check.mjs --group=client`, `node tools/web-channel/build-sdk.mjs`, `node tools/web-channel/check-http.mjs` and `node scripts/check-vault.mjs --onboarding-only` run in the ordinary workspace with explicit local test tools. The full vault command was `node scripts/check-vault.mjs`; Anchor 1.2.0, Surfpool 1.5.0, Agave/SBF 3.1.10 and bindgen 0.2.129 were selected explicitly. No ambient wallet, remote fork, container, AWS, venue or public-chain run. SDK/SBF tests use synthetic trust and disposable local assets only. Ignored local logs are not checkout/CI dependencies; retained test sources and manifest entries reproduce the workflows.
+Unexpected: empty registration must preserve the financial ledger version while advancing the accepted journal head; actual Runtime/risk/projection/recovery tests verify this. Dynamic participant routing cannot mutate the immutable release contract or fence an unrelated in-flight owner. The existing complete immutable recovery-key registry seals enrollment rather than silently omit future claimants. Public signature hints and negative caches require owner/operation isolation, not global first-reporter ownership. A pre-existing release-profile CMS test incorrectly required a padding error for every wrong recipient; the test-only correction follows documented OpenSSL semantics and preserves production role/hash verification.
+Next: publish one backend-only PR and record actual CI/review state. No automatic merge, frontend, AWS or credit investigation.
 PR: none.
 Merge: none.
 
