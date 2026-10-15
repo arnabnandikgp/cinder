@@ -1060,10 +1060,10 @@ Evidence: F02/F03/B02/B08, [ADR 0032](../architecture/0032-bulk-codec-foundation
 BV-01/BV-02/BV-06/BV-07/BV-10 in [BULK map](../venues/bulk.md), pinned upstream
 derived signing/hash vectors and synthetic native shape/adversarial fixtures.
 
-- [ ] Exact canonical limit/cancel bytes and index-0 order IDs match pinned source vectors; money/IDs never traverse floating-point production types; unsupported actions have no dispatch path.
-- [ ] REST/WS scope/side/order attribution, signed fees, wide IDs, decimal/exponent precision, duplicate/conflict, malformed/partial history and resource bounds pass offline regressions; page coverage grants no completion.
-- [ ] New package and existing pinned JSON raw-value feature pass dependency/lock guards; shipping service/kernel do not acquire adapter, network, signing or journal ownership through this foundation.
-- [ ] Existing workspace checks and new focused fixtures pass on exact tracked source; merger receipts, observed testnet availability limits and pending native/runtime qualifications are recorded before review/merge.
+- [x] Exact canonical limit/cancel bytes and index-0 order IDs match pinned source vectors; money/IDs never traverse floating-point production types; unsupported actions have no dispatch path.
+- [x] REST/WS scope/side/order attribution, signed fees, wide IDs, decimal/exponent precision, duplicate/conflict, malformed/partial history and resource bounds pass offline regressions; page coverage grants no completion.
+- [x] New package and existing pinned JSON raw-value feature pass dependency/lock guards; shipping service/kernel do not acquire adapter, network, signing or journal ownership through this foundation.
+- [x] Existing workspace checks and new focused fixtures pass on exact tracked source; merger receipts, observed testnet availability limits and pending native/runtime qualifications are recorded before review/merge.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates

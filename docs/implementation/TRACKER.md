@@ -33,7 +33,7 @@
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
 | [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | closed | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), merged `52a36ef` |
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
-| [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | in progress | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | local implementation / verification |
+| [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | in progress | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | local gates passed / publication pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-15. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -78,9 +78,22 @@ reproducible script remain ignored under the October 15 BULK reassessment's
 outage or a new deployed schema. Zero wallet, signature, faucet, financial action,
 RPC or AWS. No current native grid, fee state or risk config was qualified.
 
-Next: complete exact-source local checks, inspect/publicize the bounded P27 diff
-and preserve these limitations. No frontend, native execution/funding or resumed
-Pacifica missing-credit work. Preserve unrelated untracked examples/docs/stays.
+P27 source checkpoint `109165529ac469e239173859ae51785299549398`, staged tree
+`3fd625849b5d0faf85f904bf16671a4f037bd22e`, passes pinned Node 24.21.0 / Rust
+1.97.1 offline `scripts/check.mjs` groups `contracts`, `lint`, `rust`, `client`:
+81 contracts (33 phases / 58 tracked documents), strict default/all-feature
+all-target Clippy/build, 667/667/604 Rust passes and 45 SDK/relay passes. Only the
+existing expected 10/10/9 Rust ignored entries remain; all 21 new codec tests run.
+Contracts/lint/Rust use a clean tracked-only export, excluding unrelated user
+files. The client group uses existing locked installed dependencies and identical
+tracked executable source. Logs are `/private/tmp/cinder-p27-final-{contracts,lint,rust,client}.log`.
+No new SBF, browser, container, hardware or live financial qualification is claimed.
+
+Next: publish/review P27; hosted new-head checks and independent review remain
+pending. Native metadata availability, financial mapping and joined execution-unit
+composition remain gated, not activation authority. No frontend, native execution/
+funding or resumed Pacifica missing-credit work. Preserve unrelated untracked
+examples/docs/stays. This receipt-only successor does not change executable code.
 
 ### Second-venue assessment — P26, 2026-10-15
 
@@ -5652,9 +5665,9 @@ Merge: 0af365ebab93571d0815ec4d7406e5da44177857.
 ## P27 — BULK exact wire and fill codec foundation
 
 Work: added isolated cinder-bulk exact decimal/exponent/grid, unsigned limit/cancel and scoped REST/WS fill codecs; explicit input limits, duplicate/conflict and coverage consistency with no financial authority. Added pinned-source sub-vector provenance and synthetic/adversarial tests. No shipping Runtime activation or new financial contract.
-Verification: focused codecs passing before final bounded API cleanup; strict/full tracked-source checks pending. Source is on tee/p27-bulk-adapter-foundation above actual merged trunk 0af365e. The three approved public testnet metadata GETs returned origin HTTP 502; no native schema/financial qualification is claimed.
-Unexpected: upstream default_meta_order_ids use default zero account/nonce/index, not the accompanying signing context. Private hash-helper test preserves that oracle while public single-action hashing fixes index 0. Native cancellation tag is cx. New exact decimal source forms require raw-value preservation, not floating JSON values. Initial compiler/fixture interpretation errors were local, with no signing/dispatch.
-Next: complete exact-source checks, then publish/review P27. Native metadata availability, full financial mapping and joined unit-state design remain separate; no frontend, financial run or reopened Pacifica investigation.
+Verification: exact source checkpoint 109165529ac469e239173859ae51785299549398 / tracked tree 3fd625849b5d0faf85f904bf16671a4f037bd22e passes all 21 focused codec tests, strict default/all-feature all-target lint/build, 667/667/604 Rust tests (only expected 10/10/9 ignored), 81 contracts with 33 phases/58 tracked documents and 45 SDK/relay tests. Clean tracked-source export excludes unrelated examples/docs; client checks use the same tracked code with existing locked installed dependencies. Commands are the four pinned scripts/check.mjs groups contracts/lint/rust/client, locked/offline with incremental and dev/test debug information disabled. Source is on tee/p27-bulk-adapter-foundation above actual merged trunk 0af365e. The three approved public testnet metadata GETs returned origin HTTP 502; no native schema/financial qualification, new SBF/browser/hardware run or shipping activation is claimed.
+Unexpected: upstream default_meta_order_ids use default zero account/nonce/index, not the accompanying signing context. Private hash-helper test preserves that oracle while public single-action hashing fixes index 0. Native cancellation tag is cx. New exact decimal source forms require raw-value preservation, not floating JSON values. Initial compiler/fixture interpretation errors were local, with no signing/dispatch. A preliminary broad run hit rustdoc E0463 after two source exports compiled concurrently into one cache; it is not a passing receipt. The final full single-writer rerun above passes without a product change for that harness error.
+Next: publish/review P27. Hosted checks/independent review remain pending for the new head. Native metadata availability, full financial mapping and joined unit-state design remain separate; no frontend, financial run or reopened Pacifica investigation.
 PR: none.
 Merge: none.
 
