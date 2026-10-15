@@ -17,12 +17,12 @@ use sha2::{Digest, Sha256};
 /// Hard page bound, separate from retained journal evidence.
 pub const MAX_PAGE: usize = 64;
 /// Account/positions/operations/open orders/fills/funding/book movements/
-/// grants/configured markets/committed account snapshot family count.
-pub const KINDS: u8 = 10;
+/// grants/configured markets/committed snapshot/exact-batch ingress family count.
+pub const KINDS: u8 = 11;
 /// Signed read. Zero cursor starts a new snapshot, never a global journal cut.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Query {
-    /// Exact family 0..9 in the order listed above.
+    /// Exact family 0..10 in the order listed above.
     pub kind: u8,
     /// Permitted-row commitment then offset; all zero for initial page.
     pub cursor: [u8; 40],
@@ -386,6 +386,42 @@ impl<A: Admission> Service<A> {
                     if let Some(cap) = cap {
                         w.u64(cap);
                     }
+                    rows.push(row(w)?);
+                }
+            }
+            10 => {
+                for e in state
+                    .escrows()
+                    .iter()
+                    .filter(|e| e.batch.request.account == req.account)
+                {
+                    use cinder_journal::escrow::Status;
+                    let mut w = Writer::new(&[]);
+                    w.raw(&e.batch.request.request.bytes());
+                    w.raw(&e.batch.route);
+                    w.byte(match e.status {
+                        Status::Pending => 0,
+                        Status::Prepared => 1,
+                        Status::Exposed => 2,
+                        Status::Failed => 3,
+                        Status::Refunded => 4,
+                        Status::Funding => 5,
+                        Status::Available => 6,
+                        Status::Returned => 7,
+                    });
+                    w.i128(e.batch.amount.atoms());
+                    w.byte(u8::from(e.receipt.is_some()));
+                    let held = state
+                        .holds()
+                        .iter()
+                        .find(|h| h.request == e.batch.request && h.active)
+                        .and_then(|h| {
+                            h.reservations
+                                .iter()
+                                .find(|r| r.resource == Resource::Customer(req.account))
+                        })
+                        .map_or(0, |r| r.amount.atoms());
+                    w.i128(held);
                     rows.push(row(w)?);
                 }
             }

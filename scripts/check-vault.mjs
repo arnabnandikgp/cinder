@@ -98,7 +98,7 @@ try {
   }
   assert(ready, `Surfpool startup timeout: ${serverLog}`);
   // Asynchronous child keeps the parent available to supervise/clean up the sandbox.
-  await nodeSuite('vault', { cwd: client, env, pattern: focused.length ? `^${focused[0]==='--acceptance-only'?'P22':'P21'} ` : undefined });
+  await nodeSuite('vault', { cwd: client, env, pattern: focused.length ? `^${focused[0]==='--acceptance-only'?'(?:P22|P23C)':'P21'} ` : undefined });
 } finally {
   surfpool.kill('SIGTERM');
   for (let i = 0; i < 50 && surfpool.exitCode === null && surfpool.signalCode === null; i++) await delay(100);

@@ -8,6 +8,8 @@ use cinder_pacifica::funding::{
 type Demo<'a> = Option<(&'a Gateway, &'a demo::Policy)>;
 
 pub(crate) struct IssueRequest {
+    sweep_amount: Option<u64>,
+    sweep: Option<chain::Escrow>,
     port: [u8; 32],
     funding: [u8; 32],
     route: Route,
@@ -85,6 +87,44 @@ impl<T: Transport> Port<T> {
                 .map_err(|_| Error)?;
         }
         Ok(IssueRequest {
+            sweep_amount: if rail == Rail::Sweep {
+                Some(
+                    u64::try_from(
+                        j.state()
+                            .map_err(|_| Error)?
+                            .escrows()
+                            .iter()
+                            .find(|e| e.attempt == Some(attempt))
+                            .ok_or(Error)?
+                            .batch
+                            .amount
+                            .atoms(),
+                    )
+                    .map_err(|_| Error)?,
+                )
+            } else {
+                None
+            },
+            sweep: if rail == Rail::Sweep {
+                let e = j
+                    .state()
+                    .map_err(|_| Error)?
+                    .escrows()
+                    .iter()
+                    .find(|e| e.attempt == Some(attempt))
+                    .ok_or(Error)?;
+                Some(
+                    chain::Escrow::derive(
+                        funding.route(),
+                        e.batch.owner,
+                        e.batch.operation,
+                        e.batch.expires_at_slot,
+                    )
+                    .map_err(|_| Error)?,
+                )
+            } else {
+                None
+            },
             port: self.loaded.commitment(),
             funding: funding
                 .release_commitment(j.configuration())
@@ -117,6 +157,9 @@ impl<T: Transport> Port<T> {
             .find(|b| b.account == request.attempt.request.account.bytes())
             .ok_or(Error)?;
         let mut keys = vec![r.config];
+        if let Some(s) = &request.sweep {
+            keys.extend([s.route, s.escrow, s.batch, s.tokens]);
+        }
         if request.rail == Rail::Payout {
             keys.extend([
                 chain::pda(r.program, &[b"customer", &r.config, &b.wallet]).map_err(|_| Error)?,
@@ -125,6 +168,16 @@ impl<T: Transport> Port<T> {
         }
         let accounts = self.client.accounts(&keys, slot, proof.at())?;
         let context = self.client.context(self.clock.now()?)?;
+        if let Some(s) = &request.sweep {
+            crate::escrow_deposit::pre_sweep(
+                &accounts,
+                r,
+                s,
+                b.wallet,
+                request.sweep_amount.ok_or(Error)?,
+                context.slot,
+            )?;
+        }
         let epoch = if request.recovery && request.rail == Rail::Return {
             r.epoch.checked_add(1).ok_or(Error)?
         } else {
@@ -137,7 +190,15 @@ impl<T: Transport> Port<T> {
             b.wallet,
             b.tokens,
             epoch,
-            context.slot.checked_add(c.expiry_slots).ok_or(Error)?,
+            if let Some(s) = &request.sweep {
+                context
+                    .slot
+                    .checked_add(c.expiry_slots)
+                    .ok_or(Error)?
+                    .min(s.expires_at_slot.parse().map_err(|_| Error)?)
+            } else {
+                context.slot.checked_add(c.expiry_slots).ok_or(Error)?
+            },
         )?;
         Ok(IssueRead {
             request,
@@ -178,7 +239,10 @@ impl<T: Transport> Port<T> {
             .map_err(|_| Error)?;
         let prepared =
             chain::prepare(&work.action, work.context, work.limits, at).map_err(|_| Error)?;
-        let signed = if matches!(work.action.plan().rail(), Rail::Release | Rail::Payout) {
+        let signed = if matches!(
+            work.action.plan().rail(),
+            Rail::Release | Rail::Payout | Rail::Sweep
+        ) {
             prepared
                 .sign(self.loaded.funds.clone(), simulation, at)
                 .map_err(|_| Error)?
@@ -311,6 +375,9 @@ impl IssueRead {
             Some((gateway, policy)) => {
                 funding.expose_demo_ingress(j, gateway, policy, dispatch, self.counters)
             }
+            None if self.request.rail == Rail::Sweep => {
+                funding.expose_escrow_sweep(j, dispatch, self.counters)
+            }
             None => funding.expose_chain(j, dispatch, self.request.rail, self.counters),
         }
         .map_err(|_| Error)?;
@@ -353,6 +420,16 @@ impl ReconcileRead {
                 .funds()
                 .iter()
                 .any(|o| o.attempt == Some(self.request.wire.attempt) && o.terminal)
+                || j.state().map_err(|_| Error)?.escrows().iter().any(|e| {
+                    e.attempt == Some(self.request.wire.attempt)
+                        && matches!(
+                            e.status,
+                            cinder_journal::escrow::Status::Funding
+                                | cinder_journal::escrow::Status::Available
+                                | cinder_journal::escrow::Status::Refunded
+                                | cinder_journal::escrow::Status::Failed
+                        )
+                })
             {
                 Outcome::Settled
             } else {

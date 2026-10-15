@@ -14,6 +14,9 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Binding {
+    /// Explicit new-history escrow mode, absent for legacy fixture regressions.
+    #[serde(default)]
+    pub escrow: Option<funding::escrow::Routing>,
     /// Explicit public offline route.
     pub route: Route,
     /// Exact public native owner encoding.
@@ -77,6 +80,15 @@ pub(super) fn profile(account: &str) -> Profile {
 }
 /// Construct qualified FAKE ports only in the non-default fixture feature.
 pub fn controller(b: &Binding) -> Result<Controller, Error> {
+    if let Some(routing) = &b.escrow {
+        return Controller::new_escrow(
+            profile(&b.account),
+            b.route.clone(),
+            routing.clone(),
+            Zeroizing::new(b.broker_seed),
+        )
+        .map_err(|_| Error);
+    }
     Controller::new(
         profile(&b.account),
         b.route.clone(),

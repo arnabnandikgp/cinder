@@ -29,7 +29,7 @@
 | [P22 — Offline adversarial acceptance](PLAN.md#p22) | closed | SDK/service-driven trading, funding and recovery workflows preserve accounting under reproducible external fixtures, process faults and races. | [#53](https://github.com/arnabnandikgp/cinder/pull/53), merged `8247d24` |
 | [P23A — Venue-directed custody contract](PLAN.md#p23a) | in progress | Approved escrow ownership, full-batch sweep/refund, credit and payout/recovery rules are explicit and distinguish future behavior from existing evidence. | [#64](https://github.com/arnabnandikgp/cinder/pull/64), ready/open against `product/tee-v1` |
 | [P23B — Atomic escrow program/client](PLAN.md#p23b) | in progress | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | [#65](https://github.com/arnabnandikgp/cinder/pull/65), ready/open above #64; offline checks pass |
-| [P23C — Escrow funding integration](PLAN.md#p23c) | open | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | — |
+| [P23C — Escrow funding integration](PLAN.md#p23c) | in progress | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | Local `tee/p23c-connect`, above #65 |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -39,6 +39,31 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P23C escrow connection — offline verification in progress
+
+Branch `tee/p23c-connect` starts at #65 head
+`504fefc332d86c91577b27389856dc2420e6b8c2`, above #64/#65 in native stack #66.
+Scope is PLAN P23C / ADR 0030, offline only. Internal slices: (1) journal-owned
+pending ingress, atomic handoff recognition and reservations; (2) versioned sweep
+codec, original-wire persistence and qualified chain evidence; (3) shared
+Runtime/SDK lifecycle, payout/recovery and joined SBF regressions. No second
+balance database, new program, history migration, live run, onboarding or frontend.
+Pending owner inventory remains outside pooled assets/claims. Handoff uses the
+existing receipt/debt rules and reserves the new physical funding and attributable
+spendable credits until qualified native completion. Returns/payouts keep the
+existing consumption counters. Native missing credit and earlier residuals remain
+deferred; neither demo assumptions nor old hardware evidence are upgraded.
+
+The connected slices are implemented. The eight focused original-chain/controller
+tests and separate recovery-return/shared-counter test pass; broad Rust and the
+initial full 90-test SBF suite passed before final hardening. Final exact-source
+full-suite verification is running, not inherited from that earlier result.
+Engine 24, v2 sweep codec, `ingress` read family 10 and new explicit Runtime mode
+are documented in ADR 0030. Existing live funding manifests reject activation.
+
+Next: complete final verification, record its exact source/checks and publish one
+dependent PR. Do not merge predecessors or close unreviewed phases.
 
 ### P23B atomic escrow program/client — 2026-10-15
 
@@ -5233,10 +5258,39 @@ Merge: none.
 
 ## P23C — Escrow funding integration
 
-Work: not started; scoped in PLAN and ADR 0030.
-Verification: not run; owning journal/controller/SDK/Runtime and SBF acceptance cases remain required.
-Unexpected: none yet.
-Next: join qualified sweep receipts and pending ownership to the current financial journal after P23B; retain qualified native credit and payout/recovery gates.
+Work: journal-owned pending inventory, stable exact-batch handoff identity and
+atomic kernel receipt plus customer/house/location restrictions; explicit v2
+sweep codec and original signed-wire retention; finalized original deposit,
+batch/token/code/refund/sweep qualification; staged Runtime/controller join and
+private `ingress` SDK reads. Full strong native completion releases restrictions;
+demo/partial/unknown evidence cannot. Recovery recalls only unallocated or
+strongly zero-effect native funding through the original return rail. Full native
+funding returns and final customer payouts retain the existing shared counters.
+Engine revision 24 explicitly rejects old histories; no migration/deployment.
+
+Verification: final exact-source offline suite underway. Initial full local
+vault run passed 90/90, including both new P23C and existing P21/P22/P23B cases;
+it preceded final hardening and is not the final source receipt. Eight focused
+service escrow tests now pass, including expired original/no-retained-wire
+closure, freeze priority, forecast conservation and return/counter qualification.
+
+Unexpected: handoff must be a single atomic control candidate because journal
+observations intentionally survive rejected control proposals. Restricting only
+nominal house-cash increases misses unabsorbed-debt recoveries; the residual gross
+restriction now covers both debt cases. Exposed reconciliation must be prioritized
+over earlier unexposed queue entries. Accepted-but-not-prepared funding stays in
+the forecast once; a recovery return is not pending venue ingress. First-seen
+finalized refunds retain inventory/refund atomically. Recovery custody evidence
+must not predate the actual retained sweep slot. These are offline correctness
+hardening, not changed financial economics or relaxed external qualification.
+
+Boundary: static configured deposit locators remain; no self-service onboarding,
+frontend, native-credit investigation, AWS/chain/venue run or fresh live activation.
+Existing live manifests reject the new escrow funding mode. Unknown or partial
+native allocation remains restricted, not magically recovered. No user source or
+research was removed; only a rebuildable incremental cache was reclaimed.
+
+Next: finish final checks, publish above #65 and record actual CI/review state.
 PR: none.
 Merge: none.
 

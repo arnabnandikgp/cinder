@@ -32,7 +32,7 @@ fn signed_read_schema_has_the_same_p18_envelope_and_typescript_suffix() {
     };
     let original = req.message();
     let prefix = &original[..original.len() - 1];
-    for kind in 0..10 {
+    for kind in 0..cinder_api::reads::KINDS {
         req.command = Command::Read(cinder_api::reads::Query {
             kind,
             cursor: [0; 40],

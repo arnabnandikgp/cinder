@@ -392,6 +392,16 @@ impl<B: Backend, P: Protection> Journal<B, P> {
                 .iter()
                 .any(|o| !o.terminal || o.faulted || o.demo.is_some())
             || s.attempts().iter().any(|a| match a.kind {
+                AttemptKind::Escrow => !s.escrows().iter().any(|e| {
+                    e.attempt == Some(a.key)
+                        && matches!(
+                            e.status,
+                            crate::escrow::Status::Failed
+                                | crate::escrow::Status::Refunded
+                                | crate::escrow::Status::Available
+                                | crate::escrow::Status::Returned
+                        )
+                }),
                 AttemptKind::Funds => !s
                     .funds()
                     .iter()

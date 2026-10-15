@@ -34,6 +34,20 @@ SDK quantities remain bigint.
 | grants / 7 | Active current-epoch terms and accepted-order budget usage. Owner sees active grants; an agent sees only its own. No expired/revoked grants, other-agent directory or native credentials. |
 | markets / 8 | Configured unit/quote precision versions, exact quote-atom-per-lot-times-tick ratio, supported GTC/ALO/IOC mask 7, optional policy cap. Governed kernel metadata, not instrument labels, public feeds or an invented native decimal grid. Native/display mappings still come from approved deployment configuration. |
 | updates / 9 | Replacement snapshot: discriminator 2 account row, 0 configured position row, 1 current receipt. Selected economic histories are separately subscribable families. No native IDs/house capital/global head. |
+| ingress / 10 | P23C own-account escrow inventory: private request ID[32], public route PDA[32], status u8, original amount i128, recognized boolean u8, customer restriction i128. No another-owner inventory or additive account balance. |
+
+`ingress` appends a read family without changing the original ten tags or account
+row. Status values: `0 pending`, `1 prepared`, `2 exposed`, `3 failed`, `4 refunded`,
+`5 funding`, `6 credited`, `7 returned`. The amount is the full original batch in
+quote atoms. `recognized` means the original finalized handoff has been booked,
+not that native credit or payout has completed. `credited` records completed
+funding for that batch; it is not its current unspent or withdrawable balance.
+`returned` means a qualified recovery return into the PDA payout vault, not payment
+to the customer. Customer restriction comes from the common authoritative hold;
+account `held` already includes it, so never add it to that field again. Public
+route metadata is not a native per-user account ID. Existing READ grants permit
+all these own-account views under their current authorization, not only rows for
+the grant's trading market. See [ADR 0030](0030-venue-directed-escrow.md).
 
 Forced liquidation/ADL/restoration book effects are in movements/current positions;
 ordinary fills do not claim a complete source-specific forced-fill allocation
@@ -121,7 +135,7 @@ NOT proof of erasing Snow internals/browser copies; ADR 0021's release limit sta
 regressions. `node tools/web-channel/check.mjs`: shared native/WASM core, independent
 verifier, actual Node/Chrome SDK → opaque relay → separate Rust service → protected
 witnessed journal. Both transports run all eight original commands/ten read
-families; stream cases cover initial/correlated pages, other-ingress commits,
+families (eleven with P23C ingress); stream cases cover initial/correlated pages, other-ingress commits,
 pagination, agent privacy/revoke, idle expiry, missing delivery/fresh reconciliation,
 real slow-consumer overflow and witness loss. Rust tests cover deduplicated actual
 fills, unknown/zero/settled funding and exact restart projections.

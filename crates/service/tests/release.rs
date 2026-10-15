@@ -167,6 +167,7 @@ fn runtime_configuration() -> cinder_service::runtime::Configuration {
         perp_tag: p.perp_tag,
         execution: policy(),
         route: route(),
+        escrow: None,
         trading_epoch: 1,
         chain: None,
         demo_allocation: None,
@@ -210,6 +211,43 @@ fn confidential_configuration_constructs_the_same_actual_controller_contract() {
     let mut keys = runtime_keys();
     keys.remove(&cinder_service::boot::Role::Storage);
     assert!(runtime_configuration().construct(keys).is_err());
+}
+
+#[test]
+fn escrow_configuration_is_explicit_binds_actual_route_and_changes_application_commitment() {
+    let legacy = runtime_configuration()
+        .construct(runtime_keys())
+        .unwrap()
+        .commitment();
+    assert!(
+        serde_json::to_value(runtime_configuration())
+            .unwrap()
+            .get("escrow")
+            .is_none()
+    );
+    let r = route();
+    let routing = cinder_pacifica::funding::escrow::Routing {
+        route: cinder_pacifica::funding::chain::pda(r.program, &[b"venue_route", &r.config])
+            .unwrap(),
+        venue: config().venue.bytes(),
+    };
+    let mut cfg = runtime_configuration();
+    cfg.escrow = Some(routing.clone());
+    assert_ne!(cfg.construct(runtime_keys()).unwrap().commitment(), legacy);
+    for wrong in [
+        cinder_pacifica::funding::escrow::Routing {
+            route: [0; 32],
+            ..routing.clone()
+        },
+        cinder_pacifica::funding::escrow::Routing {
+            venue: [99; 32],
+            ..routing
+        },
+    ] {
+        let mut cfg = runtime_configuration();
+        cfg.escrow = Some(wrong);
+        assert!(cfg.construct(runtime_keys()).is_err());
+    }
 }
 
 #[cfg(feature = "local-fixture")]

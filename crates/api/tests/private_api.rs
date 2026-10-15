@@ -411,12 +411,75 @@ fn read_families_are_signed_scoped_bounded_and_do_not_commit() {
         assert_eq!(call(&mut s, &foreign), Err(Error::Unauthorized));
     }
     assert_eq!(s.head(), head);
-    for (kind, limit) in [(10, 1), (0, 0), (0, 65)] {
+    for (kind, limit) in [(reads::KINDS, 1), (0, 0), (0, 65)] {
         assert_eq!(
             call(&mut s, &owner_request(91, query(kind, limit, [0; 40]))),
             Err(Error::Invalid)
         );
     }
+}
+
+#[test]
+fn escrow_inventory_reads_are_owner_scoped_and_never_inflate_account_balances() {
+    let t = Temp::new();
+    let mut s = seed(&t);
+    let before = s
+        .state()
+        .unwrap()
+        .ledger()
+        .book(Owner::Customer(user(1)))
+        .unwrap()
+        .cash();
+    for (n, owner) in [(60, user(1)), (61, user(2))] {
+        let mut request = support::request(n);
+        request.account = owner;
+        let b = cinder_journal::escrow::Batch {
+            request,
+            route: [20; 32],
+            batch: [n; 32],
+            operation: [n; 32],
+            owner: wallet(if n == 60 { 1 } else { 2 })
+                .verifying_key()
+                .to_bytes(),
+            amount: cash(100),
+            epoch: 1,
+            expires_at_slot: 500,
+            signature: [n; 64],
+        };
+        assert_eq!(
+            commit(
+                &mut s,
+                n,
+                vec![],
+                vec![Control::Escrow(cinder_journal::escrow::Action::Pending(
+                    Box::new(b)
+                ))]
+            )
+            .receipt
+            .controls,
+            None
+        );
+    }
+    let head = s.head();
+    let a = page(call(&mut s, &owner_request(90, query(10, 64, [0; 40]))).unwrap());
+    assert_eq!(a.rows.len(), 1);
+    assert_eq!(&a.rows[0].as_bytes()[..32], &[60; 32]);
+    assert_eq!(a.rows[0].as_bytes()[64], 0);
+    let req = request(91, 2, 1, query(10, 64, [0; 40]), &wallet(2), [8; 32]);
+    let b = page(call(&mut s, &req).unwrap());
+    assert_eq!(b.rows.len(), 1);
+    assert_eq!(&b.rows[0].as_bytes()[..32], &[61; 32]);
+    assert_ne!(a.revision, b.revision);
+    assert_eq!(s.head(), head);
+    assert_eq!(
+        s.state()
+            .unwrap()
+            .ledger()
+            .book(Owner::Customer(user(1)))
+            .unwrap()
+            .cash(),
+        before
+    );
 }
 #[test]
 fn read_cursors_bind_own_query_and_changed_snapshot_but_not_other_activity() {

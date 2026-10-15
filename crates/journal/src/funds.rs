@@ -780,7 +780,7 @@ impl State {
         Ok(())
     }
 
-    fn funds_complete(&self, index: usize) -> bool {
+    pub(crate) fn funds_complete(&self, index: usize) -> bool {
         let o = &self.funds[index];
         let Some(t) = &o.proof else {
             return false;

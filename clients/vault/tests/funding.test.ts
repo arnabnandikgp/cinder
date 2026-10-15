@@ -7,6 +7,7 @@ import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SystemProgram, Tr
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { fundingInstruction, verifyFundingWire } from '../src/funding.ts';
 import { identity, movement, receiptAddress, u64, vaultAddresses, vaultProgram } from '../src/index.ts';
+import {depositEscrowInstruction,sweepEscrowInstruction,venueEscrowAddresses,escrowBatchAddress} from '../src/escrow.ts';
 
 // No server, live key or signing service: codec-only disposable local identities.
 const idl = JSON.parse(readFileSync(new URL('../idl/cinder_vault.json', import.meta.url), 'utf8')) as Idl;
@@ -30,7 +31,7 @@ function contract(rail = 'Release', overrides: Record<string, unknown> = {}) {
     program: bytes(programId), domain: bytes(domain), pool: bytes(pool), config: bytes(config), vault: bytes(vault),
     mint: bytes(mint), funds: bytes(funds.publicKey), broker: bytes(broker.publicKey), broker_tokens: bytes(brokerTokens),
     decimals: 6, venue_program: bytes(native), venue_vault: bytes(venueVault), epoch: '1', operation: bytes(operation),
-    customer: bytes(owner.publicKey), amount: '9007199254740993', sequence: '0', paid: '0',
+    customer: rail==='Payout'||rail==='Sweep'?bytes(owner.publicKey):bytes(Buffer.alloc(32)), amount: '9007199254740993', sequence: '0', paid: '0',
     recipient_tokens: rail === 'Payout' ? bytes(getAssociatedTokenAddressSync(mint, owner.publicKey)) : bytes(Buffer.alloc(32)),
     expires_at_slot: '18446744073709551615', ...overrides };
   return Buffer.from(JSON.stringify(Object.fromEntries(Object.keys(c).sort().map(k => [k, c[k]]))));
@@ -48,6 +49,26 @@ test('funding contract builds the exact Anchor release with u64s above JavaScrip
   const verified = await verifyFundingWire(program, input, signed(built.instruction));
   assert.equal(verified.signature.length, 64); assert.equal(verified.binding.length, 32);
   assert.deepEqual(verified.binding, createHash('sha256').update(input).digest());
+});
+test('P23C original escrow wire reproduces exactly from independent Anchor owner builder',async()=>{
+  const fixture=JSON.parse(readFileSync(new URL('../../../crates/pacifica/tests/fixtures/escrow-deposit-public.json',import.meta.url),'utf8'));
+  const c=JSON.parse(readFileSync(new URL('../../../crates/pacifica/tests/fixtures/funding-codec-public.json',import.meta.url),'utf8')).vectors[6].contract;
+  const disposable=Keypair.fromSeed(Buffer.alloc(32,11)),p=vaultProgram(provider,{...idl,address:new PublicKey(c.program).toBase58()});
+  const context={domain:Uint8Array.from(c.domain),pool:Uint8Array.from(c.pool),mint:new PublicKey(c.mint),config:new PublicKey(c.config),owner:disposable.publicKey};
+  const ix=await depositEscrowInstruction(p,context,{epoch:1n,operation:Uint8Array.from(fixture.operation),expiresAtSlot:400n},20_000_000n,new PublicKey(c.recipient_tokens));
+  const tx=new Transaction({feePayer:disposable.publicKey,recentBlockhash:new PublicKey(Buffer.alloc(32,51)).toBase58()}).add(ix);tx.sign(disposable);
+  assert.deepEqual(tx.serialize(),Buffer.from(fixture.wire));assert(tx.verifySignatures(true));
+});
+test('P23C v2 sweep binds full original batch and rejects mixed legacy schema or mutated addresses',async()=>{
+  const depositOperation=Buffer.alloc(32,41),e=venueEscrowAddresses(programId,config,owner.publicKey);
+  const sweep=Object.fromEntries(Object.entries({route:bytes(e.route),escrow:bytes(e.escrow),tokens:bytes(e.escrowTokens),batch:bytes(escrowBatchAddress(programId,e.escrow,depositOperation)),operation:bytes(depositOperation),expires_at_slot:'400'}).sort(([a],[b])=>a.localeCompare(b)));
+  const input=contract('Sweep',{schema:'cinder-vault-funding-v2',sweep,expires_at_slot:'400'}),built=await fundingInstruction(program,input);
+  const want=await sweepEscrowInstruction(program,{domain,pool,mint,config,owner:owner.publicKey},depositOperation,{epoch:1n,operation,expiresAtSlot:400n},funds.publicKey,brokerTokens,0n);
+  assert.deepEqual(built.instruction,want);assert.equal(want.data.length,96);
+  await verifyFundingWire(program,input,signed(want));
+  for(const change of [{schema:'cinder-vault-funding-v1'},{sweep:{...sweep,batch:bytes(key().publicKey)}},{expires_at_slot:'401'},{customer:bytes(Buffer.alloc(32))}])
+    await assert.rejects(fundingInstruction(program,contract('Sweep',{schema:'cinder-vault-funding-v2',sweep,expires_at_slot:'400',...change})));
+  await assert.rejects(fundingInstruction(program,contract('Release',{sweep:null})));
 });
 test('each allowed physical rail verifies its exact disposable signed wire', async () => {
   for (const rail of ['Release', 'Return', 'Deposit', 'Payout']) {

@@ -29,6 +29,25 @@ The initial adverse-state fixture failures are recorded in TRACKER; final test
 counts and publication/CI/review receipts belong there. This does not promote old
 live M1/M2 results into new escrow evidence or supply the pending P23C journal join.
 
+P23C promotes the exact-batch pending/handoff/credit contract into
+`journal::escrow`, `pacifica::funding::escrow` and the service's original-wire
+chain qualifiers. `escrow-deposit-public.json` is a reproducible disposable-key
+Anchor owner-deposit vector, not a transaction submitted to a public chain.
+The permanent acceptance-manifest `escrow` case requires both P23C HTTP/WebSocket
+SDK → service → protected journal → compiled SBF workflows. It also retains
+the P22 legacy route and P21 independent-claims workflows. Controller/RPC tests
+qualify exact fields and failure boundaries using explicitly synthetic chain
+responses; only the local SBF suite actually executes Solana instructions.
+The SDK appends private `ingress` rows, not a financial balance store.
+
+New coverage includes atomic debt-aware restrictions, full-credit/restart,
+original-wire/lost-response/no-resend behavior, refund races, frozen reconciliation,
+strong zero-effect recovery returns and shared counters. Runtime tests exercise
+the actual encrypted journal and release the writer during external I/O. Current
+source and exact checks/review/CI belong to TRACKER. No old hardware receipt is
+upgraded; live activation, external credit correctness and the deferred
+missing-credit/residual inventory are unchanged.
+
 ## P21A initial web-channel qualification
 
 [ADR 0021](../architecture/0021-confidential-web-api.md) and the

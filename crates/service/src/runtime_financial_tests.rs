@@ -21,6 +21,126 @@ impl Transport for NoNativePost {
         panic!("cash-only allocation cannot POST orders or withdrawals")
     }
 }
+struct EscrowRpc<'a> {
+    app: &'a Application,
+    inner: chain_fixture::Fake,
+    refund: bool,
+    changed: bool,
+}
+impl chain_rpc::Transport for EscrowRpc<'_> {
+    fn post(&mut self, body: PrivateBytes) -> Result<chain_rpc::Response, Error> {
+        let value: Value = serde_json::from_slice(body.as_bytes()).unwrap();
+        if value["method"] == "simulateTransaction" && !self.changed {
+            let mut active = self
+                .app
+                .active
+                .try_lock()
+                .expect("escrow RPC cannot hold the financial writer");
+            let store = &mut active.store;
+            let controls = if self.refund {
+                vec![Control::Escrow(cinder_journal::escrow::Action::Refund(
+                    initialization_support::request(10),
+                ))]
+            } else {
+                vec![]
+            };
+            let tx = Transaction {
+                id: CommitId::new([70; 32]).unwrap(),
+                expected: store.head(),
+                at: 100,
+                evidence: vec![],
+                inputs: vec![],
+                order_observations: vec![],
+                funds_observations: vec![],
+                controls,
+            };
+            assert_eq!(store.commit(tx).unwrap().receipt.controls, None);
+            self.changed = true;
+        }
+        self.inner.post(body)
+    }
+}
+#[test]
+fn offline_runtime_escrow_path_releases_writer_for_io_and_rechecks_refund_before_signing() {
+    use chain_fixture::escrow_tests as escrow;
+    for refund in [false, true] {
+        let metrics = Arc::new(Metrics::default());
+        let mut app = application(metrics.clone());
+        app.clock = Arc::new(Fixed);
+        app.deadline = 10_000;
+        // Deliberately direct offline qualification. Shipping manifest funding
+        // activation for this new mode remains closed; no old demo grant is used.
+        app.gates.funding = false;
+        let (mut journal, funding) = escrow::seed(store_for(metrics, chain_fixture::config()));
+        let original = escrow::start(&mut journal, &funding);
+        let fake = chain_fixture::fake(10);
+        escrow::pending(&fake, &original, &funding);
+        let loaded = chain_fixture::loaded(&funding, vec![]);
+        {
+            let mut a = app.active.lock().unwrap();
+            a.store = journal;
+            a.funding = funding;
+        }
+        let mut port = loaded
+            .with_transport(
+                EscrowRpc {
+                    app: &app,
+                    inner: fake.clone(),
+                    refund,
+                    changed: false,
+                },
+                Arc::new(Fixed),
+            )
+            .unwrap();
+        let result = app.tick_funds(Some(&mut port), &mut NoNativePost);
+        let mut a = app.active.lock().unwrap();
+        let Active { store, funding, .. } = &mut *a;
+        let wire = funding
+            .retained_wire(store, initialization_support::attempt(10), 100)
+            .unwrap();
+        if refund {
+            assert!(result.is_err());
+            assert!(wire.is_none());
+            assert_eq!(fake.calls("sendTransaction"), 0);
+            continue;
+        }
+        result.unwrap();
+        assert!(wire.is_some());
+        assert_eq!(fake.calls("sendTransaction"), 1);
+        chain_fixture::retain_at(
+            &fake,
+            store,
+            funding,
+            initialization_support::attempt(10),
+            100,
+        );
+        let tx = Transaction {
+            id: CommitId::new([71; 32]).unwrap(),
+            expected: store.head(),
+            at: 100,
+            evidence: vec![],
+            inputs: vec![],
+            order_observations: vec![],
+            funds_observations: vec![],
+            controls: vec![Control::Funds(cinder_journal::funds::Action::Freeze)],
+        };
+        assert_eq!(store.commit(tx).unwrap().receipt.controls, None);
+        drop(a);
+        app.tick_funds(Some(&mut port), &mut NoNativePost).unwrap();
+        let a = app.active.lock().unwrap();
+        let s = a.store.state().unwrap();
+        assert!(s.frozen());
+        assert_eq!(s.ledger().broker().atoms(), 20_000_000);
+        assert_eq!(
+            s.reserved(Resource::Customer(initialization_support::user(1)))
+                .unwrap()
+                .atoms(),
+            20_000_000
+        );
+        assert!(!s.native_funding_ready());
+        assert_eq!(fake.calls("sendTransaction"), 1);
+    }
+}
 struct FlatRpc<'a> {
     app: &'a Application,
     inner: chain_fixture::Fake,

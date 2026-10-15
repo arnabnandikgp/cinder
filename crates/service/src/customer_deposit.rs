@@ -167,6 +167,9 @@ pub fn recognize<B: Backend, P: Protection>(
     }
     let account = deposit.account();
     let t = deposit.into_target();
+    if t.sweep.is_some() {
+        return Err(Error);
+    }
     let domain = journal.configuration().domain;
     if account != locator.account
         || deployment.program != t.program

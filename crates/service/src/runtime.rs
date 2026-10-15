@@ -167,6 +167,10 @@ pub struct Configuration {
     pub execution: Policy,
     /// Loaded funds route; chain signing requires version 2's separate role.
     pub route: Route,
+    /// Explicit new-history escrow composition. Existing measured live funding
+    /// approvals do not authorize this mode; fresh activation is separately scoped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escrow: Option<cinder_pacifica::funding::escrow::Routing>,
     /// Trading-agent epoch, distinct from witness/storage generation.
     pub trading_epoch: u64,
     /// Version 2 private chain limits/path. Omitted in old five-role profiles.
@@ -191,6 +195,14 @@ impl Configuration {
         mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
     ) -> Result<Loaded, Error> {
         manifest.validate()?;
+        if self.escrow.is_some()
+            && (manifest.gates.funding
+                || manifest.version == 6
+                || self.demo_allocation.is_some()
+                || manifest.demo_deposit.is_some())
+        {
+            return Err(Error);
+        }
         let allocation = self.demo_allocation.clone();
         if manifest.version == 6 && allocation.is_none() {
             return Err(Error);
@@ -286,7 +298,12 @@ impl Configuration {
             )
         }
         .map_err(|_| Error)?;
-        let funding = if demo_ingress_only {
+        let funding = if let Some(routing) = self.escrow {
+            if demo_ingress_only || self.demo_allocation.is_some() {
+                return Err(Error);
+            }
+            Controller::new_escrow(profile, self.route, routing, take(keys, Role::Broker)?)
+        } else if demo_ingress_only {
             Controller::new_demo_ingress(profile, self.route, take(keys, Role::Broker)?)
         } else {
             Controller::new(profile, self.route, take(keys, Role::Broker)?)
@@ -863,26 +880,34 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                 Some(chain) if chain.deposit_count() != 0 => {
                     let index = active.deposit_index;
                     let count = chain.deposit_count();
-                    if crate::customer_deposit::recorded(
-                        &active.store,
-                        chain.deposit_locator(index)?,
-                    )? {
+                    let escrow = active.funding.escrow_routing().cloned();
+                    if if escrow.is_some() {
+                        crate::escrow_deposit::recorded(
+                            &active.store,
+                            chain.deposit_locator(index)?,
+                        )?
+                    } else {
+                        crate::customer_deposit::recorded(
+                            &active.store,
+                            chain.deposit_locator(index)?,
+                        )?
+                    } {
                         active.deposit_index = (index + 1) % count;
                         None
                     } else {
-                        Some((index, count, active.funding.route().clone()))
+                        Some((index, count, active.funding.route().clone(), escrow))
                     }
                 }
                 _ => None,
             }
         };
-        if let Some((index, count, route)) = deposit {
+        if let Some((index, count, route, escrow)) = deposit {
             // Original signature/code/account RPC I/O has no journal guard.
-            let found = io
-                .chain
-                .as_mut()
-                .ok_or(Error)?
-                .collect_deposit(&route, index)?;
+            let found =
+                io.chain
+                    .as_mut()
+                    .ok_or(Error)?
+                    .collect_deposit(&route, escrow.is_some(), index)?;
             let mut active = self.active.lock().map_err(|_| Error)?;
             let current = self.active_time()?;
             if active
@@ -892,10 +917,12 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                 .logical_time()
                 > current
                 || active.funding.route() != &route
+                || active.funding.escrow_routing() != escrow.as_ref()
             {
                 return Err(Error);
             }
-            match found.complete(&mut active.store)? {
+            let Active { store, funding, .. } = &mut *active;
+            match found.complete(store, funding)? {
                 chain_funding::Outcome::Pending
                 | chain_funding::Outcome::Rejected
                 | chain_funding::Outcome::Settled => active.deposit_index = (index + 1) % count,

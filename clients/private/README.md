@@ -64,6 +64,14 @@ npm dependencies.
 
 ## Confidential browser/Node HTTP and WebSocket
 
+P23C appends `query: { kind: 'ingress' }` to signed private reads, with the same
+account/agent authorization, paging and encrypted HTTP/WebSocket carrier. It shows
+pending/refunded batches and recognized funding/credited/returned lifecycle, not
+a second balance. `credited` is historical funding completion, not current free
+collateral; `returned` is PDA vault arrival, not customer payment. Restriction
+amounts already contribute to account `held`. Exact fields/statuses are in the
+[private-read contract](../../docs/architecture/private-read-contract.md).
+
 `src/browser.ts` is the public web bundle entry. `connectWebChannel` fixes AWS-only
 trust and implements the same `ConfidentialChannel` consumed by `PrivateClient`.
 Load the generated `channel.js`/`channel_bg.wasm` from your trusted client

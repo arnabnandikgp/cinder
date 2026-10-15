@@ -929,6 +929,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Escrow(action) => {
+                w.byte(13);
+                crate::escrow::encode_action(&mut w, action);
+            }
             Control::Recovery(action) => {
                 w.byte(12);
                 crate::recovery::encode_action(&mut w, action);
@@ -1063,6 +1067,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             10 => Control::Restoration(crate::restoration::decode_action(&mut r)?),
             11 => Control::ResolveRaw(crate::raw::decode_resolution(&mut r)?),
             12 => Control::Recovery(crate::recovery::decode_action(&mut r)?),
+            13 => Control::Escrow(crate::escrow::decode_action(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }
@@ -1267,6 +1272,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
             w.item(&p.basis());
         }
     }
+    crate::escrow::encode_state(&mut w, s);
     w.count(s.holds.len());
     for hold in &s.holds {
         w.item(&hold.request);
@@ -1276,6 +1282,7 @@ pub(crate) fn state_commitment(s: &State) -> Result<[u8; 32], Error> {
     w.count(s.attempts.len());
     for a in &s.attempts {
         w.byte(match a.kind {
+            AttemptKind::Escrow => 6,
             AttemptKind::Restoration => 5,
             AttemptKind::Emergency => 4,
             AttemptKind::Funds => 3,

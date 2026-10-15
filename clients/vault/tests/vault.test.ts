@@ -132,6 +132,9 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 for (const carrier of ['http','websocket'] as const) test(`P22 ${carrier} complete controller lifecycle and process faults`, {timeout:120_000}, async()=>{
   await runAcceptance({program,connection,governance,programData,fund,send},carrier);
 });
+for (const carrier of ['http','websocket'] as const) test(`P23C ${carrier} escrow-to-native-to-payout joined lifecycle`, {timeout:120_000}, async()=>{
+  await runAcceptance({program,connection,governance,programData,fund,send},carrier,true);
+});
 
 const signerKey=(k:Keypair)=>createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.from(k.secretKey.subarray(0,32))]),format:'der',type:'pkcs8'});
 const toBytes=(p:PublicKey|Uint8Array)=>Array.from(p instanceof PublicKey?p.toBytes():p);

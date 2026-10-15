@@ -21,6 +21,7 @@ test("manifest requires declarations, not stale comments, strings or longer iden
       "normal",
       'const stale = "complete controller lifecycle and process faults";',
     ],
+    ["escrow", '// test(`P23C http escrow-to-native-to-payout joined lifecycle`, () => {});'],
     [
       "normal",
       'const stale = "test(`P22 http complete controller lifecycle and process faults`, () => {});";',

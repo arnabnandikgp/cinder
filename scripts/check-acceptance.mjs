@@ -94,6 +94,7 @@ export function validate(
     if (typeof c.id !== "string" || !c.id || seen.has(c.id))
       errors.push("Missing/duplicate case identity");
     seen.add(c.id);
+    if(c.prefix!==undefined&&!['P21','P22','P23C'].includes(c.prefix))errors.push(`Invalid test prefix ${c.id}`);
     if (
       !["workspace", "browser", "vault"].includes(c.runner) ||
       !["synthetic", "local-sbf"].includes(c.evidence)
