@@ -355,6 +355,65 @@ impl Controller {
         }));
         checked(j.commit(tx)?)
     }
+    /// Durably abandon only an expired, never-exposed original sweep. The owner
+    /// may still refund the on-chain batch; this grants no replacement attempt.
+    /// Setup freshness/freeze cannot prevent cleanup. Exposed work is untouched.
+    pub fn cancel_expired_escrow_sweep<B: Backend, P: Protection>(
+        &self,
+        j: &mut Journal<B, P>,
+        at: u64,
+        attempt: AttemptKey,
+    ) -> Result<bool, Error> {
+        if self.escrow.is_none() {
+            return Ok(false);
+        }
+        let Some(entry) = j
+            .state()?
+            .escrows()
+            .iter()
+            .find(|e| e.attempt == Some(attempt))
+        else {
+            return Ok(false);
+        };
+        if entry.status != Status::Prepared {
+            return Ok(false);
+        }
+        let original = j
+            .state()?
+            .attempts()
+            .iter()
+            .find(|a| a.key == attempt)
+            .ok_or(Error::Qualification)?;
+        if original.kind != AttemptKind::Escrow || original.possibly_exposed {
+            return Err(Error::Qualification);
+        }
+        if original.expires_at > at {
+            return Ok(false);
+        }
+        let batch = entry.batch.clone();
+        let expiry = original.expires_at;
+        // Verify the accepted head before mutation; a cached projection cannot
+        // establish that an unobserved competing writer never exposed this key.
+        self.history(j, at)?;
+        self.validate_batch(&batch)?;
+        let mut hash = Sha256::new();
+        hash.update(b"CINDER-ESCROW-EXPIRED-2\0");
+        hash.update(self.contract);
+        hash.update(attempt.encode());
+        hash.update(expiry.to_be_bytes());
+        let mut tx = self.tx(
+            j,
+            CommitId::new(hash.finalize().into())?,
+            at,
+            Record::Ingress {
+                raw: b"expired original never-exposed sweep".to_vec(),
+            },
+        )?;
+        tx.controls
+            .push(Control::Escrow(Action::Cancel(batch.request)));
+        checked(j.commit(tx)?)?;
+        Ok(true)
+    }
     /// Continue only the original owner's full-batch venue-funding consent.
     /// Internal Approval is a trusted digest, not a wallet signature, payout
     /// authorization or external signing API. Reconcile exposed work first,
@@ -384,6 +443,11 @@ impl Controller {
         self.validate_batch(&e.batch)?;
         if e.status == Status::Exposed {
             return Ok(e.attempt);
+        }
+        if e.status == Status::Prepared
+            && self.cancel_expired_escrow_sweep(j, at, e.attempt.ok_or(Error::Qualification)?)?
+        {
+            return Ok(None);
         }
         if !self.ready(&h, at) || j.state()?.frozen() {
             return Ok(None);

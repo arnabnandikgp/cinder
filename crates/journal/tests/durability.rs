@@ -126,6 +126,7 @@ fn replay_rejects_corrupt_bytes_versions_and_recomputed_wrong_projection() {
         (0, 13, 20),
         (0, 13, 21),
         (0, 13, 22),
+        (0, 13, 23),
         (0, 13, 10),
         (0, 10, 7),
         (0, 10, 6),

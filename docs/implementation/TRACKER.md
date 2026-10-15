@@ -55,8 +55,8 @@ spendable credits until qualified native completion. Returns/payouts keep the
 existing consumption counters. Native missing credit and earlier residuals remain
 deferred; neither demo assumptions nor old hardware evidence are upgraded.
 
-The connected slices are implemented. The eight focused original-chain/controller
-tests include recovery-return/shared-counter qualification. Final native checks
+The connected slices are implemented. The eight original-chain/controller
+tests include recovery-return/shared-counter qualification. Initial native checks
 pass: all-feature Rust 623 tests, shipping-default Rust 562 tests, strict
 default/all-feature lint/build, 80 contract checks and 42 SDK/relay tests. The
 92-case SBF run passed 91, including both new escrow lifecycles and old recovery;
@@ -74,9 +74,20 @@ metadata. Final publication contract guards pass 80/80 from a clean source expor
 Current exact PR head/check state is also recorded in its description. Hosted CI
 and review remain pending; technical completion is not merge or live qualification.
 
-Next: handle actual #67 CI/review and review predecessors before any separately
-authorized bottom-up merge. Do not resume missing-credit/live tests, onboard users
-or connect the terminal under this PR's offline authority.
+Review follow-up (2026-10-15): the user authorized fixing the four reviewed items
+and merging #64 → #65 → #67 after verification. #65's authority wording and
+generated deposit documentation are corrected on parent `9821246`. #67's Codex
+#4279800178 and CodeRabbit #4279862176 report one shared expiry bug: a never-
+exposed prepared sweep remained queued after its deadline. Two regressions failed
+against the old code. Durable `Action::Cancel` now closes only expired unexposed
+attempts, including after staged RPC prechecks and during stale/frozen/recovery
+admission. It creates neither replacement signatures nor customer credit. Exposed
+work still reconciles, never follows cancellation. The revision-23 genesis test
+nit is included. Local focused checks are recorded in the owning P23C entry.
+
+Next: finish lint/contracts, push the restacked corrections, record/resolve the
+addressed threads and wait for the actual new-head CI/review before the approved
+bottom-up merge. No onboarding, frontend, AWS or live qualification is authorized.
 
 ### P23B atomic escrow program/client — 2026-10-15
 
@@ -5344,6 +5355,26 @@ frontend, native-credit investigation, AWS/chain/venue run or fresh live activat
 Existing live manifests reject the new escrow funding mode. Unknown or partial
 native allocation remains restricted, not magically recovered. No user source or
 research was removed; only a rebuildable incremental cache was reclaimed.
+
+Review follow-up (2026-10-15): Codex #4279800178 and CodeRabbit #4279862176 are
+duplicate valid findings, corrected with one expiry-only cancellation path.
+`cancel_expired_escrow_sweep` verifies the accepted head, retains permanent
+attempt/batch identity and permits later owner refund without booking money or
+re-signing. It runs before admission/setup checks and again after pre-exposure
+RPC in the actual Runtime. A possible exposure can never use `Action::Cancel`;
+existing no-wire `Unsent` and retained-wire reconciliation are unchanged.
+CodeRabbit's missing `(0, 13, 23)` genesis regression is also added.
+Two new tests first failed against the original code; after correction all 13
+focused service/Runtime escrow tests pass, including queue progress/restart,
+owner refund, stale/frozen/recovery cleanup, stale-head rejection, exposed-work
+preservation and precheck expiry with zero simulation/sign/send. All 15 durability
+and eight journal escrow tests pass. Eleven default-feature service escrow tests
+also pass, plus strict default/all-feature all-target Clippy/build, formatting and
+80 clean-source contract/inventory/plan/workspace checks. Hosted checks and actual
+review-thread dispositions follow at the new heads before merge. The trunk has no
+classic branch protection and its effective rules API returns an empty list;
+therefore all eight jobs will be checked explicitly rather than assuming GitHub
+enforces them. No repository governance, assurance or deadline gate was relaxed.
 
 Publication: #67 is ready/open above #65 in native stack #66, initially at
 `60f0a9fb4e89cab3c6b360b28e2387f835ad31d6`. Final plan/link/contracts/workspace

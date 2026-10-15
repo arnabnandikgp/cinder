@@ -34,6 +34,13 @@ pub(crate) fn start<B: Backend, P: Protection>(
     j: &mut Journal<B, P>,
     c: &Controller,
 ) -> chain::Escrow {
+    start_with_expiry(j, c, 10_000)
+}
+pub(crate) fn start_with_expiry<B: Backend, P: Protection>(
+    j: &mut Journal<B, P>,
+    c: &Controller,
+    expires_at: u64,
+) -> chain::Escrow {
     let r = c.route();
     let s = chain::Escrow::derive(r, r.beneficiaries[0].wallet, [10; 32], 400).unwrap();
     c.observe_escrow_deposit(
@@ -54,7 +61,7 @@ pub(crate) fn start<B: Backend, P: Protection>(
         PrivateBytes::new(b"synthetic qualified original owner deposit".to_vec()).unwrap(),
     )
     .unwrap();
-    c.prepare_escrow_sweep(j, id(61), 100, support::attempt(10), 10_000)
+    c.prepare_escrow_sweep(j, id(61), 100, support::attempt(10), expires_at)
         .unwrap();
     s
 }
@@ -230,6 +237,11 @@ fn expired_sweep_closes_only_without_retained_wire_never_from_timeout_alone() {
         let mut p = port(&c, &f);
         let issued = p.issue(&mut j, &c, support::attempt(10));
         assert_eq!(issued.is_ok(), retained);
+        assert_eq!(
+            c.prepare_next_escrow(&mut j, 10_000).unwrap(),
+            Some(support::attempt(10))
+        );
+        assert_eq!(j.state().unwrap().escrows()[0].status, Status::Exposed);
         assert!(
             !c.close_unsent_chain(&mut j, id(70), 100, support::attempt(10))
                 .unwrap()
@@ -322,6 +334,144 @@ fn escrow_controller_cannot_reinterpret_a_legacy_funding_history_or_reuse_its_co
     assert!(escrow.prepare_next_escrow(&mut journal, 100).is_err());
     assert_eq!(journal.head(), head);
     assert!(journal.state().unwrap().escrows().is_empty());
+}
+
+#[test]
+fn expired_unexposed_sweep_cancels_once_after_restart_and_unblocks_later_owner_inventory() {
+    let temp = support::Temp::new();
+    let (mut j, c) = create(&temp);
+    start_with_expiry(&mut j, &c, 101);
+    let mut b = j.state().unwrap().escrows()[0].batch.clone();
+    let s = chain::Escrow::derive(c.route(), b.owner, [20; 32], 400).unwrap();
+    b.request = support::request(20);
+    b.operation = s.operation;
+    b.batch = s.batch;
+    b.signature = [20; 64];
+    c.observe_escrow_deposit(
+        &mut j,
+        id(70),
+        100,
+        b,
+        support::raw(b"qualified later owner deposit"),
+    )
+    .unwrap();
+    let ledger = j.state().unwrap().ledger().clone();
+    let reopen = || {
+        Journal::open(
+            SqliteBackend::open(&temp.db, Migration::None).unwrap(),
+            support::FixtureProtection,
+            config(),
+        )
+        .unwrap()
+    };
+    drop(j);
+    let mut j = reopen();
+    assert_eq!(c.prepare_next_escrow(&mut j, 101).unwrap(), None);
+    assert_eq!(j.state().unwrap().escrows()[0].status, Status::Failed);
+    assert_eq!(j.state().unwrap().ledger(), &ledger);
+    assert!(
+        !j.state()
+            .unwrap()
+            .attempts()
+            .iter()
+            .find(|a| a.key == support::attempt(10))
+            .unwrap()
+            .possibly_exposed
+    );
+    assert!(
+        c.retained_wire(&mut j, support::attempt(10), 101)
+            .unwrap()
+            .is_none()
+    );
+    let first = j.head();
+    drop(j);
+    let mut j = reopen();
+    assert_eq!(j.head(), first);
+    let next = c.prepare_next_escrow(&mut j, 102).unwrap().unwrap();
+    assert_eq!(next.request, support::request(20));
+    assert_eq!(j.state().unwrap().escrows()[0].status, Status::Failed);
+    c.observe_escrow_refund(
+        &mut j,
+        id(71),
+        103,
+        support::request(10),
+        support::raw(b"qualified original owner refund"),
+    )
+    .unwrap();
+    assert_eq!(j.state().unwrap().escrows()[0].status, Status::Refunded);
+    assert_eq!(j.state().unwrap().ledger(), &ledger);
+    assert!(
+        c.prepare_escrow_sweep(&mut j, id(72), 104, support::attempt(10), 1000)
+            .is_err()
+    );
+}
+
+#[test]
+fn expired_unexposed_sweep_cleanup_does_not_require_fresh_setup_or_normal_admission() {
+    for recovery in [false, true] {
+        let temp = support::Temp::new();
+        let (mut j, c) = create(&temp);
+        start_with_expiry(&mut j, &c, 101);
+        let control = if recovery {
+            Control::Recovery(cinder_journal::recovery::Action::Begin {
+                expected_version: j.state().unwrap().ledger().version(),
+                authority_epoch: 7,
+                valid_until: 30_000,
+                fence: [99; 32],
+            })
+        } else {
+            Control::Funds(lifecycle::Action::Freeze)
+        };
+        let t = tx(&j, 70, vec![], vec![control]);
+        assert_eq!(j.commit(t).unwrap().receipt.controls, None);
+        assert_eq!(c.prepare_next_escrow(&mut j, 20_000).unwrap(), None);
+        assert_eq!(j.state().unwrap().escrows()[0].status, Status::Failed);
+        let head = j.head();
+        assert_eq!(c.prepare_next_escrow(&mut j, 20_000).unwrap(), None);
+        assert_eq!(j.head(), head);
+        assert!(
+            j.state()
+                .unwrap()
+                .holds()
+                .iter()
+                .filter(|h| h.request == support::request(10))
+                .all(|h| !h.active)
+        );
+    }
+}
+
+#[test]
+fn expired_sweep_cleanup_requires_the_verified_current_journal_head() {
+    let temp = support::Temp::new();
+    let fault = Arc::new(StorageFault::default());
+    let (mut j, c) = seed(
+        Journal::create(
+            Guarded {
+                inner: SqliteBackend::create(&temp.db).unwrap(),
+                fault: fault.clone(),
+            },
+            support::FixtureProtection,
+            config(),
+        )
+        .unwrap(),
+    );
+    start_with_expiry(&mut j, &c, 101);
+    let head = j.head();
+    fault.fenced.store(true, Ordering::SeqCst);
+    assert!(
+        c.cancel_expired_escrow_sweep(&mut j, 101, support::attempt(10))
+            .is_err()
+    );
+    assert_eq!(j.head(), head);
+    assert!(j.state().is_err());
+    drop(j);
+    let j = Journal::open(
+        SqliteBackend::open(&temp.db, Migration::None).unwrap(),
+        support::FixtureProtection,
+        config(),
+    )
+    .unwrap();
+    assert_eq!(j.state().unwrap().escrows()[0].status, Status::Prepared);
 }
 
 #[test]

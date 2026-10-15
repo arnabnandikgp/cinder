@@ -253,7 +253,12 @@ Original intent precedes counter reads/signing. Fresh chain/code/token/batch
 checks run outside the Runtime journal writer; their result rejoins and rechecks
 the original authority/state before signature delivery. The original signed wire
 is persisted before send. A lost reply is reconciled with that wire, never signed
-again. Expiry can close an exposed-but-unsent plan only when the trusted controller
+again. A never-exposed `Prepared` sweep that reaches its dispatch deadline is
+durably cancelled to the existing terminal/refundable state, before normal
+admission/freshness checks. The Runtime repeats this check after pre-exposure
+RPC work; cancellation neither changes balances nor authorizes a replacement
+attempt. Exposed attempts never take that cancellation path.
+Expiry can close an exposed-but-unsent plan only when the trusted controller
 checks the independently verified current head and proves no signed wire was
 retained; expiry with a retained wire does not establish zero execution. Exposed
 reconciliation has priority over queued new work and continues during freeze.

@@ -154,6 +154,15 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                     demo_deposit,
                     ..
                 } = &mut *active;
+                // RPC/code/counter reads may outlive the original deadline.
+                // Close only an unexposed escrow before physical-plan exposure;
+                // this is ordinary cleanup, not a financial supervisor failure.
+                if funding
+                    .cancel_expired_escrow_sweep(store, now, attempt)
+                    .map_err(|_| Error)?
+                {
+                    return Ok(());
+                }
                 let demo = demo_deposit
                     .as_ref()
                     .filter(|p| p.initial_setup.is_some())
