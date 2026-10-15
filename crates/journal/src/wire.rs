@@ -929,6 +929,10 @@ pub fn encode_transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.count(tx.controls.len());
     for c in &tx.controls {
         match c {
+            Control::Onboarding(action) => {
+                w.byte(14);
+                crate::onboarding::encode(action, &mut w);
+            }
             Control::Escrow(action) => {
                 w.byte(13);
                 crate::escrow::encode_action(&mut w, action);
@@ -1068,6 +1072,7 @@ pub fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
             11 => Control::ResolveRaw(crate::raw::decode_resolution(&mut r)?),
             12 => Control::Recovery(crate::recovery::decode_action(&mut r)?),
             13 => Control::Escrow(crate::escrow::decode_action(&mut r)?),
+            14 => Control::Onboarding(crate::onboarding::decode(&mut r)?),
             _ => return Err(Error::Codec),
         });
     }

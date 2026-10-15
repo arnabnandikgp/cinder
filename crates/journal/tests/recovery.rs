@@ -311,6 +311,47 @@ fn settled_cut_includes_all_customers_and_replays_without_mutation() {
 }
 
 #[test]
+fn recovery_cut_includes_post_genesis_customer_liabilities_and_paid_basis() {
+    let t = Temp::new();
+    let mut s = setup(&t);
+    let wallet = [77; 32];
+    let id = cinder_journal::onboarding::account(config().domain, wallet).unwrap();
+    commit(
+        &mut s,
+        vec![],
+        vec![
+            Control::Onboarding(cinder_journal::onboarding::Action::Register(
+                cinder_journal::onboarding::Binding {
+                    account: id,
+                    wallet,
+                    tokens: [78; 32],
+                },
+            )),
+            Control::Order(orders::Action::AdvanceAuthority {
+                account: id,
+                epoch: 1,
+            }),
+        ],
+    );
+    commit(
+        &mut s,
+        vec![receipt(77, Owner::Customer(id), Location::Vault, 50)],
+        vec![],
+    );
+    freeze(&mut s);
+    let check = final_check(&mut s, 90);
+    let cut = s.recovery_cut(s.head(), check.clone()).unwrap();
+    assert_eq!(cut.accounts().len(), 3);
+    assert_eq!(cut.total(), cash(350));
+    let registered = cut.accounts().iter().find(|a| a.account() == id).unwrap();
+    assert_eq!(registered.payable(), cash(50));
+    assert_eq!(registered.paid(), cash(0));
+    drop(s);
+    let mut s = reopen(&t);
+    assert_eq!(s.recovery_cut(s.head(), check).unwrap(), cut);
+}
+
+#[test]
 fn ordinary_payment_and_rail_fee_are_not_subtracted_twice() {
     let t = Temp::new();
     let mut s = setup(&t);

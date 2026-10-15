@@ -31,6 +31,7 @@
 | [P23B — Atomic escrow program/client](PLAN.md#p23b) | closed | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | [#65](https://github.com/arnabnandikgp/cinder/pull/65), merged `b162d8f` |
 | [P23C — Escrow funding integration](PLAN.md#p23c) | closed | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | [#67](https://github.com/arnabnandikgp/cinder/pull/67), merged `7e04a94` |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
+| [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | in progress | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | Local `tee/backend-onboarding`; no PR yet |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-15. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -39,6 +40,51 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### Backend-only onboarding — P25, 2026-10-15
+
+The user approved self-service backend/SDK preparation through the point of
+frontend integration, explicitly excluding frontend work and live deployment.
+Branch `tee/backend-onboarding` carries the verified predecessor merge-receipt
+commit `496902f` above merged trunk `7e04a94`. P25 is a separate product-integration
+phase; P23's deferred live acceptance and P24's release gates are not expanded.
+Implemented [ADR 0031](../architecture/0031-backend-onboarding.md): explicit
+zero-configured-customer composition; wallet-signed confidential account
+creation/retrieval; one atomic empty book, immutable owner/ATA and initial epoch;
+current-epoch rediscovery without resetting grants/counters; journal-derived
+authorization, risk, projections, funding routes and recovery inventory. The
+immutable genesis/release policy does not grow or rebind when owners enroll.
+Engine revision 25 intentionally rejects older histories; no migration/reset.
+
+`OnboardingClient` uses the existing confidential HTTP/WebSocket channel.
+Unsigned Solana helpers check existing customer/escrow state and prepare setup,
+exact deposit and eligible owner refund through the generated ABI. Durable
+owner-signed original-signature hints feed the existing qualified chain observer;
+a hint never creates money, inventory or trading permission. Negative caches and
+hint uniqueness are owner/operation-scoped, preventing a wrong-owner report of a
+public signature from suppressing its rightful deposit. Both regressions failed
+before the correction and pass after it.
+
+Fresh-wallet local SDK → opaque relay → service → compiled SBF acceptance passes
+on both carriers, including restart, zero credit and unswept refund. API tests
+cover capacity, replay/domain/session/signature refusal, concurrent and uncertain
+commits, epoch revocation and recovery enrollment fencing. Actual Runtime and
+risk/recovery tests include post-genesis participants. Final full regression
+commands/results and exact checked source will be recorded in the owning P25
+entry before publication; current broad runs are not a hardware/live receipt.
+
+Boundaries: V1's complete immutable recovery-key registry seals enrollment;
+incremental key enrollment/rotation remains separate work. Capacity is governed,
+and original reports are capped at 128 per history, not an open-production
+anti-Sybil policy. The canonical recipient ATA must exist before refund/payout;
+helpers neither sign/send nor automatically pay rent/create it. Existing live
+manifests still reject escrow funding activation. No frontend, AWS, public-chain,
+venue, configured-wallet or missing-credit work occurred; unrelated untracked
+qualification example, user-journey document and `stays/` remain untouched.
+
+Next: complete exact-source lint/Rust/SDK/browser/full-SBF checks, record their
+results and publish one backend-only PR. Review/CI/merge remain outstanding;
+P23 live and P24 remain open independently.
 
 ### Verified escrow stack merge — 2026-10-15
 
@@ -5446,6 +5492,15 @@ Next: follow the next user-authorized scope. Live activation, onboarding and
 missing-credit investigation stay separately scoped; P23 live is not closed.
 PR: https://github.com/arnabnandikgp/cinder/pull/67.
 Merge: 7e04a94b782077dc120dcb3e70b086d33e0b67e2.
+
+## P25 — Backend onboarding and escrow preparation
+
+Work: implemented ADR 0031's opt-in fresh-history account creation/discovery, journal-owned empty participant inventory/authority, canonical owner ATA, Runtime/release binding, signed no-credit deposit hints, dynamic risk/funding/recovery ownership and unsigned SDK escrow setup/deposit/refund. Existing configured mode and generated program ABI remain unchanged; engine revision is 25. No frontend or live activity.
+Verification: focused API onboarding passes 8/8; shipping-default escrow controller passes 13/13, including two red-first wrong-owner signature/negative-cache regressions. Both compiled-SBF SDK carrier workflows pass. Broad final checks are running; exact source/results follow before publication. Existing Nitro-only tests are not promoted to local or changed-image passes.
+Unexpected: empty registration must preserve the financial ledger version while advancing the accepted journal head; actual Runtime/risk/projection/recovery tests verify this. Dynamic participant routing cannot mutate the immutable release contract or fence an unrelated in-flight owner. The existing complete immutable recovery-key registry seals enrollment rather than silently omit future claimants. Public signature hints and negative caches require owner/operation isolation, not global first-reporter ownership.
+Next: finish final regressions and publish one backend-only PR, then record actual CI/review state. No automatic merge, frontend, AWS or credit investigation.
+PR: none.
+Merge: none.
 
 ## P24 — Release safety case
 

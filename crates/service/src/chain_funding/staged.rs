@@ -129,7 +129,9 @@ impl<T: Transport> Port<T> {
             funding: funding
                 .release_commitment(j.configuration())
                 .map_err(|_| Error)?,
-            route: funding.route().clone(),
+            route: funding
+                .route_for(j.state().map_err(|_| Error)?, attempt.request.account)
+                .map_err(|_| Error)?,
             attempt,
             rail,
             recovery,
@@ -357,7 +359,13 @@ impl IssueRead {
             .release_commitment(j.configuration())
             .map_err(|_| Error)?
             != self.request.funding
-            || funding.route() != &self.request.route
+            || funding
+                .route_for(
+                    j.state().map_err(|_| Error)?,
+                    self.request.attempt.request.account,
+                )
+                .map_err(|_| Error)?
+                != self.request.route
             || at < self.request.at
             || at < self.context.at
             || at - self.context.at > self.limits.maximum_age_ms

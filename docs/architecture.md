@@ -8,8 +8,9 @@ records actual completion. An older research proposal does not override those fi
 
 Custody direction updated 2026-10-15: [ADR 0030](architecture/0030-venue-directed-escrow.md)
 approves customer/venue/asset escrow ingress and venue-specific PDA payouts.
-P23B adds the local program/client boundary; P23C still joins the journal/Runtime.
-The currently merged source uses the prior common-vault ingress. Approval,
+P23B/P23C's local program/client and journal/Runtime integration are merged.
+P25 adds [backend-only onboarding](architecture/0031-backend-onboarding.md) over
+the same journal, not frontend integration or a new financial ledger. Approval,
 implementation, migration and live qualification
 remain separate. The flow sections below show the new target; historical ADRs
 and receipts keep their own route/source semantics.
@@ -53,7 +54,8 @@ implementation is a separate workstream, not the template for this architecture.
 | Confidential web API | Merged: shared browser/Node attestation and Noise core, HTTP/WebSocket commands, signed private reads and bounded subscriptions; offline only, changed-image/native qualification remains P23 | P21A |
 | Offline joined acceptance | Merged SDK/service/controller/SBF fault suites with explicit native fixtures | P22 |
 | Live qualification | Code stack merged; full actual funding/trading/payout/recovery acceptance deferred | P23 |
-| Venue-directed escrow revision | Approved contract; local program/client added in dependent P23B; journal join, deployment and live qualification remain | P23A–P23C |
+| Venue-directed escrow revision | Merged local program/client, journal and Runtime integration; deployment/live qualification remain separate | P23A–P23C |
+| Backend onboarding | Opt-in new-history wallet ownership, discovery and unsigned escrow preparation; no frontend/deployment | P25 |
 | Release review | Production policy, governance, independent assurance and customer-funds gates remain open | P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one

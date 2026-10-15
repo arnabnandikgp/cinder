@@ -7,9 +7,9 @@ import { spawn,type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AnchorProvider, BN, type Idl, type Wallet } from '@anchor-lang/core';
+import { AnchorProvider, BN, utils, type Idl, type Wallet } from '@anchor-lang/core';
 import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SystemProgram, Transaction, type TransactionInstruction } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createMint, createAccount, mintTo, getAccount,
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createMint, createAccount, createAssociatedTokenAccount, mintTo, getAccount,
   freezeAccount, thawAccount, approve, transfer, burn } from '@solana/spl-token';
 import { customerAddress, depositReceiptAddress, identity, movement, receiptAddress, u64, vaultAddresses, vaultProgram } from '../src/index.ts';
 import { fundingInstruction, verifyFundingWire } from '../src/funding.ts';
@@ -19,7 +19,8 @@ import { venueRouteAddress, venueEscrowAddresses, escrowBatchAddress, registerVe
 import { buildRecoveryTree, recoveryAddress, recoveryReceiptAddress, recoveryClaimWire, recoveryStatementWire,
   recoveryContextHash, recoveryLeaf, type RecoveryClaim, type RecoveryStatement } from '../src/recovery.ts';
 import { custodySnapshot,custodyWire,decryptKit,independentClaim,recoveryKeyAuthorization,retrieveKit,verifyManifest,type ExpectedCustody,type Snapshot } from '../src/claims.ts';
-import { PrivateClient,type MessageSigner } from '../../private/src/index.ts';
+import { PrivateClient,OnboardingClient,type Discovery,type MessageSigner } from '../../private/src/index.ts';
+import {prepareVenueEscrow,prepareEscrowDeposit,prepareEscrowRefund} from '../src/onboarding.ts';
 import { WebChannel,type WebCore } from '../../private/src/web-channel-core.ts';
 // Deliberately fixture-rooted verifier; never accepted by the production client.
 import { verifyWithRoot } from '../../../tools/web-channel/attestation/verifier.mjs';
@@ -81,7 +82,7 @@ before(async () => {
     0, governance.publicKey.toBase58()]);
 });
 
-async function fixture() {
+async function fixture(domainOverride?:Uint8Array) {
   const funds = keys(), recovery = keys(), broker = keys(), owner = keys(), outsider = keys();
   await Promise.all([funds, recovery, broker, owner, outsider].map(fund));
   const mint = await createMint(connection, governance, governance.publicKey, governance.publicKey, 6);
@@ -89,7 +90,7 @@ async function fixture() {
   const source = await createAccount(connection, governance, mint, owner.publicKey);
   const foreignTokens = await createAccount(connection, governance, mint, outsider.publicKey);
   await mintTo(connection, governance, mint, source, governance, 1_000_000n);
-  const domain = id('deployment'), pool = id(`pool-${++number}`);
+  const domain = domainOverride?Buffer.from(domainOverride):id('deployment'), pool = id(`pool-${++number}`);
   const { config, vault } = vaultAddresses(programId, domain, pool, mint);
   const customer = customerAddress(programId, config, owner.publicKey);
   const initAccounts = { governance: governance.publicKey, funds: funds.publicKey, recovery: recovery.publicKey,
@@ -128,6 +129,59 @@ async function fixture() {
     customer, auth, receipt, depositReceipt, initialize, deposit, release, payout, returned, freeze, state };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+for(const carrier of ['http','websocket'] as const)test(`P25 ${carrier} fresh-wallet onboarding and owner escrow preparation`,{timeout:120_000},async()=>{
+  const f=await fixture(Buffer.alloc(32,2)),alice=keys(),bob=keys();await Promise.all([alice,bob].map(fund));
+  const venue=Buffer.alloc(32,4),context={domain:f.domain,pool:f.pool,mint:f.mint,config:f.config,owner:f.owner.publicKey};
+  await send(await registerVenueRouteInstruction(program,context,governance.publicKey,1n,venue),[governance]);
+  const source=await createAssociatedTokenAccount(connection,governance,f.mint,alice.publicKey);
+  await mintTo(connection,governance,f.mint,source,governance,100n);
+  const binding={escrow:{route:toBytes(venueRouteAddress(programId,f.config)),venue:toBytes(venue)},account:f.broker.publicKey.toBase58(),broker_seed:toBytes(f.broker.secretKey.subarray(0,32)),keys:[],
+    route:{domain:toBytes(f.domain),pool:toBytes(f.pool),funds:toBytes(f.funds.publicKey),beneficiaries:[],program:toBytes(programId),config:toBytes(f.config),vault:toBytes(f.vault),mint:toBytes(f.mint),broker:toBytes(f.broker.publicKey),broker_tokens:toBytes(f.brokerTokens),venue_program:toBytes(f.outsider.publicKey),venue_vault:toBytes(f.foreignTokens),epoch:1,decimals:6,withdrawal:'Qualified',chain:'Qualified',settings:'Qualified',withdrawal_cost:10,maximum_movement:10000,maximum_fee:0,setup_max_age:10000}};
+  const directory=await mkdtemp(join(tmpdir(),'cinder-p25-')),store=join(directory,'store');await mkdir(store,{mode:0o700});
+  const storageKey=randomBytes(32),configBytes=Buffer.from(JSON.stringify(binding)),prefix=Buffer.alloc(4);prefix.writeUInt32BE(configBytes.length);
+  const binary=new URL('../../../target/debug/cinder-service-fixture',import.meta.url).pathname;
+  const coreModule=await import(new URL('../../../tools/web-channel/pkg/channel.js',import.meta.url).href);
+  await coreModule.default({module_or_path:await readFile(new URL('../../../tools/web-channel/pkg/channel_bg.wasm',import.meta.url))});
+  const core=coreModule as WebCore,policy={network:Buffer.alloc(32,1),deployment:f.domain,manifest:Buffer.alloc(32,21),pcrs:[Buffer.alloc(48,22),Buffer.alloc(48,23),Buffer.alloc(48,24)] as const};
+  const signer=(owner:Keypair):MessageSigner=>({publicKey:owner.publicKey.toBytes(),signMessage:async b=>sign(null,b,signerKey(owner))});
+  let service:ChildProcessWithoutNullStreams|undefined,relay:ReturnType<typeof createWebRelay>|undefined,channel:WebChannel|undefined;
+  const start=async()=>{
+    // No customer wallet or account is configured: the required legacy CLI argument is ignored in this explicit mode.
+    service=spawn(binary,['127.0.0.1:0',store,Buffer.alloc(32,9).toString('hex'),'--onboarding-web']);
+    const line=await childLines(service);service.stdin.write(Buffer.concat([storageKey,prefix,configBytes]));
+    const [address,ca]=(await line()).split(' ');relay=createWebRelay({target:{host:'127.0.0.1',port:Number(address!.split(':')[1])}});
+    relay.server.listen(0,'127.0.0.1');await once(relay.server,'listening');
+    channel=await WebChannel.connect({baseUrl:`http://127.0.0.1:${relay.server.address().port}`,policy,core,transport:carrier},(q,p,c)=>verifyWithRoot(q,p,c,Buffer.from(ca!,'hex')));
+  };
+  const stop=async()=>{channel?.close();channel=undefined;if(relay){await relay.close();relay=undefined;}if(service){await stopFixture(service);service=undefined;}};
+  const discover=async(owner:Keypair)=>{const d=await new OnboardingClient(channel!,signer(owner),{domain:policy,policy:1}).open(BigInt(Date.now()+20_000));assert.equal(d.kind,'discovery');if(d.kind!=='discovery')throw Error('onboarding rejected');return d;};
+  const view=async(owner:Keypair,d:Discovery,n:number)=>new PrivateClient(channel!,signer(owner),{domain:policy,policy:1,account:d.account}).request({id:Buffer.alloc(32,n),epoch:d.epoch,expiresAt:BigInt(Date.now()+20_000),command:{kind:'view'}});
+  try{
+    await start();const d=await discover(alice),before=await readFile(join(store,'accepted'));
+    assert.deepEqual(await discover(alice),d);assert.deepEqual(await readFile(join(store,'accepted')),before);assert(new PublicKey(d.recipient).equals(source));
+    const bobAccount=await discover(bob);assert.notDeepEqual(d.account,bobAccount.account);
+    const av=await view(alice,d,40);assert(av.kind==='view'&&av.cash===0n&&av.held===0n&&av.positions.every(p=>p.lots===0n));
+    const stolen=await view(bob,d,41);assert(stolen.kind==='error'&&stolen.code==='unauthorized');
+    const prepared=await prepareVenueEscrow(program,alice.publicKey,d);assert.equal(prepared.length,2);
+    assert.equal(await connection.getAccountInfo(customerAddress(programId,f.config,alice.publicKey)),null);
+    for(const ix of prepared)await send(ix,[alice]);assert.equal((await prepareVenueEscrow(program,alice.publicKey,d)).length,0);
+    const operation=id(`p25-${carrier}`),auth={epoch:d.custody.epoch,operation,expiresAtSlot:(1n<<64n)-1n};
+    const signature=await send(await prepareEscrowDeposit(program,alice.publicKey,d,auth,100n,source),[alice]);
+    const pending=await program.account.escrowBatch.fetch(escrowBatchAddress(programId,venueEscrowAddresses(programId,f.config,alice.publicKey).escrow,operation));assert.equal(pending.state,0);
+    // Decode the actual original chain signature without importing a second transaction/signing implementation.
+    const original=await connection.getTransaction(signature,{commitment:'confirmed',maxSupportedTransactionVersion:0});assert(original);
+    const hint=await new OnboardingClient(channel!,signer(alice),{domain:policy,policy:1}).reportDeposit({epoch:d.epoch,expiresAt:BigInt(Date.now()+20_000),operation,signature:utils.bytes.bs58.decode(signature)});assert.equal(hint.kind,'discovery');
+    const unfunded=await view(alice,d,42);assert(unfunded.kind==='view'&&unfunded.cash===0n&&unfunded.held===0n);
+    await stop();await start();const resumed=await discover(alice);assert.deepEqual(resumed,{...d,pendingDeposits:[new Uint8Array(operation)]});
+    const refund=await prepareEscrowRefund(program,alice.publicKey,d,operation);await send(refund,[alice]);
+    assert.equal((await getAccount(connection,source)).amount,100n);
+    assert.equal((await program.account.escrowBatch.fetch(escrowBatchAddress(programId,venueEscrowAddresses(programId,f.config,alice.publicKey).escrow,operation))).state,2);
+    await assert.rejects(send(refund,[alice]),/EscrowConsumed/);assert.equal((await prepareVenueEscrow(program,alice.publicKey,d)).length,0);
+    assert.equal((await program.account.customerCounter.fetch(customerAddress(programId,f.config,alice.publicKey))).paid.toString(),'0');
+    const final=await view(alice,d,43);assert(final.kind==='view'&&final.cash===0n);assert.deepEqual(final.positions,av.positions);
+  }finally{await stop();await rm(directory,{recursive:true,force:true});}
+});
 
 for (const carrier of ['http','websocket'] as const) test(`P22 ${carrier} complete controller lifecycle and process faults`, {timeout:120_000}, async()=>{
   await runAcceptance({program,connection,governance,programData,fund,send},carrier);

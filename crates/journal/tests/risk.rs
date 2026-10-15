@@ -171,6 +171,53 @@ fn setup(t: &Temp, a: i128, b: i128, house: i128, qa: i64, qb: i64) -> Store {
 fn report(s: &Store) -> Report {
     s.state().unwrap().risk_report().unwrap()
 }
+
+#[test]
+fn onboarded_empty_book_preserves_financial_cuts_and_joins_risk_and_book_history() {
+    let t = Temp::new();
+    let mut s = setup(&t, 1000, 2000, 5000, 0, 0);
+    let wallet = [77; 32];
+    let id = cinder_journal::onboarding::account(config().domain, wallet).unwrap();
+    let before = report(&s);
+    let version = s.state().unwrap().ledger().version();
+    assert_eq!(
+        commit(
+            &mut s,
+            vec![],
+            vec![
+                Control::Onboarding(cinder_journal::onboarding::Action::Register(
+                    cinder_journal::onboarding::Binding {
+                        account: id,
+                        wallet,
+                        tokens: [78; 32]
+                    }
+                )),
+                Control::Order(orders::Action::AdvanceAuthority {
+                    account: id,
+                    epoch: 1
+                })
+            ]
+        )
+        .receipt
+        .controls,
+        None
+    );
+    assert_eq!(s.state().unwrap().ledger().version(), version);
+    let after = report(&s);
+    assert_eq!(after.current.customers.len(), 3);
+    assert_eq!(&after.current.customers[..2], before.current.customers);
+    assert_eq!(after.current.customers[2].equity, cash(0));
+    assert_eq!(after.current.customers[2].free, cash(0));
+    assert!(s.customer_book_history(id).unwrap().is_empty());
+    commit(&mut s, vec![receipt(77, Owner::Customer(id), 40)], vec![]);
+    let history = s.customer_book_history(id).unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].before.cash(), cash(0));
+    assert_eq!(history[0].after.cash(), cash(40));
+    drop(s);
+    let s = t.open();
+    assert_eq!(s.customer_book_history(id).unwrap(), history);
+}
 fn selection(s: &Store, n: u8, lev: u64) -> Control {
     let x = Selection {
         request: request(n),

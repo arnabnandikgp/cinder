@@ -11,6 +11,148 @@ use serde_json::{Value, json};
 use std::sync::atomic::AtomicU64;
 
 struct EscrowExpiryTime(AtomicU64);
+
+#[test]
+fn actual_runtime_bootstraps_a_fresh_wallet_into_its_same_encrypted_journal_without_funding_activation()
+ {
+    use cinder_api::onboarding;
+    use cinder_pacifica::funding::{chain, escrow::Routing};
+    let metrics = Arc::new(Metrics::default());
+    let mut app = application(metrics.clone());
+    let mut config = configuration();
+    config.customers.clear();
+    let mut route = app.active.lock().unwrap().funding.route().clone();
+    route.beneficiaries.clear();
+    route.config = chain::pda(
+        route.program,
+        &[b"cinder_vault", &route.domain, &route.pool, &route.mint],
+    )
+    .unwrap();
+    route.vault = chain::pda(route.program, &[b"tokens", &route.config]).unwrap();
+    let routing = Routing {
+        route: chain::pda(route.program, &[b"venue_route", &route.config]).unwrap(),
+        venue: config.venue.bytes(),
+    };
+    let profile = Profile {
+        config: config.clone(),
+        source: config.sources[0].scope,
+        account: chain::address(route.broker),
+        environment: Origin::Testnet.url().into(),
+        revision: 1,
+        evidence: "offline zero-customer Runtime test".into(),
+        precision: Level::Qualified,
+        fills: Level::Qualified,
+        quote_places: 0,
+        perp_tag: 0,
+        markets: vec![Mapping {
+            symbol: "BTC".into(),
+            market: 0,
+            size: Grid { places: 0, step: 1 },
+            price: Grid { places: 0, step: 1 },
+        }],
+    };
+    let gateway = Gateway::new(
+        profile.clone(),
+        Policy {
+            revision: 1,
+            evidence: "offline Runtime test".into(),
+            execution: Level::Qualified,
+            origin: Origin::Testnet,
+            expiry_ms: 3000,
+            credits: 600,
+            cleanup_reserve: 120,
+            read_cost: cinder_pacifica::reads::MIN_READ_COST,
+        },
+        Zeroizing::new([7; 32]),
+        1,
+    )
+    .unwrap();
+    let funding = Controller::new_escrow(
+        profile,
+        route.clone(),
+        routing.clone(),
+        Zeroizing::new([9; 32]),
+    )
+    .unwrap();
+    let policy = onboarding::Policy {
+        maximum_accounts: 8,
+        custody_domain: route.domain,
+        pool: route.pool,
+        venue: routing.venue,
+        program: route.program,
+        config: route.config,
+        route: routing.route,
+        mint: route.mint,
+        decimals: route.decimals,
+        epoch: route.epoch,
+        maximum_deposit: route.maximum_movement,
+    };
+    let api = Service::new_onboarding(
+        Contract {
+            owners: vec![],
+            maximum_auth_lifetime: 120_000,
+            maximum_grant_lifetime: 120_000,
+        },
+        RiskAdmission { enabled: false },
+        policy.clone(),
+    )
+    .unwrap();
+    ApplicationContract::derive(&config, &api, &gateway, &funding).unwrap();
+    let mut store = store_for(metrics, config.clone());
+    api.initialize(&mut store, NOW).unwrap();
+    funding
+        .bind(&mut store, CommitId::new([88; 32]).unwrap(), NOW)
+        .unwrap();
+    {
+        let mut active = app.active.lock().unwrap();
+        active.store = store;
+        active.gateway = gateway;
+        active.funding = funding;
+    }
+    app.api = api;
+    let mut r = onboarding::Request {
+        domain: config.domain,
+        policy: config.policy,
+        wallet: public(33),
+        session: [8; 32],
+        expires_at: NOW + 60_000,
+        command: onboarding::Command::Open,
+        signature: [0; 64],
+    };
+    r.signature = Signer::new_without_digest(&key(33))
+        .unwrap()
+        .sign_oneshot_to_vec(&r.message())
+        .unwrap()
+        .try_into()
+        .unwrap();
+    let result = app.handle(&session(), r.encode().unwrap(), NOW).unwrap();
+    let account = cinder_journal::onboarding::account(config.domain, public(33)).unwrap();
+    let expected = cinder_api::Response::Discovery(Box::new(onboarding::Discovery {
+        account,
+        epoch: 1,
+        recipient: policy.recipient(public(33)).unwrap(),
+        custody: policy,
+        pending_deposits: vec![],
+    }))
+    .encode()
+    .unwrap();
+    assert_eq!(result, expected);
+    let active = app.active.lock().unwrap();
+    let state = active.store.state().unwrap();
+    assert_eq!(state.registrations().len(), 1);
+    assert_eq!(
+        state
+            .ledger()
+            .book(Owner::Customer(account))
+            .unwrap()
+            .cash()
+            .atoms(),
+        0
+    );
+    assert!(!state.native_funding_ready());
+    assert!(!app.gates.funding);
+    assert!(!app.stop.load(Ordering::SeqCst));
+}
 impl Clock for EscrowExpiryTime {
     fn now(&self) -> Result<u64, Error> {
         Ok(self.0.load(Ordering::SeqCst))

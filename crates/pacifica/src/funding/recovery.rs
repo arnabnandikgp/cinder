@@ -203,7 +203,13 @@ impl Controller {
             .map_err(|e| BindingError::Adapter(Error::Journal(e)))?
             .logical_time();
         let history = self.history(j, at).map_err(BindingError::Adapter)?;
-        let r = &self.route;
+        let route = self
+            .effective_route(
+                j.state()
+                    .map_err(|e| BindingError::Adapter(Error::Journal(e)))?,
+            )
+            .map_err(BindingError::Adapter)?;
+        let r = &route;
         if !history.bound
             || observed.network != self.profile.config.domain.network.bytes()
             || observed.program != r.program || observed.config != r.config

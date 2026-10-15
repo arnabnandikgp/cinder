@@ -22,11 +22,12 @@ The approved next custody model is [venue-directed escrow](docs/architecture/003
 customers deposit to their venue/asset escrow, may reclaim an unswept batch, and
 authorize its full sweep through Cinder's supported venue funding route. Returns
 use a venue-specific PDA payout/recovery vault and shared payment counters, ending
-at the registered user's wallet. P23B adds the local escrow program/client;
-P23C still joins this route to the financial journal and Runtime. The legacy
+at the registered user's wallet. Merged P23B/P23C provide the local escrow
+program/client and financial journal/Runtime join. The legacy
 common-vault instructions remain explicit. No deployment or history migration
-is implied. Self-service onboarding and a backend-connected trading terminal
-remain separate product integration work.
+is implied. [P25 backend onboarding](docs/architecture/0031-backend-onboarding.md)
+adds opt-in fresh-wallet account discovery and unsigned escrow preparation;
+frontend integration and deployment remain separate work.
 
 Tests, implementation, hardware evidence and production readiness are distinct.
 There is no audit, universal solvency proof, unconditional exit guarantee or

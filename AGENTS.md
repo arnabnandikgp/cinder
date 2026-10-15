@@ -19,7 +19,8 @@ the website/demo and Mintlify docs are separate workstreams, not backend templat
   migration, deployment, native credit qualification or general self-custody of
   venue collateral.
 - Missing-credit investigation/live financial runs remain deferred until reopened.
-  Self-service onboarding and backend-connected terminal need separate scope;
+  P25 adds opt-in, new-history backend/SDK onboarding (ADR 0031), not a terminal.
+  Frontend integration remains separately scoped;
   paper UI behavior and marketing promises are not native qualification.
 
 ## Repo map

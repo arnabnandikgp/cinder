@@ -14,6 +14,11 @@ financial economics and P23's seven remaining live groups stay intact; the
 Pacifica credit investigation remains deferred. Onboarding/terminal integration
 follows the custody contract under separate explicit scope.
 
+Backend-only product integration, approved 2026-10-15: P25 adds self-service
+wallet ownership, private account discovery and unsigned escrow preparation.
+Its number is a new stable ID, not a requirement to execute after P24. Frontend,
+AWS/deployment and deferred native-credit/live financial work remain out of scope.
+
 ## How work advances
 
 Each phase below is one reviewable PR by default, not an assertion about equal
@@ -986,6 +991,32 @@ ADR 0030 accounting/qualification cases, W01/W03–W05/W09 and original P23 rece
 - [x] Qualified return and ordinary/recovery payouts share final-payment counters; unswept refunds stay segregated and swept-but-uncredited liabilities remain visible.
 - [x] Joined offline SDK/service/compiled-SBF workflows and old-route regressions pass; status fields distinguish pending, funding in progress and available collateral; no live credit or changed-image qualification is claimed.
 - [x] Exact source/CI/review and remaining P23 live dependencies are recorded; frontend/onboarding and fresh AWS/venue/chain activation stay separately scoped.
+
+<a id="p25"></a>
+## P25 — Backend onboarding and escrow preparation
+
+Depends on: P18, P21A, P23C.
+
+Deliver: bounded opt-in wallet-signed creation/retrieval of an empty private
+account through the existing confidential SDK/API. Persist immutable ownership
+and payout binding in the authoritative journal, not a signup database or
+per-customer startup configuration. Discovery returns configured custody route,
+account and current epoch. Unsigned client helpers prepare owner-paid customer
+registration, escrow opening, exact batch deposit and eligible refund. Retain
+owner-reported original transaction locators without treating them as credit;
+the existing qualified chain path alone recognizes inventory/handoff. Include
+new accounts in authorization, projections, risk, funding and recovery. No native
+per-user account, balance injection, financial-policy relaxation, frontend,
+deployment, AWS invocation or investigation of missing Pacifica credit.
+Evidence: B02/B04–B08/S01–S05, ADR 0030, P18/P21A confidential carriers,
+P23B unsigned builders and P23C journal/Runtime/SBF acceptance. The detailed
+contract and exact-source checks belong to the owning handoff and ADR 0031.
+
+- [x] Fresh wallets create/retrieve exactly one empty account per deployment; signatures bind service domain, policy, session and deadline; wrong signer/domain/channel, agents and malformed requests fail without disclosing another account.
+- [x] Atomic registration and immutable owner/recipient survive restart, duplicate/concurrent requests and stale/uncertain writes; bounded governed capacity fails closed; old configured-account mode remains explicit.
+- [x] SDK discovery and unsigned escrow preparation require no customer-specific startup edits; local compiled-program tests cover registration, opening, exact deposits and eligible refunds without public-chain activity.
+- [x] Signed original deposit locators are durable hints only; private lifecycle and risk/funding/recovery account inventory use the same journal; unknown/partial credit cannot become trading collateral.
+- [ ] Fresh-wallet SDK/API acceptance, owner isolation, reconnects, generated ABI preservation and existing regression/CI checks pass; tracker records exact source, limitations and PR/review state before merge.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates

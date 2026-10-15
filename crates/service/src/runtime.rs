@@ -131,10 +131,20 @@ pub struct Owner {
     /// Bound token recipient, not caller-selected per withdrawal.
     pub tokens: [u8; 32],
 }
-/// Encrypted configuration payload. Not customer onboarding or a policy API.
+/// Governed backend enrollment bound, not a caller's request to bypass admission.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Onboarding {
+    /// Maximum total accounts, including genesis customers; hard cap is 1024.
+    pub maximum_accounts: u16,
+}
+/// Encrypted configuration payload. Not a public policy API.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Configuration {
+    /// Explicit backend onboarding opt-in; capacity is policy, not wallet inventory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onboarding: Option<Onboarding>,
     /// Existing canonical journal configuration codec, no alternate ledger.
     pub ledger: Vec<u8>,
     /// Governed private customer bindings.
@@ -320,14 +330,34 @@ impl Configuration {
                 })
             })
             .collect::<Result<Vec<_>, Error>>()?;
-        let api = Service::new(
-            Contract {
-                owners,
-                maximum_auth_lifetime: self.auth_ms,
-                maximum_grant_lifetime: self.grant_ms,
-            },
-            RiskAdmission { enabled: false },
-        )
+        let contract = Contract {
+            owners,
+            maximum_auth_lifetime: self.auth_ms,
+            maximum_grant_lifetime: self.grant_ms,
+        };
+        let api = if let Some(policy) = self.onboarding {
+            let r = funding.route();
+            let escrow = funding.escrow_routing().ok_or(Error)?;
+            Service::new_onboarding(
+                contract,
+                RiskAdmission { enabled: false },
+                cinder_api::onboarding::Policy {
+                    maximum_accounts: policy.maximum_accounts,
+                    custody_domain: r.domain,
+                    pool: r.pool,
+                    venue: escrow.venue,
+                    program: r.program,
+                    config: r.config,
+                    route: escrow.route,
+                    mint: r.mint,
+                    decimals: r.decimals,
+                    epoch: r.epoch,
+                    maximum_deposit: r.maximum_movement,
+                },
+            )
+        } else {
+            Service::new(contract, RiskAdmission { enabled: false })
+        }
         .map_err(|_| Error)?;
         let chain = match (self.chain, peer) {
             (None, None) => None,
@@ -877,46 +907,58 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
             }
             active.poll_ms.ok_or(Error)?;
             match &io.chain {
-                Some(chain) if chain.deposit_count() != 0 => {
-                    let index = active.deposit_index;
-                    let count = chain.deposit_count();
-                    let escrow = active.funding.escrow_routing().cloned();
-                    if if escrow.is_some() {
-                        crate::escrow_deposit::recorded(
-                            &active.store,
-                            chain.deposit_locator(index)?,
-                        )?
-                    } else {
-                        crate::customer_deposit::recorded(
-                            &active.store,
-                            chain.deposit_locator(index)?,
-                        )?
-                    } {
-                        active.deposit_index = (index + 1) % count;
+                Some(chain) => {
+                    let state = active.store.state().map_err(|_| Error)?;
+                    let locators = chain.locators(state);
+                    let count = locators.len();
+                    if count == 0 {
                         None
                     } else {
-                        Some((index, count, active.funding.route().clone(), escrow))
+                        let index = active.deposit_index % count;
+                        let locator = locators[index].clone();
+                        let escrow = active.funding.escrow_routing().cloned();
+                        let recorded = if escrow.is_some() {
+                            crate::escrow_deposit::recorded(&active.store, &locator)?
+                        } else {
+                            crate::customer_deposit::recorded(&active.store, &locator)?
+                        };
+                        if recorded {
+                            active.deposit_index = (index + 1) % count;
+                            None
+                        } else {
+                            let account = AccountId::new(locator.account).map_err(|_| Error)?;
+                            let route = active
+                                .funding
+                                .route_for(active.store.state().map_err(|_| Error)?, account)
+                                .map_err(|_| Error)?;
+                            Some((index, count, route, escrow, locator))
+                        }
                     }
                 }
                 _ => None,
             }
         };
-        if let Some((index, count, route, escrow)) = deposit {
-            // Original signature/code/account RPC I/O has no journal guard.
-            let found =
-                io.chain
-                    .as_mut()
-                    .ok_or(Error)?
-                    .collect_deposit(&route, escrow.is_some(), index)?;
+        if let Some((index, count, route, escrow, locator)) = deposit {
+            // Original transaction/code/account RPC I/O never holds the writer.
+            let found = io.chain.as_mut().ok_or(Error)?.collect_locator(
+                &route,
+                escrow.is_some(),
+                locator.clone(),
+            )?;
             let mut active = self.active.lock().map_err(|_| Error)?;
             let current = self.active_time()?;
+            let account = AccountId::new(locator.account).map_err(|_| Error)?;
             if active
                 .store
                 .verified_state()
                 .map_err(|_| Error)?
                 .logical_time()
                 > current
-                || active.funding.route() != &route
+                || active
+                    .funding
+                    .route_for(active.store.state().map_err(|_| Error)?, account)
+                    .map_err(|_| Error)?
+                    != route
                 || active.funding.escrow_routing() != escrow.as_ref()
             {
                 return Err(Error);

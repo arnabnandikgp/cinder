@@ -620,9 +620,9 @@ impl State {
         let mut rows = vec![];
         let mut gross = vec![0; self.config.markets.len()];
         let mut pending_deficit = 0;
-        for id in &self.config.customers {
+        for id in ledger.customer_ids() {
             let b = ledger
-                .book(Owner::Customer(*id))
+                .book(Owner::Customer(id))
                 .map_err(|_| ControlError::Invalid)?;
             let equity = self.book_equity(b, marks)?;
             let (mut initial, mut maintenance, mut outcome, mut costs) = (0, 0, 0, 0);
@@ -636,7 +636,7 @@ impl State {
                     .iter()
                     .find(|r| r.market == m.unit())
                     .ok_or(ControlError::Unqualified)?;
-                let (buys, sells, cost) = self.pending(active, Some(*id), *m, mark)?;
+                let (buys, sells, cost) = self.pending(active, Some(id), *m, mark)?;
                 let q = i128::from(pos.quantity().lots());
                 i64::try_from(add(q, buys)?).map_err(|_| ControlError::Capacity)?;
                 i64::try_from(sub(q, sells)?).map_err(|_| ControlError::Capacity)?;
@@ -644,16 +644,16 @@ impl State {
                 let notional = value(*m, abs(q)?, mark)?;
                 let bound = value(*m, worst, mark)?;
                 gross[j] = add(gross[j], bound)?;
-                initial = add(initial, ratio(notional, SCALE, self.leverage(*id, r))?)?;
+                initial = add(initial, ratio(notional, SCALE, self.leverage(id, r))?)?;
                 maintenance = add(
                     maintenance,
                     ratio(notional, u64::from(r.maintenance_bps), SCALE)?,
                 )?;
-                outcome = add(outcome, ratio(bound, SCALE, self.leverage(*id, r))?)?;
+                outcome = add(outcome, ratio(bound, SCALE, self.leverage(id, r))?)?;
                 costs = add(costs, cost)?;
             }
             outcome = add(outcome, costs)?;
-            let resource = Resource::Customer(*id);
+            let resource = Resource::Customer(id);
             let other = sub(active.held(resource)?, active.order_hold(resource)?)?;
             let requirement = outcome.max(add(initial, active.order_hold(resource)?)?);
             let free = sub(sub(equity, other)?, requirement)?;
@@ -665,7 +665,7 @@ impl State {
                 sub(sub(0, lower)?.max(0), sub(0, equity)?.max(0))?.max(0),
             )?;
             rows.push(Customer {
-                account: *id,
+                account: id,
                 equity: atom(equity),
                 initial: atom(initial),
                 maintenance: atom(maintenance),
@@ -970,7 +970,7 @@ impl State {
         // Historical order/hold counts occur only in the one-time index cost.
         let preparation = (self.orders.len() + self.holds.len()).saturating_mul(32);
         let reservations: usize = active.holds.iter().map(|h| h.reservations.len()).sum();
-        let work = (self.config.customers.len() + 3)
+        let work = (self.ledger.customer_ids().count() + 3)
             .saturating_mul(self.config.markets.len())
             .saturating_mul(
                 active

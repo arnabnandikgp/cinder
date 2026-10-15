@@ -14,6 +14,113 @@ fn create(temp: &support::Temp) -> (support::Store, Controller) {
         .unwrap(),
     )
 }
+
+#[test]
+fn post_genesis_owner_routes_and_deposit_hints_use_the_accepted_journal_without_rebinding_the_release()
+ {
+    let t = support::Temp::new();
+    let (mut j, c) = create(&t);
+    let release = c.release_commitment(j.configuration()).unwrap();
+    let bind = |wallet, tokens| {
+        let account = cinder_journal::onboarding::account(config().domain, wallet).unwrap();
+        cinder_journal::onboarding::Binding {
+            account,
+            wallet,
+            tokens,
+        }
+    };
+    let public = |n: u8| -> [u8; 32] {
+        openssl::pkey::PKey::private_key_from_raw_bytes(&[n; 32], openssl::pkey::Id::ED25519)
+            .unwrap()
+            .raw_public_key()
+            .unwrap()
+            .try_into()
+            .unwrap()
+    };
+    let b = bind(public(77), [78; 32]);
+    let commit = |j: &mut support::Store, n, b: cinder_journal::onboarding::Binding| {
+        let mut tx = super::tx(j, n, vec![], vec![]);
+        tx.controls = vec![
+            Control::Onboarding(cinder_journal::onboarding::Action::Register(b.clone())),
+            Control::Order(orders::Action::AdvanceAuthority {
+                account: b.account,
+                epoch: 1,
+            }),
+        ];
+        assert_eq!(j.commit(tx).unwrap().receipt.controls, None);
+    };
+    commit(&mut j, 80, b.clone());
+    let snapshot = c.route_for(j.state().unwrap(), b.account).unwrap();
+    assert_eq!(snapshot.beneficiaries.len(), 1);
+    assert_eq!(snapshot.beneficiaries[0].wallet, b.wallet);
+    let c2 = bind(public(79), [80; 32]);
+    commit(&mut j, 81, c2.clone());
+    assert_eq!(
+        snapshot,
+        c.route_for(j.state().unwrap(), b.account).unwrap()
+    );
+    assert_eq!(c.release_commitment(j.configuration()).unwrap(), release);
+    let s = chain::Escrow::derive(c.route(), b.wallet, [81; 32], 400).unwrap();
+    let batch = Batch {
+        request: RequestKey {
+            domain: config().domain,
+            account: b.account,
+            request: RequestId::new([81; 32]).unwrap(),
+        },
+        route: s.route,
+        batch: s.batch,
+        operation: s.operation,
+        owner: b.wallet,
+        amount: atoms(20),
+        epoch: 1,
+        expires_at_slot: 400,
+        signature: [82; 64],
+    };
+    c.observe_escrow_deposit(
+        &mut j,
+        id(82),
+        100,
+        batch.clone(),
+        PrivateBytes::new(b"explicit synthetic qualified new-owner inventory".to_vec()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        j.state()
+            .unwrap()
+            .ledger()
+            .book(Owner::Customer(b.account))
+            .unwrap()
+            .cash(),
+        atoms(0)
+    );
+    let mut wrong = batch.clone();
+    wrong.request.account = c2.account;
+    assert!(
+        c.observe_escrow_deposit(
+            &mut j,
+            id(83),
+            100,
+            wrong,
+            PrivateBytes::new(b"wrong owner".to_vec()).unwrap()
+        )
+        .is_err()
+    );
+    let mut hint = super::tx(&j, 84, vec![], vec![]);
+    hint.controls = vec![Control::Onboarding(
+        cinder_journal::onboarding::Action::Notice(cinder_journal::onboarding::Notice {
+            account: b.account,
+            operation: batch.operation,
+            signature: batch.signature,
+        }),
+    )];
+    assert_eq!(j.commit(hint).unwrap().receipt.controls, None);
+    let fake = fake(10);
+    let port = port(&c, &fake);
+    let locators = port.locators(j.state().unwrap());
+    assert_eq!(locators.len(), 1);
+    assert_eq!(locators[0].account, b.account.bytes());
+    assert_eq!(locators[0].signature, batch.signature);
+}
 pub(crate) fn seed<B: Backend, P: Protection>(
     journal: Journal<B, P>,
 ) -> (Journal<B, P>, Controller) {
@@ -263,6 +370,51 @@ fn expired_sweep_closes_only_without_retained_wire_never_from_timeout_alone() {
         assert!(p.issue(&mut j, &c, support::attempt(10)).is_err());
         assert_eq!(f.calls("sendTransaction"), usize::from(retained));
     }
+}
+
+#[test]
+fn invalid_owner_locator_cannot_poison_the_rightful_deposit_signature() {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../pacifica/tests/fixtures/escrow-deposit-public.json"
+    ))
+    .unwrap();
+    let wire: Vec<u8> = serde_json::from_value(fixture["wire"].clone()).unwrap();
+    let temp = support::Temp::new();
+    let (mut j, c) = create(&temp);
+    let before = j.state().unwrap().ledger().clone();
+    let f = fake(41);
+    f.0.lock().unwrap().wire = Some(wire.clone());
+    let valid = crate::customer_deposit::Locator {
+        account: [1; 32],
+        operation: [41; 32],
+        signature: wire[1..65].to_vec(),
+    };
+    let mut wrong_owner = valid.clone();
+    wrong_owner.account = [2; 32];
+    let mut wrong_operation = valid.clone();
+    wrong_operation.operation = [42; 32];
+    let mut p = loaded(&c, vec![])
+        .with_transport(f.clone(), Arc::new(Fixed))
+        .unwrap();
+    for invalid in [wrong_owner, wrong_operation] {
+        assert!(
+            p.collect_locator(c.route(), true, invalid)
+                .unwrap()
+                .complete(&mut j, &c)
+                .unwrap()
+                == Outcome::Rejected
+        );
+    }
+    assert!(
+        p.collect_locator(c.route(), true, valid)
+            .unwrap()
+            .complete(&mut j, &c)
+            .unwrap()
+            == Outcome::Settled
+    );
+    assert_eq!(j.state().unwrap().escrows()[0].status, Status::Pending);
+    assert_eq!(j.state().unwrap().ledger(), &before);
+    assert_eq!(f.calls("sendTransaction"), 0);
 }
 
 #[test]

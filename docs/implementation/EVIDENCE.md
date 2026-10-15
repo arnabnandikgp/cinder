@@ -7,6 +7,15 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+[ADR 0031](../architecture/0031-backend-onboarding.md) adds a separately approved
+backend-only product slice (P25). The retained source is implementation and local
+fixtures, not a promotion of testnet credentials or assumed native credit.
+Fresh-wallet owner signatures and canonical PDA/ATA derivation are exercised
+through both confidential carriers against actual local SBF. Risk/projection and
+final-cut tests explicitly include post-genesis participants. Exact-source checks
+and PR state belong to TRACKER; these tests do not qualify a changed Nitro image,
+public onboarding service or real venue credit.
+
 P23A–P23C merged as #64/#65/#67 at `09494db`, `b162d8f` and `7e04a94`.
 The exact verified source heads and full merge hashes are recorded in TRACKER.
 All eight hosted offline jobs passed per layer, including complete local-SBF,

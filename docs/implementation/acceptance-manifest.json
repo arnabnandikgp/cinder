@@ -23,6 +23,15 @@
   },
   "cases": [
     {
+      "id": "onboarding",
+      "prefix": "P25",
+      "runner": "vault",
+      "file": "clients/vault/tests/vault.test.ts",
+      "test": "fresh-wallet onboarding and owner escrow preparation",
+      "requirements": ["W03", "W05", "W06", "V01", "V05", "V09"],
+      "evidence": "local-sbf"
+    },
+    {
       "id": "escrow",
       "prefix": "P23C",
       "runner": "vault",

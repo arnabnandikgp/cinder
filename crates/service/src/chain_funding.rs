@@ -208,7 +208,7 @@ impl Loaded {
             self.configuration.maximum_calls,
         )?;
         Ok(Port {
-            rejected_deposits: vec![false; self.configuration.deposits.len()],
+            rejected_deposits: std::collections::BTreeSet::new(),
             loaded: self,
             client,
             clock,
@@ -220,10 +220,10 @@ pub struct Port<T: Transport> {
     loaded: Loaded,
     client: Client<T>,
     clock: Arc<dyn Clock>,
-    // Bounded by the immutable release configuration, private and boot-local.
+    // Bounded by configured locators and accepted hints, private and boot-local.
     // Only finalized original-transaction ineligibility is terminal here;
     // pending evidence and port/current-account/code errors are never cached.
-    rejected_deposits: Vec<bool>,
+    rejected_deposits: std::collections::BTreeSet<([u8; 64], [u8; 32], [u8; 32])>,
 }
 /// Coarse result; ACK or missing evidence never means a settled customer payment.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -368,8 +368,14 @@ impl<T: Transport> Port<T> {
         } {
             return Ok(Outcome::Settled);
         }
-        self.collect_deposit(funding.route(), funding.escrow_routing().is_some(), index)?
-            .complete(j, funding)
+        self.collect_deposit(
+            &funding
+                .effective_route(j.state().map_err(|_| Error)?)
+                .map_err(|_| Error)?,
+            funding.escrow_routing().is_some(),
+            index,
+        )?
+        .complete(j, funding)
     }
     /// Only configured identity metadata is handed to I/O. Native/chain signing
     /// keys never leave their existing controllers, and no journal guard is
@@ -387,8 +393,19 @@ impl<T: Transport> Port<T> {
             .get(index)
             .ok_or(Error)?
             .clone();
+        self.collect_locator(route, escrow, locator)
+    }
+    pub(crate) fn collect_locator(
+        &mut self,
+        route: &cinder_pacifica::funding::Route,
+        escrow: bool,
+        locator: crate::customer_deposit::Locator,
+    ) -> Result<DepositRead, Error> {
+        // Eligibility is specific to the asserted owner/operation. A malicious
+        // reporter cannot poison another owner's public signature or batch.
+        let rejection_key = (locator.validate()?, locator.account, locator.operation);
         let rejected = |port: &mut Self| {
-            port.rejected_deposits[index] = true;
+            port.rejected_deposits.insert(rejection_key);
             DepositRead {
                 escrow,
                 locator: locator.clone(),
@@ -396,7 +413,7 @@ impl<T: Transport> Port<T> {
             }
         };
         let now = self.clock.now()?;
-        if self.rejected_deposits[index] {
+        if self.rejected_deposits.contains(&rejection_key) {
             return Ok(rejected(self));
         }
         let Some(tx) = self.client.finalized(locator.validate()?, now)? else {
@@ -454,11 +471,24 @@ impl<T: Transport> Port<T> {
             })),
         })
     }
-    pub(crate) fn deposit_locator(
+    /// Accepted signed hints plus immutable legacy locators. Caller holds a
+    /// verified state; parent requests can never add a locator to this list.
+    pub(crate) fn locators(
         &self,
-        index: usize,
-    ) -> Result<&crate::customer_deposit::Locator, Error> {
-        self.loaded.configuration.deposits.get(index).ok_or(Error)
+        state: &cinder_journal::model::State,
+    ) -> Vec<crate::customer_deposit::Locator> {
+        let mut locators = self.loaded.configuration.deposits.clone();
+        for n in state.deposit_notices() {
+            let locator = crate::customer_deposit::Locator {
+                account: n.account.bytes(),
+                operation: n.operation,
+                signature: n.signature.to_vec(),
+            };
+            if !locators.contains(&locator) {
+                locators.push(locator);
+            }
+        }
+        locators
     }
     /// One bounded read locator per scheduler cut; no dynamic parent input.
     pub fn deposit_count(&self) -> usize {

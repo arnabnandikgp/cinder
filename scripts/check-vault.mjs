@@ -13,7 +13,7 @@ import { nodeSuite } from './test-runner.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const focused=process.argv.slice(2);
-assert(focused.length===0||(focused.length===1&&['--recovery-only','--acceptance-only'].includes(focused[0])),'Only explicit local recovery/acceptance focuses are supported');
+assert(focused.length===0||(focused.length===1&&['--recovery-only','--acceptance-only','--onboarding-only'].includes(focused[0])),'Only explicit local recovery/acceptance/onboarding focuses are supported');
 const programs = resolve(root, 'programs');
 const client = resolve(root, 'clients/vault');
 const anchor = process.env.CINDER_ANCHOR_TOOL || 'anchor';
@@ -98,7 +98,7 @@ try {
   }
   assert(ready, `Surfpool startup timeout: ${serverLog}`);
   // Asynchronous child keeps the parent available to supervise/clean up the sandbox.
-  await nodeSuite('vault', { cwd: client, env, pattern: focused.length ? `^${focused[0]==='--acceptance-only'?'(?:P22|P23C)':'P21'} ` : undefined });
+  await nodeSuite('vault', { cwd: client, env, pattern: focused.length ? `^${focused[0]==='--acceptance-only'?'(?:P22|P23C)':focused[0]==='--onboarding-only'?'P25':'P21'} ` : undefined });
 } finally {
   surfpool.kill('SIGTERM');
   for (let i = 0; i < 50 && surfpool.exitCode === null && surfpool.signalCode === null; i++) await delay(100);

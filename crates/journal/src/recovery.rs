@@ -488,8 +488,9 @@ impl<B: Backend, P: Protection> Journal<B, P> {
         let zero = QuoteAtoms::new(self.configuration().quote, 0);
         let mut total = zero;
         let mut deficits = zero;
-        let mut accounts = Vec::with_capacity(self.configuration().customers.len());
-        for account in &self.configuration().customers {
+        let participants: Vec<_> = l.customer_ids().collect();
+        let mut accounts = Vec::with_capacity(participants.len());
+        for account in &participants {
             let cash = l
                 .book(Owner::Customer(*account))
                 .map_err(|_| CutError::UnresolvedEvidence)?

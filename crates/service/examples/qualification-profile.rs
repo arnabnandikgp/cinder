@@ -198,6 +198,7 @@ fn run() -> Result<(), Error> {
         setup_max_age: 10000,
     };
     let configuration = Configuration {
+        onboarding: None,
         ledger: cinder_journal::wire::encode_config(&config).map_err(|_| Error)?,
         owners: vec![owner],
         auth_ms: 30000,

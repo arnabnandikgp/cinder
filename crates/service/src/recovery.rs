@@ -75,8 +75,13 @@ fn recipient(
 }
 
 const REGISTRY: &[u8] = b"CINDER_RECOVERY_KEYS_V1\0";
-fn key_record(controller: &Controller, keys: &[RecipientKey]) -> Result<Vec<u8>, Error> {
-    let r = controller.route();
+fn key_record(
+    controller: &Controller,
+    state: &cinder_journal::model::State,
+    keys: &[RecipientKey],
+) -> Result<Vec<u8>, Error> {
+    let route = controller.effective_route(state).map_err(|_| Error)?;
+    let r = &route;
     if keys.len() != r.beneficiaries.len() {
         return Err(Error);
     }
@@ -121,7 +126,7 @@ pub fn register_keys<B: Backend, P: Protection>(
     {
         return Err(Error);
     }
-    let record = key_record(controller, keys)?;
+    let record = key_record(controller, j.state().map_err(|_| Error)?, keys)?;
     let tx = cinder_journal::model::Transaction {
         id,
         expected: j.head(),
@@ -143,7 +148,7 @@ pub fn require_registered<B: Backend, P: Protection>(
     keys: &[RecipientKey],
 ) -> Result<(), Error> {
     j.verified_state().map_err(|_| Error)?;
-    let registered = key_record(controller, keys)?;
+    let registered = key_record(controller, j.state().map_err(|_| Error)?, keys)?;
     let mut records = j
         .transactions()
         .flat_map(|t| &t.evidence)
@@ -595,7 +600,9 @@ pub fn prepare<B: Backend, P: Protection>(
     {
         return Err(Error);
     }
-    let route = controller.route();
+    let route = controller
+        .effective_route(j.state().map_err(|_| Error)?)
+        .map_err(|_| Error)?;
     let mut verified = std::collections::BTreeMap::new();
     for key in keys {
         if verified

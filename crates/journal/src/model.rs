@@ -156,6 +156,8 @@ impl fmt::Debug for Attempt {
 /// Atomic control mutations; policy/authorization is a separate P07/P09 prerequisite.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Control {
+    /// Owner-authenticated empty-account registration or original-deposit hint.
+    Onboarding(crate::onboarding::Action),
     /// Qualified exact-batch ingress in this same journal and ledger.
     Escrow(crate::escrow::Action),
     /// Operator-qualified recovery-only cutover and irreversible dispatch seal.
@@ -274,6 +276,8 @@ pub struct Receipt {
 /// One joined replay state. Reservations/attempts own no second set of assets.
 #[derive(Clone, PartialEq, Eq)]
 pub struct State {
+    pub(crate) registrations: Vec<crate::onboarding::Binding>,
+    pub(crate) deposit_notices: Vec<crate::onboarding::Notice>,
     pub(crate) config: Config,
     pub(crate) ledger: Ledger,
     pub(crate) holds: Vec<Hold>,
@@ -321,6 +325,8 @@ impl State {
             .iter()
             .any(|s| s.location == Location::Broker);
         Ok(Self {
+            registrations: Vec::new(),
+            deposit_notices: Vec::new(),
             ledger: Ledger::new(config.clone()).map_err(|_| Error::Invalid)?,
             config,
             holds: Vec::new(),
@@ -491,6 +497,7 @@ impl State {
     }
     pub(crate) fn control(&mut self, c: &Control) -> Result<(), ControlError> {
         match c {
+            Control::Onboarding(action) => self.onboard(action)?,
             Control::Escrow(action) => self.escrow_action(action)?,
             Control::Recovery(action) => self.recovery_action(action)?,
             Control::ResolveRaw(resolution) => self.resolve_raw(resolution)?,
@@ -689,7 +696,7 @@ impl State {
                 .markets
                 .len()
                 .saturating_mul(2)
-                .saturating_add(self.config.customers.len())
+                .saturating_add(self.ledger.customer_ids().count())
                 .saturating_add(4),
         );
         if observations > 4096 || cells > 65536 {
