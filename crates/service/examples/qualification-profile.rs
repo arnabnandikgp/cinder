@@ -228,6 +228,7 @@ fn run() -> Result<(), Error> {
             read_cost: 10,
         },
         route,
+        escrow: None,
         trading_epoch: 1,
         chain: None,
         demo_allocation: None,
