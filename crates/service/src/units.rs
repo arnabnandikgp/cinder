@@ -69,6 +69,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         {
             return Err(Error);
         }
+        api.initialize(&mut journal).map_err(|_| Error)?;
         let reader = journal.attach_reader(binding).map_err(|_| Error)?;
         Ok(Self {
             journal: Mutex::new(journal),
@@ -277,6 +278,17 @@ impl<B: Backend + Send, P: Protection + Send, A: cinder_api::Admission + Send + 
         now: u64,
     ) -> Result<Option<PreparedReply>, Error> {
         self.prepare(channel, request, now, true)
+    }
+    fn poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        match self.prepare(channel, request, now, true)? {
+            Some(prepared) => self.release(channel, prepared),
+            None => Ok(None),
+        }
     }
     fn release_reply(
         &self,

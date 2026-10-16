@@ -63,6 +63,19 @@ impl<A: crate::Admission> Service<A> {
     pub fn commitment(&self, config: &units::Configuration) -> Result<[u8; 32], Error> {
         history::fingerprint(config, &self.auth)
     }
+    /// Trusted startup verification before attaching a publication/listener.
+    /// This loads no key, creates no account and grants no native permission.
+    pub fn initialize<B: Backend, P: Protection>(
+        &self,
+        journal: &mut units::Journal<B, P>,
+    ) -> Result<(), Error> {
+        journal.verified_state().map_err(|_| Error::Unavailable)?;
+        self.cache
+            .lock()
+            .map_err(|_| Error::Unavailable)?
+            .accepted(journal, &self.auth)?;
+        Ok(())
+    }
     /// Reject malformed signatures/sessions/read methods before witness I/O.
     /// Current authority and final release are checked separately.
     pub fn authenticate_read(
