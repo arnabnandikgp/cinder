@@ -91,6 +91,19 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         custody::validate_onboarding(journal.configuration(), &api, funding)?;
         Self::attach(journal, api, binding, witness, clock, deadline)
     }
+    /// Synthetic discovery for the feature-gated local fixture only. Shipping
+    /// constructors always require the actual custody-controller inventory.
+    #[cfg(feature = "local-fixture")]
+    pub(crate) fn open_fixture(
+        journal: Journal<B, P>,
+        api: Service<A>,
+        binding: Binding,
+        witness: Arc<dyn Witness>,
+        clock: Arc<dyn Clock>,
+        deadline: u64,
+    ) -> Result<Self, Error> {
+        Self::attach(journal, api, binding, witness, clock, deadline)
+    }
     fn attach(
         mut journal: Journal<B, P>,
         api: Service<A>,

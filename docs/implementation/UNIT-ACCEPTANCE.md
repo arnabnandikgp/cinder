@@ -28,6 +28,11 @@ engine, record AEAD, replicated accepted history and both native adapters. Only
 external balances/setup/observations, session/time and same-host witness are
 explicit fixtures. It never reads wallet/cloud config or opens a socket.
 Its fixed public disposable native seeds and seeded money must never be deployed.
+Discovery in this fixture is explicitly synthetic: its crate-private,
+`local-fixture`-gated constructor does not qualify a loaded funding inventory.
+Shipping onboarding uses `open_with_custody` and rejects absent or mismatched
+controllers/decimals/epochs/deposit limits. BULK has no qualified controller;
+this offline driver does not circumvent that live startup gate.
 
 The acceptance manifest now requires the named SDK case to actually run in the
 private suite; it also requires unit custody/recovery cases in Rust. Deleted,

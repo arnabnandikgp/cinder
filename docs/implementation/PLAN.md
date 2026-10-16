@@ -1171,10 +1171,10 @@ owner/global revocation, recorded-only versus decided lifecycle, private read
 scope and final publication gates. Shipping v1 remains explicit, never fallback.
 Evidence: ADRs 0034–0039, P18/P21A/P23 publication races and P29–P32 fixtures.
 
-- [ ] Measure repeated requests at MAX_ITEMS and implement only necessary derived head-keyed indexing/cache; freshness and replay validation remain authoritative.
-- [ ] Unit reads and operation receipts cannot leak another component, mistake recording for acceptance or reuse a cursor across units; current revocation/fencing governs publication.
-- [ ] Runnable handler and SDK request/update paths bind unit and stable operation identity with no implicit retries or changed native authority.
-- [ ] Focused performance, auth, read/update, restart/race and legacy regressions pass; exact source, review and remaining activation gates are recorded.
+- [x] Measure repeated requests at MAX_ITEMS and implement only necessary derived head-keyed indexing/cache; freshness and replay validation remain authoritative.
+- [x] Unit reads and operation receipts cannot leak another component, mistake recording for acceptance or reuse a cursor across units; current revocation/fencing governs publication.
+- [x] Runnable handler and SDK request/update paths bind unit and stable operation identity with no implicit retries or changed native authority.
+- [x] Focused performance, auth, read/update, restart/race and legacy regressions pass; exact source, review and remaining activation gates are recorded.
 
 <a id="p34"></a>
 ## P34 — Unit execution and financial reconciliation
@@ -1186,10 +1186,10 @@ reconciliation alongside Pacifica, under one shared durable history. No global
 readiness inferred from an ACK or an unqualified account snapshot.
 Evidence: X01–X05, P13/P14/P27/P28 codecs, ADR 0034 and pinned native sources.
 
-- [ ] Original operation, attempt, unit/account, exact bytes and holds commit before signing/exposure; unknown outcomes block blind resend.
-- [ ] Fills, funding, fees, forced events and reconciliation preserve actual ownership/precision and ingest adverse facts while new admission is frozen.
-- [ ] Cross-unit IDs, partial/late/duplicate/conflicting facts, crashes and shared freshness faults are contained or fenced as specified.
-- [ ] Offline joined execution tests and legacy regressions pass; every unsupported native capability stays disabled pending its own qualification.
+- [x] Original operation, attempt, unit/account, exact bytes and holds commit before signing/exposure; unknown outcomes block blind resend.
+- [x] Fills, funding, fees, forced events and reconciliation preserve actual ownership/precision and ingest adverse facts while new admission is frozen. Unqualified native funding/ADL causes stay retained and unresolved, not fabricated financial events.
+- [x] Cross-unit IDs, partial/late/duplicate/conflicting facts, crashes and shared freshness faults are contained or fenced as specified.
+- [ ] Offline joined execution tests and legacy regressions pass; every unsupported native capability stays disabled pending its own qualification. Original full matrix passes; final adapter/range review regressions pending.
 
 <a id="p35"></a>
 ## P35 — Unit funding, payouts and recovery
@@ -1201,10 +1201,10 @@ with explicit native funding/return evidence adapters. No new financial promises
 or automatic on-chain program proliferation. Evidence: ADR 0030, P15–P17/P21/
 P23B/P23C, unit registry backing aliases and each venue's verified rail contract.
 
-- [ ] Exact escrow batches/routes and native funding ownership remain unit-bound; source handoff and qualified arrival never credit the customer twice.
-- [ ] Unsupported or uncertain native credit/return remains pending and restricts dependent trading/payouts without cross-unit substitution.
-- [ ] Normal/recovery payouts preserve shared paid counters, final reconciliation, fenced authority and segregated actual backing.
-- [ ] Offline faults/partial movement/replay/wrong-unit/recovery tests pass; native rail gaps and approval requirements are explicit rather than mocked qualification.
+- [x] Exact escrow batches/routes and native funding ownership remain unit-bound; source handoff and qualified arrival never credit the customer twice.
+- [x] Unsupported or uncertain native credit/return remains pending and restricts dependent trading/payouts without cross-unit substitution.
+- [x] Normal/recovery payouts preserve shared paid counters, final reconciliation, fenced authority and segregated actual backing.
+- [ ] Offline faults/partial movement/replay/wrong-unit/recovery tests pass; native rail gaps and approval requirements are explicit rather than mocked qualification. Original full matrix passes; final loaded-policy/discovery review regressions pending.
 
 <a id="p36"></a>
 ## P36 — Joined second-venue acceptance and qualification
@@ -1216,8 +1216,8 @@ plus bounded native/hardware qualification where separately approved and
 supported. Record offline completion separately from live integration completion.
 Evidence: W acceptance matrix, P22/P23 harnesses, native capability receipts.
 
-- [ ] Joined lifecycle/adversarial fixtures cover admission, native preparation, partial fills, financial reconciliation, custody and recovery without independent balances.
-- [ ] Concurrency/restart/revocation/cross-unit/freshness failures preserve accounting and publication; cached projections never become authority.
+- [x] Joined lifecycle/adversarial fixtures cover admission, native preparation, partial fills, financial reconciliation, custody and recovery without independent balances. The SDK trading process, selected-adapter custody/recovery and existing carrier/SBF suites are complementary evidence, not one live financial round trip.
+- [x] Concurrency/restart/revocation/cross-unit/freshness failures preserve accounting and publication; cached projections never become authority.
 - [ ] Clean-checkout CI exercises all new offline tests without ignored research, wallets or external requests.
 - [ ] Approved native/changed-image hardware runs have exact source and cleanup receipts; blocked/deferred capabilities are named and never counted as qualified.
 

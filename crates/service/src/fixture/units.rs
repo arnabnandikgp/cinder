@@ -176,7 +176,7 @@ fn start(
         epoch: 1,
         api: api.commitment(j.configuration()).map_err(|_| Error)?,
     };
-    crate::units::Runtime::open(
+    crate::units::Runtime::open_fixture(
         j,
         api,
         binding,
