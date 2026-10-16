@@ -29,8 +29,10 @@ is implied. [P25 backend onboarding](docs/architecture/0031-backend-onboarding.m
 adds opt-in fresh-wallet account discovery and unsigned escrow preparation;
 frontend integration and deployment remain separate work.
 
-[BULK candidate work](docs/venues/bulk.md) adds only offline exact wire/fill
-codecs, not a second enabled venue. Current native environment, accounting and
+[BULK candidate work](docs/venues/bulk.md) adds offline exact wire/fill and financial
+observation codecs, not a second enabled venue. The
+[two-unit state contract](docs/architecture/0034-execution-unit-boundary.md) is a
+proposal for review, not an implemented multi-venue runtime. Native environment, accounting and
 funding/return evidence remain qualification gates; no cross-venue margin follows.
 
 Tests, implementation, hardware evidence and production readiness are distinct.

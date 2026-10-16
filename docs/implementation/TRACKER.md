@@ -34,6 +34,7 @@
 | [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | closed | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), merged `52a36ef` |
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
+| [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | in progress | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | local implementation |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -42,6 +43,17 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P28 selected — 2026-10-16
+
+User approved the next recommended slice. Branch
+`tee/p28-bulk-financial-observations` starts above merged P27 `b818655` and carries
+the local P27 closure receipt `ecea03a`, as PLAN requires. Implement isolated
+financial observations plus the concrete unit-state design; no Runtime/journal
+activation or external run is authorized. Scope and acceptance are in PLAN P28.
+Preserve unrelated untracked qualification example, user-journey doc and stays.
+Next: exact account/position, funding/fee/risk fixtures and source-specific mapping;
+then the unit contract and appropriate local checks/publication.
 
 ### P27 merged after review corrections — 2026-10-16
 
@@ -5748,6 +5760,15 @@ Final verification/merge: 022938e passes all eight hosted jobs, exact-head CodeR
 Next: propose the remaining BULK financial mapping and explicit two-unit ownership contract before runtime composition. Native environment/bridge qualification remains separately gated; no frontend, financial run or reopened Pacifica investigation follows automatically.
 PR: https://github.com/arnabnandikgp/cinder/pull/71.
 Merge: b818655a63ba10491cae2aa51877b52a340054c2.
+
+## P28 — BULK financial observations and execution-unit contract
+
+Work: implementing bounded exact native financial observations and documenting the two-unit ownership contract; no financial posting or Runtime activation.
+Verification: pending, acceptance in PLAN P28. P27 results remain historical.
+Unexpected: native cumulative margin/position metrics are not standalone settlements; reported entry prices and risk-vault rows cannot be reinterpreted as exact Cinder basis or fills.
+Next: implement and test account/position and event mappings, document unit-state boundaries, then verify/publish one bounded PR.
+PR: none.
+Merge: none.
 
 ## P24 — Release safety case
 
