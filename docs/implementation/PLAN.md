@@ -1104,9 +1104,9 @@ Evidence: F01–F14/X01–X05/S01–S04, P05/P06 replay fixtures,
 [ADR 0034](../architecture/0034-execution-unit-boundary.md),
 [bounded implementation](../architecture/0035-unit-journal-foundation.md).
 
-- [ ] Registry binds domain/native/custody/source/precision/key-policy ownership, starts empty and rejects duplicate or shared physical backing aliases without changing legacy codecs.
-- [ ] Enrollment and revocation are atomic across units; reservation identities cannot change unit or commitment, and rejected controls do not discard actual observations.
-- [ ] Replay, duplicate/conflict, wrong-unit source, independent inventory, CAS/unknown outcomes, freshness fencing, encrypted storage and legacy/new-format isolation pass deterministic offline tests.
+- [x] Registry binds domain/native/custody/source/precision/key-policy ownership, starts empty and rejects duplicate or shared physical backing aliases without changing legacy codecs.
+- [x] Enrollment and revocation are atomic across units; reservation identities cannot change unit or commitment, and rejected controls do not discard actual observations.
+- [x] Replay, duplicate/conflict, wrong-unit source, independent inventory, CAS/unknown outcomes, freshness fencing, encrypted storage and legacy/new-format isolation pass deterministic offline tests.
 - [ ] Appropriate exact-source workspace checks pass; implementation limits, PR/review/CI state and the next versioned API/controller/runtime gate are recorded without activation claims.
 
 <a id="p24"></a>

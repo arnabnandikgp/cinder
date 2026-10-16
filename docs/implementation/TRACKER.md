@@ -45,6 +45,44 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P29 offline qualification complete — 2026-10-16
+
+Tested source `8d6065dfdc5838a5478376ba2fdfce302f68edce`, tree
+`7340ced180543dabf447948402d721645fcb599d`, is committed on
+`tee/p29-execution-unit-journal`. Exact staged source was exported to a clean
+temporary checkout, excluding the unrelated untracked qualification example,
+user-journey doc and stays. No code changed after those checks.
+
+The opt-in `journal::units` implementation has one immutable one/two-unit
+registry, one protected history/head, existing financial component states,
+shared wallet ownership/epochs and immutable reservation routes. The legacy
+normalizer's extra composition predicate only narrows accepted attribution;
+its ordinary entrypoint preserves the original checks. Unsupported controls
+retain actual facts with refused control receipts. No exposure is returned.
+
+On macOS with Rust 1.97.1 / Node 24.21.0, clean-source `node scripts/check.mjs`
+groups **contracts/lint/rust/client** all pass (locked/offline Cargo, shared
+target, incremental/debug information disabled). Results: **81** contract tests,
+**35** phases/**61** tracked docs; strict default/all-feature all-target lint and
+build; full Rust **715/715/652** passed in all-feature debug/release and shipping
+default, with only expected **10/10/9** ignored tests. All **20** new unit tests
+execute in each profile. Local relay **15** and SDK **30** tests pass against the
+exact-source binaries. No local Linux/container, fresh browser/SBF or ARM package
+run is claimed; unchanged additional qualification jobs remain hosted CI gates.
+
+Tests cover physical aliases, cross-asset/owner/source/request isolation, shared
+registration/revocation, retained late fills under refused controls, exact retry,
+restart, CAS, lost durable reply/panic, actual record AEAD, synthetic replicated
+witness/replica loss, 64 records and byte/record/format bounds. These are offline
+tests, not an audit, native isolation/backing proof or hardware qualification.
+P23 financial acceptance and G01–G05 remain unchanged. No live activity occurred.
+
+Next: publish this single bounded PR through the native stack workflow, record
+its exact head/CI/review state, then await review. Full signed economic-intent
+routing, unit-bound API/SDK/grants, financial controllers, shared read publication,
+global recovery fencing and joined Runtime acceptance remain later composition;
+they are not implicitly enabled or claimed complete here. No merge is authorized.
+
 ### P29 approved and started — 2026-10-16
 
 User approved the new-history unit identity/registry and journal foundation.
@@ -5898,13 +5936,23 @@ Merge: b4dce81d757c30d076e945082dd33e4c21a9269a.
 
 ## P29 — New-history execution-unit journal foundation
 
-Work: Approved offline scope recorded in ADR 0035. New-history registry, one
-deployment journal/head, shared ownership/epochs and unit-owned foundation holds
-are being implemented. Legacy Runtime and journal remain unchanged.
-Verification: Pending focused replay/isolation/storage tests and exact-source workspace checks.
-Unexpected: Foundation controls deliberately exclude exposure and full financial
-admission; reservation commitments are not future signed order digests.
-Next: Finish local verification, record exact checked source and open one reviewable PR.
+Work: Implemented `kernel::identity::UnitId`, `journal::units` registry/state/codec/
+store and twenty offline regressions, with ADR 0035 and updated entrypoints.
+Shipping Runtime/API and legacy replay stay unchanged; one new history, not a
+backend/journal per venue. Shared owner/epoch changes are atomic; reservation
+routes survive release/replay, and the new path cannot expose/sign.
+Verification: Source `8d6065d`, tree `7340ced180543dabf447948402d721645fcb599d`,
+passes all clean-source check groups: 81 contracts, strict default/all-feature
+all-target workspace lint/build, Rust 715/715/652 with expected ignored 10/10/9,
+relay 15 and SDK 30. Exact commands/environment and source limits are in the
+current handoff. Full code source: `8d6065dfdc5838a5478376ba2fdfce302f68edce`.
+Unexpected: A narrowing-only normalizer predicate retains original foreign
+request/attempt evidence without posting it to the wrong component. Unknown
+storage/freshness and unwinding fence the whole new handle. Foundation controls
+exclude exposure and full admission; reservation commitments are not signed
+order digests. No runtime deadline, financial policy or dependency was changed.
+Next: Publish one ready PR, record its head/check/review state and await review;
+unit-bound API/controller/runtime composition remains separately scoped.
 PR: Not opened.
 Merge: Not merged.
 
