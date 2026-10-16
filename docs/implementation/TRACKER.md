@@ -42,7 +42,7 @@
 | [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; existing findings addressed |
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), open |
-| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | Offline verification passes; publication pending |
+| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), open; offline verification passes |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-17 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -91,6 +91,30 @@ heads were green before these changes; new heads require new CI/review. Next:
 restack P35/P36, apply the same completion retention to the withdrawal callback,
 finish exact-source matrix and publish approved fixes. No automatic merge,
 frontend, native financial/RPC/AWS activity or new qualification.
+
+### Historical: Four-layer stack published — 2026-10-17
+
+All four ready PRs are linked in native GitHub stack #80, bottom-up:
+[#78](https://github.com/arnabnandikgp/cinder/pull/78) →
+[#79](https://github.com/arnabnandikgp/cinder/pull/79) →
+[#81](https://github.com/arnabnandikgp/cinder/pull/81) →
+[#82](https://github.com/arnabnandikgp/cinder/pull/82).
+P36 targets `tee/p35-unit-custody`, not trunk. Opening head
+`fdad105fa25b5f0d5f67d50c859a1e5997878a27`, tree
+`b9c9d030eb35a55422251416c4071e6bb9333d13`, differs from checked `4507b60`
+only in EVIDENCE/PLAN/TRACKER. This publication receipt is also docs-only.
+At inspection #82 contracts are green, seven other hosted jobs are running,
+CodeRabbit status is green but no substantive new review is claimed. P34's
+single targeted browser rerun is workflow attempt 2, in progress. Old failures
+and old green heads remain historical; no merge is authorized or performed.
+
+The independent offline P33–P36 implementation work is complete and reviewable.
+P36's actual native/changed-image qualification criterion remains open. Next:
+review current-head #82/stack findings and CI, then obtain a separate bounded
+native run approval if desired using UNIT-QUALIFICATION-PROPOSAL. Do not deploy
+the fixture constructor or use it to claim a working BULK funding rail, live
+manifest, privacy hardware or financial round trip. The deferred Pacifica
+credit issue stays deferred. No frontend, wallet/faucet, RPC or AWS work started.
 
 ### Historical: P36 final corrected source verified — 2026-10-17
 
@@ -6741,9 +6765,10 @@ lint/build, Rust 797/797/734 (intentional ignores 10/10/9), relay 15, SDK 42 and
 tsc. Current handoff owns exact tree, logs, review and predecessor CI status.
 Unexpected: fixture timestamps/deadlines/readiness must obey real admission;
 native/changed-image qualification remains separately scoped, not fixture proof.
-Next: publish and link fourth PR; finish current-head hosted CI/review. Keep
+Next: finish current-head hosted CI/review. Fourth layer #82 is published in
+native stack #80; see current handoff for opening head and checked source. Keep
 native/hardware criterion open until supported approved runs actually complete.
-PR: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/82.
 Merge: none.
 
 ## P24 — Release safety case
