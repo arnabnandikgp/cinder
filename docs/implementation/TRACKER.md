@@ -39,10 +39,10 @@
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
 | [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
-| [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; final verification/review pending |
+| [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; existing findings addressed |
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), open |
-| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | Local implementation; full regression/review pending |
+| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | Offline verification passes; publication pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-17 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -91,6 +91,55 @@ heads were green before these changes; new heads require new CI/review. Next:
 restack P35/P36, apply the same completion retention to the withdrawal callback,
 finish exact-source matrix and publish approved fixes. No automatic merge,
 frontend, native financial/RPC/AWS activity or new qualification.
+
+### Historical: P36 final corrected source verified — 2026-10-17
+
+Checked source `4507b60d498433e8d4613253b145e2e3d694d7f3`, tree
+`deccae44e26ea1c29cf43ef28ddb18d6412d34d6`, clean tracked export
+`/private/tmp/cinder-p36-final.hM0rSx`. Rust 1.97.1 / Node 24.21.0, locked/offline
+Cargo, existing caches, incremental/debug info disabled, one Cargo writer.
+All four final groups pass:
+
+- contracts: 82/82, actual graph, fixture boundaries and implementation inventory;
+- lint: format, strict default/all-feature all-target Clippy and all-feature build;
+- Rust: 797/797/734 in all-feature debug/release and shipping-default debug;
+  existing intentional ignores 10/10/9, not hardware passes;
+- client: relay 15/15, SDK 42/42 including joined native-signature lifecycle,
+  and TypeScript checking.
+
+Logs `/private/tmp/cinder-p36-final-{contracts,lint,rust,client}.log`.
+Author's scoped review `/private/tmp/cinder-p36-review.html` is not an independent
+audit. Final bookkeeping-only successors do not change the checked runtime.
+No source test failure remains in this matrix. Earlier first-source checks also
+passed but do not substitute for this corrected-source result.
+
+P34 corrections pushed at `cc59226af4e4fa910430ce22916e8c05083bfac3`;
+P35 restacked and pushed with exact old-head force-with-lease at
+`d24373e2b9169b24985c66855650eecdb230479e`. Seven still-open existing findings
+across #78/#79/#81 were replied to with exact fixes/evidence and resolved;
+three other #78 threads were already resolved. No new inline findings at the
+latest inspection. CodeRabbit was rate-limited on #79/#81, not a completed review.
+
+Hosted snapshot: #78 `a1f40d2` has eight green jobs; #81 `d24373e` has seven
+green with vault still running. #79 `cc59226` has six green, vault running and
+browser failed at `http-fixture.mjs`'s five-second Missing fixture notification,
+after both Node/Chrome cryptographic groups passed. The descendant #81 browser
+job passes. Exact failed log `/private/tmp/cinder-p34-browser-failure.log`;
+The precise localhost suite passes all 26 HTTP/WebSocket process groups each in
+Node 24.21.0 / actual Chrome 155.0.8059.82, including notification, queue overflow,
+restart and revocation. Log `/private/tmp/cinder-p36-browser-http.log`. No source,
+timeout or assertion was relaxed. One targeted rerun of the failed P34 browser
+job was requested; original cause is not established from a non-reproduction.
+Do not claim this current-head hosted browser failure green from older evidence.
+
+Next: publish/link the fourth open PR, record the single browser rerun result,
+then request only separately scoped native qualification if the user chooses it.
+[UNIT-ACCEPTANCE](UNIT-ACCEPTANCE.md) and the unapproved
+[proposal](UNIT-QUALIFICATION-PROPOSAL.md) own live limits. BULK funding/returns,
+consumed live two-unit manifest and changed-image Nitro remain gates; Pacifica
+missing credit stays deferred. No automatic merge, frontend or live financial/
+RPC/AWS activity. Both clean review worktrees were removed; all source remains
+in Git. Preserve the same three unrelated untracked user paths.
 
 ### Historical: P35 policy/discovery review correction — 2026-10-17
 
@@ -6639,10 +6688,11 @@ Merge: 1134f9421d090caae9739868bcf860ba61e43157.
 
 Work: implemented the opt-in shared-unit handler, private projections and explicit
 SDK client, reusing existing witnessed final-release gates; ADR 0039.
-Verification: original final source passed all four groups and eight hosted
-jobs. Review-fix source `2142c08` passes all API, six focused unit-runtime,
-client 15/40, TypeScript, strict clippy, format and contract checks; current
-handoff records exact provenance and new-head hosted checks still pending.
+Verification: original final source passed all four groups. Review-fix source
+`2142c08` passes all API, six focused unit-runtime, client 15/40, TypeScript,
+strict Clippy, format and contracts; current #78 `a1f40d2` has eight hosted green
+jobs and all existing actionable threads are addressed. Final stack matrix
+also passes; current handoff records exact provenance and evidence limits.
 Unexpected: recorded-only receipts need an explicit v2-only lifecycle extension;
 legacy decoders must refuse it. No v1-to-v2 default-unit fallback.
 Next: verify the current review corrections and complete the open four-PR stack.
@@ -6686,11 +6736,12 @@ Merge: none.
 
 Work: actual SDK-to-Runtime-to-native-signature joined fixture and mandatory
 execution guards; UNIT-ACCEPTANCE matrix and separate qualification proposal.
-Verification: joined SDK lifecycle, tsc, manifest negatives and strict lint/build
-pass; full exact-source regression is underway. Current handoff owns receipts.
+Verification: final corrected source `4507b60` passes contracts 82, strict
+lint/build, Rust 797/797/734 (intentional ignores 10/10/9), relay 15, SDK 42 and
+tsc. Current handoff owns exact tree, logs, review and predecessor CI status.
 Unexpected: fixture timestamps/deadlines/readiness must obey real admission;
 native/changed-image qualification remains separately scoped, not fixture proof.
-Next: finish regressions/review corrections, publish and link fourth PR. Keep
+Next: publish and link fourth PR; finish current-head hosted CI/review. Keep
 native/hardware criterion open until supported approved runs actually complete.
 PR: none.
 Merge: none.
