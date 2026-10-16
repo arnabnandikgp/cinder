@@ -39,7 +39,7 @@
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
 | [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
-| [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | — |
+| [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; final verification/review pending |
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | open | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | — |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | open | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | — |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | open | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | — |
@@ -51,6 +51,39 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P33 published; remaining stack continues — 2026-10-16
+
+Ready #78 targets `product/tee-v1` through native `gh stack`; implementation
+head `de271d706aedc68180d6d9aadc7e9d5f0684f0aa`, tree
+`9677b1872c9fdf6268a2040f7171951c752981e5`. No native activation or merge.
+Unit Handler, all eleven private read families, v2-only recorded status,
+unit-bound receipt/cursor/SDK/subscription paths and common witnessed publication
+are implemented. Startup verifies original API history. ADR 0039 is the contract.
+
+Five focused runtime tests and nine SDK unit tests pass. The first clean export
+passed strict default/all-feature lint/build, contracts 81 and inventory (42
+phases/66 docs); full Rust matrix is running. That export predates final valid-
+projector/startup/poll and SDK scratch-erasure refinements; its results are not
+claimed as exact-head qualification. Final focused/hosted checks remain pending.
+Local source export `/private/tmp/cinder-p33-check.SRoo5n`; logs
+`/private/tmp/cinder-p33-{contracts,lint,rust,runtime,units}.log`.
+
+MAX_ITEMS=1024 cold interpretation measured ~292 ms; 64 fresh same-head signed
+and authenticated requests ~44 ms. These local synthetic results exclude native,
+remote witness and Nitro latency. Corrected two new fixture assumptions: request
+IDs are deployment/customer-global even across units; SQLite alone is not a
+freshness witness. No actual gate was relaxed. Cache misses retain full signature/
+join validation; same-head reuse still performs current auth/freshness.
+
+Approved metadata refresh completed exactly two unsigned GETs (exchangeInfo,
+feeState), both Cloudflare origin HTTP 502, no retry or financial/RPC/AWS action.
+Exact headers/bodies/receipt are in ignored
+`work/venues/bulk/reassessment-2026-10-16/run-q9qwUP/`; no new capability inferred.
+
+Next: finish P33 exact-head verification while building P34 unit execution/
+reconciliation, then P35 funding/recovery and P36 joined acceptance. User asked
+for all four as an open PR stack, not a stop after P33 or automatic merges.
 
 ### Four-layer integration stack authorized — 2026-10-16
 
@@ -6415,13 +6448,14 @@ Merge: 1134f9421d090caae9739868bcf860ba61e43157.
 
 ## P33 — Unit service, reads and SDK
 
-Work: implementing the approved shared-unit handler, private projections and
-explicit SDK client, reusing existing witnessed final-release gates.
-Verification: focused tests running; exact-source matrix pending.
+Work: implemented the opt-in shared-unit handler, private projections and explicit
+SDK client, reusing existing witnessed final-release gates; ADR 0039.
+Verification: five focused runtime and nine SDK unit tests pass; first export
+strict lint/build/contracts pass. Exact-head/hosted matrix and review pending.
 Unexpected: recorded-only receipts need an explicit v2-only lifecycle extension;
 legacy decoders must refuse it. No v1-to-v2 default-unit fallback.
-Next: finish focused publication/performance/client tests, then exact-source checks.
-PR: none.
+Next: complete exact-head verification/review and build P34 above this PR.
+PR: https://github.com/arnabnandikgp/cinder/pull/78.
 Merge: none.
 
 ## P34 — Unit execution and reconciliation
