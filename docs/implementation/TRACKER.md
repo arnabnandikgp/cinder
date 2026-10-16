@@ -38,7 +38,7 @@
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | closed | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), merged `793a05c` |
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
-| [P32 — Unit-scoped financial admission](PLAN.md#p32) | in progress | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | — |
+| [P32 — Unit-scoped financial admission](PLAN.md#p32) | in progress | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), open; CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -47,6 +47,27 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P32 published for review — 2026-10-16
+
+Ready [#77](https://github.com/arnabnandikgp/cinder/pull/77) targets
+`product/tee-v1` from `tee/p32-unit-financial-admission`, published using native
+`gh stack submit --auto --open`. One new layer only; no automatic merge.
+Opening head `1e7f0eda73f0a8bc8f3d00400193003326b29e28` differs from checked
+implementation `ee40273` only in PLAN/TRACKER. Publication documentation is
+also receipt-only: code/tests are unchanged after all four exact-tree groups.
+
+At opening-head inspection all eight hosted jobs were running, CodeRabbit was
+pending and there was no substantive review. This receipt's new head needs its
+own checks; older green results are not inherited CI approval. Local publication
+contracts/inventory pass; the source qualification handoff below records the
+full matrix. P31 is actually merged at `d23e33c`; its closure is not contingent
+on #77. Preserve the same three unrelated untracked user paths.
+
+Next: inspect #77's exact latest-head findings/checks, address relevant review,
+and obtain merge/next-slice direction. Runtime/read/recovery composition follows
+separately, including the MAX_ITEMS latency/cache gate before request wiring.
+No native capability, live venue/RPC/AWS activity or frontend integration started.
 
 ### P32 offline qualification complete — 2026-10-16
 
@@ -6365,9 +6386,9 @@ Unexpected: tests must distinguish known noncommitted SQLite CAS failure from
 unknown append fencing. Payout acceptance reserves customer entitlement; queued
 amounts need not already be available at the payout location. Dispatch retains
 its separate FIFO/location qualification. No policy was changed to satisfy tests.
-Next: publish one ready PR and inspect its exact-head CI/review. Runtime wiring
+Next: inspect #77's exact-head CI/review. Runtime wiring
 must first qualify MAX_ITEMS replay cost; no native activation is implied.
-PR: none.
+PR: https://github.com/arnabnandikgp/cinder/pull/77.
 Merge: Not merged.
 
 ## P24 — Release safety case
