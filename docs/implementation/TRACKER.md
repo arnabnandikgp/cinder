@@ -41,7 +41,7 @@
 | [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
 | [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; final verification/review pending |
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
-| [P35 — Unit funding and recovery](PLAN.md#p35) | open | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | — |
+| [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | — |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | open | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -96,6 +96,32 @@ positive paths. Exact-source offline BULK execution 11/11, Pacifica execution
 attempt used equality on a non-PartialEq kind; replaced it with a pattern check.
 No gate was relaxed. P35/P36 must be restacked onto this correction; no live
 request or automatic merge. New-head hosted checks/review remain separate.
+
+### P34 verified locally; P35 underway — 2026-10-16
+
+P34 source `8cad0bb` (building on rebased checkpoint `69da0ff`) adds sealed
+component controllers, native signing/read budgets, exact account/environment
+binding and typed runtime/opaque egress. Ten focused BULK cases pass. Clean
+source lint/default+all-feature Clippy/all-target build, all three full Rust
+profiles and client group (relay 15, SDK 40 and TypeScript) pass. The original
+contracts run found the synthetic expected graph still described codecs-only;
+updated the fixture, retained reverse-edge/pin/feature negatives, and all 81
+contract tests plus actual graph/inventory pass at committed source `8cad0bb`.
+Logs `/private/tmp/cinder-p34-{lint,rust,client,contracts-final}.log`.
+No native financial/RPC/AWS activity; two approved public metadata GETs returned
+origin 502 and provide no new qualification. P34 publication remains pending.
+
+P35 now composes existing Pacifica funds/recovery through the sealed controller,
+retains canonical owner bootstrap proofs, and adds an atomic all-unit recovery
+cutover. Unit replay revision 5 starts new empty histories, not migration. Three
+new signed bootstrap tests and three unit custody/cutover tests pass locally.
+The allocation fixture initially omitted the existing required current native
+reconciliation/collateral cut; supplied that synthetic evidence, with no relaxed
+admission rule. Typed runtime worker completion wiring is being compiled.
+BULK funding remains disabled; the deferred Pacifica missing-credit investigation
+has not been reopened. Next: finish P35 adversarial/legacy checks, publish the
+remaining PR layers and complete P36 joined offline acceptance/qualification
+proposal. No automatic merge or frontend work is authorized.
 
 ### P33 review fixes verified — 2026-10-16
 

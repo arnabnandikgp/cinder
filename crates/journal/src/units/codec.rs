@@ -7,7 +7,7 @@ pub(super) const GENESIS: u8 = 30;
 pub(super) const RECORD: u8 = 31;
 // Unit ownership/controller changes require a separate replay revision even
 // when the reused single-unit financial engine remains unchanged.
-const REVISION: u16 = 4;
+const REVISION: u16 = 5;
 pub(super) fn writer(tag: u8) -> Writer {
     let mut w = Writer::new(tag);
     w.raw(&REVISION.to_be_bytes());
@@ -53,6 +53,36 @@ pub(super) fn transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.raw(&tx.expected.hash);
     w.u64(tx.at);
     match &tx.change {
+        Change::EnrollOwner {
+            wallet,
+            recipients,
+            proof,
+        } => {
+            w.byte(6);
+            w.raw(wallet);
+            w.count(recipients.len());
+            for r in recipients {
+                w.raw(&r.unit.bytes());
+                w.raw(&r.tokens);
+            }
+            w.blob(proof.as_bytes());
+        }
+        Change::BeginRecovery {
+            versions,
+            authority_epoch,
+            valid_until,
+            fence,
+        } => {
+            w.byte(5);
+            w.count(versions.len());
+            for (unit, version) in versions {
+                w.raw(&unit.bytes());
+                w.u64(*version);
+            }
+            w.u64(*authority_epoch);
+            w.u64(*valid_until);
+            w.raw(fence);
+        }
         Change::Admit(a) => {
             w.byte(4);
             api_record(&mut w, &a.record);
@@ -104,6 +134,41 @@ pub(super) fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
     };
     let at = r.u64()?;
     let change = match r.byte()? {
+        6 => {
+            let wallet = r.array()?;
+            let n = r.count()?;
+            if n > MAX_UNITS {
+                return Err(Error::Limit);
+            }
+            let mut recipients = Vec::with_capacity(n);
+            for _ in 0..n {
+                recipients.push(Recipient {
+                    unit: UnitId::new(r.array()?).map_err(|_| Error::Codec)?,
+                    tokens: r.array()?,
+                });
+            }
+            Change::EnrollOwner {
+                wallet,
+                recipients,
+                proof: model::PrivateBytes::new(r.blob()?.to_vec())?,
+            }
+        }
+        5 => {
+            let n = r.count()?;
+            if n > MAX_UNITS {
+                return Err(Error::Limit);
+            }
+            let mut versions = Vec::with_capacity(n);
+            for _ in 0..n {
+                versions.push((UnitId::new(r.array()?).map_err(|_| Error::Codec)?, r.u64()?));
+            }
+            Change::BeginRecovery {
+                versions,
+                authority_epoch: r.u64()?,
+                valid_until: r.u64()?,
+                fence: r.array()?,
+            }
+        }
         4 => {
             let record = read_api_record(&mut r)?;
             let kind = match r.byte()? {

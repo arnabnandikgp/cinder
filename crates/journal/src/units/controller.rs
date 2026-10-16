@@ -80,6 +80,23 @@ impl<B: Backend, P: Protection> Controller for Selected<'_, B, P> {
     fn shared_logical_time(&self) -> Result<u64, Error> {
         Ok(self.journal.state()?.logical_time())
     }
+    fn recovery_cut(
+        &mut self,
+        expected: Head,
+        check: EventKey,
+    ) -> Result<crate::recovery::Cut, crate::recovery::CutError> {
+        self.verified_state()
+            .map_err(crate::recovery::CutError::Journal)?;
+        if !self
+            .journal
+            .state()
+            .map_err(crate::recovery::CutError::Journal)?
+            .in_recovery()
+        {
+            return Err(crate::recovery::CutError::NotFrozen);
+        }
+        crate::recovery::cut(self, expected, check)
+    }
     fn descriptor(&self) -> Option<&Descriptor> {
         self.journal
             .configuration()

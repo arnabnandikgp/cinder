@@ -25,6 +25,19 @@ pub trait Controller: Source {
     /// Commit against the exact common head. Unknown outcomes never deliver an
     /// exposure; exact duplicate commits return no second local delivery.
     fn commit(&mut self, transaction: Transaction) -> Result<Committed, Error>;
+    /// Settled projection only, never root activation or native-key fencing.
+    fn recovery_cut(
+        &mut self,
+        expected: crate::Head,
+        check: cinder_kernel::identity::EventKey,
+    ) -> Result<crate::recovery::Cut, crate::recovery::CutError>
+    where
+        Self: Sized,
+    {
+        self.verified_state()
+            .map_err(crate::recovery::CutError::Journal)?;
+        crate::recovery::cut(self, expected, check)
+    }
     /// Retained component provenance, not independent freshness/authority.
     fn transactions(&self) -> impl Iterator<Item = &Transaction> {
         self.transactions_with_receipts().map(|(t, _)| t)

@@ -309,14 +309,16 @@ function decodeBody(bytes: Uint8Array, scoped: boolean): Response {
 }
 /** Wallet-only bootstrap; an agent signer cannot act on an owner's account.
  * Requests use the same attested encrypted channel, never a public signup API. */
-export class OnboardingClient {
+class BootstrapClient {
   readonly #channel: ConfidentialChannel; readonly #signer: MessageSigner;
   readonly #domain: Domain; readonly #policy: number;
-  constructor(channel: ConfidentialChannel, signer: MessageSigner, config: {domain: Domain; policy: number}) {
+  readonly #unit?:Id; readonly #contract?:Id;
+  constructor(channel: ConfidentialChannel, signer: MessageSigner, config: {domain: Domain; policy: number}, scoped?:{unit:Id;contract:Id}) {
     this.#channel=channel;this.#signer=signer;
     this.#domain={network:id(config.domain.network),deployment:id(config.domain.deployment)};
     if(!Number.isInteger(config.policy)||config.policy<1||config.policy>0xffffffff)fail();
     this.#policy=config.policy;
+    if(scoped){this.#unit=id(scoped.unit);this.#contract=id(scoped.contract);}
   }
   /** Create once or retrieve current epoch. Does not reset grants or paid counters. */
   open(expiresAt:bigint):Promise<Discovery|{kind:'error';code:ErrorCode}>{return this.#exchange(expiresAt);}
@@ -333,14 +335,17 @@ export class OnboardingClient {
       if(notice.epoch<=0n||!(notice.signature instanceof Uint8Array)||notice.signature.length!==64||!notice.signature.some(x=>x))fail();
       w.n(1n,1);w.n(notice.epoch,8);w.key(notice.operation);w.chunks.push(new Uint8Array(notice.signature));
     }else w.n(0n,1);
-    const message=w.end(),wire=new Uint8Array(message.length+64);
+    const original=w.end();
+    const message=this.#unit?new Uint8Array([...utf8.encode('CINDER-UNIT-ONBOARD\0\x00\x01'),...this.#unit,...this.#contract!,...original]):original;
+    if(this.#unit)original.fill(0);
+    const wire=new Uint8Array(message.length+64);
     try{
       const toSign=message.slice();let signature:Uint8Array;
       try{signature=await this.#signer.signMessage(toSign);}finally{toSign.fill(0);}
       if(!(signature instanceof Uint8Array)||signature.length!==64)fail();wire.set(message);wire.set(signature,message.length);
       const reply=await this.#channel.exchange(wire);
       try{
-        const result=decodeResponse(reply);if(result.kind==='error')return result;if(result.kind!=='discovery')fail();
+        const result=this.#unit?decodeUnitResponse(reply,this.#unit).response:decodeResponse(reply);if(result.kind==='error')return result;if(result.kind!=='discovery')fail();
         const identity=new Uint8Array([...utf8.encode('CINDER-ACCOUNT-1\0'),...this.#domain.network,...this.#domain.deployment,...wallet]);
         try{const expected=new Uint8Array(await crypto.subtle.digest('SHA-256',identity));if(!equal(result.account,expected))fail();}finally{identity.fill(0);}
         return result;
@@ -348,6 +353,15 @@ export class OnboardingClient {
     }catch{throw new Error('Private onboarding unavailable; reconnect and retrieve the same owner account before proceeding');}
     finally{message.fill(0);wire.fill(0);wallet.fill(0);}
   }
+}
+/** Legacy single-route owner bootstrap. Never defaults into a shared unit. */
+export class OnboardingClient extends BootstrapClient {
+  constructor(channel:ConfidentialChannel,signer:MessageSigner,config:{domain:Domain;policy:number}){super(channel,signer,config);}
+}
+/** Explicit owner bootstrap for a shared deployment. Pin the independently
+ * approved custody contract; never copy an unauthenticated relay hint. */
+export class UnitOnboardingClient extends BootstrapClient {
+  constructor(channel:ConfidentialChannel,signer:MessageSigner,config:{domain:Domain;policy:number;unit:Id;contract:Id}){super(channel,signer,config,config);}
 }
 
 class Client {

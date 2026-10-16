@@ -3,6 +3,8 @@
 
 pub mod admission;
 pub mod history;
+/// Purpose-separated owner bootstrap with immutable unit custody discovery.
+pub mod onboarding;
 pub mod service;
 
 use crate::{

@@ -13,9 +13,9 @@ pub struct Routing {
     pub venue: [u8; 32],
 }
 impl Controller {
-    pub(super) fn close_unsent_escrow<B: Backend, P: Protection>(
+    pub(super) fn close_unsent_escrow<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         plan: &Plan,
@@ -107,9 +107,9 @@ impl Controller {
     }
     /// Retain qualified original deposit evidence and pending owner inventory;
     /// this posts no asset, claim, available collateral or paid counter.
-    pub fn observe_escrow_deposit<B: Backend, P: Protection>(
+    pub fn observe_escrow_deposit<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         batch: Batch,
@@ -119,9 +119,9 @@ impl Controller {
     }
     /// Atomically retain the original inventory and an already-finalized refund.
     #[allow(clippy::too_many_arguments)]
-    pub fn observe_escrow_inventory<B: Backend, P: Protection>(
+    pub fn observe_escrow_inventory<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         batch: Batch,
@@ -162,9 +162,9 @@ impl Controller {
         checked(j.commit(tx)?)
     }
     /// Retain actual qualified terminal refund, even during freeze/recovery.
-    pub fn observe_escrow_refund<B: Backend, P: Protection>(
+    pub fn observe_escrow_refund<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         request: RequestKey,
@@ -194,9 +194,9 @@ impl Controller {
     }
     /// Durable abstract intent first; no signature, counter read or RPC is
     /// performed under this journal mutation. Only the original batch is eligible.
-    pub fn prepare_escrow_sweep<B: Backend, P: Protection>(
+    pub fn prepare_escrow_sweep<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         attempt: AttemptKey,
@@ -225,9 +225,9 @@ impl Controller {
         checked(j.commit(tx)?)
     }
     /// Physical counter/slot-bound plan, durably exposed once before signing.
-    pub fn expose_escrow_sweep<B: Backend, P: Protection>(
+    pub fn expose_escrow_sweep<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         dispatch: Dispatch,
         counters: Counters,
     ) -> Result<ChainAction, Error> {
@@ -301,9 +301,9 @@ impl Controller {
     /// Fenced recovery operator recalls only original, unallocated collateral.
     /// The internal Approval is a trusted operator digest, not a user signature;
     /// unknown or partially executed native funding cannot use this return.
-    pub fn prepare_escrow_recall<B: Backend, P: Protection>(
+    pub fn prepare_escrow_recall<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         original: RequestKey,
@@ -358,9 +358,9 @@ impl Controller {
     /// Durably abandon only an expired, never-exposed original sweep. The owner
     /// may still refund the on-chain batch; this grants no replacement attempt.
     /// Setup freshness/freeze cannot prevent cleanup. Exposed work is untouched.
-    pub fn cancel_expired_escrow_sweep<B: Backend, P: Protection>(
+    pub fn cancel_expired_escrow_sweep<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         at: u64,
         attempt: AttemptKey,
     ) -> Result<bool, Error> {
@@ -418,9 +418,9 @@ impl Controller {
     /// Internal Approval is a trusted digest, not a wallet signature, payout
     /// authorization or external signing API. Reconcile exposed work first,
     /// including while new admission is frozen or setup freshness has expired.
-    pub fn prepare_next_escrow<B: Backend, P: Protection>(
+    pub fn prepare_next_escrow<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         at: u64,
     ) -> Result<Option<AttemptKey>, Error> {
         if self.escrow.is_none() {
@@ -518,9 +518,9 @@ impl Controller {
         checked(j.commit(tx)?)?;
         Ok(None)
     }
-    pub(super) fn observe_sweep<B: Backend, P: Protection>(
+    pub(super) fn observe_sweep<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         plan: Plan,

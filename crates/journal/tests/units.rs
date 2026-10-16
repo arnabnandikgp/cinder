@@ -1274,7 +1274,7 @@ fn financial_join_requires_original_record_epoch_headers_and_joined_risk() {
 }
 #[test]
 fn prior_unit_genesis_revisions_are_not_silently_upgraded_for_native_execution() {
-    for revision in [1, 2, 3] {
+    for revision in [1, 2, 3, 4] {
         let t = Temp::new();
         drop(create(&t));
         let mut frames = SqliteBackend::open(&t.db, Migration::None)

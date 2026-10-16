@@ -9,6 +9,7 @@ pub struct Service<A> {
     auth: Authorizer,
     admission: A,
     cache: Mutex<history::Cache>,
+    onboarding: Option<super::onboarding::Contract>,
 }
 impl<A> fmt::Debug for Service<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -22,7 +23,30 @@ impl<A: crate::Admission> Service<A> {
             auth,
             admission,
             cache: Mutex::new(history::Cache::default()),
+            onboarding: None,
         }
+    }
+    /// Explicit new-history owner discovery, with all unit custody policies bound
+    /// into the private publication/release contract; not enabled by default.
+    pub fn with_onboarding(mut self, contract: super::onboarding::Contract) -> Self {
+        self.onboarding = Some(contract);
+        self
+    }
+    /// Owner bootstrap over the same private carrier. No amount or credit setter.
+    pub fn onboard<B: Backend, P: Protection>(
+        &self,
+        j: &mut units::Journal<B, P>,
+        channel: &impl ConfidentialChannel,
+        bytes: &PrivateBytes,
+        now: u64,
+    ) -> Result<(UnitId, Response), Error> {
+        self.onboarding.as_ref().ok_or(Error::Unauthorized)?.handle(
+            j,
+            channel,
+            bytes,
+            now,
+            self.auth.maximum_auth_lifetime,
+        )
     }
     // Build the existing projector with a valid, actual selected-owner binding.
     // Never manufacture an invalid legacy Service or use it for v2 auth.
@@ -61,7 +85,19 @@ impl<A: crate::Admission> Service<A> {
     /// Commitment installed in the shared read binding. It includes the entire
     /// immutable registry and authorization limits, not a caller-selected unit.
     pub fn commitment(&self, config: &units::Configuration) -> Result<[u8; 32], Error> {
-        history::fingerprint(config, &self.auth)
+        let original = history::fingerprint(config, &self.auth)?;
+        Ok(match &self.onboarding {
+            None => original,
+            Some(c) => Sha256::digest(
+                [
+                    b"CINDER-UNIT-SERVICE-CUSTODY-1\0".as_slice(),
+                    &original,
+                    &c.commitment(),
+                ]
+                .concat(),
+            )
+            .into(),
+        })
     }
     /// Trusted startup verification before attaching a publication/listener.
     /// This loads no key, creates no account and grants no native permission.
@@ -70,6 +106,9 @@ impl<A: crate::Admission> Service<A> {
         journal: &mut units::Journal<B, P>,
     ) -> Result<(), Error> {
         journal.verified_state().map_err(|_| Error::Unavailable)?;
+        if let Some(onboarding) = &self.onboarding {
+            onboarding.initialize(journal, self.auth.maximum_auth_lifetime)?;
+        }
         self.history(
             journal.state().map_err(|_| Error::Unavailable)?,
             journal.head(),
@@ -86,7 +125,9 @@ impl<A: crate::Admission> Service<A> {
         history::shared(
             &self.cache,
             head,
-            self.commitment(state.configuration())?,
+            // The API record contract is unchanged by owner discovery. The
+            // carrier release additionally binds custody through commitment().
+            history::fingerprint(state.configuration(), &self.auth)?,
             || history::History::interpret(state, head, &self.auth, transactions),
         )
     }

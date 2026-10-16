@@ -42,7 +42,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         )
         .map_err(|_| Error)
     }
-    fn native_writer(&self) -> Result<std::sync::MutexGuard<'_, Journal<B, P>>, Error> {
+    pub(super) fn native_writer(&self) -> Result<std::sync::MutexGuard<'_, Journal<B, P>>, Error> {
         self.now()?;
         self.journal.try_lock().map_err(|e| {
             if matches!(e, std::sync::TryLockError::Poisoned(_)) {

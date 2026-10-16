@@ -54,6 +54,11 @@ impl State {
     pub fn recovery_sealed(&self) -> bool {
         self.recovery.as_ref().is_some_and(|p| p.sealed)
     }
+    /// A recovery cutover was accepted, including expired or sealed permission.
+    /// Expiry never restores ordinary trading or erases the fencing obligation.
+    pub fn in_recovery(&self) -> bool {
+        self.recovery.is_some()
+    }
     /// Current recovery operator epoch; None includes expired/sealed permissions.
     pub fn recovery_epoch(&self) -> Option<u64> {
         self.recovery
@@ -375,159 +380,165 @@ impl<B: Backend, P: Protection> Journal<B, P> {
     /// projection; this function does not seal the tail or revoke escaped keys.
     pub fn recovery_cut(&mut self, expected: Head, check: EventKey) -> Result<Cut, CutError> {
         self.verified_state().map_err(CutError::Journal)?;
-        if expected != self.head {
-            return Err(CutError::Stale);
-        }
-        let s = self.state().map_err(CutError::Journal)?;
-        let l = s.ledger();
-        if !s.frozen() {
-            return Err(CutError::NotFrozen);
-        }
-        if s.holds().iter().any(|h| h.active)
-            || s.orders().iter().any(|o| !o.complete())
-            || s.funds()
+        cut(self, expected, check)
+    }
+}
+/// Same settled-cut checks over a sealed authoritative component. Freshness and
+/// shared cutover checks belong to the owning Controller before this projection.
+pub(crate) fn cut(
+    source: &impl crate::read::Source,
+    expected: Head,
+    check: EventKey,
+) -> Result<Cut, CutError> {
+    if expected != source.head() {
+        return Err(CutError::Stale);
+    }
+    let s = source.state().map_err(CutError::Journal)?;
+    let l = s.ledger();
+    if !s.frozen() {
+        return Err(CutError::NotFrozen);
+    }
+    if s.holds().iter().any(|h| h.active)
+        || s.orders().iter().any(|o| !o.complete())
+        || s.funds()
+            .iter()
+            .any(|o| !o.terminal || o.faulted || o.demo.is_some())
+        || s.attempts().iter().any(|a| match a.kind {
+            AttemptKind::Escrow => !s.escrows().iter().any(|e| {
+                e.attempt == Some(a.key)
+                    && matches!(
+                        e.status,
+                        crate::escrow::Status::Failed
+                            | crate::escrow::Status::Refunded
+                            | crate::escrow::Status::Available
+                            | crate::escrow::Status::Returned
+                    )
+            }),
+            AttemptKind::Funds => !s
+                .funds()
                 .iter()
-                .any(|o| !o.terminal || o.faulted || o.demo.is_some())
-            || s.attempts().iter().any(|a| match a.kind {
-                AttemptKind::Escrow => !s.escrows().iter().any(|e| {
-                    e.attempt == Some(a.key)
-                        && matches!(
-                            e.status,
-                            crate::escrow::Status::Failed
-                                | crate::escrow::Status::Refunded
-                                | crate::escrow::Status::Available
-                                | crate::escrow::Status::Returned
-                        )
-                }),
-                AttemptKind::Funds => !s
-                    .funds()
-                    .iter()
-                    .any(|o| o.attempt == Some(a.key) && o.terminal && !o.faulted),
-                AttemptKind::Order
-                | AttemptKind::Cancel
-                | AttemptKind::Emergency
-                | AttemptKind::Restoration => !s
-                    .orders()
-                    .iter()
-                    .any(|o| o.intent.request == a.key.request && o.complete()),
-                // Generic attempts have no qualified terminal lifecycle. A released
-                // hold or policy expiry cannot manufacture closure evidence.
-                AttemptKind::Generic => true,
-            })
-            || l.movements().iter().any(|m| {
-                !s.funds()
-                    .iter()
-                    .any(|o| o.attempt == Some(m.mandate.attempt) && o.terminal && !o.faulted)
-            })
+                .any(|o| o.attempt == Some(a.key) && o.terminal && !o.faulted),
+            AttemptKind::Order
+            | AttemptKind::Cancel
+            | AttemptKind::Emergency
+            | AttemptKind::Restoration => !s
+                .orders()
+                .iter()
+                .any(|o| o.intent.request == a.key.request && o.complete()),
+            // Generic attempts have no qualified terminal lifecycle. A released
+            // hold or policy expiry cannot manufacture closure evidence.
+            AttemptKind::Generic => true,
+        })
+        || l.movements().iter().any(|m| {
+            !s.funds()
+                .iter()
+                .any(|o| o.attempt == Some(m.mandate.attempt) && o.terminal && !o.faulted)
+        })
+    {
+        return Err(CutError::OpenCommitments);
+    }
+    if s.unresolved_raw() != 0
+        || l.unresolved_attribution() != 0
+        || l.unresolved_funds() != 0
+        || l.issues().iter().any(|i| i.open)
+        || l.unresolved_protection()
+            .map_err(|_| CutError::Arithmetic)?
+    {
+        return Err(CutError::UnresolvedEvidence);
+    }
+    l.check_bridge().map_err(|_| CutError::UnresolvedEvidence)?;
+    for owner in l
+        .customer_ids()
+        .map(Owner::Customer)
+        .chain([Owner::House, Owner::Suspense])
+    {
+        if !flat(l.book(owner).map_err(|_| CutError::UnresolvedEvidence)?)
+            || l.funding_views(owner)
+                .iter()
+                .any(|f| !f.settled || f.payment.is_none())
         {
-            return Err(CutError::OpenCommitments);
-        }
-        if s.unresolved_raw() != 0
-            || l.unresolved_attribution() != 0
-            || l.unresolved_funds() != 0
-            || l.issues().iter().any(|i| i.open)
-            || l.unresolved_protection()
-                .map_err(|_| CutError::Arithmetic)?
-        {
-            return Err(CutError::UnresolvedEvidence);
-        }
-        l.check_bridge().map_err(|_| CutError::UnresolvedEvidence)?;
-        for owner in l
-            .customer_ids()
-            .map(Owner::Customer)
-            .chain([Owner::House, Owner::Suspense])
-        {
-            if !flat(l.book(owner).map_err(|_| CutError::UnresolvedEvidence)?)
-                || l.funding_views(owner)
-                    .iter()
-                    .any(|f| !f.settled || f.payment.is_none())
-            {
-                return Err(CutError::NotSettled);
-            }
-        }
-        if !flat(l.venue()) {
             return Err(CutError::NotSettled);
         }
-        if l.venue().cash().atoms() != 0
-            || l.broker().atoms() != 0
-            || l.in_transit().map_err(|_| CutError::Arithmetic)?.atoms() != 0
-        {
-            return Err(CutError::AssetsNotReturned);
-        }
-        // A final check must follow every financial posting. Control-only freeze
-        // or terminal release may follow it without inventing a newer native cut.
-        let qualified = self.history.iter().any(|r| {
-            r.tx.inputs
-                .iter()
-                .zip(&r.receipt.inputs)
-                .any(|(i, result)| {
-                    i.source_cut.is_some()
-                        && i.authority_epoch != 0
-                        && i.source == check.scope
-                        && *result == InputResult::Normalized(Disposition::Applied)
-                        && i.event.as_ref().is_some_and(|e| {
-                            e.key == cinder_kernel::identity::RecordKey::Economic(check.clone())
-                                && matches!(&e.change, Change::Reconcile(c)
+    }
+    if !flat(l.venue()) {
+        return Err(CutError::NotSettled);
+    }
+    if l.venue().cash().atoms() != 0
+        || l.broker().atoms() != 0
+        || l.in_transit().map_err(|_| CutError::Arithmetic)?.atoms() != 0
+    {
+        return Err(CutError::AssetsNotReturned);
+    }
+    // A final check must follow every financial posting. Control-only freeze
+    // or terminal release may follow it without inventing a newer native cut.
+    let qualified = source.transactions_with_receipts().any(|(tx, receipt)| {
+        tx.inputs.iter().zip(&receipt.inputs).any(|(i, result)| {
+            i.source_cut.is_some()
+                && i.authority_epoch != 0
+                && i.source == check.scope
+                && *result == InputResult::Normalized(Disposition::Applied)
+                && i.event.as_ref().is_some_and(|e| {
+                    e.key == cinder_kernel::identity::RecordKey::Economic(check.clone())
+                        && matches!(&e.change, Change::Reconcile(c)
                                 if c.complete
                                 && c.expected_version.checked_add(1) == Some(l.version())
                                 && c.cash == Some(l.venue().cash())
                                 && c.funding == Some(l.venue().funding())
                                 && c.positions.as_deref() == Some(l.venue().positions()))
-                        })
                 })
-        });
-        if !qualified {
-            return Err(CutError::IncompleteCheck);
-        }
-        let zero = QuoteAtoms::new(self.configuration().quote, 0);
-        let mut total = zero;
-        let mut deficits = zero;
-        let participants: Vec<_> = l.customer_ids().collect();
-        let mut accounts = Vec::with_capacity(participants.len());
-        for account in &participants {
-            let cash = l
-                .book(Owner::Customer(*account))
-                .map_err(|_| CutError::UnresolvedEvidence)?
-                .cash();
-            if cash.atoms() > 0 {
-                total = total.checked_add(cash).map_err(|_| CutError::Arithmetic)?;
-            } else {
-                deficits = deficits
-                    .checked_sub(cash)
-                    .map_err(|_| CutError::Arithmetic)?;
-            }
-            accounts.push(AccountCut {
-                account: *account,
-                cash,
-                paid: l.paid(*account).map_err(|_| CutError::Arithmetic)?,
-            });
-        }
-        let suspense = l
-            .book(Owner::Suspense)
+        })
+    });
+    if !qualified {
+        return Err(CutError::IncompleteCheck);
+    }
+    let zero = QuoteAtoms::new(source.configuration().quote, 0);
+    let mut total = zero;
+    let mut deficits = zero;
+    let participants: Vec<_> = l.customer_ids().collect();
+    let mut accounts = Vec::with_capacity(participants.len());
+    for account in &participants {
+        let cash = l
+            .book(Owner::Customer(*account))
             .map_err(|_| CutError::UnresolvedEvidence)?
             .cash();
-        let other_claims = QuoteAtoms::new(zero.unit(), suspense.atoms().max(0));
-        if l.vault().atoms()
-            < total
-                .checked_add(other_claims)
-                .map_err(|_| CutError::Arithmetic)?
-                .atoms()
-        {
-            return Err(CutError::Unbacked);
+        if cash.atoms() > 0 {
+            total = total.checked_add(cash).map_err(|_| CutError::Arithmetic)?;
+        } else {
+            deficits = deficits
+                .checked_sub(cash)
+                .map_err(|_| CutError::Arithmetic)?;
         }
-        Ok(Cut {
-            head: expected,
-            configuration: self.configuration().clone(),
-            check,
-            accounts,
-            total,
-            deficits,
-            vault: l.vault(),
-            suspense,
-            house: l
-                .book(Owner::House)
-                .map_err(|_| CutError::UnresolvedEvidence)?
-                .cash(),
-        })
+        accounts.push(AccountCut {
+            account: *account,
+            cash,
+            paid: l.paid(*account).map_err(|_| CutError::Arithmetic)?,
+        });
     }
+    let suspense = l
+        .book(Owner::Suspense)
+        .map_err(|_| CutError::UnresolvedEvidence)?
+        .cash();
+    let other_claims = QuoteAtoms::new(zero.unit(), suspense.atoms().max(0));
+    if l.vault().atoms()
+        < total
+            .checked_add(other_claims)
+            .map_err(|_| CutError::Arithmetic)?
+            .atoms()
+    {
+        return Err(CutError::Unbacked);
+    }
+    Ok(Cut {
+        head: expected,
+        configuration: source.configuration().clone(),
+        check,
+        accounts,
+        total,
+        deficits,
+        vault: l.vault(),
+        suspense,
+        house: l
+            .book(Owner::House)
+            .map_err(|_| CutError::UnresolvedEvidence)?
+            .cash(),
+    })
 }

@@ -1,5 +1,7 @@
 //! Opt-in unit handler on the existing confidential TLS/Noise carriers. Native
 //! workers and a governed deployment manifest are separate activation gates.
+/// Typed trusted custody workers; native/chain I/O stays outside the writer.
+pub mod custody;
 pub mod native;
 use crate::{
     Error,
@@ -128,6 +130,30 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         if current < now {
             self.fence();
             return Err(Error);
+        }
+        if request.as_bytes().starts_with(api::onboarding::MAGIC) {
+            if periodic {
+                return Err(Error);
+            }
+            let unit = api::onboarding::Request::decode(request.as_bytes())
+                .map_err(|_| Error)?
+                .unit;
+            let mut writer = self.journal.try_lock().map_err(|e| {
+                if matches!(e, std::sync::TryLockError::Poisoned(_)) {
+                    self.fence();
+                }
+                Error
+            })?;
+            let reply = match self
+                .api
+                .onboard(&mut writer, channel, &request, self.now()?)
+            {
+                Ok((bound, response)) if bound == unit => api::encode_response(unit, &response),
+                Ok(_) => return Err(Error),
+                Err(e) => api::encode_error(unit, e),
+            }
+            .map_err(|_| Error)?;
+            return Ok(Some(PreparedReply::immediate(reply)));
         }
         let r = api::Request::decode(request.as_bytes()).map_err(|_| Error)?;
         if periodic && !matches!(r.body.command, Command::Read(q) if q.cursor == [0;40]) {

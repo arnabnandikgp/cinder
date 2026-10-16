@@ -7,6 +7,15 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P33–P35 extend the opt-in unit path: witnessed private reads/UnitClient (ADR 0039),
+selected native execution/reads/ordinary fills (ADR 0040), and canonical owner
+custody discovery, unit funds composition and shared recovery cutover (ADR 0041).
+New unit revisions require empty histories, not shipping v1 migration. Native
+signatures/owner proofs use disposable synthetic identities; native financial
+and hardware qualification remain separate. October 16's approved refresh used
+two unsigned BULK public metadata GETs, both origin 502, and establishes no new
+native private API/funding capability. Exact checks/PR receipts live in TRACKER.
+
 P32 joins new or recorded signed v2 operations to unit-local financial controls
 in one accepted append. The existing exact engine supplies risk, holds, payout
 queue and leverage semantics; explicit synthetic policy is not calibrated

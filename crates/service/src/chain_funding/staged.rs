@@ -50,9 +50,9 @@ pub(crate) struct ReconcileRead {
 }
 
 impl<T: Transport> Port<T> {
-    pub(crate) fn prepare_issue<B: Backend, P: Protection>(
+    pub(crate) fn prepare_issue<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         attempt: AttemptKey,
         demo: Demo<'_>,
@@ -218,9 +218,9 @@ impl<T: Transport> Port<T> {
             .map_err(|_| Error)?;
         self.client.simulate(&prepared, self.clock.now()?)
     }
-    pub(crate) fn persist_issue<B: Backend, P: Protection>(
+    pub(crate) fn persist_issue<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         work: IssueWork,
         simulation: chain::Simulation,
@@ -269,9 +269,9 @@ impl<T: Transport> Port<T> {
             },
         )
     }
-    pub(crate) fn prepare_reconcile<B: Backend, P: Protection>(
+    pub(crate) fn prepare_reconcile<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         attempt: AttemptKey,
         at: u64,
@@ -348,9 +348,9 @@ impl<T: Transport> Port<T> {
     }
 }
 impl IssueRead {
-    pub(crate) fn expose<B: Backend, P: Protection>(
+    pub(crate) fn expose<J: JournalController>(
         self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         demo: Demo<'_>,
         at: u64,
@@ -399,9 +399,9 @@ impl IssueRead {
     }
 }
 impl ReconcileRead {
-    pub(crate) fn complete<B: Backend, P: Protection>(
+    pub(crate) fn complete<J: JournalController>(
         self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         at: u64,
     ) -> Result<Outcome, Error> {
