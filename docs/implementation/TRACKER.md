@@ -62,8 +62,12 @@ ingestion. BULK successful HTTP trade pages must match the retained explicit
 slot range; malformed/mismatched pages stay unresolved and cannot authorize a
 continuation. Original body and query budget remain retained, not retried.
 New wrong-identity and three wrong-range regressions supplement the existing
-positive paths. Verification is pending; no new live request or authority.
-P35/P36 descendants must be restacked onto this correction. No automatic merge.
+positive paths. Exact-source offline BULK execution 11/11, Pacifica execution
+21/21 and strict all-feature/all-target workspace Clippy pass. Logs:
+`/private/tmp/cinder-p34-review-{native,pacifica,lint}.log`. The first compile
+attempt used equality on a non-PartialEq kind; replaced it with a pattern check.
+No gate was relaxed. P35/P36 must be restacked onto this correction; no live
+request or automatic merge. New-head hosted checks/review remain separate.
 
 ### P33 review fixes verified — 2026-10-16
 

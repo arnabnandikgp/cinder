@@ -196,7 +196,7 @@ pub fn complete(
     // HTTP success alone cannot certify the original requested scan. Retain a
     // mismatched/malformed page as unresolved, without a successful cursor.
     let normalize = normalize
-        && (c.poll.kind != Kind::Trades
+        && (!matches!(c.poll.kind, Kind::Trades)
             || fills::rest(
                 &profile.scope,
                 &profile
