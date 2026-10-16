@@ -169,7 +169,12 @@ fn bounded_wire_atoms_match_independent_native_binary64_rounding_oracle() {
 }
 #[test]
 fn rest_keeps_wide_ids_exact_price_fee_and_account_side_for_maker() {
-    let p = fills::rest(&scope(Network::Testnet), &market(), page(&row()).as_bytes()).unwrap();
+    let p = fills::rest(
+        &scope(Network::Testnet),
+        &[market()],
+        page(&row()).as_bytes(),
+    )
+    .unwrap();
     let f = &p.fills[0];
     assert_eq!(f.id.slot, 9007199254740993);
     assert_eq!(f.id.sequence, u64::MAX);
@@ -184,7 +189,7 @@ fn rest_keeps_wide_ids_exact_price_fee_and_account_side_for_maker() {
 #[test]
 fn rest_and_ws_maker_side_normalize_to_one_semantic_execution() {
     let s = scope(Network::Testnet);
-    let rest = fills::rest(&s, &market(), page(&row()).as_bytes()).unwrap();
+    let rest = fills::rest(&s, &[market()], page(&row()).as_bytes()).unwrap();
     let ws = fills::stream(&s, &market(), ws().as_bytes()).unwrap();
     assert_eq!(rest.fills[0], ws);
     let mut w = ws_json();
@@ -222,7 +227,7 @@ fn wrong_account_topic_symbol_and_native_isolation_are_not_accepted() {
     assert!(
         fills::rest(
             &s,
-            &market(),
+            &[market()],
             page(&row().replace(&owner(), &other())).as_bytes()
         )
         .is_err()
@@ -294,7 +299,7 @@ fn missing_null_noncanonical_or_conflicting_execution_ids_are_not_invented() {
         ),
         row().replace("\"slot\":9007199254740993", "\"slot\":9007199254740994"),
     ] {
-        assert!(fills::rest(&scope(Network::Testnet), &market(), page(&r).as_bytes()).is_err());
+        assert!(fills::rest(&scope(Network::Testnet), &[market()], page(&r).as_bytes()).is_err());
     }
 }
 #[test]
@@ -303,7 +308,7 @@ fn duplicate_executions_collapse_but_conflicting_economics_are_reported() {
     assert_eq!(
         fills::rest(
             &s,
-            &market(),
+            &[market()],
             page(&format!("{},{}", row(), row())).as_bytes()
         )
         .unwrap()
@@ -314,7 +319,7 @@ fn duplicate_executions_collapse_but_conflicting_economics_are_reported() {
     assert!(matches!(
         fills::rest(
             &s,
-            &market(),
+            &[market()],
             page(&format!("{},{}", row(), row().replace("100.1", "100.2"))).as_bytes()
         ),
         Err(Error::Conflict)
@@ -323,7 +328,7 @@ fn duplicate_executions_collapse_but_conflicting_economics_are_reported() {
 #[test]
 fn raw_number_and_string_decimals_share_exact_semantics() {
     let s = scope(Network::Testnet);
-    let a = fills::rest(&s, &market(), page(&row()).as_bytes())
+    let a = fills::rest(&s, &[market()], page(&row()).as_bytes())
         .unwrap()
         .fills;
     let r = row()
@@ -332,7 +337,7 @@ fn raw_number_and_string_decimals_share_exact_semantics() {
         .replace("-0.00000001", "-1e-8");
     assert_eq!(
         a,
-        fills::rest(&s, &market(), page(&r).as_bytes())
+        fills::rest(&s, &[market()], page(&r).as_bytes())
             .unwrap()
             .fills
     );
@@ -345,7 +350,7 @@ fn scalar_overprecision_duplicate_fields_and_bad_fee_selection_fail_closed() {
         row().replace("\"fee\":-0.00000001", "\"fee\":0.00000002"),
         row().replace("\"iso\":false", "\"iso\":true"),
     ] {
-        assert!(fills::rest(&scope(Network::Testnet), &market(), page(&r).as_bytes()).is_err());
+        assert!(fills::rest(&scope(Network::Testnet), &[market()], page(&r).as_bytes()).is_err());
     }
 }
 #[test]
@@ -391,13 +396,20 @@ fn coverage_cursor_bounds_and_retention_do_not_admit_malformed_pages() {
             "\"startSlot\":9007199254740994",
         ),
     ] {
-        assert!(fills::rest(&s, &market(), p.as_bytes()).is_err());
+        assert!(fills::rest(&s, &[market()], p.as_bytes()).is_err());
     }
     for coverage in ["partial", "unknown"] {
-        assert!(fills::rest(&s, &market(), base.replace("complete", coverage).as_bytes()).is_ok());
+        assert!(
+            fills::rest(
+                &s,
+                &[market()],
+                base.replace("complete", coverage).as_bytes()
+            )
+            .is_ok()
+        );
     }
     assert!(
-        fills::rest(&s, &market(), page("").as_bytes())
+        fills::rest(&s, &[market()], page("").as_bytes())
             .unwrap()
             .fills
             .is_empty()
@@ -406,11 +418,11 @@ fn coverage_cursor_bounds_and_retention_do_not_admit_malformed_pages() {
 #[test]
 fn observation_bodies_rows_and_private_debug_output_are_bounded() {
     let s = scope(Network::Testnet);
-    assert!(fills::rest(&s, &market(), &vec![b' '; fills::MAX_BODY + 1]).is_err());
+    assert!(fills::rest(&s, &[market()], &vec![b' '; fills::MAX_BODY + 1]).is_err());
     assert!(
         fills::rest(
             &s,
-            &market(),
+            &[market()],
             page(&vec![row(); fills::MAX_ROWS + 1].join(",")).as_bytes()
         )
         .is_err()
@@ -425,13 +437,25 @@ fn page_order_and_retained_range_metadata_are_explicit() {
     let s = scope(Network::Testnet);
     let newer = row();
     let older = row().replace("18446744073709551615", "18446744073709551614");
-    let p = fills::rest(&s, &market(), page(&format!("{newer},{older}")).as_bytes()).unwrap();
+    let p = fills::rest(
+        &s,
+        &[market()],
+        page(&format!("{newer},{older}")).as_bytes(),
+    )
+    .unwrap();
     assert_eq!(p.fills.len(), 2);
     assert_eq!(p.as_of_slot, 9007199254740994);
     assert_eq!(p.start_slot, 9007199254740993);
     assert_eq!(p.end_slot, 9007199254740993);
     assert_eq!(p.min_available_slot, Some(0));
-    assert!(fills::rest(&s, &market(), page(&format!("{older},{newer}")).as_bytes()).is_err());
+    assert!(
+        fills::rest(
+            &s,
+            &[market()],
+            page(&format!("{older},{newer}")).as_bytes()
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -444,4 +468,125 @@ fn fill_retains_the_exact_market_mapping_as_well_as_execution_identity() {
     assert_eq!(original.market.symbol(), "BTC-USD");
     assert_ne!(original.market, changed.market);
     assert_ne!(original, changed);
+}
+
+#[test]
+fn exact_zero_accepts_large_bounded_exponents_without_accepting_negative_zero() {
+    for text in ["0e-100", "0e100", "0e-32768", "0e32767", "0.000e-100"] {
+        assert_eq!(scaled(text, 8), Ok(0), "{text}");
+    }
+    assert_eq!(scaled("1e-100", 8), Err(Error::Invalid));
+    assert_eq!(scaled("1e100", 8), Err(Error::Limit));
+    for text in ["-0e-100", "-0e100", "0e32768", "0e", "0e+", "0e--1"] {
+        assert!(scaled(text, 8).is_err(), "{text}");
+    }
+}
+
+#[test]
+fn ioc_collar_retains_native_precision_without_relaxing_resting_ticks_or_bounds() {
+    let m = market();
+    let action = Action::limit(&m, true, "100.01", "1", TimeInForce::Ioc).unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&action.json().unwrap()).unwrap();
+    assert_eq!(json["l"]["px"], "100.01000000");
+    let message = action.message(&scope(Network::Testnet), 42).unwrap();
+    assert_eq!(&message[28..36], &10_001_000_000_u64.to_le_bytes());
+    for tif in [TimeInForce::Gtc, TimeInForce::Alo] {
+        assert!(Action::limit(&m, true, "100.01", "1", tif).is_err());
+    }
+    for price in ["0", "-1", "1e-9", "99999999"] {
+        assert!(Action::limit(&m, true, price, "1", TimeInForce::Ioc).is_err());
+    }
+    assert!(Action::limit(&m, true, "100.01", "1e-9", TimeInForce::Ioc).is_err());
+}
+
+#[test]
+fn mixed_market_page_does_not_erase_a_configured_adverse_fill() {
+    let s = scope(Network::Testnet);
+    let eth = row().replace("BTC-USD", "ETH-USD");
+    let btc = row()
+        .replace("18446744073709551615", "18446744073709551614")
+        .replace("\"reasonCode\":0", "\"reasonCode\":2");
+    let p = fills::rest(&s, &[market()], page(&format!("{eth},{btc}")).as_bytes()).unwrap();
+    assert_eq!(p.fills.len(), 1);
+    assert_eq!(p.fills[0].reason, Reason::Adl);
+    assert_eq!(p.unmapped.len(), 1);
+    assert_eq!(p.unmapped[0].symbol, "ETH-USD");
+    assert_eq!(p.unmapped[0].body(), eth);
+    assert_eq!(p.unmapped[0].key, p.unmapped[0].id.scoped(&s));
+    assert_eq!(format!("{:?}", p.unmapped[0]), "UnmappedFill([PRIVATE])");
+    assert_eq!(p.coverage, Coverage::Complete); // Reported coverage is not reconciliation.
+}
+
+#[test]
+fn mixed_market_page_uses_each_mapping_and_preserves_cross_market_order() {
+    let s = scope(Network::Testnet);
+    let markets = [
+        market(),
+        Market::new("ETH-USD", "0.00001", "0.01", 6).unwrap(),
+    ];
+    let eth = row()
+        .replace("BTC-USD", "ETH-USD")
+        .replace("0.00100001", "0.002")
+        .replace("100.1", "100.01")
+        .replace("-0.00000001", "-0.000001")
+        .replace("0.00000002", "0.000002");
+    let btc = row().replace("18446744073709551615", "18446744073709551614");
+    let p = fills::rest(&s, &markets, page(&format!("{eth},{btc}")).as_bytes()).unwrap();
+    assert_eq!(p.fills.len(), 2);
+    assert!(p.unmapped.is_empty());
+    assert_eq!(p.fills[0].market, markets[1]);
+    assert_eq!(
+        (p.fills[0].quantity, p.fills[0].price, p.fills[0].fee),
+        (200, 10001, -1)
+    );
+    assert_eq!(p.fills[1].market, markets[0]);
+    assert_eq!(
+        (p.fills[1].quantity, p.fills[1].price, p.fills[1].fee),
+        (100001, 1001, -1)
+    );
+    assert!(fills::rest(&s, &markets, page(&format!("{btc},{eth}")).as_bytes()).is_err());
+}
+
+#[test]
+fn unmapped_rows_are_bounded_deduplicated_and_cannot_hide_identity_conflicts() {
+    let s = scope(Network::Testnet);
+    let eth = row().replace("BTC-USD", "ETH-USD");
+    let p = fills::rest(&s, &[], page(&format!("{eth},{eth}")).as_bytes()).unwrap();
+    assert!(p.fills.is_empty());
+    assert_eq!(p.unmapped.len(), 1);
+    assert_eq!(p.unmapped[0].body(), eth);
+    let changed = eth.replace("100.1", "100.2");
+    assert!(matches!(
+        fills::rest(
+            &s,
+            &[market()],
+            page(&format!("{eth},{changed}")).as_bytes()
+        ),
+        Err(Error::Conflict)
+    ));
+    for rows in [format!("{},{}", row(), eth), format!("{},{}", eth, row())] {
+        assert!(matches!(
+            fills::rest(&s, &[market()], page(&rows).as_bytes()),
+            Err(Error::Conflict)
+        ));
+    }
+    for raw in [
+        eth.replace(&owner(), &other()),
+        eth.replace("\"slot\":9007199254740993", "\"slot\":1"),
+        eth.replace("ETH-USD", "eth-usd"),
+    ] {
+        assert!(fills::rest(&s, &[market()], page(&raw).as_bytes()).is_err());
+    }
+    assert!(matches!(
+        fills::rest(&s, &[market(), market()], page("").as_bytes()),
+        Err(Error::Conflict)
+    ));
+    assert!(matches!(
+        fills::rest(
+            &s,
+            &vec![market(); fills::MAX_MARKETS + 1],
+            page("").as_bytes()
+        ),
+        Err(Error::Limit)
+    ));
 }

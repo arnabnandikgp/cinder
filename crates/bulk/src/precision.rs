@@ -48,8 +48,14 @@ pub fn scaled(text: &str, places: u8) -> Result<i128, Error> {
     if negative && coefficient == 0 {
         return Err(Error::Invalid);
     }
+    if coefficient == 0 {
+        return Ok(0);
+    }
     let power = i32::from(places) + i32::from(exponent)
         - i32::try_from(fraction.len()).map_err(|_| Error::Limit)?;
+    if power < -38 {
+        return Err(Error::Invalid);
+    }
     let factor = 10_u128
         .checked_pow(power.unsigned_abs())
         .ok_or(Error::Limit)?;

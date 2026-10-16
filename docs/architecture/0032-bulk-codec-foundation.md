@@ -23,7 +23,9 @@ Runtime and immutable P25 discovery are not replaced by this library.
 
 Normalize bounded decimal/exponent lexemes with integer coefficients and checked
 powers of ten. Reject inexact atoms, invalid grammar, negative zero and overflow;
-extra trailing zero precision can normalize exactly. Source exponent forms such
+extra trailing zero precision can normalize exactly. Valid zero coefficients
+remain exact across the bounded exponent range; an excessively small nonzero
+value is inexact, not a representational overflow. Source exponent forms such
 as `1e-8` do not justify adding a floating path to the kernel. Explicit market
 steps and quote scale are inputs, not live-qualified defaults or native basis.
 
@@ -34,6 +36,8 @@ customer reduction must be admitted/attributed by a future joined controller,
 not blindly translated into a native pooled reduction. Cancellation's JSON tag
 is `cx`, binary action ordinal 3. Limit ordinal is 1; legacy actions have no
 trailing builder Option byte when no builder is present.
+Only resting GTC/ALO actions require the configured resting tick; an IOC collar
+retains exact 1e8 native precision, positivity and the same technical wire bound.
 
 Encoded price/size are exact 1e8-scaled integers and quoted JSON decimals. A
 technical bound of 2^48 scaled units avoids the ambiguous upper range of the
@@ -62,8 +66,18 @@ Execution keys include the Cinder deployment/source, native account and network.
 Every fill also retains the exact instrument/grids/quote precision used for
 normalization; a changed mapping is a conflicting interpretation of the same
 execution key, not a new event or an equal fact with a hidden unit change.
-Identical page duplicates collapse; conflicting economics, inconsistent reason
-labels, malformed/unsorted ranges, wrong account/market, off-grid values, oversized
+Account history has no symbol filter. REST decoding accepts a bounded unique
+symbol-to-market mapping and normalizes each row in its own instrument units.
+An unmapped row is returned separately with source-checked ID/key and original
+JSON, including unknown fields and numeric lexemes; configured/adverse fills in
+the same page still decode. It is not a reconciled fill or evidence of absence.
+The future controller must persist this inventory and contain dependent economic
+reconciliation even when native page coverage reports complete. Exact unmapped
+duplicates collapse; differing raw rows under the same ID conflict without
+guessing their economic equivalence. Cross-market ID conflicts also reject.
+
+Identical mapped page duplicates collapse; conflicting economics, inconsistent reason
+labels, malformed/unsorted ranges, wrong account, off-grid values, oversized
 bodies/pages and explicit isolated-lane rows reject. Unsupported raw facts must
 be retained and contained by the future controller, not silently dropped or
 interpreted as no event. These codecs are independent of admission/risk state.

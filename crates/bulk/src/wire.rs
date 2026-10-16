@@ -58,7 +58,8 @@ impl std::fmt::Debug for Action {
     }
 }
 impl Action {
-    /// Exact positive price collar/size. Native reduce-only is intentionally false:
+    /// Exact positive price collar/size; only resting TIFs require tick alignment.
+    /// Native reduce-only is intentionally false:
     /// a private customer's reduction is not necessarily a reduction of pooled net.
     pub fn limit(
         market: &Market,
@@ -68,7 +69,9 @@ impl Action {
         tif: TimeInForce,
     ) -> Result<Self, Error> {
         market.quantity(size)?;
-        market.price(price)?;
+        if tif != TimeInForce::Ioc {
+            market.price(price)?;
+        }
         let bounded = |s| {
             u64::try_from(scaled(s, 8)?)
                 .ok()

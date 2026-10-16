@@ -1,5 +1,5 @@
 //! Exact scoped fills; page coverage metadata never certifies finality or credit.
-use crate::{Error, Scope, address, precision::Market};
+use crate::{Error, Scope, address, precision::Market, symbol};
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use sha2::{Digest, Sha256};
@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 pub const MAX_BODY: usize = 256 * 1024;
 /// Maximum normalized executions in one bounded page.
 pub const MAX_ROWS: usize = 128;
+/// Bound the configured symbol lookup independently of response size.
+pub const MAX_MARKETS: usize = 128;
 
 /// Network-local execution identity; gaps in an account's sequence are legitimate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -140,13 +142,9 @@ fn check_body(body: &[u8]) -> Result<(), Error> {
         Ok(())
     }
 }
-fn row(scope: &Scope, market: &Market, r: Row) -> Result<Fill, Error> {
-    if r.symbol != market.symbol {
-        return Err(Error::Invalid);
-    }
-    if r.iso || r.iso_pubkey.is_some() {
-        return Err(Error::Unsupported);
-    }
+/// Validate source identity even when economic units are not configured.
+fn row_identity(scope: &Scope, r: &Row) -> Result<(TradeId, bool), Error> {
+    symbol(&r.symbol)?;
     let maker = address(&r.maker)?;
     let taker = address(&r.taker)?;
     if (maker == scope.account) == (taker == scope.account) {
@@ -156,7 +154,16 @@ fn row(scope: &Scope, market: &Market, r: Row) -> Result<Fill, Error> {
     if id.slot != r.slot || id.sequence != r.sequence {
         return Err(Error::Conflict);
     }
-    let own_maker = maker == scope.account;
+    Ok((id, maker == scope.account))
+}
+fn row(scope: &Scope, market: &Market, r: Row) -> Result<Fill, Error> {
+    if r.symbol != market.symbol {
+        return Err(Error::Invalid);
+    }
+    if r.iso || r.iso_pubkey.is_some() {
+        return Err(Error::Unsupported);
+    }
+    let (id, own_maker) = row_identity(scope, &r)?;
     let fee = market.fee(&scalar(&r.fee)?)?;
     let maker_fee = market.fee(&scalar(&r.maker_fee)?)?;
     let taker_fee = market.fee(&scalar(&r.taker_fee)?)?;
@@ -205,13 +212,39 @@ struct PageInfo {
 }
 #[derive(Deserialize)]
 struct NativePage {
-    data: Vec<Row>,
+    data: Vec<Box<RawValue>>,
     page: PageInfo,
+}
+/// A source-attributed row without configured economic units. It is not a fill
+/// posting or proof of absence; persist it and contain dependent reconciliation.
+pub struct UnmappedFill {
+    /// Original network-local identity, checked against row slot/sequence.
+    pub id: TradeId,
+    /// Same scoped identity used when a mapping becomes available; never re-credit.
+    pub key: [u8; 32],
+    /// Exact native symbol whose mapping is unavailable.
+    pub symbol: String,
+    raw: Box<RawValue>,
+}
+impl UnmappedFill {
+    /// Original row JSON, including numeric lexemes and unknown fields. Private
+    /// evidence, not log output or an authenticated observation by itself.
+    pub fn body(&self) -> &str {
+        self.raw.get()
+    }
+}
+impl std::fmt::Debug for UnmappedFill {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("UnmappedFill([PRIVATE])")
+    }
 }
 /// Bounded page observations. Even an empty complete page cannot release a hold.
 pub struct Page {
     /// Distinct exact executions in source order; equal duplicates collapse.
     pub fills: Vec<Fill>,
+    /// Unmapped rows retained separately, not skipped or counted as reconciled.
+    /// Nonempty inventory blocks any claim of complete economic reconciliation.
+    pub unmapped: Vec<UnmappedFill>,
     /// Opaque continuation, never reconstructed from row timestamps.
     pub next_cursor: Option<String>,
     /// Native-reported range coverage, never a Cinder settlement certificate.
@@ -225,11 +258,21 @@ pub struct Page {
     /// Native reported retention floor; absence remains unknown.
     pub min_available_slot: Option<u64>,
 }
-/// Decode one REST fills page with exact scalar lexemes and scoped attribution.
+/// Decode an account-wide REST page using a bounded unique symbol mapping.
+/// Known markets normalize independently; unmapped rows retain original bytes.
 /// Caller must authenticate/retain the original body and request/range/cursor;
 /// this codec does not prove that the requested scan or original funding completed.
-pub fn rest(scope: &Scope, market: &Market, body: &[u8]) -> Result<Page, Error> {
+pub fn rest(scope: &Scope, markets: &[Market], body: &[u8]) -> Result<Page, Error> {
     check_body(body)?;
+    if markets.len() > MAX_MARKETS {
+        return Err(Error::Limit);
+    }
+    let mut by_symbol = BTreeMap::new();
+    for market in markets {
+        if by_symbol.insert(market.symbol.as_str(), market).is_some() {
+            return Err(Error::Conflict);
+        }
+    }
     let p: NativePage = serde_json::from_slice(body).map_err(|_| Error::Invalid)?;
     if p.data.len() > MAX_ROWS {
         return Err(Error::Limit);
@@ -250,17 +293,43 @@ pub fn rest(scope: &Scope, market: &Market, body: &[u8]) -> Result<Page, Error> 
         return Err(Error::Invalid);
     }
     let mut seen = BTreeMap::new();
+    let mut seen_unmapped = BTreeMap::<TradeId, usize>::new();
     let mut fills = Vec::new();
+    let mut unmapped = Vec::<UnmappedFill>::new();
     let mut previous = None;
-    for r in p.data {
+    for raw in p.data {
+        let r: Row = serde_json::from_str(raw.get()).map_err(|_| Error::Invalid)?;
         if r.slot < p.page.start_slot || r.slot > p.page.end_slot {
             return Err(Error::Invalid);
         }
-        let fill = row(scope, market, r)?;
-        if previous.is_some_and(|id| fill.id > id) {
+        let (id, _) = row_identity(scope, &r)?;
+        if previous.is_some_and(|old| id > old) {
             return Err(Error::Invalid);
         }
-        previous = Some(fill.id);
+        previous = Some(id);
+        let Some(market) = by_symbol.get(r.symbol.as_str()) else {
+            if seen.contains_key(&id) {
+                return Err(Error::Conflict);
+            }
+            if let Some(index) = seen_unmapped.get(&id) {
+                if unmapped[*index].body() != raw.get() {
+                    return Err(Error::Conflict);
+                }
+            } else {
+                seen_unmapped.insert(id, unmapped.len());
+                unmapped.push(UnmappedFill {
+                    id,
+                    key: id.scoped(scope),
+                    symbol: r.symbol,
+                    raw,
+                });
+            }
+            continue;
+        };
+        if seen_unmapped.contains_key(&id) {
+            return Err(Error::Conflict);
+        }
+        let fill = row(scope, market, r)?;
         match seen.get(&fill.id) {
             Some(old) if old != &fill => return Err(Error::Conflict),
             Some(_) => {}
@@ -272,6 +341,7 @@ pub fn rest(scope: &Scope, market: &Market, body: &[u8]) -> Result<Page, Error> 
     }
     Ok(Page {
         fills,
+        unmapped,
         next_cursor: cursor,
         coverage: p.page.coverage,
         as_of_slot: p.page.as_of_slot,
