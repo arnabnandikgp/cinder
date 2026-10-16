@@ -85,7 +85,7 @@ fn cfg() -> units::Configuration {
                     s.location = location;
                     c.sources.push(s);
                 }
-                units::Descriptor {
+                let mut descriptor = units::Descriptor {
                     id: uid(n),
                     environment: Origin::Testnet.commitment(),
                     native_account: if n == 40 { broker() } else { [n + 3; 32] },
@@ -94,14 +94,23 @@ fn cfg() -> units::Configuration {
                     payout_vault: if n == 40 { r.vault } else { [n + 6; 32] },
                     key_policy: [n + 7; 32],
                     ledger: c,
+                };
+                if n == 40 {
+                    descriptor.key_policy = controller_for(descriptor.ledger.clone(), r.clone())
+                        .release_commitment(&descriptor.ledger)
+                        .unwrap();
                 }
+                descriptor
             })
             .collect(),
     )
     .unwrap()
 }
 fn controller() -> funding::Controller {
-    let c = cfg().units()[0].ledger.clone();
+    controller_for(cfg().units()[0].ledger.clone(), route())
+}
+fn controller_for(c: Config, r: Route) -> funding::Controller {
+    let venue = c.venue.bytes();
     let p = Profile {
         source: c.sources[0].scope,
         account: bs58::encode(broker()).into_string(),
@@ -120,17 +129,42 @@ fn controller() -> funding::Controller {
         perp_tag: 0,
         config: c,
     };
-    let r = route();
     funding::Controller::new_escrow(
         p,
         r.clone(),
         Routing {
-            venue: cfg().units()[0].ledger.venue.bytes(),
+            venue,
             route: chain::pda(r.program, &[b"venue_route", &r.config]).unwrap(),
         },
         Zeroizing::new([9; 32]),
     )
     .unwrap()
+}
+
+#[test]
+fn unit_funding_policy_pin_refuses_changed_limits_epoch_and_fees_before_binding() {
+    let t = support::Temp::new();
+    let mut j = fixture(&t);
+    let before = j.head();
+    for change in 0..4 {
+        let mut r = route();
+        match change {
+            0 => r.maximum_movement += 1,
+            1 => r.maximum_fee += 1,
+            2 => r.epoch += 1,
+            _ => r.setup_max_age += 1,
+        }
+        let controller = controller_for(cfg().units()[0].ledger.clone(), r);
+        assert!(
+            controller
+                .bind(&mut j.select(uid(40)).unwrap(), id(2), 10)
+                .is_err()
+        );
+        assert_eq!(j.head(), before);
+    }
+    controller()
+        .bind(&mut j.select(uid(40)).unwrap(), id(2), 10)
+        .unwrap();
 }
 fn fixture(t: &support::Temp) -> Store {
     let mut j = Store::create(

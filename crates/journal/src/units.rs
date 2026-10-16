@@ -33,7 +33,9 @@ pub struct Descriptor {
     pub custody_config: [u8; 32],
     /// Unit-exclusive program-controlled return/payout vault.
     pub payout_vault: [u8; 32],
-    /// Commitment to separate native key-role instances and release policy.
+    /// For a funded unit, the exact loaded funding-controller release commitment
+    /// (roles, route, epoch and limits). Native execution has a separate adapter
+    /// commitment; this field is not a complete deployment manifest.
     pub key_policy: [u8; 32],
     /// Existing exact units, source scopes, policy and empty initial books.
     pub ledger: Config,

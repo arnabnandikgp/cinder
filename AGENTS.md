@@ -15,7 +15,7 @@ not native exposure or a listener. P33 adds an opt-in unit Handler/private read
 publication and explicit UnitClient (ADR 0039), not a shipping deployment manifest
 or native execution. P34 adds a sealed selected-component controller, agent-only
 BULK execution, bounded native reads and fill/fee ingestion (ADR 0040). Unit
-replay revision 5 requires new empty histories; no revision-1/2/3/4 migration is
+replay revision 6 requires new empty histories; no revision-1/2/3/4/5 migration is
 supplied. P35 adds opt-in canonical owner/unit discovery, sealed-controller funds
 and atomic all-unit operator recovery cutover (ADR 0041), not a qualified BULK
 funding rail. Shipping Runtime/PrivateClient stay v1; only durable native preparation

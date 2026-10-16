@@ -60,6 +60,38 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
     /// Attach after trusted configuration/history verification. Constructing
     /// this handler does not qualify clocks, storage, image or native support.
     pub fn open(
+        journal: Journal<B, P>,
+        api: Service<A>,
+        binding: Binding,
+        witness: Arc<dyn Witness>,
+        clock: Arc<dyn Clock>,
+        deadline: u64,
+    ) -> Result<Self, Error> {
+        if api.onboarding_policies().is_some() {
+            return Err(Error);
+        }
+        Self::attach(journal, api, binding, witness, clock, deadline)
+    }
+    /// Match discovery against the actual loaded custody controllers before any
+    /// owner bootstrap/publication. Unsupported native rails cannot be omitted
+    /// from an advertised discovery inventory or substituted by another unit.
+    #[allow(clippy::too_many_arguments)]
+    pub fn open_with_custody(
+        journal: Journal<B, P>,
+        api: Service<A>,
+        binding: Binding,
+        witness: Arc<dyn Witness>,
+        clock: Arc<dyn Clock>,
+        deadline: u64,
+        funding: &[(
+            cinder_kernel::identity::UnitId,
+            &cinder_pacifica::funding::Controller,
+        )],
+    ) -> Result<Self, Error> {
+        custody::validate_onboarding(journal.configuration(), &api, funding)?;
+        Self::attach(journal, api, binding, witness, clock, deadline)
+    }
+    fn attach(
         mut journal: Journal<B, P>,
         api: Service<A>,
         binding: Binding,

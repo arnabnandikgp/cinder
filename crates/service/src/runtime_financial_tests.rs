@@ -87,6 +87,44 @@ fn actual_runtime_bootstraps_a_fresh_wallet_into_its_same_encrypted_journal_with
         epoch: route.epoch,
         maximum_deposit: route.maximum_movement,
     };
+    // Selected-unit assembly must compare discovery economics with the loaded
+    // controller, not merely accept canonical PDAs with arbitrary scales/limits.
+    let unit = cinder_kernel::identity::UnitId::new([40; 32]).unwrap();
+    let registry = cinder_journal::units::Configuration::new(
+        config.domain,
+        vec![cinder_journal::units::Descriptor {
+            id: unit,
+            environment: Origin::Testnet.commitment(),
+            native_account: route.broker,
+            funding_wallet: route.broker,
+            custody_config: route.config,
+            payout_vault: route.vault,
+            key_policy: funding.release_commitment(&config).unwrap(),
+            ledger: config.clone(),
+        }],
+    )
+    .unwrap();
+    for change in 0..4 {
+        let mut p = policy.clone();
+        match change {
+            0 => p.decimals += 1,
+            1 => p.epoch += 1,
+            2 => p.maximum_deposit += 1,
+            _ => {}
+        }
+        let contract =
+            cinder_api::units::onboarding::Contract::new(registry.clone(), vec![(unit, p)])
+                .unwrap();
+        let api = cinder_api::units::service::Service::new(
+            cinder_api::units::Authorizer::new(120_000, 120_000).unwrap(),
+            RiskAdmission { enabled: false },
+        )
+        .with_onboarding(contract);
+        let result =
+            crate::units::custody::validate_onboarding(&registry, &api, &[(unit, &funding)]);
+        assert_eq!(result.is_ok(), change == 3);
+        assert!(crate::units::custody::validate_onboarding(&registry, &api, &[]).is_err());
+    }
     let api = Service::new_onboarding(
         Contract {
             owners: vec![],

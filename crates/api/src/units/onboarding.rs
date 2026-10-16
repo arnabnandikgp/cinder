@@ -112,6 +112,10 @@ impl Contract {
     pub fn commitment(&self) -> [u8; 32] {
         self.digest
     }
+    /// Canonical immutable inventory for the enclosing service's loaded-policy check.
+    pub fn policies(&self) -> &[(UnitId, Policy)] {
+        &self.policies
+    }
     fn policy(&self, unit: UnitId) -> Result<&Policy, Error> {
         self.policies
             .iter()

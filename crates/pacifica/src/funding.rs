@@ -506,6 +506,7 @@ impl Controller {
     pub fn unit_binding(&self, unit: &cinder_journal::units::Descriptor) -> Result<(), Error> {
         self.profile.unit_binding(unit)?;
         if self.escrow.is_none()
+            || self.release_commitment(&unit.ledger)? != unit.key_policy
             || self.route.broker != unit.funding_wallet
             || self.route.config != unit.custody_config
             || self.route.vault != unit.payout_vault

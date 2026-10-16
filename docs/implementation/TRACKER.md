@@ -80,6 +80,24 @@ restack P35/P36, apply the same completion retention to the withdrawal callback,
 finish exact-source matrix and publish approved fixes. No automatic merge,
 frontend, native financial/RPC/AWS activity or new qualification.
 
+### Historical: P35 policy/discovery review correction — 2026-10-17
+
+Codex #4298003187/#4298003192 are valid. Selected funding now checks the entire
+loaded controller release commitment against descriptor `key_policy` before any
+binding/history mutation. Changed fee, movement, epoch or setup policy cannot
+become the first accepted controller. This pin is the funding-role policy, not
+an assertion that a complete two-venue deployment manifest has been assembled.
+Unit Runtime with onboarding must use `open_with_custody`; it checks every
+advertised program/config/mint/route/pool/domain/epoch/decimal/maximum-deposit
+against the actual loaded controller before attaching the journal/publication.
+The ordinary open constructor refuses an unvalidated onboarding inventory.
+Canonical API-only policy construction is not native qualification.
+
+New policy tampering and discovery-economics cases include positive controls and
+missing-controller refusal. Unit replay revision 6 starts empty, rejects 1–5
+and leaves the legacy financial engine unchanged. Verification pending. No live
+funding/venue/RPC/AWS action or automatic merge; restack P36 onto this correction.
+
 ### Historical: P34 adapter-boundary review correction — 2026-10-17
 
 Codex findings #4297788400/#4297788418 are valid. Selected Pacifica native

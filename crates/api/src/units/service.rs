@@ -32,6 +32,11 @@ impl<A: crate::Admission> Service<A> {
         self.onboarding = Some(contract);
         self
     }
+    /// Loaded discovery inventory for trusted assembly validation, never native
+    /// qualification by itself. A runnable service must match actual controllers.
+    pub fn onboarding_policies(&self) -> Option<&[(UnitId, crate::onboarding::Policy)]> {
+        self.onboarding.as_ref().map(|c| c.policies())
+    }
     /// Owner bootstrap over the same private carrier. No amount or credit setter.
     pub fn onboard<B: Backend, P: Protection>(
         &self,

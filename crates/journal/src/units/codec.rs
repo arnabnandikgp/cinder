@@ -7,7 +7,7 @@ pub(super) const GENESIS: u8 = 30;
 pub(super) const RECORD: u8 = 31;
 // Unit ownership/controller changes require a separate replay revision even
 // when the reused single-unit financial engine remains unchanged.
-const REVISION: u16 = 5;
+const REVISION: u16 = 6;
 pub(super) fn writer(tag: u8) -> Writer {
     let mut w = Writer::new(tag);
     w.raw(&REVISION.to_be_bytes());

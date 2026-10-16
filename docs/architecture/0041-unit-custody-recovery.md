@@ -9,7 +9,10 @@ promise, bridge or production authority is introduced.
 The existing Pacifica funding controller and private recovery package machinery
 accept the sealed financial Controller. Legacy use retains its checks; selected
 use additionally binds exact native environment/account, funding wallet, custody
-config and payout vault. Unit mode requires exact-batch escrow and canonical
+config and payout vault, and the exact loaded funding-controller commitment in
+the descriptor's `key_policy` (including roles, route, epoch and limits). Native
+execution policy remains separately bound; this is not a complete live manifest.
+Unit mode requires exact-batch escrow and canonical
 config/token-vault PDAs, not common-vault or weak demo-credit composition. The
 empty Config remains immutable; accepted registrations supply beneficiaries
 without changing keys, routes, precision or lifetime paid baselines.
@@ -37,6 +40,13 @@ fields. V1 signatures are invalid; no URL-selected/default unit exists. Canonica
 classic-SPL recipients and custody config/route/payout PDAs are checked. Complete
 custody policy contributes to carrier release binding separately from the
 existing API-history contract.
+
+Runnable onboarding uses `Runtime::open_with_custody`: every advertised policy
+must match an actual loaded controller's program, mint, route, pool, domain,
+epoch, decimals and full-deposit limit before journal attachment/publication.
+The ordinary constructor refuses onboarding without this inventory. Unsupported
+rails cannot be presented as qualified controllers. API-only contract creation
+checks canonical discovery structure, not native policy qualification.
 
 Enrollment atomically adds empty books in all units at one shared epoch and
 retains the original proof for startup verification. Public bootstrap mode
@@ -66,7 +76,7 @@ workflow, not replica I/O under a serving Runtime lock. Later accepted facts
 invalidate prepared roots; separate qualified chain/operator approval still
 governs publication/activation. No heartbeat or immediate-outage payout exists.
 
-Unit replay revision **5** starts empty histories; no migration from 1–4 or new
+Unit replay revision **6** starts empty histories; no migration from 1–5 or new
 counter baselines for existing liabilities. Synthetic tests cover real bootstrap
 signatures, canonical recipients, restart/revoke, exclusive sweep/refund,
 once-only handoff, full allocation, missing-credit holds, global recovery,

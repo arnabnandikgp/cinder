@@ -8,6 +8,44 @@ use cinder_pacifica::{
     funding as funds,
 };
 
+/// Validate all advertised deposit economics against loaded immutable routes.
+/// Pure check, before journal attachment, enrollment or listener publication.
+pub(crate) fn validate_onboarding<A: cinder_api::Admission>(
+    configuration: &units::Configuration,
+    api: &Service<A>,
+    funding: &[(UnitId, &funds::Controller)],
+) -> Result<(), Error> {
+    let policies = api.onboarding_policies().ok_or(Error)?;
+    if policies.len() != funding.len() {
+        return Err(Error);
+    }
+    for ((unit, p), (id, controller)) in policies.iter().zip(funding) {
+        let descriptor = configuration
+            .units()
+            .iter()
+            .find(|u| u.id == *unit)
+            .ok_or(Error)?;
+        controller.unit_binding(descriptor).map_err(|_| Error)?;
+        let r = controller.route();
+        if unit != id
+            || controller
+                .escrow_routing()
+                .is_none_or(|v| v.route != p.route || v.venue != p.venue)
+            || p.program != r.program
+            || p.config != r.config
+            || p.mint != r.mint
+            || p.pool != r.pool
+            || p.custody_domain != r.domain
+            || p.epoch != r.epoch
+            || p.decimals != r.decimals
+            || p.maximum_deposit != r.maximum_movement
+        {
+            return Err(Error);
+        }
+    }
+    Ok(())
+}
+
 /// Original qualified chain inventory, with no caller-supplied effective time.
 pub struct Inventory {
     /// Durable observation identity.
