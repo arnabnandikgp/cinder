@@ -1139,9 +1139,9 @@ No financial admission, runtime/listener activation, frontend or live activity.
 Evidence: X01–X04/S01–S04, P29 replay/P30 scope tests and
 [ADR 0037](../architecture/0037-unit-api-history.md).
 
-- [ ] Versioned shared state/encoding commits original API records, contract and immutable request ownership; old unit revision is refused without changing legacy financial replay.
-- [ ] Current authentication precedes dedupe/lookup; accepted grants and atomic global revocation survive replay without cross-unit authority or repeat effects.
-- [ ] Financial capture is recorded-only, cannot consume quota or create financial effects, and retains original owner/unit through retries, cancellation references and foundation-route conflicts.
+- [x] Versioned shared state/encoding commits original API records, contract and immutable request ownership; old unit revision is refused without changing legacy financial replay.
+- [x] Current authentication precedes dedupe/lookup; accepted grants and atomic global revocation survive replay without cross-unit authority or repeat effects.
+- [x] Financial capture is recorded-only, cannot consume quota or create financial effects, and retains original owner/unit through retries, cancellation references and foundation-route conflicts.
 - [ ] Exact-source offline adversarial/CAS/unknown/freshness/encryption and workspace regressions pass; tracker records source, evidence limits, PR/CI/review and the remaining financial-controller gate.
 
 <a id="p24"></a>

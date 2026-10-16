@@ -39,6 +39,8 @@ requires a newly signed current-epoch retry; stale signatures are not exempt.
 An owner may recover an expired original grant: current identity/session/epoch
 are authenticated first, but the original grant deadline is not revalidated as
 a new proposal before dedupe. A new grant still passes every proposal check.
+Fresh retry authentication never renews the original epoch or execution deadline
+of an unadmitted intent; later admission must evaluate the retained original.
 
 Accepted grant cuts are rebuilt from original signed administrative records at
 the fresh common head. Replay validates signed/header/effect consistency and

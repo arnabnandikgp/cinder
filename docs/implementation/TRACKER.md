@@ -47,6 +47,58 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P31 offline qualification complete — 2026-10-16
+
+Implementation source `5a1f182404b8f41dda827854ecbfd0f883b3de77`, tree
+`721e671c71e2c9567d2232917631975d8b7c1e46`, is committed on
+`tee/p31-unit-api-history`. The branch carries prior P29/P30 closure receipt
+`9802917` above actual merged trunk `1e9cd2d`. The merged predecessor's four
+push workflows (all eight jobs) have now passed; earlier running text is historical.
+
+P31 implements original signed API records/contract pinning under the common
+protected journal; an immutable actual accepted-history grant adapter;
+authenticated dedupe and original-operation lookup; and atomic owner grants/
+global revoke. Financial requests stay `Effect::Recorded`, not financial
+`Outcome::Accepted`. They create no hold/posting, quota use, native preparation,
+exposure or signer. Signature/session/current epoch precede return of a duplicate;
+original wire/epoch/deadlines are not replaced by retry auth. Same-unit grant
+amendment, cross-unit replay/takeover and retrospective reservation claims fail.
+
+All checks ran on that exact staged tree in a clean tracked-source export,
+excluding the three unrelated untracked user paths. Rust 1.97.1 / Node 24.21.0;
+locked/offline Cargo, `CARGO_INCREMENTAL=0`, dev/test debug info disabled, existing
+build/dependency caches, one Cargo writer at a time:
+
+- `node scripts/check.mjs --group=contracts`: 81/81, 37 phases / 63 tracked docs;
+  dependency/fixture boundaries pass.
+- `node scripts/check.mjs --group=lint`: format, strict default/all-feature
+  all-target clippy and all-feature build pass.
+- `node scripts/check.mjs --group=rust`: 742/742/679 passed for all-feature
+  debug/release/shipping-default; only existing explicit qualification ignores
+  10/10/9. No unexpected skip or missing required test.
+- `node scripts/check.mjs --group=client`: relay 15/15, private SDK 37/37 and
+  TypeScript checking pass without optional browser-verifier dependencies.
+
+The focused API suite is 22 and journal suite 25; ten API and four journal tests
+are new. Cases include real-grant unit isolation/replay, expired-grant owner
+retry, no repeated revoke, recorded-only quota/financial state, original cancel/
+lookup ownership, contract pinning, malformed trusted headers/wires, actual AEAD,
+private debug, before/after unknown append, shared CAS, reservation conflicts,
+explicit revision-1 refusal and complete-state commitments. Initial compile
+errors required explicit kernel-to-codec error mapping and copying index keys
+before a mutable borrow; corrected before focused passes. No dependency, test
+expectation, financial gate or runtime deadline was weakened.
+
+Unit replay revision 2 requires new empty histories; revision-1 opt-in unit
+histories are refused, not silently migrated. Legacy shipping codec/engine and
+Runtime/v1 SDK remain unchanged. No local SBF/Chrome or changed-image hardware
+qualification is claimed by these four groups; hosted jobs supply their own
+new-head results. No live venue/RPC/AWS, frontend, container or wallet work.
+Next: publish one ready P31 PR against `product/tee-v1`, verify its actual head/
+CI/review and retain `in progress` until accepted review/authorized merge.
+Afterward the remaining implementation boundary is the atomic financial-controller
+join, followed by runtime/read/recovery wiring, not immediate native activation.
+
 ### P31 approved and started — 2026-10-16
 
 User approved the next plan after P29/P30 merge. Branch
@@ -6188,13 +6240,15 @@ Work: `journal::units::api` and revision-2 state/codec commit original signed
 records, contract and request ownership. `api::units::history` rebuilds accepted
 grants, authenticates dedupe/lookup and atomically captures admin effects or
 recorded-only financial intents. No independent database or financial acceptance.
-Verification: Focused API 22/22 and unit-journal 25/25 pass; full exact-source
-workspace/legacy checks remain pending. Ten API and four journal cases are new.
+Verification: Source `5a1f182404b8f41dda827854ecbfd0f883b3de77`, tree
+`721e671c71e2c9567d2232917631975d8b7c1e46`: contracts 81, strict lint/build,
+Rust 742/742/679 (existing ignored 10/10/9), relay 15 and SDK 37 pass. Focused API
+22 and unit-journal 25 pass; fourteen cases are new. Current handoff records scope.
 Unexpected: Owner-grant proposal validation must follow dedupe in durable capture
 so an authenticated owner can recover an expired original grant without reinstalling
 it. Raw P30 preflight retains its proposal checks; existing scope tests still pass.
-Next: Complete strict clean-source checks and offline regressions, update exact
-evidence, then open one PR against `product/tee-v1` with the prior merge receipt.
+Next: Publish one ready PR against `product/tee-v1`, inspect its exact-head CI/
+review, and keep this bounded phase in progress until an authorized merge.
 PR: Not opened.
 Merge: Not merged.
 
