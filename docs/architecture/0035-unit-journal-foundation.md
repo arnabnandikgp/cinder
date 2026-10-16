@@ -17,6 +17,10 @@ Genesis binds nonzero unit IDs, the domain, native environment/account, distinct
 funding wallets, custody configs/payout vaults, key-role/policy commitments and
 the complete kernel config (sources, units, markets and policies). Distinct
 source physical accounts prevent namespace aliases from duplicating backing.
+Within each unit, the key-controlled funding wallet must also differ from the
+program-controlled payout vault, including in a single-unit registry. The native
+trading identity may equal its funding wallet; it must not be confused with the
+separate payout endpoint.
 These are configuration consistency checks, not proof of native isolation or
 correct chain addresses. New genesis starts with no customers or balances.
 Legacy format/engine and shipping Runtime remain unchanged. Neither format can

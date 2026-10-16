@@ -264,6 +264,27 @@ fn registry_is_canonical_empty_and_rejects_ambiguous_physical_ownership() {
 }
 
 #[test]
+fn each_unit_keeps_key_controlled_funding_separate_from_program_payouts() {
+    let domain = support::config().domain;
+    // Include the first/only descriptor: inter-unit checks cannot cover it.
+    for count in 1..=2 {
+        for index in 0..count {
+            let mut units = descriptors();
+            units.truncate(count);
+            units[index].payout_vault = units[index].funding_wallet;
+            assert_eq!(
+                Configuration::new(domain, units).unwrap_err(),
+                Error::Invalid
+            );
+        }
+    }
+    // A venue identity may legitimately be the funding wallet, not the payout PDA.
+    let mut units = descriptors();
+    units[0].native_account = units[0].funding_wallet;
+    assert!(Configuration::new(domain, units).is_ok());
+}
+
+#[test]
 fn enrollment_is_atomic_asset_specific_and_replay_derived() {
     let t = Temp::new();
     let mut s = create(&t);

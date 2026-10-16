@@ -45,6 +45,28 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P29 review correction; next slice authorized — 2026-10-16
+
+User requested relevant review fixes, then continuation with the next planned
+work. This is not merge or live-run permission: keep #73 open and stack the next
+bounded phase above it. Codex inline #4293050565 / thread
+`PRRT_kwDOUXiYz86tJL6r` is valid: the registry checked funding/payout collisions
+between units but not within a unit. Added a red-first one/two-unit regression,
+which fails against `2b63a5f`, then reject the same-unit alias as `Error::Invalid`.
+Native account = funding wallet remains valid; it is not the payout endpoint.
+All 21 focused tests pass in debug and release; strict default/all-feature
+all-target workspace lint/build and all 81 contract guards pass on the clean
+review-fix export. The red-first failure and correction are retained in the
+tracked regression; no dependency, financial equation or legacy codec changed.
+CodeRabbit comment #6212448954 reviewed through `2b63a5f` and reported no
+actionable findings. Existing CI at that head has seven successful jobs and the
+SBF job still running when inspected; no new-head success is inherited.
+
+Next: push the checked narrow fix, reply/resolve the validated thread, then
+add the signed unit-bound API/SDK contract slice to PLAN/TRACKER and implement it
+on a dependent branch. Preserve legacy API behavior and P29's no-dispatch gate.
+No frontend, venue/RPC/AWS test, schema migration or financial-policy change.
+
 ### P29 published for review — 2026-10-16
 
 Ready PR [#73](https://github.com/arnabnandikgp/cinder/pull/73) targets

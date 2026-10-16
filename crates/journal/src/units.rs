@@ -62,6 +62,7 @@ impl Configuration {
         for (i, u) in units.iter().enumerate() {
             if u.ledger.domain != domain
                 || !u.ledger.customers.is_empty()
+                || u.funding_wallet == u.payout_vault
                 || [
                     u.environment,
                     u.native_account,
