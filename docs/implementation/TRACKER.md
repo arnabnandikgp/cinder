@@ -36,14 +36,14 @@
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | in progress | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), review / CI pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-15. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P27 review corrections — 2026-10-15
+### P27 review corrections — 2026-10-16
 
 User approved fixing the three substantive #71 findings and merging after
 verification. Fix checkpoint `4be6936e1e3ad27cc3d5ddf511900c045df87bcd`, tree
@@ -68,8 +68,11 @@ export, preserving unrelated user examples/docs/stays. Logs are
 `/private/tmp/cinder-p27-review-{red,focused,contracts,lint,release}.log`.
 The earlier whole-workspace 667/667/604 and 45-client results are historical;
 new-head hosted regressions/review must be checked before the authorized merge.
-The original `579f606` head had all eight hosted jobs green. This successor only
-records the correction receipt; publication, thread replies and CI are next.
+The original `579f606` head had all eight hosted jobs green. Published correction
+head `59ea539c801565d7d95ea39ce85503977f53acf9` has contracts green with seven
+jobs running; the three findings have explicit fix/test replies. This receipt-only
+successor corrects the UTC date and records publication; exact new-head CI and any
+new substantive review must be checked before the user-authorized merge.
 
 ### Verified P25/P26 merge and P27 codec work — 2026-10-15
 
