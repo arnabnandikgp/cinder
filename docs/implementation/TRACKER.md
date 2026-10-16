@@ -35,7 +35,7 @@
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
-| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; CI/review pending |
+| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; eight CI jobs pass; finding fixed/resolved |
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | in progress | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -45,6 +45,54 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P30 offline qualification complete — 2026-10-16
+
+Implementation source `f6554faaba8328e94739617dd9754b8c2fff450e`, tree
+`ae8e340aa0322d0f1d170b4ee9c03c012af077bc`, is committed on
+`tee/p30-unit-api-contract` above open #73. Opt-in `api::units` and private SDK
+helpers implement ADR 0036: explicit signed unit/digest/reply binding and fresh
+shared-head owner/agent scope preflight. Existing v1 strategy bytes and shipping
+Runtime/PrivateClient remain unchanged. Grant cuts remain a trusted pure
+accepted-history port, not a shipping database or grant installation service.
+Preflight is not financial admission, quota consumption, cancel ownership,
+idempotency, signing, dispatch or a fresh-head guarantee for a later action.
+
+Checks used a clean tracked-source export, Rust 1.97.1 / Node 24.21.0, locked/
+offline Cargo, `CARGO_INCREMENTAL=0`, dev/test debug info disabled and the existing
+target cache. Standard `node scripts/check.mjs --group=contracts|lint|rust|client`
+groups were run separately (not a literal combined group argument):
+
+- Contracts: 81/81, 36 phases / 62 tracked documents; dependency boundaries pass.
+- Lint: format and strict default/all-feature all-target clippy/build pass.
+- Rust: all-feature debug/release 728/728 passed; shipping-default 665 passed.
+  Existing explicit hardware/expensive qualification ignores remain 10/10/9;
+  no unexpected ignore or skipped required test.
+- Client: relay 15/15 and private SDK 37/37, including TypeScript checking and
+  all seven new SDK cases. The twelve new Rust cases pass in every profile.
+- Production browser bundle builds and imports with all four new helpers exported.
+  This is bundle qualification, not a v2 listener, Chrome or hardware run.
+
+Exact Rust run tree was `74b9b382b413950b589662156c3c1c3ea648964e`.
+The first client run correctly failed because the new protocol test imported the
+full browser entry and therefore optional verifier packages absent from the
+private-only CI job. Removed that test-only import/assertion; production and Rust
+sources are identical between that tree and the committed tree above. Final
+contracts, lint and full client groups use the corrected tree; the client group
+passes without optional web-channel packages. The separately built browser
+bundle verifies the actual public exports. No CI dependency/install change or
+runtime deadline workaround was needed. The only removed files were regenerable
+`target/debug` build outputs to recover disk space; unrelated user files remain.
+
+Parent #73 is still open at `06f9d0ffbf1ecdadb3fcabc8ea1c2d55a9475ea6`.
+All eight hosted jobs pass at that exact head. Codex thread
+`PRRT_kwDOUXiYz86tJL6r` is fixed/replied/resolved. CodeRabbit reported no
+actionable finding through `2b63a5f`; new-head re-review is rate-limited, not
+independent approval of the fix. No merge is authorized or performed.
+Next: publish one ready P30 PR above #73 and record its actual head/CI/review.
+Later durable API/controller integration must implement the accepted-history
+grant port and atomically join intent ownership, dedupe, quota, holds, risk and
+head/epoch checks before any runtime/native activation. No live resources run.
 
 ### P30 started above the reviewed P29 fix — 2026-10-16
 
@@ -6021,11 +6069,17 @@ Merge: Not merged.
 
 ## P30 — Signed unit-bound API and SDK contract
 
-Work: Scope and acceptance in ADR 0036 / PLAN P30; implementation started above #73.
-Verification: Pending v2 protocol, auth-scope, SDK and legacy regressions.
+Work: Opt-in `api::units`, unchanged v1 shared command/permission helpers,
+immutable unit-state config accessor, private SDK v2 helpers, twelve Rust and
+seven SDK regressions; ADR 0036 and entrypoint/evidence docs. No shipping listener.
+Verification: Source `f6554faaba8328e94739617dd9754b8c2fff450e`; contracts 81,
+strict lint/build, Rust 728/728/665, relay 15 and SDK 37; exact run-tree differences
+and browser-bundle limits are recorded in the current handoff.
 Unexpected: Current-head grant evidence remains an explicit trusted accepted-history
 port; this phase does not masquerade as a durable grant/admission service.
-Next: Implement and test one explicit v2 contract, then publish the dependent PR.
+The clean-source client run caught a test-only optional browser dependency import;
+remove that import rather than expanding the private job's install surface.
+Next: Publish the ready dependent PR above #73; review exact new-head CI/findings.
 PR: Not opened.
 Merge: Not merged.
 

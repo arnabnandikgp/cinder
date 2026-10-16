@@ -1122,9 +1122,9 @@ consumption, native signing, dispatch, new endpoint, frontend or live test.
 Evidence: B08/S01/S02/X01–X04, P18/P21A vectors, P29 state/replay tests and
 [ADR 0036](../architecture/0036-unit-api-contract.md).
 
-- [ ] V2 binds UnitId in signed and stable economic bytes; independent Rust/SDK vectors agree; malformed/version/precision/size inputs and wrong-unit/unwrapped replies fail closed without v1 fallback.
-- [ ] Current-head scope verification checks owner/global epoch/component and typed accepted-grant cut; same owner/market across units cannot widen permissions, and global revocation survives replay.
-- [ ] SDK helpers snapshot signing bytes/metadata before async wallet work, preserve caller buffers and stable retry semantics, and perform no native/network action or implicit retry.
+- [x] V2 binds UnitId in signed and stable economic bytes; independent Rust/SDK vectors agree; malformed/version/precision/size inputs and wrong-unit/unwrapped replies fail closed without v1 fallback.
+- [x] Current-head scope verification checks owner/global epoch/component and typed accepted-grant cut; same owner/market across units cannot widen permissions, and global revocation survives replay.
+- [x] SDK helpers snapshot signing bytes/metadata before async wallet work, preserve caller buffers and stable retry semantics, and perform no native/network action or implicit retry.
 - [ ] Appropriate exact-source workspace/SDK/legacy regressions pass; open predecessor #73 and this phase's scope, evidence, PR/CI/review state and remaining controller/runtime gates are recorded.
 
 <a id="p24"></a>
