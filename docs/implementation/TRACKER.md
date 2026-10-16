@@ -33,7 +33,7 @@
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
 | [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | closed | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), merged `52a36ef` |
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
-| [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | in progress | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), review / CI pending |
+| [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -42,6 +42,45 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P27 merged after review corrections — 2026-10-16
+
+User authorized fixing and merging #71. Exact final PR head
+`022938e02ea72fda82dc54925d921e4f14ecb8c9` passed all eight hosted jobs:
+contracts/inventory, strict Rust lint/build, full Rust regressions, SDK/relay,
+actual offline browser channel, retained-history growth, ARM64 default package
+and compiled SBF/Surfpool vault transactions. CodeRabbit's exact-head re-review
+completed without new findings; all three original threads have fix/test replies
+and are resolved. No independent audit or live financial pass is claimed.
+
+The correction source `4be6936` / tree `b31fd92` also passes full clean-source
+local Rust matrices: **672/672/609**, only the expected 10/10/9 ignored entries,
+plus all 26 focused codec tests in debug/release, 81 contract guards and strict
+workspace lint/build. Full correction log:
+`/private/tmp/cinder-p27-review-full-rust.log`. Receipt-only successors do not
+change executable code. Earlier counts below remain historical.
+
+#71 merged at **2026-10-16 04:15:10 UTC**, squash commit
+`b818655a63ba10491cae2aa51877b52a340054c2`, into `product/tee-v1`. Fetched trunk
+is tree-identical to the verified final head. Native stack submission maintained
+the PR, but `gh stack merge` reported no hosted stack object for this single-layer
+stack; the authorized fallback was `gh pr merge --squash --match-head-commit`
+against the exact green head, without admin bypass. Trunk classic protection is
+false and effective rules empty; inspected, not changed.
+
+P27 is closed for its **offline codec scope only**. BULK is not connected to
+shipping Runtime or native funding/trading; the three prior metadata GETs remain
+502 observations, not usable qualification. No new venue, RPC, AWS or financial
+run occurred. Pacifica's missing-credit work and frontend remain deferred.
+
+Next proposed slice: complete source-pinned BULK account/position/funding/fee/
+forced-event normalization and its financial mapping, alongside the precise
+two-execution-unit ownership/journal contract from SECOND-VENUE. Do not activate
+dispatch or extend the single-pool journal before the unit boundary is reviewed.
+Further native environment/authority/bridge checks need a separately approved
+bounded run. No next phase is opened by this merge. This local post-merge
+documentation receipt is prepared on `product/tee-v1` for the next authorized PR,
+per PLAN; do not push it directly to trunk. Unrelated user files remain untouched.
 
 ### P27 review corrections — 2026-10-16
 
@@ -5705,9 +5744,10 @@ Work: added isolated cinder-bulk exact decimal/exponent/grid, unsigned limit/can
 Verification: exact source checkpoint 109165529ac469e239173859ae51785299549398 / tracked tree 3fd625849b5d0faf85f904bf16671a4f037bd22e passes all 21 focused codec tests, strict default/all-feature all-target lint/build, 667/667/604 Rust tests (only expected 10/10/9 ignored), 81 contracts with 33 phases/58 tracked documents and 45 SDK/relay tests. Clean tracked-source export excludes unrelated examples/docs; client checks use the same tracked code with existing locked installed dependencies. Commands are the four pinned scripts/check.mjs groups contracts/lint/rust/client, locked/offline with incremental and dev/test debug information disabled. Source is on tee/p27-bulk-adapter-foundation above actual merged trunk 0af365e. The three approved public testnet metadata GETs returned origin HTTP 502; no native schema/financial qualification, new SBF/browser/hardware run or shipping activation is claimed.
 Unexpected: upstream default_meta_order_ids use default zero account/nonce/index, not the accompanying signing context. Private hash-helper test preserves that oracle while public single-action hashing fixes index 0. Native cancellation tag is cx. New exact decimal source forms require raw-value preservation, not floating JSON values. Initial compiler/fixture interpretation errors were local, with no signing/dispatch. A preliminary broad run hit rustdoc E0463 after two source exports compiled concurrently into one cache; it is not a passing receipt. The final full single-writer rerun above passes without a product change for that harness error.
 Review correction: Codex #4287027650/#4287027660 and CodeRabbit #4287105612 are valid. Fix checkpoint 4be6936e1e3ad27cc3d5ddf511900c045df87bcd passes 26 codec tests in both debug/release, 81 clean-source contracts and strict workspace lint/build. Three regressions fail on the old source first; two more cover per-market precision and retained unmapped/conflicting rows. Original 579f606 has eight hosted green jobs; correction-head CI is not inherited. Current handoff records details/logs.
-Next: publish corrections, reply/resolve findings and check exact-head CI/review before the user-authorized merge. Native metadata availability, full financial mapping and joined unit-state design remain separate; no frontend, financial run or reopened Pacifica investigation.
-PR: https://github.com/arnabnandikgp/cinder/pull/71, ready/open directly above product/tee-v1 through native gh stack.
-Merge: none.
+Final verification/merge: 022938e passes all eight hosted jobs, exact-head CodeRabbit re-review has no new findings, and all three original threads are resolved with fix/test replies. Full correction-source local Rust matrices pass 672/672/609 with only expected 10/10/9 ignored entries. Actual merged tree is identical to the green source; see current handoff for the guarded single-PR merge fallback and exact receipts.
+Next: propose the remaining BULK financial mapping and explicit two-unit ownership contract before runtime composition. Native environment/bridge qualification remains separately gated; no frontend, financial run or reopened Pacifica investigation follows automatically.
+PR: https://github.com/arnabnandikgp/cinder/pull/71.
+Merge: b818655a63ba10491cae2aa51877b52a340054c2.
 
 ## P24 — Release safety case
 
