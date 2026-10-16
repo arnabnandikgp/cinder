@@ -27,7 +27,8 @@ of every venue loss. It does not internally cross customer orders.
 Pacifica is the first integration. AWS Nitro Enclaves is the confidential-runtime
 target. Additional venues are a future extension behind qualified adapters, not
 an assumption that unrelated venue accounts share collateral or identical risk.
-BULK research is retained but its integration is paused. The old Phoenix/PER
+BULK has an opt-in two-unit implementation and joined offline acceptance; live
+funding/release qualification remains disabled. The old Phoenix/PER
 implementation is a separate workstream, not the template for this architecture.
 
 | Component | In this PR / implementation status | Owning phase |
@@ -60,6 +61,9 @@ implementation is a separate workstream, not the template for this architecture.
 | Unit-bound API contract | Opt-in v2 signed unit/digest/reply binding and current-head scope preflight; trusted accepted-grant port, not durable admission or a listener; shipping API remains v1 | P30 / ADR 0036 |
 | Durable unit API history | Original signed records and accepted grants/global revoke share the journal; financial capture is recorded-only, with immutable derived grant cuts; no financial admission or runtime activation | P31 / ADR 0037 |
 | Unit financial admission | Original v2 intents, current authority, agent quota, order/cancel/payout/leverage controls and unit-local risk/holds join atomically; no native exposure or shipping Runtime activation | P32 / [ADR 0038](architecture/0038-unit-financial-admission.md) |
+| Shared unit service/native execution | Opt-in witnessed private reads/SDK, original native exposure and observations under one head; not a shipping release manifest | P33–P34 / [ADR 0040](architecture/0040-unit-native-execution.md) |
+| Unit custody/recovery | Canonical owner discovery, exact-batch funds and global operator cutover reuse existing accounting/counters; no BULK rail | P35 / [ADR 0041](architecture/0041-unit-custody-recovery.md) |
+| Joined unit acceptance | Real SDK/service/native-signature/financial replay fixtures plus existing carrier/custody suites; native/hardware scope remains separate | P36 / [acceptance boundary](implementation/UNIT-ACCEPTANCE.md) |
 | Release review | Production policy, governance, independent assurance and customer-funds gates remain open | P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one

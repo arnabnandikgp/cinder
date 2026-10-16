@@ -42,7 +42,7 @@
 | [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; final verification/review pending |
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), open |
-| [P36 — Joined second-venue acceptance](PLAN.md#p36) | open | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | — |
+| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | Local implementation; full regression/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-17 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -133,7 +133,54 @@ attempt used equality on a non-PartialEq kind; replaced it with a pattern check.
 No gate was relaxed. P35/P36 must be restacked onto this correction; no live
 request or automatic merge. New-head hosted checks/review remain separate.
 
-### P34 verified locally; P35 underway — 2026-10-16
+### P36 joined lifecycle passes; stack review corrections — 2026-10-17
+
+Worktree `cinder-tee`, branch `tee/p36-joined-acceptance`. Three ready PRs form
+native GitHub stack #80: #78 → #79 → #81. No automatic merge or frontend work.
+The P36 local-fixture driver joins actual UnitOnboardingClient/UnitClient owner
+and delegated signatures, unit Runtime/API/risk/holds, replicated encrypted
+journal and both native adapters. Node independently verifies both native
+signatures. Partial/duplicate/late fill attribution, original-ID lookup, unknown
+no-resend, unit-local gap containment, global revoke, reopen and global boot
+fence pass in the focused SDK process test. Fixture IPC bypasses the encrypted
+carrier; existing carrier suites remain separate evidence. Fixed disposable
+keys, synthetic setup/balances and readiness never qualify a live release.
+
+Clean export `/private/tmp/cinder-p36-check.UBo9xY` passes format, both strict
+Clippy configurations and all-target/all-feature build. Contracts pass; full
+Rust/client groups are running. Focused SDK, TypeScript and all five acceptance
+manifest guards pass (`/private/tmp/cinder-p36-{sdk,tsc,manifest}.log`). Initial
+fixture failures were grant/order deadline ordering, missing explicit synthetic
+native readiness and a fill timestamp preceding dispatch. Corrected fixtures,
+not production gates. The manifest now requires actual execution of the joined
+SDK case and unit custody/recovery cases, not merely source text.
+
+P34 source `8cad0bb3de1f84a9ccd27418f5458a95e8fe9072`, tree
+`0252caa5932f97df800a5ee0bf900d616eb9e397`, passed all four local groups (81
+contracts, strict lint/build, all three Rust profiles, relay 15, SDK 40, tsc).
+P35 source `07fb0bfc1eac0163a56e4eee2186cbb40f21d64d`, tree
+`3b25c4270d4f75f3470492f7800ee67c3de00fe9`, passed all four local groups
+(81 contracts, strict lint/build, all Rust profiles, relay 15, SDK 41, tsc),
+plus actual selected-adapter custody/recovery and legacy funding regressions.
+Logs `/private/tmp/cinder-p35-{lint,contracts,rust,client,adapter,packages}.log`.
+
+Latest hosted inspection: all eight jobs green at #78 `a1f40d2`, #79 `8cad0bb`
+and #81 `07fb0bf`. CodeRabbit completed #78's original review but is rate-limited
+on #79/#81; its green status is not substantive review. Codex has two P34
+findings (adapter binding and retained read range), and two P35 findings (funding
+release policy and discovery economics). Validate/fix on the owning branches,
+then restack before final P36 qualification/publication; do not inherit old CI.
+
+See [UNIT-ACCEPTANCE](UNIT-ACCEPTANCE.md) for exact offline/live limits and
+[UNIT-QUALIFICATION-PROPOSAL](UNIT-QUALIFICATION-PROPOSAL.md) for unapproved
+future native/changed-image runs. BULK funding/returns remain disabled, consumed
+live two-unit role/egress/chain manifest remains unqualified and Pacifica's
+missing-credit investigation stays deferred. Only two approved public GETs
+were made, both origin 502; no native financial, wallet/RPC or AWS action.
+Next: resolve valid boundary findings, finish exact-source regression, publish
+the fourth PR and link the full open stack. Preserve the three unrelated paths.
+
+### Historical P34 verified locally; P35 underway — 2026-10-16
 
 P34 source `8cad0bb` (building on rebased checkpoint `69da0ff`) adds sealed
 component controllers, native signing/read budgets, exact account/environment
@@ -6598,7 +6645,7 @@ client 15/40, TypeScript, strict clippy, format and contract checks; current
 handoff records exact provenance and new-head hosted checks still pending.
 Unexpected: recorded-only receipts need an explicit v2-only lifecycle extension;
 legacy decoders must refuse it. No v1-to-v2 default-unit fallback.
-Next: complete exact-head verification/review and build P34 above this PR.
+Next: verify the current review corrections and complete the open four-PR stack.
 PR: https://github.com/arnabnandikgp/cinder/pull/78.
 Merge: none.
 
@@ -6637,11 +6684,14 @@ Merge: none.
 
 ## P36 — Joined second-venue acceptance
 
-Work: not started; scope and gates in PLAN.
-Verification: not run; current live approval is public metadata GETs only.
-Unexpected: actual native/hardware qualification requires a separate scoped run;
-offline fixtures cannot close that criterion.
-Next: joined offline acceptance and a bounded qualification proposal.
+Work: actual SDK-to-Runtime-to-native-signature joined fixture and mandatory
+execution guards; UNIT-ACCEPTANCE matrix and separate qualification proposal.
+Verification: joined SDK lifecycle, tsc, manifest negatives and strict lint/build
+pass; full exact-source regression is underway. Current handoff owns receipts.
+Unexpected: fixture timestamps/deadlines/readiness must obey real admission;
+native/changed-image qualification remains separately scoped, not fixture proof.
+Next: finish regressions/review corrections, publish and link fourth PR. Keep
+native/hardware criterion open until supported approved runs actually complete.
 PR: none.
 Merge: none.
 

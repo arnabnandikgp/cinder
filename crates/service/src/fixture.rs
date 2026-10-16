@@ -234,6 +234,8 @@ pub fn policy() -> Policy {
 pub mod acceptance;
 /// Joined SBF recovery fixture helpers, never available in the production build.
 pub mod recovery;
+/// Private-pipe two-unit SDK/service/native acceptance, never a shipping endpoint.
+pub mod units;
 
 // Public accepted-head file for the local crash test only. Same-host storage is
 // NOT an authenticated independent witness and cannot qualify G03 freshness.
@@ -580,7 +582,7 @@ impl Handler for FixtureHandler {
                     request: key,
                     attempt: AttemptId::new(r.id.bytes()).map_err(|_| Error)?,
                 };
-                let mut tx = empty(&store, now);
+                let mut tx = empty(&*store, now);
                 tx.controls = vec![Control::Order(orders::Action::Prepare { attempt })];
                 if self.native.is_none() {
                     tx.controls.push(Control::Expose(attempt));
@@ -674,7 +676,7 @@ fn user() -> AccountId {
 fn cash(n: i128) -> QuoteAtoms {
     QuoteAtoms::new(config().quote, n)
 }
-fn empty(store: &Store, now: u64) -> Transaction {
+fn empty(store: &impl cinder_journal::controller::Controller, now: u64) -> Transaction {
     let mut id = [0; 32];
     openssl::rand::rand_bytes(&mut id).unwrap();
     Transaction {
@@ -700,7 +702,7 @@ fn event(n: u8, change: Change) -> Event {
     }
 }
 fn commit(
-    store: &mut Store,
+    store: &mut impl cinder_journal::controller::Controller,
     now: u64,
     events: Vec<Event>,
     controls: Vec<Control>,
@@ -733,6 +735,28 @@ fn commit(
     Ok(())
 }
 fn seed(store: &mut Store, now: u64, recovery: bool, customer_credit: bool) -> Result<(), Error> {
+    seed_for(store, now, recovery, customer_credit, user())
+}
+fn seed_for(
+    store: &mut impl cinder_journal::controller::Controller,
+    now: u64,
+    recovery: bool,
+    customer_credit: bool,
+    customer: AccountId,
+) -> Result<(), Error> {
+    let configuration = store.configuration().clone();
+    if configuration.quote != config().quote {
+        return Err(Error);
+    }
+    let event = |n, change| Event {
+        key: RecordKey::Economic(EventKey {
+            scope: configuration.sources[0].scope,
+            event: EconomicEventId::new(&[n]).unwrap(),
+            leg: 0,
+        }),
+        policy: configuration.policy,
+        change,
+    };
     let initial = |n, owner, location| {
         let mut e = event(
             n,
@@ -743,7 +767,7 @@ fn seed(store: &mut Store, now: u64, recovery: bool, customer_credit: bool) -> R
             },
         );
         if let RecordKey::Economic(k) = &mut e.key {
-            k.scope = config()
+            k.scope = configuration
                 .sources
                 .iter()
                 .find(|s| s.location == location)
@@ -758,7 +782,7 @@ fn seed(store: &mut Store, now: u64, recovery: bool, customer_credit: bool) -> R
             0,
             initial(
                 1,
-                Owner::Customer(user()),
+                Owner::Customer(customer),
                 if recovery {
                     Location::Vault
                 } else {
@@ -781,13 +805,13 @@ fn seed(store: &mut Store, now: u64, recovery: bool, customer_credit: bool) -> R
         }),
     );
     commit(store, now, vec![check], vec![])?;
-    let market = config().markets[0].unit();
+    let market = configuration.markets[0].unit();
     let price = PriceTicks::new(market, 100).unwrap();
     let expiry = now + 86_400_000;
     let cut = collateral::Cut {
         expected_version: store.state().map_err(|_| Error)?.ledger().version(),
         policy: collateral::Policy {
-            revision: config().policy,
+            revision: configuration.policy,
             markets: vec![collateral::MarginRule {
                 market,
                 private_bps: 1000,
@@ -802,7 +826,7 @@ fn seed(store: &mut Store, now: u64, recovery: bool, customer_credit: bool) -> R
         marks: vec![MarkObservation {
             price,
             evidence: EventKey {
-                scope: config().sources[0].scope,
+                scope: configuration.sources[0].scope,
                 event: EconomicEventId::new(&[99]).unwrap(),
                 leg: 0,
             },
@@ -812,7 +836,7 @@ fn seed(store: &mut Store, now: u64, recovery: bool, customer_credit: bool) -> R
         }],
     };
     let policy = risk::Policy {
-        revision: config().policy,
+        revision: configuration.policy,
         markets: vec![risk::MarketRule {
             market,
             maximum_leverage: 100_000,

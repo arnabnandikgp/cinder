@@ -8,6 +8,12 @@ fn run() -> Result<(), cinder_service::Error> {
         sync::Arc,
     };
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.len() == 3 && args[1] == "--unit-pipe" {
+        return cinder_service::fixture::units::run(
+            Path::new(&args[0]),
+            decode_hex(&args[2])?.try_into().map_err(|_| Error)?,
+        );
+    }
     if args.len() == 2 && args[1] == "--recovery-worker" {
         return recovery_worker(Path::new(&args[0]));
     }

@@ -9,6 +9,8 @@ test("manifest requires declarations, not stale comments, strings or longer iden
     ["private-commands", "// export async function runHttp() {}"],
     ["private-commands", "/*\nexport async function runHttp() {}\n*/"],
     ["private-commands", 'const stale = "runHttp";'],
+    ["unit-sdk-joined", "// test('joined SDK unit lifecycle preserves native attribution, shared revoke and restart without resend',()=>{});"],
+    ["unit-sdk-joined", "const name = 'joined SDK unit lifecycle preserves native attribution, shared revoke and restart without resend';"],
     [
       "differential",
       "// property_seeded_joined_ledger_matches_independent_reference_at_every_cut",
@@ -35,6 +37,10 @@ test("manifest requires declarations, not stale comments, strings or longer iden
         : readFileSync(new URL(`../${path}`, import.meta.url));
     assert(validate(manifest, read).includes(`Missing test ${id}`), stale);
   }
+});
+test('private joined acceptance must be discovered in the approved SDK test root',()=>{
+  const m=structuredClone(manifest),entry=m.cases.find(c=>c.id==='unit-sdk-joined');assert(entry);
+  entry.file='tools/web-channel/wrong.test.mjs';assert(validate(m).some(e=>e.includes('Invalid private source')));
 });
 test("tracked fixed-seed manifest traces all source families and portable scenarios", () =>
   assert.deepEqual(validate(manifest), []));

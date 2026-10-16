@@ -6,6 +6,12 @@ This is a **proposed implementation breakdown**, not approval of numerical risk
 limits, a new financial contract, live activity or production activation.
 [BULK assessment](../venues/bulk.md), [baseline](BASELINE.md), [tracker](TRACKER.md).
 
+October 17 implementation update: the user-approved P33–P36 stack implements
+the shared service/SDK, unit native execution, existing funds/recovery composition
+and [joined offline acceptance](UNIT-ACCEPTANCE.md). Earlier breakdowns below are
+historical planning context. The [remaining qualification](UNIT-QUALIFICATION-PROPOSAL.md)
+is not automatic live permission or an enabled BULK funding bridge.
+
 October 16 follow-up: P26/P27 are merged. P28 implements the remaining offline
 [financial observations](../architecture/0033-bulk-financial-observations.md) and
 makes the proposed [unit-state boundary](../architecture/0034-execution-unit-boundary.md)

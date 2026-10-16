@@ -22,6 +22,11 @@ funding rail. Shipping Runtime/PrivateClient stay v1; only durable native prepar
 and qualified adapter policy can authorize native exposure.
 Phoenix/PER, the website/demo and Mintlify docs are separate workstreams, not
 backend templates.
+P36's [joined acceptance](docs/implementation/UNIT-ACCEPTANCE.md) exercises the
+actual SDK/unit Runtime/native adapters with synthetic ports. Its private-pipe
+driver is local-fixture-only, not an encrypted endpoint or shipping release.
+Native two-unit role/egress/chain manifest and changed-image qualification remain
+separate gates; never deploy fixture keys/readiness/balances or claim a BULK rail.
 
 ## Product context
 

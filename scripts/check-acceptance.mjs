@@ -32,7 +32,8 @@ function declaresTest(file, name, text) {
       `^[ \\t]*(?:export\\s+)?(?:async\\s+)?function\\s+${escaped}\\s*\\(`,
       "m",
     ).test(source);
-  // Node test names here are suffixes of a carrier-specific template literal.
+  if (new RegExp(`^\\s*test\\(\\s*['"]${escaped}['"]\\s*,`, 'm').test(source)) return true;
+  // Other Node test names are suffixes of a carrier-specific template literal.
   return new RegExp(
     "^[ \\t]*(?:for\\s*\\([^\\n]*\\)\\s*)?test\\(\\s*`[^`\\n]* " +
       escaped +
@@ -96,10 +97,11 @@ export function validate(
     seen.add(c.id);
     if(c.prefix!==undefined&&!['P21','P22','P23C','P25'].includes(c.prefix))errors.push(`Invalid test prefix ${c.id}`);
     if (
-      !["workspace", "browser", "vault"].includes(c.runner) ||
+      !["workspace", "browser", "vault", "private"].includes(c.runner) ||
       !["synthetic", "local-sbf"].includes(c.evidence)
     )
       errors.push(`Invalid evidence/runner ${c.id}`);
+    if(c.runner==='private' && !/^clients\/private\/tests\/[a-zA-Z0-9_-]+\.test\.ts$/.test(c.file)) errors.push(`Invalid private source ${c.id}`);
     if (!safe(c.file) || typeof c.test !== "string" || !c.test)
       errors.push(`Unsafe/missing test ${c.id}`);
     else
