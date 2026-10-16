@@ -95,8 +95,14 @@ Canonical API-only policy construction is not native qualification.
 
 New policy tampering and discovery-economics cases include positive controls and
 missing-controller refusal. Unit replay revision 6 starts empty, rejects 1–5
-and leaves the legacy financial engine unchanged. Verification pending. No live
-funding/venue/RPC/AWS action or automatic merge; restack P36 onto this correction.
+and leaves the legacy financial engine unchanged. Checked source `a923037`
+passes all three actual selected funding/recovery tests, the loaded discovery
+positive/tampering/missing-controller runtime case, all 28 unit journal cases
+and strict all-feature/all-target workspace Clippy. Clean export
+`/private/tmp/cinder-p35-review.cq4ab6`; logs
+`/private/tmp/cinder-p35-review-{policy,discovery,journal,lint}.log`.
+No live funding/venue/RPC/AWS action or automatic merge. Restack P36 onto this
+correction; new-head hosted checks and complete-stack regressions are separate.
 
 ### Historical: P34 adapter-boundary review correction — 2026-10-17
 
