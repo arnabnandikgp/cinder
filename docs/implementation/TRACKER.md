@@ -35,8 +35,8 @@
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
-| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; eight CI jobs pass; finding fixed/resolved |
-| [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | in progress | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), open; CI/review pending |
+| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | closed | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), merged `793a05c` |
+| [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -45,6 +45,59 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P29/P30 reviewed and merged — 2026-10-16
+
+User explicitly authorized review disposition, then both merges, followed by a
+next-step recommendation. No new implementation phase or live run is started.
+Final #73 head `06f9d0ffbf1ecdadb3fcabc8ea1c2d55a9475ea6` and #74 head
+`223b969c45bb66704f8632ce1258751f9e7ce651` each passed all eight hosted jobs:
+contracts/inventory, strict Rust lint/build, Rust regressions, SDK/relay, browser
+channel, retained-history growth, ARM64 package and SBF/Surfpool transactions.
+There are no unresolved review threads. #73's sole Codex finding was already
+fixed/replied/resolved. Its CodeRabbit fix-head re-review was rate-limited;
+the earlier review through `2b63a5f` had no actionable comments.
+
+#74 CodeRabbit comment #6213433998 reviewed all changes through its final head
+and reported no actionable comments. Codex summary #6213435089 reports no findings
+at `06cd1338545987fc58c36594d4d3b3617211f8ae`; only PLAN/TRACKER changed afterward.
+The generic 44.44% docstring warning includes tests/private helpers and identifies
+no missing public behavior/security contract. The public v2/SDK functions and
+preflight's limitations are documented; no corrective product change was needed.
+Scoped review artifact: `/private/tmp/cinder-p30-review.html`, not a full audit.
+
+After verifying both exact heads and the two-member native stack, authorized
+`gh stack merge 74 --yes --squash` atomically merged the layers into
+`product/tee-v1`: #73 at **2026-10-16 12:27:18 UTC** as
+`793a05cba5f9c3811d215fa27568b0009bfb6dbc`, #74 at **12:27:19 UTC** as
+`1e9cd2dfdddf824c208ca4282c303e1b65cd0bc1`.
+Fetched trunk and reviewed #74 have the identical tree
+`c2088b58ebed8751a2dfa1e0cbf491bfa1bab614`. No admin bypass, code modification,
+live venue/RPC/AWS activity or frontend integration occurred. Trunk classic branch
+protection is still false; all checks were explicitly inspected, not assumed
+enforced. New trunk-push CI is separate: contracts and ARM64 pass; workspace and
+vault workflows were running when recorded. Premerge green is not a claim that
+those new push jobs have already completed.
+
+Local trunk's earlier P28-only receipt `2d543109b8147e59795936e5b61a6c2272ad546a`
+was already included in the merged feature history. All 39 nonempty added lines
+were checked present in merged TRACKER, and its original commit remains reachable
+on the retained P29 branch before aligning the local trunk ref. No reset/clean or
+user-file deletion. Preserve the three unrelated untracked paths. This post-merge
+receipt is prepared locally for the next authorized PR, per PLAN; do not push it
+directly to trunk. Only documentation guards are rerun for this receipt; the
+unchanged reviewed product tree retains its recorded test provenance.
+The first closure guard rejected the decorated P30 PR field; restored its
+canonical standalone URL before the complete guard rerun.
+
+Both phases are closed for their stated offline foundation/contract scope, not
+multi-unit Runtime activation. Next recommended bounded slice: durable unit-scoped
+API operation/grant records under the same accepted journal, supplying the P30
+grant port and replay-safe routing/dedupe. Then join quota, cancel ownership,
+holds/risk and head/epoch checks atomically in the financial controllers before
+Runtime wiring. Separate grants databases, unsigned routing, cross-margin and
+unknown-outcome resends remain forbidden. Native BULK activation and the deferred
+Pacifica credit/live financial qualification remain separate gates.
 
 ### P30 published as the next stacked PR — 2026-10-16
 
@@ -6088,10 +6141,13 @@ request/attempt evidence without posting it to the wrong component. Unknown
 storage/freshness and unwinding fence the whole new handle. Foundation controls
 exclude exposure and full admission; reservation commitments are not signed
 order digests. No runtime deadline, financial policy or dependency was changed.
-Next: Review #73's latest-head CI/findings; keep the phase in progress until an
-authorized merge. Unit-bound API/controller/runtime composition remains separate.
+Final verification: all eight hosted checks pass at review-fix head
+`06f9d0ffbf1ecdadb3fcabc8ea1c2d55a9475ea6`; all 21 focused journal cases pass
+debug/release and the original Codex thread is resolved. Authorized native stack
+merge completed at 2026-10-16 12:27:18 UTC; current handoff carries exact receipts.
+Next: P30 is also merged; recommend the durable unit-scoped API/controller join.
 PR: https://github.com/arnabnandikgp/cinder/pull/73.
-Merge: Not merged.
+Merge: 793a05cba5f9c3811d215fa27568b0009bfb6dbc.
 
 ## P30 — Signed unit-bound API and SDK contract
 
@@ -6105,10 +6161,14 @@ Unexpected: Current-head grant evidence remains an explicit trusted accepted-his
 port; this phase does not masquerade as a durable grant/admission service.
 The clean-source client run caught a test-only optional browser dependency import;
 remove that import rather than expanding the private job's install surface.
-Next: Review #74's exact latest-head CI/findings; keep both layers open until an
-authorized merge. Later durable API/controller/runtime gates remain explicit.
-PR: https://github.com/arnabnandikgp/cinder/pull/74; ready, base `tee/p29-execution-unit-journal`.
-Merge: Not merged.
+Final verification: all eight hosted checks pass at `223b969c45bb66704f8632ce1258751f9e7ce651`;
+CodeRabbit full review has no actionable comments, Codex has no findings on the
+code-identical opening head, and no threads are unresolved. Native stack merge
+completed at 2026-10-16 12:27:19 UTC; fetched trunk is tree-identical to that head.
+Next: Propose durable unit-scoped operation/grant history, then the atomic
+financial-controller join. No next phase or runtime/native activation is started.
+PR: https://github.com/arnabnandikgp/cinder/pull/74.
+Merge: 1e9cd2dfdddf824c208ca4282c303e1b65cd0bc1.
 
 ## P24 — Release safety case
 
