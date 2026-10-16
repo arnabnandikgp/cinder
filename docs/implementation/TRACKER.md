@@ -52,9 +52,44 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P33 review fixes verified — 2026-10-16
+
+Review-fix source `2142c0897c91b3848d4eacb333bc8eed154da516`, tree
+`77ec5fca94e37e3d6c666fd8e49b1c2c69e2fa96`, addresses CodeRabbit's browser
+export/cache/error findings and Codex's read-authentication and capture-time
+findings. UnitClient is exported publicly; shared cache replay and replaced
+history destruction occur outside its latch, with a deterministic concurrent
+hit/newer-build test. Read-auth failures return private unit errors without
+leaking read slots or closing an otherwise valid session. Admission no longer
+rewrites original operation timestamps. Readiness here always means PR review
+readiness, not native/production qualification or merge approval.
+
+Exact fix-source local checks pass: all API tests (9 lib, 3 interop, 9 onboarding,
+27 legacy private, 43 unit); six focused unit-runtime cases; complete client group
+(relay 15, SDK 40 and TypeScript), strict all-feature/all-target clippy, format,
+contracts/inventory and diff checks. Logs `/private/tmp/cinder-p33-review-*.log`;
+scoped review `/private/tmp/cinder-p33-review.html`, not an independent audit.
+The first client attempt lacked the temporary worktree's dependency symlink;
+reused installed dependencies and reran successfully. No dependency/test gate
+changed to satisfy it.
+
+Before these fixes, final source `de271d7` in clean export
+`/private/tmp/cinder-p33-final.B00ESB` passed all four groups: contracts 81,
+lint/build, Rust 770/770/707 (explicit ignores 10/10/9), relay 15, SDK 39 and
+TypeScript. All eight hosted jobs passed at documentation-only successor
+`927f255eedd968439085320f6b3741fce178a27b`. These are historical, not inherited
+new-head CI approval. The review-fix push needs its own hosted checks/review.
+
+P34 is preserved at local checkpoint `968d468` on `tee/p34-unit-execution`:
+selected-unit controller and BULK signer/observation code compile; its four
+focused native tests pass. The temporary P33 source worktree excludes the three
+unrelated user paths. Next: push this base fix, rebase the unpublished P34
+checkpoint onto it, then finish native runtime/egress and adversarial work before
+P35/P36. No live financial/RPC/AWS activity, automatic merge or frontend work.
+
 ### P33 published; remaining stack continues — 2026-10-16
 
-Ready #78 targets `product/tee-v1` through native `gh stack`; implementation
+PR #78 (ready for review) targets `product/tee-v1` through native `gh stack`; implementation
 head `de271d706aedc68180d6d9aadc7e9d5f0684f0aa`, tree
 `9677b1872c9fdf6268a2040f7171951c752981e5`. No native activation or merge.
 Unit Handler, all eleven private read families, v2-only recorded status,
@@ -6450,8 +6485,10 @@ Merge: 1134f9421d090caae9739868bcf860ba61e43157.
 
 Work: implemented the opt-in shared-unit handler, private projections and explicit
 SDK client, reusing existing witnessed final-release gates; ADR 0039.
-Verification: five focused runtime and nine SDK unit tests pass; first export
-strict lint/build/contracts pass. Exact-head/hosted matrix and review pending.
+Verification: original final source passed all four groups and eight hosted
+jobs. Review-fix source `2142c08` passes all API, six focused unit-runtime,
+client 15/40, TypeScript, strict clippy, format and contract checks; current
+handoff records exact provenance and new-head hosted checks still pending.
 Unexpected: recorded-only receipts need an explicit v2-only lifecycle extension;
 legacy decoders must refuse it. No v1-to-v2 default-unit fallback.
 Next: complete exact-head verification/review and build P34 above this PR.
