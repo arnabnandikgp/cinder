@@ -52,6 +52,19 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P34 adapter-boundary review correction — 2026-10-17
+
+Codex findings #4297788400/#4297788418 are valid. Selected Pacifica native
+history/read completion and observation replay/ingestion now enforce the exact
+descriptor account/environment at the adapter boundary, not only the Runtime
+wrapper. Wrong selected identities refuse before mutation, including duplicate
+ingestion. BULK successful HTTP trade pages must match the retained explicit
+slot range; malformed/mismatched pages stay unresolved and cannot authorize a
+continuation. Original body and query budget remain retained, not retried.
+New wrong-identity and three wrong-range regressions supplement the existing
+positive paths. Verification is pending; no new live request or authority.
+P35/P36 descendants must be restacked onto this correction. No automatic merge.
+
 ### P33 review fixes verified — 2026-10-16
 
 Review-fix source `2142c0897c91b3848d4eacb333bc8eed154da516`, tree

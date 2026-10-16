@@ -376,6 +376,9 @@ impl Gateway {
     }
     fn history<J: Controller>(&self, journal: &mut J, at: u64) -> Result<History, Error> {
         journal.verified_state()?;
+        if let Some(unit) = journal.descriptor() {
+            self.unit_binding(unit)?;
+        }
         if journal.configuration() != &self.profile.config {
             return Err(Error::Qualification);
         }

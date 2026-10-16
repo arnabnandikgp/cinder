@@ -519,6 +519,42 @@ fn failed_http_pages_cannot_normalize_facts_or_supply_continuation_and_429_is_du
         Err(Error::Limit)
     ));
 }
+
+#[test]
+fn successful_http_wrong_scan_range_is_retained_but_cannot_advance_cursor() {
+    for range in [(99, 101), (100, 100), (101, 101)] {
+        let t = support::Temp::new();
+        let (mut j, _) = fixture(&t);
+        let g = gateway(1);
+        let (_, completion) =
+            cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(80)).unwrap();
+        let mut body: serde_json::Value = serde_json::from_slice(page().as_bytes()).unwrap();
+        body["page"]["startSlot"] = range.0.into();
+        body["page"]["endSlot"] = range.1.into();
+        cinder_bulk::reads::complete(
+            &g,
+            &mut j.select(uid(40)).unwrap(),
+            completion,
+            Reply::Response {
+                status: 200,
+                body: PrivateBytes::new(serde_json::to_vec(&body).unwrap()).unwrap(),
+                received_at: 10,
+                retry_after_ms: None,
+            },
+            10,
+        )
+        .unwrap();
+        let selected = j.select(uid(40)).unwrap();
+        let retained = selected
+            .transaction(CommitId::new([81; 32]).unwrap())
+            .unwrap();
+        assert!(retained.inputs.iter().all(|i| i.event.is_none()));
+        let mut next = poll(82);
+        next.range = None;
+        next.continuation = Some(CommitId::new([81; 32]).unwrap());
+        assert!(cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), next).is_err());
+    }
+}
 #[test]
 fn read_expiry_wrong_family_and_uncertain_reservation_never_release_a_second_request() {
     let t = support::Temp::new();

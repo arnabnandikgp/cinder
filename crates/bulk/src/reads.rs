@@ -157,7 +157,7 @@ pub fn complete(
     reply: Reply,
     at: u64,
 ) -> Result<Committed, Error> {
-    gateway.observation_binding(j)?;
+    let (profile, _) = gateway.observation_binding(j)?;
     j.verified_state().map_err(|_| Error::Unavailable)?;
     let original = j
         .transaction(c.poll.reservation)
@@ -193,8 +193,27 @@ pub fn complete(
             (body, received_at, Some(status), status == 200, cooldown)
         }
     };
+    // HTTP success alone cannot certify the original requested scan. Retain a
+    // mismatched/malformed page as unresolved, without a successful cursor.
+    let normalize = normalize
+        && (c.poll.kind != Kind::Trades
+            || fills::rest(
+                &profile.scope,
+                &profile
+                    .mappings
+                    .iter()
+                    .map(|m| m.wire.clone())
+                    .collect::<Vec<_>>(),
+                body.as_bytes(),
+            )
+            .is_ok_and(|p| c.poll.range.is_none_or(|r| r == (p.start_slot, p.end_slot))));
     let hash: [u8; 32] = Sha256::digest(body.as_bytes()).into();
-    let extra = gateway.read_result(c.poll.reservation, hash, code, cooldown)?;
+    let result_code = if code == Some(200) && !normalize {
+        None
+    } else {
+        code
+    };
+    let extra = gateway.read_result(c.poll.reservation, hash, result_code, cooldown)?;
     observation::ingest_with(
         gateway,
         j,

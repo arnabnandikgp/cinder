@@ -545,6 +545,9 @@ fn archive(
 /// Replay diagnostic views from accepted encrypted-journal evidence only.
 /// New/changed profiles cannot silently reinterpret previously accepted history.
 pub fn replay<J: Controller>(journal: &mut J, profile: &Profile) -> Result<View, Error> {
+    if let Some(unit) = journal.descriptor() {
+        profile.unit_binding(unit)?;
+    }
     if journal.configuration() != &profile.config {
         return Err(Error::Qualification);
     }
@@ -607,6 +610,9 @@ fn ingest_inner<J: Controller>(
     at: u64,
     coverage: Option<Coverage>,
 ) -> Result<Committed, Error> {
+    if let Some(unit) = journal.descriptor() {
+        profile.unit_binding(unit)?;
+    }
     if message.body.len() > MAX_BODY
         || message.account.len() > 256
         || message.cursor.as_ref().is_some_and(|c| c.len() > 256)
