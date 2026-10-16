@@ -44,6 +44,42 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P28 review correction and authorized merge — 2026-10-16
+
+User reviewed the unit proposal, requested a brief recap and authorized relevant
+review fixes before merging #72. This does not authorize starting a new phase or
+any native/cloud invocation. Codex #4292204502 is valid: fullAccount's optional
+`pendingOnFill` inventory was omitted. Corrected source
+`dfe19e485b9303e4c4bc22d576f53d635e5dfcab`, tracked tree
+`6f0a52d356646dabbbb0cab208be3961a6b6b431`, retains bounded original plan rows
+separately from resting orders, preserving missing versus empty and private Debug.
+Two red-first regressions fail against the old decoder. All **49** BULK tests
+pass in debug/release; strict default/all-feature all-target workspace lint/build,
+formatting and all **81** clean-source contract guards pass. No financial posting,
+authority, dependency or shipping journal/API/Solana schema changes.
+
+CodeRabbit's exact-head review of `800bfe6` reports no actionable code findings.
+Its generic docstring-percentage warning is nonblocking; public financial types,
+constructors/decoders and semantic boundaries are documented. No bulk trait/test
+docstrings are generated solely to satisfy that heuristic. This is a focused
+correctness review, not a repository-wide audit or mainnet qualification.
+
+Old-head hosted browser job `38870406823/116873153354` failed with only
+`Browser fixture control`; the actual underlying control is not identified.
+An unchanged local Node/Chrome run of `tools/web-channel/check-http.mjs` passes
+all **26** groups per client. Do not claim this reproduces or fixes the CI cause;
+the corrected-head browser job must pass before merge. The old head's other checks
+are historical, not inherited. A clean-source strict lint retry passes after an
+explicit local disk-full failure; only regenerable debug artifacts were removed,
+not user files/research. Local review logs use
+`/private/tmp/cinder-p28-review-*.log` and are not checkout dependencies.
+
+Next: publish the tested correction, reply/resolve the original
+thread, verify exact-head checks/review, then perform the user-authorized guarded
+merge. Recap of the next proposal: new-history unit-scoped journal state and replay
+first, then versioned API/runtime composition; distinct venue backing/permissions,
+one accepted history, no cross-margin/automatic routing or live activation.
+
 ### P28 offline implementation verified — 2026-10-16
 
 User approved the financial-mapping/unit-contract slice. Branch
@@ -84,8 +120,9 @@ above `product/tee-v1`; initial publication head `0809305` contains the checked
 source and documentation receipts. This publication follow-up changes only
 PLAN/TRACKER. Current-head hosted CI/review is newly pending, not inherited from
 P27 or the local checks. The phase remains in progress with Merge: none.
-Next: review the PR and ADR 0034 before implementing joined unit state. Native
-qualification stays separately gated. No P28 merge is authorized.
+Next at publication: review the PR and ADR 0034 before implementing joined unit
+state. Native qualification stays separately gated. The later user-authorized
+review/merge continuation is recorded above; the publication scope is historical.
 Preserve unrelated untracked qualification example, user-journey doc and stays.
 
 ### P27 merged after review corrections — 2026-10-16
@@ -5799,7 +5836,8 @@ Merge: b818655a63ba10491cae2aa51877b52a340054c2.
 Work: added bounded duplicate-safe raw JSON and exact account/position, funding-payment, forced-event and fee-quote observations in cinder-bulk. Explicit interpretation profiles bind source, unit/precision, grids and account kind without re-keying old economic events. Known/held row order, signed money/positions, native flags/reasons and missing/local/aggregate distinctions remain explicit. ADR 0033 defines financial posting gates; ADR 0034 proposes the two-unit state/permissions/capital/custody/recovery boundary without Runtime/journal/API/Solana changes. Plan, evidence, provenance and contributor entrypoints are updated; no new dependency or activation.
 Verification: source 2267a721f314fa8c35f41f2ab18dc8cd3564d00c / tree 945a924c754be845e5150c8bc687a593a34e0474 passes 46 BULK cases, strict default/all-feature all-target workspace lint/build, 692/692/629 Rust cases (expected ignored 10/10/9), 81 contract guards and 45 SDK/relay tests. Source-only 34-phase/60-document plan/link checks pass. The default profile required a complete rerun after a disk-full-damaged test artifact; commands and distinction are recorded in the current handoff. No native, RPC, wallet, faucet, cloud, SBF or browser run is claimed; P27 and old hardware results stay historical. Ready PR #72 is published; current-head hosted CI/review remains newly pending.
 Unexpected: native cumulative margin/position metrics are not standalone settlements; off-tick entry/funding/forced prices and risk-vault rows cannot become exact Cinder basis or fills. Partial aggregate reports and absent children/locks stay unknown. Documented isoPubkey null is valid for a base position/payment; present numeric null is not zero. Native funding sign is not the kernel's per-long-lot convention; gross private allocation remains separately qualified. The initial default-profile build hit local disk exhaustion, not a financial test regression; the damaged generated binary was rebuilt without a product change.
-Next: review #72 and the proposed unit contract before runtime composition. No live run or P28 merge authority.
+Review correction: Codex #4292204502's missing pendingOnFill inventory is fixed at dfe19e485b9303e4c4bc22d576f53d635e5dfcab / tree 6f0a52d356646dabbbb0cab208be3961a6b6b431. Two old-source red regressions and three final positive/negative groups qualify bounded raw retention, absent/empty, original nested precision and private diagnostics. All 49 BULK tests pass in debug/release, strict workspace lint/build and 81 clean-source contracts pass. CodeRabbit has no actionable findings; its generic docstring warning is nonblocking. The old-head browser failure is not reproduced by the unchanged local 26-group Node/Chrome pass; new-head CI is still pending. A complete strict lint retry passes after the separately recorded disk-full failure. Current handoff records commands/evidence limits. User authorized review fixes and merge, not another implementation phase or live run.
+Next: publish/reply/resolve, verify exact-head CI/review and merge #72; then propose the first bounded unit-state implementation slice.
 PR: https://github.com/arnabnandikgp/cinder/pull/72.
 Merge: none.
 
