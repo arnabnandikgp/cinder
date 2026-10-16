@@ -185,6 +185,45 @@ fn unit_cursor_is_not_reusable_on_another_unit_even_for_identical_market_rows() 
     ));
 }
 
+#[test]
+fn operation_capture_timestamp_remains_original_after_later_admission() {
+    let t = Temp::new();
+    let mut j = seed(&t);
+    let service = api::service::Service::new(authorizer(), Holds(100));
+    let staged = named(90, order(), 9);
+    authorizer()
+        .capture(&mut j, &Channel::default(), &staged.encode().unwrap(), 10)
+        .unwrap();
+    let (reader, _) = read_view(&mut j, &service);
+    service
+        .mutate(&mut j, &Channel::default(), &staged.encode().unwrap(), 20)
+        .unwrap();
+    for kind in [2, 3] {
+        let view = reader
+            .verify(reader.capture().unwrap(), &ReadWitness(j.head()))
+            .unwrap();
+        let req = request(
+            40,
+            wire::Command::Read(cinder_api::reads::Query {
+                kind,
+                cursor: [0; 40],
+                limit: 64,
+            }),
+            9,
+        );
+        let Response::Read(page) = service
+            .read(&view, &Channel::default(), &req.encode().unwrap(), 20)
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(page.rows.len(), 1);
+        assert_eq!(&page.rows[0].as_bytes()[..8], &10_u64.to_be_bytes());
+        view.release(std::time::Instant::now() + std::time::Duration::from_secs(1))
+            .unwrap();
+    }
+}
+
 fn financial_config() -> units::Configuration {
     let mut descriptors = config().units().to_vec();
     for d in &mut descriptors {

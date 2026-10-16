@@ -22,6 +22,10 @@ function envelope(command:Command=commands[2],unit=40):UnitEnvelope {
 }
 const magic = Buffer.from('CINDER-API\0\x00\x01'), economicEnd = magic.length + 132, commandStart = economicEnd + 80;
 const hex = (b:Uint8Array) => Buffer.from(b).toString('hex');
+test('public browser entrypoint exports the explicit unit client',()=>{
+  const entry=readFileSync(new URL('../src/browser.ts',import.meta.url),'utf8');
+  assert.match(entry,/export\s*\{[^}]*\bUnitClient\b[^}]*\}\s*from\s*['"]\.\/index\.ts['"]/);
+});
 const wrap = (body:Uint8Array,unit=40) => new Uint8Array(Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x02'),Buffer.from(id(unit)),body]));
 const viewReply = () => new Uint8Array(Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x01\x00'),Buffer.from([0,0,0,0,0,0,0,1]),Buffer.alloc(64)]));
 

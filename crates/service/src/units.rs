@@ -140,14 +140,18 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
                 Ok(t) => t,
                 Err(e) => return self.failed(e, periodic, r.unit),
             };
-            self.api
-                .authenticate_read(
-                    ticket.unit_configuration().map_err(|_| Error)?,
-                    channel,
-                    &request,
-                    current,
-                )
-                .map_err(|_| Error)?;
+            if let Err(error) = self.api.authenticate_read(
+                ticket.unit_configuration().map_err(|_| Error)?,
+                channel,
+                &request,
+                current,
+            ) {
+                drop(ticket);
+                return api::encode_error(r.unit, error)
+                    .map(PreparedReply::immediate)
+                    .map(Some)
+                    .map_err(|_| Error);
+            }
             let view = match self.reader.verify(ticket, &*self.witness) {
                 Ok(v) => v,
                 Err(e) => return self.failed(e, periodic, r.unit),
@@ -637,5 +641,24 @@ mod tests {
         );
         drop(held);
         assert!(app.reader.capture().is_ok());
+    }
+    #[test]
+    fn bad_read_auth_returns_typed_private_error_without_losing_a_slot_or_session() {
+        let (app, _, _) = fixture();
+        let foreign = Session::established(domain(), [9; 32], 5000);
+        for _ in 0..8 {
+            let reply = app
+                .handle(&foreign, request(40, 20, 9, Command::View), 10)
+                .unwrap();
+            assert_eq!(
+                reply,
+                api::encode_error(uid(40), cinder_api::Error::Unauthorized).unwrap()
+            );
+        }
+        assert!(!app.reader.fenced());
+        assert!(
+            app.handle(&session(), request(50, 20, 9, Command::View), 10)
+                .is_ok()
+        );
     }
 }

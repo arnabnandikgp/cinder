@@ -37,6 +37,9 @@ head rebuilds and verifies all original signatures and financial joins; a same-
 head request reuses the immutable interpretation but authenticates anew. Cold
 and repeated authenticated MAX_ITEMS measurements are retained in TRACKER.
 Incremental validation is deliberately not introduced without a measured need.
+Shared cache misses interpret outside the cache mutex; installation is brief,
+older concurrent builds cannot replace newer heads, and replaced history drops
+outside the latch. No signature replay or remote I/O runs under that latch.
 The MAX_ITEMS fixture also measures 64 freshly signed/authenticated requests,
 not just cache pointer lookup. Cache timings exclude native/network/hardware
 latency. Plain SQLite is a local storage fixture, not a fresh-head witness.

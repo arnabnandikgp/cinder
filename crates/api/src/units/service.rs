@@ -70,11 +70,25 @@ impl<A: crate::Admission> Service<A> {
         journal: &mut units::Journal<B, P>,
     ) -> Result<(), Error> {
         journal.verified_state().map_err(|_| Error::Unavailable)?;
-        self.cache
-            .lock()
-            .map_err(|_| Error::Unavailable)?
-            .accepted(journal, &self.auth)?;
+        self.history(
+            journal.state().map_err(|_| Error::Unavailable)?,
+            journal.head(),
+            journal.transactions().map_err(|_| Error::Unavailable)?,
+        )?;
         Ok(())
+    }
+    fn history<'a>(
+        &self,
+        state: &units::State,
+        head: Head,
+        transactions: impl Iterator<Item = (&'a units::Transaction, &'a units::Receipt)>,
+    ) -> Result<Arc<history::History>, Error> {
+        history::shared(
+            &self.cache,
+            head,
+            self.commitment(state.configuration())?,
+            || history::History::interpret(state, head, &self.auth, transactions),
+        )
     }
     /// Reject malformed signatures/sessions/read methods before witness I/O.
     /// Current authority and final release are checked separately.
@@ -108,11 +122,11 @@ impl<A: crate::Admission> Service<A> {
         if !crate::publication::is_read(&request.body.command) {
             return Err(Error::Invalid);
         }
-        let history = self
-            .cache
-            .lock()
-            .map_err(|_| Error::Unavailable)?
-            .witnessed(view, &self.auth)?;
+        let history = self.history(
+            state,
+            view.head(),
+            view.unit_transactions().map_err(|_| Error::Unavailable)?,
+        )?;
         let checked = self
             .auth
             .check_at(state, view.head(), request, &*history, now, true)?;
@@ -141,7 +155,7 @@ impl<A: crate::Admission> Service<A> {
                     .find(|d| d.request == history::key(&r.request));
                 crate::Record {
                     request: r.request.body.clone(),
-                    at: decision.map_or(r.at, |d| d.at),
+                    at: r.at,
                     unit: Some(req.unit),
                     recorded_only: r.effect == units::api::Effect::Recorded && decision.is_none(),
                     accepted: if r.effect == units::api::Effect::Recorded {
@@ -186,11 +200,11 @@ impl<A: crate::Admission> Service<A> {
             .authenticate(journal.configuration(), channel, bytes, now)?;
         // Remote writer freshness cannot serialize the independent read cache.
         journal.verified_state().map_err(|_| Error::Unavailable)?;
-        let history = self
-            .cache
-            .lock()
-            .map_err(|_| Error::Unavailable)?
-            .accepted(journal, &self.auth)?;
+        let history = self.history(
+            journal.state().map_err(|_| Error::Unavailable)?,
+            journal.head(),
+            journal.transactions().map_err(|_| Error::Unavailable)?,
+        )?;
         let command = request.body.command;
         let (original, accepted, at) = if matches!(command, Command::Grant(_) | Command::Revoke) {
             let c = self

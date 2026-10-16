@@ -2,7 +2,10 @@
 //! not a handler returning financial Accepted receipts or a native capability.
 use super::*;
 use cinder_journal::{model::CommitId, units::api as retained};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 /// Original private mutation and its capture result. Recorded financial requests
 /// have not passed admission; never map them to `Outcome::Accepted`.
@@ -53,7 +56,7 @@ impl History {
             journal.transactions().map_err(|_| Error::Unavailable)?,
         )
     }
-    fn interpret<'a>(
+    pub(super) fn interpret<'a>(
         state: &units::State,
         head: Head,
         auth: &Authorizer,
@@ -394,6 +397,45 @@ impl Cache {
         Ok(next)
     }
 }
+// Shared service cache: no witness, signature replay or last-Arc destruction
+// under the latch. Concurrent cold builds are bounded by runtime read slots;
+// an older build cannot replace a newer accepted-head interpretation.
+pub(super) fn shared(
+    cache: &Mutex<Cache>,
+    head: Head,
+    contract: [u8; 32],
+    build: impl FnOnce() -> Result<History, Error>,
+) -> Result<Arc<History>, Error> {
+    let hit = {
+        let cache = cache.lock().map_err(|_| Error::Unavailable)?;
+        cache
+            .current
+            .as_ref()
+            .filter(|h| h.head == head && h.contract == contract)
+            .cloned()
+    };
+    if let Some(hit) = hit {
+        return Ok(hit);
+    }
+    let next = Arc::new(build()?);
+    if next.head != head || next.contract != contract {
+        return Err(Error::Unavailable);
+    }
+    let old = {
+        let mut cache = cache.lock().map_err(|_| Error::Unavailable)?;
+        if cache
+            .current
+            .as_ref()
+            .is_some_and(|old| old.contract == contract && old.head.sequence >= head.sequence)
+        {
+            None
+        } else {
+            cache.current.replace(next.clone())
+        }
+    };
+    drop(old);
+    Ok(next)
+}
 impl Grants for History {
     fn lookup(
         &self,
@@ -553,5 +595,64 @@ pub(super) fn scope(req: &Request) -> Scope {
         unit: req.unit,
         account: req.body.account,
         epoch: req.body.epoch,
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use std::{sync::mpsc, time::Duration};
+    fn head(n: u8) -> Head {
+        Head {
+            sequence: u64::from(n),
+            hash: [n; 32],
+        }
+    }
+    fn empty(n: u8) -> History {
+        // Synthetic cache metadata only, never an authentication fixture.
+        History {
+            head: head(n),
+            contract: [9; 32],
+            rows: vec![],
+            index: BTreeMap::new(),
+            grants: vec![],
+        }
+    }
+    #[test]
+    fn cold_replay_does_not_lock_out_cache_hits_or_replace_a_newer_build() {
+        let cache = Mutex::new(Cache::default());
+        let first = shared(&cache, head(1), [9; 32], || Ok(empty(1))).unwrap();
+        let (entered, wait) = mpsc::channel();
+        let (resume, blocked) = mpsc::channel();
+        std::thread::scope(|scope| {
+            let cache = &cache;
+            let cold = scope.spawn(move || {
+                shared(cache, head(2), [9; 32], || {
+                    entered.send(()).unwrap();
+                    blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+                    Ok(empty(2))
+                })
+            });
+            wait.recv_timeout(Duration::from_secs(5)).unwrap();
+            let hit = shared(cache, head(1), [9; 32], || panic!("must not rebuild a hit")).unwrap();
+            assert!(Arc::ptr_eq(&first, &hit));
+            let latest = shared(cache, head(3), [9; 32], || Ok(empty(3))).unwrap();
+            resume.send(()).unwrap();
+            assert_eq!(cold.join().unwrap().unwrap().head, head(2));
+            assert!(Arc::ptr_eq(
+                &latest,
+                &shared(cache, head(3), [9; 32], || panic!(
+                    "older build replaced newest head"
+                ))
+                .unwrap()
+            ));
+        });
+    }
+    #[test]
+    fn cache_builder_cannot_install_another_head_or_contract() {
+        let cache = Mutex::new(Cache::default());
+        assert!(shared(&cache, head(1), [9; 32], || Ok(empty(2))).is_err());
+        assert!(shared(&cache, head(1), [8; 32], || Ok(empty(1))).is_err());
+        assert!(cache.lock().unwrap().current.is_none());
     }
 }
