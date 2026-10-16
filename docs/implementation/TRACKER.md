@@ -35,7 +35,7 @@
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
-| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | — |
+| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -44,6 +44,28 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P29 published for review — 2026-10-16
+
+Ready PR [#73](https://github.com/arnabnandikgp/cinder/pull/73) targets
+`product/tee-v1` from `tee/p29-execution-unit-journal`, published through
+`gh stack init --base product/tee-v1` / `gh stack submit --auto --open`.
+Verified code is `8d6065dfdc5838a5478376ba2fdfce302f68edce`, source tree
+`7340ced180543dabf447948402d721645fcb599d`. Opening head
+`3e050fc3212849b03be04e3509c9a777c8560dd9` adds only the qualification receipt;
+this publication receipt is documentation-only too. No code changed afterward.
+
+All four local check groups passed as recorded below. At opening head, hosted
+contracts/inventory passed; the other seven hosted jobs and CodeRabbit were
+running/pending, with no substantive review yet. This docs-only receipt push
+requires the new head's own checks: earlier green results are historical, not
+current-head approval. P29 stays `in progress` pending review/CI and an authorized
+merge. The phase is locally implemented for its stated foundation scope, not
+multi-unit Runtime/API/native activation. No next implementation phase or merge
+is started automatically. Next: inspect #73's exact latest head/checks/reviews,
+address relevant findings, then seek merge/next-slice direction. Preserve the
+three unrelated untracked paths; no local tools/containers/live resources were
+installed, launched or left running.
 
 ### P29 offline qualification complete — 2026-10-16
 
@@ -5951,9 +5973,9 @@ request/attempt evidence without posting it to the wrong component. Unknown
 storage/freshness and unwinding fence the whole new handle. Foundation controls
 exclude exposure and full admission; reservation commitments are not signed
 order digests. No runtime deadline, financial policy or dependency was changed.
-Next: Publish one ready PR, record its head/check/review state and await review;
-unit-bound API/controller/runtime composition remains separately scoped.
-PR: Not opened.
+Next: Review #73's latest-head CI/findings; keep the phase in progress until an
+authorized merge. Unit-bound API/controller/runtime composition remains separate.
+PR: https://github.com/arnabnandikgp/cinder/pull/73.
 Merge: Not merged.
 
 ## P24 — Release safety case

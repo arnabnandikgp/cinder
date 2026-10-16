@@ -1107,7 +1107,7 @@ Evidence: F01–F14/X01–X05/S01–S04, P05/P06 replay fixtures,
 - [x] Registry binds domain/native/custody/source/precision/key-policy ownership, starts empty and rejects duplicate or shared physical backing aliases without changing legacy codecs.
 - [x] Enrollment and revocation are atomic across units; reservation identities cannot change unit or commitment, and rejected controls do not discard actual observations.
 - [x] Replay, duplicate/conflict, wrong-unit source, independent inventory, CAS/unknown outcomes, freshness fencing, encrypted storage and legacy/new-format isolation pass deterministic offline tests.
-- [ ] Appropriate exact-source workspace checks pass; implementation limits, PR/review/CI state and the next versioned API/controller/runtime gate are recorded without activation claims.
+- [x] Appropriate exact-source workspace checks pass; implementation limits, PR/review/CI state and the next versioned API/controller/runtime gate are recorded without activation claims.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
