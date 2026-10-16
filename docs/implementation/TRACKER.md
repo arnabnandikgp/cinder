@@ -40,7 +40,7 @@
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
 | [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
 | [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; final verification/review pending |
-| [P34 — Unit execution and reconciliation](PLAN.md#p34) | open | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | — |
+| [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | — |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | open | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | — |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | open | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
@@ -6497,11 +6497,22 @@ Merge: none.
 
 ## P34 — Unit execution and reconciliation
 
-Work: not started; scope and gates in PLAN.
-Verification: not run.
-Unexpected: refreshed public metadata GETs returned Cloudflare origin 502 for
+Work: in progress on `tee/p34-unit-execution`: sealed selected-unit controller,
+Pacifica execution/read/observation reuse, unit revision 4 preparation/exposure,
+BULK agent-only signer/nonce/key epoch/budget/ACKs and native fill/fee ingestion.
+Native funding/forced-event causality remains unresolved, not synthetic posting.
+Verification: controller and BULK libraries compile offline; four focused native
+tests are being verified. No PR or qualification claim yet. P33 final-source
+groups pass locally: contracts 81, lint/build, Rust 770/770/707 (existing ignores
+10/10/9), relay 15, SDK 39 and TypeScript; exact exported P33 source is recorded
+in the forthcoming base-review receipt. P33's eight hosted jobs are green at
+`927f255`; reviews have valid SDK/cache/error/timestamp findings to fix on P33.
+Unexpected: native prepare initializes a zero-quantity position route; ACK tests
+must check zero quantity/cash, not assume an empty position vector. No gate was
+relaxed. Refreshed public metadata GETs returned Cloudflare origin 502 for
 exchangeInfo and feeState; no new native capability was established.
-Next: unit-owned native preparation/exposure and observation reconciliation.
+Next: fix P33's relevant review on its own branch without losing this checkpoint,
+then continue P34 runtime/native egress wiring and adversarial tests before P35.
 PR: none.
 Merge: none.
 

@@ -348,6 +348,20 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             p.close();
         }
     }
+    pub(super) fn book_history(
+        &self,
+        unit: UnitId,
+        account: AccountId,
+    ) -> Result<Vec<crate::projection::BookChange>, Error> {
+        self.state()?;
+        Ok(self
+            .history
+            .iter()
+            .flat_map(|a| &a.book_changes)
+            .filter(|(u, a, _)| *u == unit && *a == account)
+            .map(|(_, _, c)| c.clone())
+            .collect())
+    }
 }
 impl<B: Backend, P: Protection> Drop for Journal<B, P> {
     fn drop(&mut self) {

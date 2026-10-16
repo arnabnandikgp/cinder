@@ -5,14 +5,17 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 build = false
-description = "Offline exact BULK wire and fill-observation codecs; no native dispatch"
+description = "Exact BULK codecs and explicitly qualified shared-journal execution"
 
 [dependencies]
 cinder-kernel.workspace = true
+cinder-journal = { path = "../journal", version = "=0.1.0" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["raw_value"] }
 sha2 = "=0.10.9"
 bs58 = "=0.5.1"
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "fast", "zeroize"] }
+zeroize = "=1.8.2"
 
 [lints]
 workspace = true

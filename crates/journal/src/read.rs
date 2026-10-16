@@ -57,7 +57,7 @@ pub trait Source: sealed::Sealed {
     /// Replay-derived changes for an already-authorized private account.
     fn customer_book_history(&self, account: AccountId) -> Result<Vec<BookChange>, Error>;
 }
-mod sealed {
+pub(crate) mod sealed {
     pub trait Sealed {}
 }
 impl<B: Backend, P: Protection> sealed::Sealed for Journal<B, P> {}

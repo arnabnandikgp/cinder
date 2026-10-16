@@ -5,6 +5,8 @@
 
 pub mod api;
 mod codec;
+mod controller;
+pub use controller::Selected;
 pub(crate) mod store;
 pub use store::{Committed, Journal};
 
@@ -469,6 +471,21 @@ impl State {
         let mut routes = self.routes.clone();
         for control in &tx.controls {
             match control {
+                model::Control::Order(orders::Action::Prepare { attempt }) => {
+                    if !self.admitted(unit, attempt.request) {
+                        return Ok(None);
+                    }
+                }
+                model::Control::Order(orders::Action::Release { request }) => {
+                    if !self.admitted(unit, *request) {
+                        return Ok(None);
+                    }
+                }
+                model::Control::Expose(attempt) => {
+                    if !self.admitted(unit, attempt.request) {
+                        return Ok(None);
+                    }
+                }
                 model::Control::Reserve { request, .. } => {
                     if request.domain != self.config.domain
                         || !self.customers.iter().any(|c| c.account == request.account)
@@ -523,6 +540,15 @@ impl State {
             }
         }
         Ok(Some(routes))
+    }
+    fn admitted(&self, unit: UnitId, request: RequestKey) -> bool {
+        self.api
+            .iter()
+            .any(|a| a.record.unit == unit && a.record.request == request)
+            && self
+                .decisions
+                .iter()
+                .any(|d| d.request == request && d.receipt.controls.is_none())
     }
     fn advance_authority(
         &mut self,

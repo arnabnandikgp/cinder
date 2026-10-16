@@ -1,7 +1,9 @@
 //! Exact BULK codecs, not a qualified venue adapter or financial controller.
 //! No I/O, secret key, signing, ledger posting, funding or readiness authority.
+pub mod execution;
 pub mod fills;
 pub mod financial;
+pub mod observation;
 pub mod precision;
 mod raw;
 pub mod wire;
@@ -12,6 +14,10 @@ use sha2::{Digest, Sha256};
 /// Secret-safe codec failure, never containing account/response/order data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
+    /// Current authority, evidence, immutable profile or capability is not qualified.
+    Unqualified,
+    /// Durability/freshness failed; outcome may be unknown, never retry implicitly.
+    Unavailable,
     /// Malformed, ambiguous or off-grid data.
     Invalid,
     /// A bounded representation or work limit was exceeded.
