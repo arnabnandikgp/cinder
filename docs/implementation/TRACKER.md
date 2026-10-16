@@ -35,6 +35,7 @@
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
+| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -43,6 +44,18 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P29 approved and started — 2026-10-16
+
+User approved the new-history unit identity/registry and journal foundation.
+Implementation is on `tee/p29-execution-unit-journal`, carrying the local P28
+merge receipt. ADR 0035 bounds this slice: one shared head, existing per-unit
+financial states, atomic ownership/epochs and non-exposing foundation holds.
+The legacy journal and shipping Runtime/API remain unchanged; full controllers,
+versioned API/grants, recovery and joined Runtime acceptance follow separately.
+No live venue/RPC/AWS/wallet/frontend work or Pacifica credit investigation.
+Verification is pending; preserve unrelated untracked work. Next: implement and
+test registry, transitions, canonical replay and storage/freshness failure bounds.
 
 ### P28 merged after review correction — 2026-10-16
 
@@ -5882,6 +5895,18 @@ Final verification and merge: all eight hosted checks pass at 71ed7c7fda4e8be947
 Next: propose the first bounded new-history unit-state/journal implementation slice; no next phase, live activity or frontend is authorized by this merge.
 PR: https://github.com/arnabnandikgp/cinder/pull/72.
 Merge: b4dce81d757c30d076e945082dd33e4c21a9269a.
+
+## P29 — New-history execution-unit journal foundation
+
+Work: Approved offline scope recorded in ADR 0035. New-history registry, one
+deployment journal/head, shared ownership/epochs and unit-owned foundation holds
+are being implemented. Legacy Runtime and journal remain unchanged.
+Verification: Pending focused replay/isolation/storage tests and exact-source workspace checks.
+Unexpected: Foundation controls deliberately exclude exposure and full financial
+admission; reservation commitments are not future signed order digests.
+Next: Finish local verification, record exact checked source and open one reviewable PR.
+PR: Not opened.
+Merge: Not merged.
 
 ## P24 — Release safety case
 

@@ -56,6 +56,7 @@ implementation is a separate workstream, not the template for this architecture.
 | Live qualification | Code stack merged; full actual funding/trading/payout/recovery acceptance deferred | P23 |
 | Venue-directed escrow revision | Merged local program/client, journal and Runtime integration; deployment/live qualification remain separate | P23A–P23C |
 | Backend onboarding | Opt-in new-history wallet ownership, discovery and unsigned escrow preparation; no frontend/deployment | P25 |
+| Execution-unit journal foundation | Opt-in new-history registry, component states and shared owners/epochs under one head; no shipping API/Runtime, dispatch or recovery activation | P29 / ADR 0035 |
 | Release review | Production policy, governance, independent assurance and customer-funds gates remain open | P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one

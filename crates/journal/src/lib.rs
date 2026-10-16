@@ -18,6 +18,7 @@ pub mod replicated;
 pub mod restoration;
 pub mod risk;
 pub mod sqlite;
+pub mod units;
 pub mod wire;
 use cinder_kernel::{identity::Domain, ledger::Config};
 use model::*;

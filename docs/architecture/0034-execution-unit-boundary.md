@@ -1,7 +1,9 @@
 # ADR 0034 — Proposed two-execution-unit state boundary
 
-Date: 2026-10-16. **Proposal for review, not implemented Runtime/journal/API
-behavior.** P28 implements observations, not this schema migration.
+Date: 2026-10-16. **Approved direction; not implemented Runtime/API behavior.**
+P28 implements observations. P29's [new-history journal foundation](0035-unit-journal-foundation.md)
+implements the bounded first state/replay slice, not native activation or the
+complete composition described below.
 [Direction](../implementation/SECOND-VENUE.md), [baseline](../implementation/BASELINE.md),
 [custody](0030-venue-directed-escrow.md), [observations](0033-bulk-financial-observations.md).
 
