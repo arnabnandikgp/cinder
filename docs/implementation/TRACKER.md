@@ -36,7 +36,7 @@
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; eight CI jobs pass; finding fixed/resolved |
-| [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | in progress | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | — |
+| [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | in progress | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), open; CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -45,6 +45,32 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P30 published as the next stacked PR — 2026-10-16
+
+Ready [#74](https://github.com/arnabnandikgp/cinder/pull/74) targets
+`tee/p29-execution-unit-journal` from `tee/p30-unit-api-contract`. Native
+`gh stack submit --auto --open` published the two-layer stack without merging.
+Opening head is `06cd1338545987fc58c36594d4d3b3617211f8ae`; it differs from
+implementation `f6554faaba8328e94739617dd9754b8c2fff450e` only in PLAN/TRACKER.
+This publication receipt also changes only those two documents, not checked
+production code or tests. Its new head requires its own hosted checks; no earlier
+green result is inherited. At opening head all eight hosted jobs were running,
+CodeRabbit pending, with no substantive review yet.
+
+All local check groups and the exact Rust/client tree distinction are recorded
+below. Phase criteria are technically complete for the bounded contract slice;
+P30 remains `in progress` pending review/CI and an authorized merge. Open parent
+#73 remains at `06f9d0ffbf1ecdadb3fcabc8ea1c2d55a9475ea6`, eight hosted jobs
+green, its sole Codex finding fixed/replied/resolved; CodeRabbit's fix-head
+re-review remains rate-limited. No stack layer has been merged. The three
+unrelated untracked user paths remain untouched. No containers, live native/
+RPC/AWS runs or frontend work were undertaken.
+
+Next: inspect #74's actual latest-head checks/reviews and address relevant
+findings. The next implementation boundary remains the durable API/controller
+join, not runtime activation based on scope preflight. Do not automatically
+merge or treat the trusted grant port as an implemented accepted-history adapter.
 
 ### P30 offline qualification complete — 2026-10-16
 
@@ -6079,8 +6105,9 @@ Unexpected: Current-head grant evidence remains an explicit trusted accepted-his
 port; this phase does not masquerade as a durable grant/admission service.
 The clean-source client run caught a test-only optional browser dependency import;
 remove that import rather than expanding the private job's install surface.
-Next: Publish the ready dependent PR above #73; review exact new-head CI/findings.
-PR: Not opened.
+Next: Review #74's exact latest-head CI/findings; keep both layers open until an
+authorized merge. Later durable API/controller/runtime gates remain explicit.
+PR: https://github.com/arnabnandikgp/cinder/pull/74; ready, base `tee/p29-execution-unit-journal`.
 Merge: Not merged.
 
 ## P24 — Release safety case
