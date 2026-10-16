@@ -1127,6 +1127,23 @@ Evidence: B08/S01/S02/X01–X04, P18/P21A vectors, P29 state/replay tests and
 - [x] SDK helpers snapshot signing bytes/metadata before async wallet work, preserve caller buffers and stable retry semantics, and perform no native/network action or implicit retry.
 - [x] Appropriate exact-source workspace/SDK/legacy regressions pass; predecessor #73 and this phase's scope, evidence, PR/CI/review state and remaining controller/runtime gates are recorded.
 
+<a id="p31"></a>
+## P31 — Durable unit-scoped API history
+
+Depends on: P30.
+
+Deliver: original signed mutation records and immutable unit/economic ownership
+under the shared journal; accepted owner grants/global revoke and a real derived
+accepted-history grant adapter. Financial requests remain explicitly recorded-only.
+No financial admission, runtime/listener activation, frontend or live activity.
+Evidence: X01–X04/S01–S04, P29 replay/P30 scope tests and
+[ADR 0037](../architecture/0037-unit-api-history.md).
+
+- [ ] Versioned shared state/encoding commits original API records, contract and immutable request ownership; old unit revision is refused without changing legacy financial replay.
+- [ ] Current authentication precedes dedupe/lookup; accepted grants and atomic global revocation survive replay without cross-unit authority or repeat effects.
+- [ ] Financial capture is recorded-only, cannot consume quota or create financial effects, and retains original owner/unit through retries, cancellation references and foundation-route conflicts.
+- [ ] Exact-source offline adversarial/CAS/unknown/freshness/encryption and workspace regressions pass; tracker records source, evidence limits, PR/CI/review and the remaining financial-controller gate.
+
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
 

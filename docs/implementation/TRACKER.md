@@ -37,6 +37,7 @@
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | closed | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), merged `793a05c` |
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
+| [P31 — Durable unit-scoped API history](PLAN.md#p31) | in progress | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -45,6 +46,17 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P31 approved and started — 2026-10-16
+
+User approved the next plan after P29/P30 merge. Branch
+`tee/p31-unit-api-history` starts above merged `1e9cd2d` and local docs-only
+receipt `9802917`. ADR 0037 bounds the slice: durable unit-scoped operation/grant
+records, global revoke in the same append, immutable derived grant evidence,
+authenticated dedupe and explicit recorded-only financial requests. No new
+financial policy, separate grant database, admission/exposure, listener, frontend,
+venue/RPC/AWS activity or active-state migration. First add the journal contract,
+then the API controller/adapter, testing each before full regression/publication.
 
 ### P29/P30 reviewed and merged — 2026-10-16
 
@@ -6170,7 +6182,24 @@ financial-controller join. No next phase or runtime/native activation is started
 PR: https://github.com/arnabnandikgp/cinder/pull/74.
 Merge: 1e9cd2dfdddf824c208ca4282c303e1b65cd0bc1.
 
+## P31 — Durable unit-scoped API history
+
+Work: `journal::units::api` and revision-2 state/codec commit original signed
+records, contract and request ownership. `api::units::history` rebuilds accepted
+grants, authenticates dedupe/lookup and atomically captures admin effects or
+recorded-only financial intents. No independent database or financial acceptance.
+Verification: Focused API 22/22 and unit-journal 25/25 pass; full exact-source
+workspace/legacy checks remain pending. Ten API and four journal cases are new.
+Unexpected: Owner-grant proposal validation must follow dedupe in durable capture
+so an authenticated owner can recover an expired original grant without reinstalling
+it. Raw P30 preflight retains its proposal checks; existing scope tests still pass.
+Next: Complete strict clean-source checks and offline regressions, update exact
+evidence, then open one PR against `product/tee-v1` with the prior merge receipt.
+PR: Not opened.
+Merge: Not merged.
+
 ## P24 — Release safety case
+
 
 Work: not started.
 Verification: not run; acceptance in PLAN P24.

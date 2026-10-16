@@ -767,3 +767,494 @@ fn replies_bind_the_unit_without_redefining_the_existing_private_body() {
         );
     }
 }
+
+// P31: these requests use real signatures and record AEAD, but no native I/O.
+fn history_request(
+    id: u8,
+    which: u8,
+    command: wire::Command,
+    signer: u8,
+    epoch: u64,
+) -> api::Request {
+    let mut req = request(which, command, signer);
+    req.body.id = RequestId::new([id; 32]).unwrap();
+    req.body.epoch = epoch;
+    sign(&mut req, signer);
+    req
+}
+fn capture(j: &mut Store, req: &api::Request, at: u64) -> Result<api::history::Captured, Error> {
+    authorizer().capture(j, &Channel::default(), &req.encode().unwrap(), at)
+}
+fn reopen(t: &Temp) -> Store {
+    Store::open(
+        SqliteBackend::open(&t.db, Migration::None).unwrap(),
+        cipher(),
+        config(),
+    )
+    .unwrap()
+}
+fn install(j: &mut Store, id: u8, which: u8, agent: u8, epoch: u64) {
+    let mut g = grant();
+    g.key = key(agent).verifying_key().to_bytes();
+    let result = capture(
+        j,
+        &history_request(id, which, wire::Command::Grant(g), 9, epoch),
+        10,
+    )
+    .unwrap();
+    assert_eq!(result.effect, units::api::Effect::Grant);
+}
+
+#[test]
+fn durable_grants_supply_real_head_bound_cuts_in_both_units_after_replay() {
+    let t = Temp::new();
+    let mut j = create(&t);
+    install(&mut j, 30, 40, 10, 1);
+    let before_b = j.head();
+    assert_eq!(
+        capture(&mut j, &history_request(31, 50, order(), 10, 1), 10).unwrap_err(),
+        Error::Unauthorized
+    );
+    assert_eq!(j.head(), before_b);
+    install(&mut j, 31, 50, 10, 1);
+    let a = history_request(32, 40, order(), 10, 1);
+    let b = history_request(33, 50, order(), 10, 1);
+    let before = j.state().unwrap().clone();
+    assert_eq!(
+        capture(&mut j, &a, 11).unwrap().effect,
+        units::api::Effect::Recorded
+    );
+    assert_eq!(
+        capture(&mut j, &b, 11).unwrap().effect,
+        units::api::Effect::Recorded
+    );
+    for which in [40, 50] {
+        assert_eq!(j.state().unwrap().unit(uid(which)), before.unit(uid(which)));
+    }
+    let expected = j.state().unwrap().clone();
+    let head = j.head();
+    drop(j);
+    let mut j = reopen(&t);
+    assert_eq!(j.head(), head);
+    assert_eq!(j.state().unwrap(), &expected);
+    let history = api::history::History::load(&mut j, &authorizer()).unwrap();
+    for req in [a, b] {
+        let checked = authorizer()
+            .check(
+                &mut j,
+                &Channel::default(),
+                &req.encode().unwrap(),
+                &history,
+                12,
+            )
+            .unwrap();
+        let cut = checked.grant().unwrap();
+        assert_eq!(cut.scope.unit, req.unit);
+        assert_eq!(cut.head, head);
+        assert_eq!(cut.accepted_at, 10);
+        assert_eq!(cut.used_orders, 0);
+        assert!(
+            j.state()
+                .unwrap()
+                .unit(req.unit)
+                .unwrap()
+                .orders()
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn capture_keeps_original_identity_and_authenticates_before_retry_conflicts() {
+    let t = Temp::new();
+    let mut j = create(&t);
+    let req = history_request(30, 40, order(), 9, 1);
+    let first = capture(&mut j, &req, 10).unwrap();
+    let head = j.head();
+    let mut retry = req.clone();
+    retry.body.expires_at = 99;
+    sign(&mut retry, 9);
+    let again = capture(&mut j, &retry, 11).unwrap();
+    assert!(again.duplicate);
+    assert_eq!(again.request, first.request);
+    assert_eq!(again.at, 10);
+    assert_eq!(j.head(), head);
+    let mut wrong = retry.clone();
+    wrong.unit = uid(50);
+    sign(&mut wrong, 9);
+    assert_eq!(capture(&mut j, &wrong, 11).unwrap_err(), Error::Conflict);
+    wrong.body.signature = [0; 64];
+    assert_eq!(
+        capture(&mut j, &wrong, 11).unwrap_err(),
+        Error::Unauthorized
+    );
+    let mut changed = req.clone();
+    changed.body.command = wire::Command::Payout {
+        net: 1,
+        maximum_fee: 0,
+        allow_partial: false,
+        good_until: 70,
+    };
+    sign(&mut changed, 9);
+    assert_eq!(capture(&mut j, &changed, 11).unwrap_err(), Error::Conflict);
+    assert_eq!(j.head(), head);
+    assert_eq!(j.state().unwrap().api_records().len(), 1);
+}
+
+#[test]
+fn accepted_revocation_is_atomic_global_and_fresh_retries_do_not_repeat_it() {
+    let t = Temp::new();
+    let mut j = create(&t);
+    install(&mut j, 30, 40, 10, 1);
+    install(&mut j, 31, 50, 10, 1);
+    let revoke = history_request(32, 40, wire::Command::Revoke, 9, 1);
+    assert_eq!(
+        capture(&mut j, &revoke, 11).unwrap().effect,
+        units::api::Effect::Revoke
+    );
+    let head = j.head();
+    drop(j);
+    let mut j = reopen(&t);
+    for which in [40, 50] {
+        assert_eq!(
+            j.state()
+                .unwrap()
+                .unit(uid(which))
+                .unwrap()
+                .authority_epoch(account()),
+            Some(2)
+        );
+        assert_eq!(
+            capture(&mut j, &history_request(33, which, order(), 10, 1), 12).unwrap_err(),
+            Error::Unauthorized
+        );
+    }
+    assert_eq!(
+        capture(&mut j, &revoke, 12).unwrap_err(),
+        Error::Unauthorized
+    );
+    let mut retry = revoke.clone();
+    retry.body.epoch = 2;
+    sign(&mut retry, 9);
+    assert!(capture(&mut j, &retry, 12).unwrap().duplicate);
+    assert_eq!(j.head(), head);
+    // Retrying an old grant with current owner auth does not install it in epoch 2.
+    let old = history_request(30, 40, wire::Command::Grant(grant()), 9, 2);
+    assert!(capture(&mut j, &old, 12).unwrap().duplicate);
+    assert_eq!(
+        capture(&mut j, &history_request(34, 40, order(), 10, 2), 12).unwrap_err(),
+        Error::Unauthorized
+    );
+    capture(
+        &mut j,
+        &history_request(35, 40, wire::Command::Grant(grant()), 9, 2),
+        12,
+    )
+    .unwrap();
+    capture(&mut j, &history_request(36, 40, order(), 10, 2), 13).unwrap();
+}
+
+#[test]
+fn recorded_orders_do_not_spend_agent_quota_and_grants_cannot_be_amended() {
+    let t = Temp::new();
+    let mut j = create(&t);
+    install(&mut j, 30, 40, 10, 1);
+    for id in [31, 32] {
+        assert_eq!(
+            capture(&mut j, &history_request(id, 40, order(), 10, 1), 11)
+                .unwrap()
+                .effect,
+            units::api::Effect::Recorded
+        );
+    }
+    let history = api::history::History::load(&mut j, &authorizer()).unwrap();
+    let checked = authorizer()
+        .check(
+            &mut j,
+            &Channel::default(),
+            &history_request(33, 40, order(), 10, 1).encode().unwrap(),
+            &history,
+            12,
+        )
+        .unwrap();
+    assert_eq!(checked.grant().unwrap().used_orders, 0);
+    let head = j.head();
+    let mut g = grant();
+    g.maximum_orders = 2;
+    assert_eq!(
+        capture(
+            &mut j,
+            &history_request(34, 40, wire::Command::Grant(g), 9, 1),
+            12
+        )
+        .unwrap_err(),
+        Error::Invalid
+    );
+    assert_eq!(j.head(), head);
+    for which in [40, 50] {
+        let s = j.state().unwrap().unit(uid(which)).unwrap();
+        assert!(s.orders().is_empty());
+        assert!(s.holds().is_empty());
+        assert!(s.attempts().is_empty());
+    }
+}
+
+#[test]
+fn owner_recovers_expired_grant_record_without_reinstalling_or_revalidating_its_deadline() {
+    let t = Temp::new();
+    let mut j = create(&t);
+    let original = history_request(30, 40, wire::Command::Grant(grant()), 9, 1);
+    capture(&mut j, &original, 10).unwrap();
+    let head = j.head();
+    let mut retry = original.clone();
+    retry.body.expires_at = 99;
+    sign(&mut retry, 9);
+    assert!(capture(&mut j, &retry, 81).unwrap().duplicate);
+    assert_eq!(j.head(), head);
+    let stale_agent = history_request(31, 40, order(), 10, 1);
+    assert_eq!(
+        capture(&mut j, &stale_agent, 81).unwrap_err(),
+        Error::Unauthorized
+    );
+    let mut new = retry;
+    new.body.id = RequestId::new([32; 32]).unwrap();
+    sign(&mut new, 9);
+    assert_eq!(capture(&mut j, &new, 81).unwrap_err(), Error::Invalid);
+}
+
+#[test]
+fn recorded_cancel_and_lookup_keep_unit_and_original_agent_ownership() {
+    let t = Temp::new();
+    let mut j = create(&t);
+    install(&mut j, 30, 40, 10, 1);
+    install(&mut j, 31, 40, 11, 1);
+    let req = history_request(32, 40, order(), 10, 1);
+    capture(&mut j, &req, 11).unwrap();
+    let mut takeover = req.clone();
+    takeover.body.signer = key(11).verifying_key().to_bytes();
+    sign(&mut takeover, 11);
+    assert_eq!(
+        capture(&mut j, &takeover, 12).unwrap_err(),
+        Error::Unauthorized
+    );
+    takeover.body.signer = key(9).verifying_key().to_bytes();
+    sign(&mut takeover, 9);
+    assert!(capture(&mut j, &takeover, 12).unwrap().duplicate);
+    let query = history_request(90, 40, wire::Command::Operation(req.body.id), 11, 1);
+    assert_eq!(
+        authorizer()
+            .captured_operation(&mut j, &Channel::default(), &query.encode().unwrap(), 12)
+            .unwrap()
+            .request,
+        req
+    );
+    let wrong = history_request(90, 50, wire::Command::Operation(req.body.id), 9, 1);
+    assert_eq!(
+        authorizer()
+            .captured_operation(&mut j, &Channel::default(), &wrong.encode().unwrap(), 12)
+            .unwrap_err(),
+        Error::NotFound
+    );
+    let cancel = wire::Command::Cancel {
+        target: req.body.id,
+        attempt: AttemptId::new([1; 32]).unwrap(),
+        good_until: 70,
+    };
+    assert_eq!(
+        capture(&mut j, &history_request(33, 50, cancel.clone(), 9, 1), 12).unwrap_err(),
+        Error::NotFound
+    );
+    assert_eq!(
+        capture(&mut j, &history_request(33, 40, cancel.clone(), 11, 1), 12).unwrap_err(),
+        Error::Unauthorized
+    );
+    assert_eq!(
+        capture(&mut j, &history_request(33, 40, cancel, 10, 1), 12)
+            .unwrap()
+            .effect,
+        units::api::Effect::Recorded
+    );
+    assert!(
+        j.state()
+            .unwrap()
+            .unit(uid(40))
+            .unwrap()
+            .attempts()
+            .is_empty()
+    );
+}
+
+#[test]
+fn history_contract_change_and_cached_grant_head_cannot_reset_authority() {
+    let t = Temp::new();
+    let mut j = create(&t);
+    install(&mut j, 30, 40, 10, 1);
+    let old = api::history::History::load(&mut j, &authorizer()).unwrap();
+    assert!(
+        api::history::History::load(&mut j, &api::Authorizer::new(101, 1000).unwrap()).is_err()
+    );
+    assert!(
+        api::history::History::load(&mut j, &api::Authorizer::new(100, 1001).unwrap()).is_err()
+    );
+    capture(&mut j, &history_request(31, 40, order(), 9, 1), 11).unwrap();
+    assert_eq!(
+        authorizer()
+            .check(
+                &mut j,
+                &Channel::default(),
+                &history_request(32, 40, order(), 10, 1).encode().unwrap(),
+                &old,
+                12
+            )
+            .unwrap_err(),
+        Error::Unavailable
+    );
+    let fresh = api::history::History::load(&mut j, &authorizer()).unwrap();
+    authorizer()
+        .check(
+            &mut j,
+            &Channel::default(),
+            &history_request(32, 40, order(), 10, 1).encode().unwrap(),
+            &fresh,
+            12,
+        )
+        .unwrap();
+}
+
+#[test]
+fn malformed_trusted_api_record_cannot_become_accepted_grant_evidence() {
+    for change in 0..4 {
+        let t = Temp::new();
+        let mut j = create(&t);
+        install(&mut j, 30, 40, 10, 1);
+        let mut r = j.state().unwrap().api_records()[0].record.clone();
+        let req = history_request(31, 40, order(), 9, 1);
+        r.request.request = req.body.id;
+        r.digest = req.digest();
+        r.wire = req.encode().unwrap();
+        r.effect = units::api::Effect::Recorded;
+        match change {
+            0 => r.digest[0] ^= 1,
+            1 => r.signer = key(11).verifying_key().to_bytes(),
+            2 => {
+                let mut bad = r.wire.as_bytes().to_vec();
+                let n = bad.len();
+                bad[n - 1] ^= 1;
+                r.wire = PrivateBytes::new(bad).unwrap();
+            }
+            _ => r.effect = units::api::Effect::Grant,
+        };
+        j.commit(units::Transaction {
+            id: CommitId::new([90; 32]).unwrap(),
+            expected: j.head(),
+            at: 11,
+            change: units::Change::Api(Box::new(r)),
+        })
+        .unwrap();
+        assert!(api::history::History::load(&mut j, &authorizer()).is_err());
+        drop(j);
+        let mut j = reopen(&t);
+        assert!(api::history::History::load(&mut j, &authorizer()).is_err());
+    }
+}
+
+struct ApiAppendFault {
+    inner: SqliteBackend,
+    fail: Arc<AtomicBool>,
+    after: bool,
+}
+impl Backend for ApiAppendFault {
+    fn load(&mut self) -> Result<Vec<Frame>, cinder_journal::Error> {
+        self.inner.load()
+    }
+    fn append(
+        &mut self,
+        expected: Option<Head>,
+        frame: &Frame,
+    ) -> Result<(), cinder_journal::Error> {
+        if self.fail.load(Ordering::SeqCst) {
+            if self.after {
+                self.inner.append(expected, frame)?;
+            }
+            return Err(cinder_journal::Error::Storage);
+        }
+        self.inner.append(expected, frame)
+    }
+    fn check_current(&mut self, h: Head) -> Result<(), cinder_journal::Error> {
+        self.inner.check_current(h)
+    }
+}
+
+#[test]
+fn uncertain_capture_requires_reload_and_never_repeats_committed_revocation() {
+    for after in [false, true] {
+        let t = Temp::new();
+        let fail = Arc::new(AtomicBool::new(false));
+        let mut j = units::Journal::create(
+            ApiAppendFault {
+                inner: SqliteBackend::create(&t.db).unwrap(),
+                fail: fail.clone(),
+                after,
+            },
+            cipher(),
+            config(),
+        )
+        .unwrap();
+        j.commit(enrollment(j.head())).unwrap();
+        let req = history_request(30, 40, wire::Command::Revoke, 9, 1);
+        fail.store(true, Ordering::SeqCst);
+        assert_eq!(
+            authorizer()
+                .capture(&mut j, &Channel::default(), &req.encode().unwrap(), 10)
+                .unwrap_err(),
+            Error::Unavailable
+        );
+        assert!(j.state().is_err());
+        fail.store(false, Ordering::SeqCst);
+        assert!(api::history::History::load(&mut j, &authorizer()).is_err());
+        j.reload().unwrap();
+        let mut retry = req.clone();
+        retry.body.epoch = if after { 2 } else { 1 };
+        sign(&mut retry, 9);
+        let result = authorizer()
+            .capture(&mut j, &Channel::default(), &retry.encode().unwrap(), 11)
+            .unwrap();
+        assert_eq!(result.duplicate, after);
+        assert_eq!(j.state().unwrap().api_records().len(), 1);
+        for which in [40, 50] {
+            assert_eq!(
+                j.state()
+                    .unwrap()
+                    .unit(uid(which))
+                    .unwrap()
+                    .authority_epoch(account()),
+                Some(2)
+            );
+        }
+        assert_eq!(j.head().sequence, 2);
+    }
+}
+
+#[test]
+fn durable_api_records_remain_ciphertext_and_private_debug_is_redacted() {
+    let t = Temp::new();
+    let mut j = create(&t);
+    install(&mut j, 30, 40, 10, 1);
+    let req = history_request(31, 40, order(), 10, 1);
+    let captured = capture(&mut j, &req, 11).unwrap();
+    let history = api::history::History::load(&mut j, &authorizer()).unwrap();
+    assert_eq!(format!("{captured:?}"), "Captured([PRIVATE])");
+    assert_eq!(format!("{history:?}"), "ApiHistory([PRIVATE])");
+    let wire = req.encode().unwrap();
+    drop(j);
+    let mut backend = SqliteBackend::open(&t.db, Migration::None).unwrap();
+    for frame in backend.load().unwrap() {
+        assert!(
+            !frame
+                .opaque
+                .as_bytes()
+                .windows(wire.as_bytes().len())
+                .any(|b| b == wire.as_bytes())
+        );
+    }
+}

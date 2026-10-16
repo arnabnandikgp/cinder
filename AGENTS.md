@@ -8,8 +8,10 @@ P29's opt-in `journal::units` foundation composes new empty unit states under
 one head with shared owners/epochs; it does not wire shipping Runtime/API,
 dispatch, funding or recovery. ADR 0035 defines its deliberately limited controls.
 P30 adds opt-in signed unit-bound API v2/SDK helpers and current-head scope
-preflight (ADR 0036), not durable grant/admission or a listener. Shipping Runtime
-and PrivateClient stay v1; preflight alone never authorizes financial exposure.
+preflight (ADR 0036). P31 adds accepted grant/operation history and recorded-only
+financial capture (ADR 0037), not admission or a listener. Unit replay revision 2
+requires new empty histories; no revision-1 unit migration is supplied. Shipping
+Runtime/PrivateClient stay v1; capture/preflight never authorize exposure.
 Phoenix/PER, the website/demo and Mintlify docs are separate workstreams, not
 backend templates.
 

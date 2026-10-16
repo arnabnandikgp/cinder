@@ -1139,6 +1139,214 @@ fn opaque_history_byte_budget_precedes_acceptance_and_still_allows_exact_retry()
     assert_eq!(reopened.commit(next).unwrap_err(), Error::Limit);
 }
 
+// Trusted journal-header fixtures only. Real signed-wire interpretation lives
+// in cinder-api's P31 tests; this placeholder is not accepted grant evidence.
+fn api_record(id: u8, which: u8, effect: units::api::Effect) -> units::api::Record {
+    units::api::Record {
+        unit: uid(which),
+        request: request(id),
+        policy: PolicyVersion::new(1).unwrap(),
+        digest: [id; 32],
+        epoch: 1,
+        signer: [70; 32],
+        contract: [90; 32],
+        effect,
+        wire: raw(b"journal-api-placeholder"),
+    }
+}
+fn api_tx(head: Head, id: u8, record: units::api::Record) -> units::Transaction {
+    global(head, id, Change::Api(Box::new(record)))
+}
+
+#[test]
+fn shared_api_headers_bind_contract_owner_policy_and_capacity_without_financial_effects() {
+    let t = Temp::new();
+    let mut j = seeded(&t);
+    let before = j.state().unwrap().clone();
+    let tx = api_tx(
+        j.head(),
+        4,
+        api_record(20, 40, units::api::Effect::Recorded),
+    );
+    assert_eq!(j.commit(tx.clone()).unwrap().receipt, units::Receipt::Api);
+    let head = j.head();
+    assert!(j.commit(tx).unwrap().duplicate);
+    assert_eq!(j.head(), head);
+    for which in [40, 50] {
+        assert_eq!(j.state().unwrap().unit(uid(which)), before.unit(uid(which)));
+    }
+    for change in 0..9 {
+        let mut r = api_record(21, 40, units::api::Effect::Recorded);
+        let expected = match change {
+            0 => {
+                r.request.account = AccountId::new([1; 32]).unwrap();
+                Error::Invalid
+            }
+            1 => {
+                r.unit = uid(99);
+                Error::Invalid
+            }
+            2 => {
+                r.policy = PolicyVersion::new(2).unwrap();
+                Error::Invalid
+            }
+            3 => {
+                r.epoch = 2;
+                Error::Invalid
+            }
+            4 => {
+                r.contract = [91; 32];
+                Error::Conflict
+            }
+            5 => {
+                r.digest = [0; 32];
+                Error::Invalid
+            }
+            6 => {
+                r.wire = raw(&vec![1; 1025]);
+                Error::Invalid
+            }
+            7 => {
+                r.effect = units::api::Effect::Grant;
+                r.signer = [71; 32];
+                Error::Invalid
+            }
+            _ => {
+                r.request = request(20);
+                r.unit = uid(50);
+                Error::Conflict
+            }
+        };
+        assert_eq!(j.commit(api_tx(head, 5, r)).unwrap_err(), expected);
+        assert_eq!(j.head(), head);
+    }
+    let accepted = j.state().unwrap().clone();
+    drop(j);
+    let j = open(&t);
+    assert_eq!(j.state().unwrap(), &accepted);
+}
+
+#[test]
+fn api_intents_and_foundation_reservations_cannot_reassign_each_others_unit() {
+    let t = Temp::new();
+    let mut j = seeded(&t);
+    j.commit(api_tx(
+        j.head(),
+        4,
+        api_record(20, 40, units::api::Effect::Recorded),
+    ))
+    .unwrap();
+    let denied = j
+        .commit(unit(j.head(), 5, 50, vec![], vec![reserve(20, 5)]))
+        .unwrap();
+    assert_eq!(
+        outcome(&denied.receipt).controls,
+        Some(ControlError::Invalid)
+    );
+    assert!(j.state().unwrap().route(request(20)).is_none());
+    j.commit(unit(j.head(), 6, 50, vec![], vec![reserve(21, 5)]))
+        .unwrap();
+    assert_eq!(j.state().unwrap().route(request(21)).unwrap().unit, uid(50));
+    let head = j.head();
+    for which in [40, 50] {
+        assert_eq!(
+            j.commit(api_tx(
+                head,
+                7,
+                api_record(21, which, units::api::Effect::Recorded)
+            ))
+            .unwrap_err(),
+            Error::Conflict
+        );
+    }
+    assert_eq!(j.head(), head);
+    drop(j);
+    let j = open(&t);
+    assert_eq!(j.state().unwrap().api_records().len(), 1);
+}
+
+#[test]
+fn api_records_share_the_same_cas_between_units_and_keep_losing_state_unmodified() {
+    let t = Temp::new();
+    let mut a = seeded(&t);
+    let mut b = open(&t);
+    a.commit(api_tx(
+        a.head(),
+        4,
+        api_record(20, 40, units::api::Effect::Recorded),
+    ))
+    .unwrap();
+    let losing = api_tx(
+        b.head(),
+        5,
+        api_record(21, 50, units::api::Effect::Recorded),
+    );
+    assert_eq!(b.commit(losing.clone()).unwrap_err(), Error::Stale);
+    assert!(b.state().unwrap().api_records().is_empty());
+    b.reload().unwrap();
+    let mut retry = losing;
+    retry.expected = b.head();
+    b.commit(retry).unwrap();
+    assert_eq!(b.state().unwrap().api_records().len(), 2);
+    drop(a);
+    drop(b);
+    assert_eq!(open(&t).state().unwrap().api_records().len(), 2);
+}
+
+#[test]
+fn api_record_bytes_and_new_replay_revision_are_authenticated_in_complete_state() {
+    let t = Temp::new();
+    let mut j = seeded(&t);
+    j.commit(api_tx(
+        j.head(),
+        4,
+        api_record(20, 40, units::api::Effect::Recorded),
+    ))
+    .unwrap();
+    drop(j);
+    let frames = SqliteBackend::open(&t.db, Migration::None)
+        .unwrap()
+        .load()
+        .unwrap();
+    for old_revision in [false, true] {
+        let mut changed = frames.clone();
+        let index = if old_revision { 0 } else { changed.len() - 1 };
+        let frame = &mut changed[index];
+        let context = RecordContext {
+            domain: support::config().domain,
+            sequence: frame.head.sequence,
+            previous: frame.previous,
+        };
+        let mut body = FixtureProtection
+            .open(context, &frame.opaque)
+            .unwrap()
+            .as_bytes()
+            .to_vec();
+        if old_revision {
+            body[13] = 1;
+        } else {
+            let marker = b"journal-api-placeholder";
+            let at = body
+                .windows(marker.len())
+                .position(|b| b == marker)
+                .unwrap();
+            body[at] ^= 1;
+        }
+        frame.opaque = FixtureProtection.seal(context, &body).unwrap();
+        rehash(frame);
+        let error = units::Journal::open(Playback(changed), FixtureProtection, configuration())
+            .unwrap_err();
+        assert_eq!(
+            error,
+            if old_revision {
+                Error::Version
+            } else {
+                Error::Codec
+            }
+        );
+    }
+}
+
 // Synthetic independent storage/witness ports, not deployed availability proof.
 #[derive(Clone)]
 struct MemoryReplica {
