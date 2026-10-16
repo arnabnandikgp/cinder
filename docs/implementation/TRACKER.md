@@ -31,16 +31,106 @@
 | [P23B — Atomic escrow program/client](PLAN.md#p23b) | closed | A deposit batch is fully swept or owner-refunded once under the fixed venue route; normal/recovery payment history cannot reset. | [#65](https://github.com/arnabnandikgp/cinder/pull/65), merged `b162d8f` |
 | [P23C — Escrow funding integration](PLAN.md#p23c) | closed | One journal recognizes handoff once, gates trading on qualified credit and preserves liabilities, refunds and shared payout protection through faults. | [#67](https://github.com/arnabnandikgp/cinder/pull/67), merged `7e04a94` |
 | [P23 — Live integration qualification](PLAN.md#p23) | in progress | The same workflow assertions run on approved actual Nitro/chain/venue rails; receipts, test exposure, funds and cleanup reconcile. | [#55](https://github.com/arnabnandikgp/cinder/pull/55) → [#56](https://github.com/arnabnandikgp/cinder/pull/56) → [#58](https://github.com/arnabnandikgp/cinder/pull/58) → [#59](https://github.com/arnabnandikgp/cinder/pull/59) → [#60](https://github.com/arnabnandikgp/cinder/pull/60) → [#61](https://github.com/arnabnandikgp/cinder/pull/61) → [#62](https://github.com/arnabnandikgp/cinder/pull/62) → [#63](https://github.com/arnabnandikgp/cinder/pull/63), merged through `8b93adb`; live financial acceptance deferred |
-| [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | in progress | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), CI/review pending |
-| [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | in progress | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), above #68; CI/review pending |
+| [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | closed | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), merged `52a36ef` |
+| [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
+| [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | in progress | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), review / CI pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-15. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P27 review corrections — 2026-10-16
+
+User approved fixing the three substantive #71 findings and merging after
+verification. Fix checkpoint `4be6936e1e3ad27cc3d5ddf511900c045df87bcd`, tree
+`b31fd92be852e45aa32512c3421db7ecbcc52496`, addresses Codex #4287027650 /
+#4287027660 and CodeRabbit #4287105612. Three red-first cases fail on the old
+source, then pass: account-wide mixed-market fills, fixed-point off-tick IOC
+collars and zero with large bounded exponents. Two further regressions cover
+per-symbol grids/fee precision, unmapped raw-row retention, identity conflicts,
+duplicate/oversized mappings and original ordering. Negative-zero, invalid grammar,
+inexact atoms, wire bounds and resting tick checks remain enforced.
+
+The REST API now takes a bounded unique market list. It decodes configured symbols
+and returns source-attributed unmapped rows separately with exact original JSON;
+they are not reconciled fills, and reported complete page coverage grants no
+economic completion. No runtime, journal, financial contract, dependency, signing,
+network or native activity changes. ADR 0032 records these boundaries.
+
+Pinned local checks pass: 26 codec tests each in debug/release (no ignored cases),
+81 contracts (33 phases / 58 tracked documents), default/all-feature all-target
+Clippy/build and formatting. Contracts/lint/release use a clean tracked-source
+export, preserving unrelated user examples/docs/stays. Logs are
+`/private/tmp/cinder-p27-review-{red,focused,contracts,lint,release}.log`.
+The earlier whole-workspace 667/667/604 and 45-client results are historical;
+new-head hosted regressions/review must be checked before the authorized merge.
+The original `579f606` head had all eight hosted jobs green. Published correction
+head `59ea539c801565d7d95ea39ce85503977f53acf9` has contracts green with seven
+jobs running; the three findings have explicit fix/test replies. This receipt-only
+successor corrects the UTC date and records publication; exact new-head CI and any
+new substantive review must be checked before the user-authorized merge.
+
+### Verified P25/P26 merge and P27 codec work — 2026-10-15
+
+The user authorized merging #68/#69 and continuing the next bounded slice.
+Native stack #70 merged through `gh stack merge --yes --squash` at 18:05:57–58 UTC:
+
+| PR | Verified source head | Actual merge |
+| --- | --- | --- |
+| #68 | `7cb5cf1655661a65f6e614614e82003d5cd423b7` | `52a36ef137cf726cd3bc620f4342cd19fc3bab80` |
+| #69 | `63a46b893ee7c50daf76da7314ece1566e482ecb` | `0af365ebab93571d0815ec4d7406e5da44177857` |
+
+Fetched trunk is tree-identical to verified #69. #68 had all eight hosted jobs
+green and CodeRabbit's new-head review had no actionable findings. #69's Codex
+count finding is corrected/resolved: clean tracked-only export reports 32 phases /
+57 documents and all 80 contract tests. At merge six jobs were green and full
+SBF/browser reruns remained in progress on that docs-only correction; its prior
+head was fully green with identical executable code. Both final jobs subsequently
+passed, so all eight exact-source checks are now green. CodeRabbit #69 was
+rate-limited, not a substantive independent approval. Both phases are closed for
+their offline scope; no live financial qualification follows. Trunk has no classic
+protection/effective rules; checked explicitly, governance unchanged.
+
+New branch `tee/p27-bulk-adapter-foundation` is based on actual merged trunk.
+P27 implements only exact unsigned order/cancel and fill observation codecs,
+with no service/journal/signing/network edge or financial posting. The only
+registry feature addition is existing pinned `serde_json/raw_value`, for original
+numeric lexemes; no new external version. Further mapping/composition remains
+the proposed SECOND-VENUE sequence, not an implicit multi-venue backend.
+
+Separately approved public testnet check performed three unsigned GETs, 2,835 ms,
+all HTTP 502 from Cloudflare (`origin_bad_gateway`); raw bodies/headers/hashes and
+reproducible script remain ignored under the October 15 BULK reassessment's
+`run-read-uJa5m6`. This observed failure from our path does not establish a global
+outage or a new deployed schema. Zero wallet, signature, faucet, financial action,
+RPC or AWS. No current native grid, fee state or risk config was qualified.
+
+P27 source checkpoint `109165529ac469e239173859ae51785299549398`, staged tree
+`3fd625849b5d0faf85f904bf16671a4f037bd22e`, passes pinned Node 24.21.0 / Rust
+1.97.1 offline `scripts/check.mjs` groups `contracts`, `lint`, `rust`, `client`:
+81 contracts (33 phases / 58 tracked documents), strict default/all-feature
+all-target Clippy/build, 667/667/604 Rust passes and 45 SDK/relay passes. Only the
+existing expected 10/10/9 Rust ignored entries remain; all 21 new codec tests run.
+Contracts/lint/Rust use a clean tracked-only export, excluding unrelated user
+files. The client group uses existing locked installed dependencies and identical
+tracked executable source. Logs are `/private/tmp/cinder-p27-final-{contracts,lint,rust,client}.log`.
+No new SBF, browser, container, hardware or live financial qualification is claimed.
+
+Published ready/open as [#71](https://github.com/arnabnandikgp/cinder/pull/71),
+using native `gh stack init/submit`, directly above `product/tee-v1` at `0af365e`.
+Initial head `bc2addd608d4144258756e6bc9c1cfe913b435fc` has hosted contracts green;
+the other seven jobs and CodeRabbit are pending/running. This link-only receipt
+will produce a new head, which requires its own hosted checks, not inherited green.
+
+Next: review P27; hosted new-head checks and independent review remain pending.
+Native metadata availability, financial mapping and joined execution-unit
+composition remain gated, not activation authority. No frontend, native execution/
+funding or resumed Pacifica missing-credit work. Preserve unrelated untracked
+examples/docs/stays. This receipt-only successor does not change executable code.
 
 ### Second-venue assessment — P26, 2026-10-15
 
@@ -5596,17 +5686,27 @@ Verification: final clean tracked-source checkpoint 49ab31a passes strict defaul
 Reproduction: macOS ARM64, pinned Rust 1.97.1/Node 24.21.0; Cargo locked/offline with incremental/dev/test debug data disabled. `node scripts/check.mjs --group=lint`, `--group=rust` and `--group=contracts` ran in a tracked-only source export, excluding unrelated user examples/research while reusing the normal build cache. `node scripts/check.mjs --group=client`, `node tools/web-channel/build-sdk.mjs`, `node tools/web-channel/check-http.mjs` and `node scripts/check-vault.mjs --onboarding-only` run in the ordinary workspace with explicit local test tools. The full vault command was `node scripts/check-vault.mjs`; Anchor 1.2.0, Surfpool 1.5.0, Agave/SBF 3.1.10 and bindgen 0.2.129 were selected explicitly. No ambient wallet, remote fork, container, AWS, venue or public-chain run. SDK/SBF tests use synthetic trust and disposable local assets only. Ignored local logs are not checkout/CI dependencies; retained test sources and manifest entries reproduce the workflows.
 Unexpected: empty registration must preserve the financial ledger version while advancing the accepted journal head; actual Runtime/risk/projection/recovery tests verify this. Dynamic participant routing cannot mutate the immutable release contract or fence an unrelated in-flight owner. The existing complete immutable recovery-key registry seals enrollment rather than silently omit future claimants. Public signature hints and negative caches require owner/operation isolation, not global first-reporter ownership. A pre-existing release-profile CMS test incorrectly required a padding error for every wrong recipient; the test-only correction follows documented OpenSSL semantics and preserves production role/hash verification.
 Review follow-up (2026-10-15): two Codex inline findings and CodeRabbit's outside-diff recovery inventory finding are confirmed. Five red-first regressions reproduce the old errors. Existing-owner hints now remain observable through stale/faulted admission, freeze and recovery seal without credit; registration retains its gates. Recovery checks use the accepted participant inventory for gross settlement and house return-fee capacity. Focused 9 API and 43 journal risk/recovery tests pass. Clean tracked-source tree b9447cc passes strict all-target lint/build, 646/646/583 Rust cases (expected ignored 10/10/9) and 80 contract guards; 45 SDK/relay tests and both fresh-wallet actual-local-SBF carriers pass. New-head CI and review disposition remain pending; prior head's eight green jobs remain historical. The first clean-export client invocation passed relay tests but lacked the ignored installed TypeScript package, so failed before SDK compilation; the successful workspace invocation uses existing locked dependencies, not a product correction.
-Next: finish verification, push/respond to the three findings and continue the authorized source-pinned BULK reassessment; merge remains separately authorized. No frontend, AWS or Pacifica credit investigation.
+Next: P25 is merged after all relevant review corrections; proceed with the approved bounded second-venue slice. No frontend, AWS or Pacifica credit investigation.
 PR: https://github.com/arnabnandikgp/cinder/pull/68.
-Merge: none.
+Merge: 52a36ef137cf726cd3bc620f4342cd19fc3bab80.
 
 ## P26 — Second-venue assessment and implementation boundary
 
 Work: reassessed BULK against current escrow/key-owned funding, pinned official client/signing repos and current documentation, compared historical SDK and mapped capability/evidence gaps. Added tracked venue assessment and minimum test-first two-unit direction; no adapter code/dependency, live invocation or frontend.
 Verification: primary-source desk analysis only; pinned Node 24.21.0 `node scripts/check.mjs --group=contracts` passes 80 cases plus the 32-phase/57-document tracked-tree plan/link guard and workspace boundaries; `git diff --check` passes. No executable changed. Sources and selected hashes retained privately in work/venues/bulk/reassessment-2026-10-15, not checkout dependencies. Historical live evidence remains historical. Codex #4286064566's count correction excludes the unrelated untracked user-journey doc; reproduce from a tracked-only source export.
 Unexpected: documented history coverage and Solana builders were already present at the old pin, not new completeness/bridge evidence. Current account schema/agent wording and market grids require requalification; activity rows do not document original Solana signature correlation. Fee-tree aggregation makes risk cohorts promising without proving commercial permission or key isolation.
-Next: new-head hosted CI/review for #69 above verified-correction #68; review bounded native-read qualification and exact unit ownership/schema before implementing the next slice. Merge and live actions remain separately authorized; do not reopen Pacifica credit.
+Next: P26 is merged with the tracked document count corrected; P27 owns the narrow codec foundation. Further native runs/composition retain their qualification gates; do not reopen Pacifica credit.
 PR: https://github.com/arnabnandikgp/cinder/pull/69.
+Merge: 0af365ebab93571d0815ec4d7406e5da44177857.
+
+## P27 — BULK exact wire and fill codec foundation
+
+Work: added isolated cinder-bulk exact decimal/exponent/grid, unsigned limit/cancel and scoped REST/WS fill codecs; explicit input limits, duplicate/conflict and coverage consistency with no financial authority. Added pinned-source sub-vector provenance and synthetic/adversarial tests. No shipping Runtime activation or new financial contract.
+Verification: exact source checkpoint 109165529ac469e239173859ae51785299549398 / tracked tree 3fd625849b5d0faf85f904bf16671a4f037bd22e passes all 21 focused codec tests, strict default/all-feature all-target lint/build, 667/667/604 Rust tests (only expected 10/10/9 ignored), 81 contracts with 33 phases/58 tracked documents and 45 SDK/relay tests. Clean tracked-source export excludes unrelated examples/docs; client checks use the same tracked code with existing locked installed dependencies. Commands are the four pinned scripts/check.mjs groups contracts/lint/rust/client, locked/offline with incremental and dev/test debug information disabled. Source is on tee/p27-bulk-adapter-foundation above actual merged trunk 0af365e. The three approved public testnet metadata GETs returned origin HTTP 502; no native schema/financial qualification, new SBF/browser/hardware run or shipping activation is claimed.
+Unexpected: upstream default_meta_order_ids use default zero account/nonce/index, not the accompanying signing context. Private hash-helper test preserves that oracle while public single-action hashing fixes index 0. Native cancellation tag is cx. New exact decimal source forms require raw-value preservation, not floating JSON values. Initial compiler/fixture interpretation errors were local, with no signing/dispatch. A preliminary broad run hit rustdoc E0463 after two source exports compiled concurrently into one cache; it is not a passing receipt. The final full single-writer rerun above passes without a product change for that harness error.
+Review correction: Codex #4287027650/#4287027660 and CodeRabbit #4287105612 are valid. Fix checkpoint 4be6936e1e3ad27cc3d5ddf511900c045df87bcd passes 26 codec tests in both debug/release, 81 clean-source contracts and strict workspace lint/build. Three regressions fail on the old source first; two more cover per-market precision and retained unmapped/conflicting rows. Original 579f606 has eight hosted green jobs; correction-head CI is not inherited. Current handoff records details/logs.
+Next: publish corrections, reply/resolve findings and check exact-head CI/review before the user-authorized merge. Native metadata availability, full financial mapping and joined unit-state design remain separate; no frontend, financial run or reopened Pacifica investigation.
+PR: https://github.com/arnabnandikgp/cinder/pull/71, ready/open directly above product/tee-v1 through native gh stack.
 Merge: none.
 
 ## P24 — Release safety case

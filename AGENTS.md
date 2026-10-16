@@ -2,8 +2,8 @@
 
 Work in `cinder-tee`, based on `product/tee-v1`, never legacy `main`.
 Cinder is a private perp broker: individual customer entitlements over pooled
-venue execution, Pacifica first, AWS Nitro. BULK activation is paused; a scoped
-second-venue desk assessment is approved (PLAN P26). Phoenix/PER,
+venue execution, Pacifica first, AWS Nitro. BULK is a second-venue candidate with
+offline codecs only, not an activated integration (PLAN P26/P27). Phoenix/PER,
 the website/demo and Mintlify docs are separate workstreams, not backend templates.
 
 ## Product context
@@ -31,7 +31,7 @@ the website/demo and Mintlify docs are separate workstreams, not backend templat
 | `crates/kernel` | Dependency-free `no_std` money, ledger, positions, risk and allocation |
 | `crates/journal` | One atomic accepted history, replay/holds, encrypted replication/freshness |
 | `crates/api`, `clients/private` | Owner/agent auth, private views, confidential browser/Node SDK |
-| `crates/pacifica` | Venue observations, native signing and funding coordination |
+| `crates/pacifica`, `crates/bulk` | Pacifica observations/signing/funding; BULK offline codecs only, not an activated integration |
 | `crates/service`, `crates/web-channel`, `services/web-relay` | Enclave runtime, shared Noise core, opaque host relay |
 | `programs/cinder-vault`, `clients/vault` | Anchor custody/recovery, generated IDL/types, chain client |
 | `crates/ports`, `crates/test-support`, `scripts`, `tools` | Typed boundaries, explicit fixtures, checks, scoped qualification |

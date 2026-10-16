@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 function fixture() {
   const pkg = name => ({ name, id: name, version: '0.1.0', source: null, targets: [{ kind: ['lib'] }], dependencies: [] });
-  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica', 'cinder-api', 'cinder-service', 'cinder-web-channel'].map(pkg);
+  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica', 'cinder-api', 'cinder-service', 'cinder-web-channel', 'cinder-bulk'].map(pkg);
   packages[2].dependencies = [
     { name: 'cinder-ports', kind: null, path: '/repo/crates/ports', req: '=0.1.0', target: null },
     { name: 'cinder-kernel', kind: 'dev', path: '/repo/crates/kernel', req: '=0.1.0', target: null },
@@ -38,6 +38,7 @@ function fixture() {
     features:name==='snow'?['use-curve25519','use-chacha20poly1305','use-sha2','use-getrandom']:name==='getrandom'?['wasm_js']:[],
     uses_default_features:!['snow','sha2'].includes(name), optional:false,
   }));
+  packages[8].dependencies = packages[4].dependencies.filter(dep => ['cinder-kernel','serde','serde_json','sha2','bs58'].includes(dep.name)).map(dep => dep.name === 'serde_json' ? {...dep,features:['raw_value']} : dep);
   packages[6].features={default:[], 'local-fixture':[]};
   packages[6].targets.push(...['cinder-service-fixture','cinder-verify-fixture'].map(name => ({name,kind:['bin'],'required-features':['local-fixture']})));
   const workspace_members = packages.map(p => p.id);
@@ -48,6 +49,19 @@ function fixture() {
 test('the intended local graph passes', () => {
   assert.deepEqual(validateWorkspace(fixture()), []);
   assert.deepEqual(validateKernelSource('#![no_std]\npub trait Transition {}'), []);
+});
+test('BULK codecs keep exact raw JSON and cannot acquire signing, journal or runtime edges', () => {
+  const withoutRaw = fixture();
+  withoutRaw.packages[8].dependencies.find(d => d.name === 'serde_json').features=[];
+  assert(validateWorkspace(withoutRaw).some(e => e.includes('adapter dependency')));
+  for (const name of ['cinder-journal','ed25519-dalek']) {
+    const graph = fixture();
+    graph.packages[8].dependencies.push({name,kind:null,path:'/repo/extra',req:'=0.1.0',target:null});
+    assert(validateWorkspace(graph).some(e => e.includes('forbidden dependency')));
+  }
+  const shipping = fixture();
+  shipping.packages[6].dependencies.push({name:'cinder-bulk',kind:null,path:'/repo/crates/bulk',req:'=0.1.0',target:null});
+  assert(validateWorkspace(shipping).some(e => e.includes('forbidden dependency')));
 });
 test('web crypto cannot select a fork, extra resolver, platform fallback or loose pin', () => {
   for(const mutate of [d=>{d.req='^0.10';},d=>{d.source='git+https://unreviewed.invalid';},d=>{d.features.push('ring-resolver');},d=>{d.uses_default_features=true;}]){

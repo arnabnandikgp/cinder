@@ -7,6 +7,16 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P25/P26 merged as #68/#69 at `52a36ef` / `0af365e`; TRACKER records full source/
+merge receipts and exact CI timing. P27 promotes only offline unsigned codec and
+synthetic fill-shape qualification, with pinned-source byte/hash provenance in
+`crates/bulk/tests/fixtures/README.md`. No upstream implementation is imported.
+The user separately approved up to twelve unsigned public testnet metadata GETs;
+three were performed, all Cloudflare origin HTTP 502. Exact private capture
+`work/venues/bulk/reassessment-2026-10-15/run-read-uJa5m6` contains raw headers/body
+hashes and budget receipt; no current native schema, bridge or financial capability
+was qualified. These are not a fixture-backed venue success or an AWS run.
+
 Second-venue desk assessment P26 promotes the sanitized [BULK map](../venues/bulk.md)
 and [minimum implementation direction](SECOND-VENUE.md). Official client pin
 `56f6676611a0c05dbd187d406dced26168516070` is compared with historical

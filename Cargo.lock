@@ -334,6 +334,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cinder-bulk"
+version = "0.1.0"
+dependencies = [
+ "bs58",
+ "cinder-kernel",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "cinder-journal"
 version = "0.1.0"
 dependencies = [

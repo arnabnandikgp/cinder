@@ -21,6 +21,7 @@ const allowed = new Map([
   ['cinder-api', ['cinder-kernel:normal', 'cinder-journal:normal', 'sha2:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
   ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'cinder-web-channel:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal', 'serde:normal', 'serde_json:normal', 'base64:normal', 'aws-sigv4:normal', 'aws-credential-types:normal', 'tungstenite:normal', 'log:normal']],
   ['cinder-web-channel', ['snow:normal', 'zeroize:normal', 'sha2:normal', 'getrandom:normal', 'wasm-bindgen:normal']],
+  ['cinder-bulk', ['cinder-kernel:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'bs58:normal']],
 ]);
 
 export function validateWorkspace(metadata) {
@@ -86,9 +87,9 @@ export function validateWorkspace(metadata) {
         if (!expected || dep.source !== dependencyPolicy.registry || dep.path || dep.target != null || dep.optional || !dep.uses_default_features || dep.features.length !== 0) errors.push('cinder-service: transport dependency configuration not approved');
         continue;
       }
-      if (['cinder-pacifica', 'cinder-api'].includes(pkg.name) && ['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].includes(dep.name)) {
+      if (['cinder-pacifica', 'cinder-api', 'cinder-bulk'].includes(pkg.name) && ['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].includes(dep.name)) {
         const expected = dependencyPolicy.packages.find(p => p.name === dep.name && dep.req === `=${p.version}`);
-        const features = dep.name === 'serde' ? ['derive'] : dep.name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : [];
+        const features = dep.name === 'serde' ? ['derive'] : dep.name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : pkg.name === 'cinder-bulk' && dep.name === 'serde_json' ? ['raw_value'] : [];
         if (!expected || dep.source !== dependencyPolicy.registry || dep.path || dep.target != null || dep.optional || dep.uses_default_features !== (dep.name !== 'ed25519-dalek') || JSON.stringify(dep.features) !== JSON.stringify(features)) errors.push(`${pkg.name}: adapter dependency configuration not approved`);
         continue;
       }
@@ -129,6 +130,6 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
     for (const error of errors) process.stderr.write(`${error}\n`);
     process.exitCode = 1;
   } else {
-    process.stdout.write('Workspace boundaries OK: 8 local packages; dependency-free kernel; pinned storage/crypto/JSON/transport graph; fixture-only binaries gated.\n');
+    process.stdout.write(`Workspace boundaries OK: ${allowed.size} local packages; dependency-free kernel; pinned storage/crypto/JSON/transport graph; fixture-only binaries gated.\n`);
   }
 }

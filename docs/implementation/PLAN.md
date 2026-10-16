@@ -1021,7 +1021,7 @@ contract and exact-source checks belong to the owning handoff and ADR 0031.
 - [x] Atomic registration and immutable owner/recipient survive restart, duplicate/concurrent requests and stale/uncertain writes; bounded governed capacity fails closed; old configured-account mode remains explicit.
 - [x] SDK discovery and unsigned escrow preparation require no customer-specific startup edits; local compiled-program tests cover registration, opening, exact deposits and eligible refunds without public-chain activity.
 - [x] Signed original deposit locators are durable hints only; private lifecycle and risk/funding/recovery account inventory use the same journal; unknown/partial credit cannot become trading collateral.
-- [ ] Fresh-wallet SDK/API acceptance, owner isolation, reconnects, generated ABI preservation and existing regression/CI checks pass; tracker records exact source, limitations and PR/review state before merge.
+- [x] Fresh-wallet SDK/API acceptance, owner isolation, reconnects, generated ABI preservation and existing regression/CI checks pass; tracker records exact source, limitations and PR/review state before merge.
 
 <a id="p26"></a>
 ## P26 — Second-venue assessment and implementation boundary
@@ -1042,7 +1042,28 @@ and date-pinned primary SDK/documentation.
 - [x] Current official source pins and historical comparison distinguish documented, implemented and unverified deployed behavior; no old experiment is relabeled as a new pass.
 - [x] Financial/custody capability map covers exact precision, identity, cash/funding/fees, native margin and ADL, credit/returns and key powers; missing evidence has an explicit disabled treatment.
 - [x] Minimum unit-scoped ownership/routing/recovery boundary and bounded next qualification are specified without a second balance database, generic plugin framework or inherited live authority.
-- [ ] Documentation/plan/link guards pass; tracker records exact source, review/CI, predecessor status and next action before authorized merge.
+- [x] Documentation/plan/link guards pass; tracker records exact source, review/CI, predecessor status and next action before authorized merge.
+
+<a id="p27"></a>
+## P27 — BULK exact wire and fill codec foundation
+
+Depends on: P26.
+
+Deliver: one narrow offline codec package, not a native Runtime integration.
+Exact decimal/exponent/scaled-grid conversion, unsigned single bounded limit and
+cancel encoding, scoped native order/fill identity and distinct REST/WS fill
+normalization. Preserve fee/reason/range metadata without financial posting or
+causal-readiness authority. No venue SDK, secrets, network, native funding,
+new accounting model, cross-venue margin or frontend. Further financial mapping
+and joined execution-unit ownership remain separately gated.
+Evidence: F02/F03/B02/B08, [ADR 0032](../architecture/0032-bulk-codec-foundation.md),
+BV-01/BV-02/BV-06/BV-07/BV-10 in [BULK map](../venues/bulk.md), pinned upstream
+derived signing/hash vectors and synthetic native shape/adversarial fixtures.
+
+- [x] Exact canonical limit/cancel bytes and index-0 order IDs match pinned source vectors; money/IDs never traverse floating-point production types; unsupported actions have no dispatch path.
+- [x] REST/WS scope/side/order attribution, signed fees, wide IDs, decimal/exponent precision, duplicate/conflict, malformed/partial history and resource bounds pass offline regressions; page coverage grants no completion.
+- [x] New package and existing pinned JSON raw-value feature pass dependency/lock guards; shipping service/kernel do not acquire adapter, network, signing or journal ownership through this foundation.
+- [x] Existing workspace checks and new focused fixtures pass on exact tracked source; merger receipts, observed testnet availability limits and pending native/runtime qualifications are recorded before review/merge.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
