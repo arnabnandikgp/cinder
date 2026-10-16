@@ -6,6 +6,13 @@ This is a **proposed implementation breakdown**, not approval of numerical risk
 limits, a new financial contract, live activity or production activation.
 [BULK assessment](../venues/bulk.md), [baseline](BASELINE.md), [tracker](TRACKER.md).
 
+October 16 follow-up: P26/P27 are merged. P28 implements the remaining offline
+[financial observations](../architecture/0033-bulk-financial-observations.md) and
+makes the proposed [unit-state boundary](../architecture/0034-execution-unit-boundary.md)
+concrete for review. It does not implement joined runtime state or authorize a
+native run. The prior three approved public metadata GETs all returned origin
+502; current native schema/bridge qualification remains unresolved.
+
 ## What changes, and what does not
 
 Keep the financial kernel, accepted journal, confidential SDK/API, custody program,
@@ -59,12 +66,13 @@ Required invariants:
 
 These are acceptance slices, **not six new mandatory research phases**. Combine
 adjacent work when it forms one independently verifiable PR. Allocate new phase
-IDs in PLAN/TRACKER as a slice is actually selected; only P26 is opened now.
+IDs in PLAN/TRACKER as a slice is actually selected; P26/P27 are merged and P28
+is the selected offline financial-mapping/unit-contract slice.
 
 | Slice | Deliverable | Exit gate |
 | --- | --- | --- |
 | Candidate assessment (P26) | Current source pins, financial/custody capability map, evidence limits and this minimum boundary | No invented native guarantees; concrete next qualification proposal; docs checks/review/merge |
-| Exact adapter foundation | A narrow BULK decoder/encoder boundary with sanitized canonical vectors and explicit disabled capabilities; no network worker yet | Integers/grids, wide IDs, source/direction/fill/funding/risk attribution, original bytes and error/unknown cases tested; existing checks remain green |
+| Exact adapter foundation (P27/P28) | Narrow BULK wire/fill/financial observations, sanitized vectors and a concrete proposed unit contract; no network worker yet | Integers/grids, wide IDs, source/direction/fill/funding/risk attribution, original bytes and error/unknown cases tested; existing checks remain green |
 | Environment qualification | Current public reads followed, if useful, by disposable paper signer/order/subaccount experiments | Separately approved run, exact provenance and limits; paper versus actual bridge results separated |
 | Joined two-unit runtime | Minimal dispatch plus per-unit books/holds, configured routes and SDK views; reuse each adapter's tested contracts | Same IDs/wallet across units, wrong-unit signatures/credits/fills, crash/replay, concurrent holds, capital and recovery isolation; one authoritative accepted history |
 | Financial round trip | Original chain deposit, attributable venue credit, trade/funding/close and finalized return/payout | Supported test bridge and approved economic run. No new confirmation contract or force-credit to make the test pass |
@@ -110,8 +118,10 @@ Solana funding test additionally needs an explicitly supported non-mainnet bridg
 token/program/cluster pin, bounded funds/fees and original-operation lifecycle.
 Never select mainnet because devnet bridge information is missing.
 
-Open design review points before joined-runtime implementation: precise schema/
-upgrade strategy for per-unit journal state; deployment-level owner versus unit
-account IDs; explicit grant/read unit binding; per-unit capital designation and
-recovery-cut/activation coordination. These refine scope/ownership, not RF1/RF2 or
-the approved economic contract. Material changes go to the user before code.
+Review the proposed defaults in ADR 0034 before joined-runtime implementation:
+one shared head with component unit books, deployment-level enrollment/revocation,
+versioned unit-bound requests/grants, segregated capital/custody and globally
+fenced operator-assisted recovery with unit-specific backing. New-history
+composition precedes any active-state migration. These refine scope/ownership,
+not RF1/RF2 or the approved economic contract. Material changes go to the user
+before code; P28 does not silently implement the proposal.

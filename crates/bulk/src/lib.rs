@@ -1,7 +1,9 @@
 //! Exact BULK codecs, not a qualified venue adapter or financial controller.
 //! No I/O, secret key, signing, ledger posting, funding or readiness authority.
 pub mod fills;
+pub mod financial;
 pub mod precision;
+mod raw;
 pub mod wire;
 
 use cinder_kernel::identity::EventScope;

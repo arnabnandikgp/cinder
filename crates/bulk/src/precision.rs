@@ -5,7 +5,43 @@ use crate::{Error, symbol};
 /// Strings and JSON numeric tokens are unquoted by the caller. Only exactly
 /// representable results are accepted; extra zero digits are harmless.
 pub fn scaled(text: &str, places: u8) -> Result<i128, Error> {
-    if text.is_empty() || text.len() > 80 || places > 38 {
+    if places > 38 {
+        return Err(Error::Limit);
+    }
+    let (negative, coefficient, exponent) = decimal(text)?;
+    if coefficient == 0 {
+        return Ok(0);
+    }
+    let power = i32::from(places) + exponent;
+    if power < -38 {
+        return Err(Error::Invalid);
+    }
+    let factor = 10_u128
+        .checked_pow(power.unsigned_abs())
+        .ok_or(Error::Limit)?;
+    let magnitude = if power >= 0 {
+        coefficient.checked_mul(factor).ok_or(Error::Limit)?
+    } else {
+        if !coefficient.is_multiple_of(factor) {
+            return Err(Error::Invalid);
+        }
+        coefficient / factor
+    };
+    if negative && magnitude == 1_u128 << 127 {
+        return Ok(i128::MIN);
+    }
+    let value = i128::try_from(magnitude).map_err(|_| Error::Limit)?;
+    if negative {
+        value.checked_neg().ok_or(Error::Limit)
+    } else {
+        Ok(value)
+    }
+}
+
+/// Bounded exact lexical parts for reported decimals that are not accounting
+/// atoms (displayed averages/rates). No precision is inferred from these parts.
+pub(crate) fn decimal(text: &str) -> Result<(bool, u128, i32), Error> {
+    if text.is_empty() || text.len() > 80 {
         return Err(Error::Limit);
     }
     let (negative, rest) = text.strip_prefix('-').map_or((false, text), |s| (true, s));
@@ -48,34 +84,11 @@ pub fn scaled(text: &str, places: u8) -> Result<i128, Error> {
     if negative && coefficient == 0 {
         return Err(Error::Invalid);
     }
-    if coefficient == 0 {
-        return Ok(0);
-    }
-    let power = i32::from(places) + i32::from(exponent)
-        - i32::try_from(fraction.len()).map_err(|_| Error::Limit)?;
-    if power < -38 {
-        return Err(Error::Invalid);
-    }
-    let factor = 10_u128
-        .checked_pow(power.unsigned_abs())
-        .ok_or(Error::Limit)?;
-    let magnitude = if power >= 0 {
-        coefficient.checked_mul(factor).ok_or(Error::Limit)?
-    } else {
-        if !coefficient.is_multiple_of(factor) {
-            return Err(Error::Invalid);
-        }
-        coefficient / factor
-    };
-    if negative && magnitude == 1_u128 << 127 {
-        return Ok(i128::MIN);
-    }
-    let value = i128::try_from(magnitude).map_err(|_| Error::Limit)?;
-    if negative {
-        value.checked_neg().ok_or(Error::Limit)
-    } else {
-        Ok(value)
-    }
+    Ok((
+        negative,
+        coefficient,
+        i32::from(exponent) - i32::try_from(fraction.len()).map_err(|_| Error::Limit)?,
+    ))
 }
 
 /// Explicit selected-market grids; construction does not qualify native math.

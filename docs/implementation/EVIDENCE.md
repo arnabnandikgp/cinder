@@ -7,6 +7,18 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P28 promotes bounded financial observations from the same official client pin
+below, specifically `msgs/account.rs` and `msgs/history.rs`, with current public
+account/funding/ADL documentation rechecked October 16. The synthetic cases in
+`crates/bulk/tests/financial.rs` do not come from a funded native account. See
+[ADR 0033](../architecture/0033-bulk-financial-observations.md) for units, source
+identity, cumulative/event distinctions and financial posting gates.
+[ADR 0034](../architecture/0034-execution-unit-boundary.md) is a proposed two-unit
+state/authorization/capital/recovery contract, not a schema/runtime migration or
+executed composition test. No third-party code/dependency, live invocation,
+financial policy change or authority promotion is included. Exact local checks
+and publication state belong to TRACKER.
+
 P25/P26 merged as #68/#69 at `52a36ef` / `0af365e`; TRACKER records full source/
 merge receipts and exact CI timing. P27 promotes only offline unsigned codec and
 synthetic fill-shape qualification, with pinned-source byte/hash provenance in

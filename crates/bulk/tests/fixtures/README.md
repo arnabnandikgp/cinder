@@ -25,3 +25,11 @@ use public fixed byte identities, wide integers and exact tiny signed fees. They
 are not native recordings or qualified live financial observations. Adverse
 cases mutate these inputs, not ignored user data. Native GET qualification and
 credit/return, funding/basis/risk parity remain separate.
+
+P28 financial fixtures are synthetic account/funding/risk/fee-tier shapes from the
+same client pin's `msgs/account.rs` and `msgs/history.rs` and the official account
+reference (including its schema section), rechecked 2026-10-16. Chosen atom units,
+grids, quotes and IDs are test configuration, not current venue precision or a
+live account. No schema decoder's default zero or synthesized ID is promoted.
+Displayed averages/rates deliberately exercise more precision than resting ticks;
+tests do not turn them into exact cost basis or qualified funding allocation.

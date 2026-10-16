@@ -12,6 +12,14 @@ October 15 public-testnet probe made three unsigned metadata GETs; all returned
 HTTP 502 Cloudflare origin errors. No usable current schema or financial evidence
 was obtained. This limited observation is not proof of a global venue outage.
 
+P28 adds [financial observations](../architecture/0033-bulk-financial-observations.md)
+for account/positions, actual funding payments, fee-tier quotes and risk history.
+Exact configured units, missing data, unsupported rows and native side/reason
+information remain explicit; none is a ledger posting, credit certificate or
+active financial provider. Its [two-unit contract](../architecture/0034-execution-unit-boundary.md)
+is proposed for review before Runtime/journal/API changes. The same source pins
+apply; no new native, RPC, wallet, faucet or cloud run occurred in this slice.
+
 ## Evidence and source pins
 
 - Official client: [`56f6676611a0c05dbd187d406dced26168516070`](https://github.com/Bulk-trade/bulk-client/tree/56f6676611a0c05dbd187d406dced26168516070),

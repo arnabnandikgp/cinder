@@ -1065,6 +1065,30 @@ derived signing/hash vectors and synthetic native shape/adversarial fixtures.
 - [x] New package and existing pinned JSON raw-value feature pass dependency/lock guards; shipping service/kernel do not acquire adapter, network, signing or journal ownership through this foundation.
 - [x] Existing workspace checks and new focused fixtures pass on exact tracked source; merger receipts, observed testnet availability limits and pending native/runtime qualifications are recorded before review/merge.
 
+<a id="p28"></a>
+## P28 — BULK financial observations and execution-unit contract
+
+Depends on: P27.
+
+Deliver: exact offline account/position, funding, fee-quote and forced-event
+observations in the isolated BULK package, bound to explicit source and kernel
+units. Preserve local/aggregate differences, display-versus-basis semantics,
+original unsupported rows and page limits. Document the financial posting gates
+and a concrete two-unit state/authorization/recovery contract before any joined
+Runtime or journal change. No new ledger, dispatch, signing, live run, funding
+completion, financial policy, frontend or reopened Pacifica credit investigation.
+Evidence: F01–F14/B02–B08, P27 fixtures, pinned official client history/account
+schemas, current primary venue documentation and SECOND-VENUE. Contracts:
+[financial mappings](../architecture/0033-bulk-financial-observations.md) and
+[proposed unit-state boundary](../architecture/0034-execution-unit-boundary.md);
+reproducible synthetic fixtures live in `crates/bulk/tests/financial.rs`.
+
+- [x] Account/position decoding preserves exact units, signed positions, original unsupported rows and missing-versus-zero fields; local/aggregate metrics are never added or converted into an authoritative cash/basis setter.
+- [x] Funding/fee/risk observations preserve source/owner/family/ID, exact signed amounts, pagination, adverse reasons and original bytes; duplicates/conflicts and unsupported lanes cannot fabricate credit or economic completeness.
+- [x] Financial mapping records cumulative versus event/settlement semantics and explicit qualification gaps; native ADL and risk-vault observations cannot independently trigger Cinder payouts or restoration.
+- [x] A concrete two-unit contract specifies one atomic history, unit-scoped books/identities/permissions/capital/custody/recovery and migration/test boundaries without implementing unreviewed runtime changes.
+- [x] Focused adversarial fixtures and appropriate workspace regression/dependency/docs checks pass on recorded exact source; PR publication/review and deferred native qualifications are explicit.
+
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
 
