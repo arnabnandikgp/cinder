@@ -48,6 +48,53 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P32 offline qualification complete — 2026-10-16
+
+Implementation source `ee40273a6b81a2d98c347bc4e22d0c9784cc0f87`, tree
+`f49bd5b79de2a730a0b67a8e53b81dff3f22095f`, is checkpointed on
+`tee/p32-unit-financial-admission`. Clean tracked-source export
+`/private/tmp/cinder-p32-source.EbihLm` excludes the three unrelated untracked
+user paths. All four groups passed on that exact tree, using Rust 1.97.1 / Node
+24.21.0, locked/offline Cargo, existing caches, `CARGO_INCREMENTAL=0`, dev/test
+debug info disabled and one Cargo writer per target:
+
+- `node scripts/check.mjs --group=contracts`: 81/81 guards, 38 phases / 64 docs,
+  dependency/fixture boundaries pass.
+- `node scripts/check.mjs --group=lint`: format, strict default/all-feature
+  all-target clippy and all-feature build pass.
+- `node scripts/check.mjs --group=rust`: 760/760/697 pass for all-feature
+  debug/release/shipping-default; only existing explicit ignores 10/10/9.
+- `node scripts/check.mjs --group=client`: relay 15, SDK 37 and TypeScript pass.
+
+Focused API is 37 (15 new); unit-journal is 28 (3 new). New cases cover atomic
+record/admission conversion, original auth/epoch/deadlines, quota after cancel
+and owner retry, durable refusal, payout recipient/leverage/shared capacity,
+malformed trusted joins, before/after unknown append, stale writers including
+a race during hold computation, local containment, fact retention and revision-2
+refusal. Actual Ed25519/AEAD fixtures are disposable and synthetic; no native
+execution, changed-image hardware, local SBF/Chrome or production assurance is
+claimed. Existing full workspace fixtures retain their own evidence limits.
+
+Initial compilation required documentation on two public enum fields. Two new
+test assumptions were corrected: a known noncommitted CAS keeps cached state
+unchanged until reload; customer payout reservation is not immediate location
+liquidity. No engine, risk policy, deadline or test gate was weakened. No new
+dependency. Scoped self-review `/private/tmp/cinder-p32-review.html` is not an
+independent audit. Logs are `/private/tmp/cinder-p32-{contracts,lint,rust,client}.log`.
+
+After proving all 63 nonempty additions from local receipt `9802917` remain in
+merged TRACKER and its original commit stays reachable on the retained P31
+branch, aligned the unused local trunk ref to the actual merge. Native
+`gh stack init --base product/tee-v1 tee/p32-unit-financial-admission` adopts only
+this new layer. No reset/clean or user-file change. This qualification receipt
+changes only PLAN/TRACKER; code/tests are unchanged after exact-tree checks.
+
+Next: publish one ready P32 PR; inspect its exact head/CI/review. Keep P32
+`in progress` until relevant review and an authorized merge. No automatic merge,
+live resources, frontend, containers or deferred Pacifica-credit investigation.
+The next implementation boundary is runtime/read/recovery composition, with the
+MAX_ITEMS replay-latency/cache gate before request wiring, not native activation.
+
 ### P31 reviewed/merged; P32 started — 2026-10-16
 
 User authorized relevant review fixes, merge and the next PR. #76's final head
@@ -6310,13 +6357,16 @@ Merge: d23e33c73458c51b6bffdc14980c18d4be157c83.
 Work: versioned journal decisions and opt-in API controller join original signed
 operations to existing unit-local order/cancel/payout/leverage controls, risk and
 holds. Refusals are terminal too. No independent book, native capability or listener.
-Verification: focused API cases and journal cases under active local qualification;
-exact-tree full checks and source receipt still pending.
+Verification: source `ee40273a6b81a2d98c347bc4e22d0c9784cc0f87`, tree
+`f49bd5b79de2a730a0b67a8e53b81dff3f22095f`: contracts 81, strict lint/build,
+Rust 760/760/697 (existing ignores 10/10/9), relay 15, SDK 37 and TypeScript pass.
+Focused API 37 and unit-journal 28 pass; 18 new cases. Current handoff records scope.
 Unexpected: tests must distinguish known noncommitted SQLite CAS failure from
 unknown append fencing. Payout acceptance reserves customer entitlement; queued
 amounts need not already be available at the payout location. Dispatch retains
 its separate FIFO/location qualification. No policy was changed to satisfy tests.
-Next: finish fault regressions, clean-source full checks and publish one ready PR.
+Next: publish one ready PR and inspect its exact-head CI/review. Runtime wiring
+must first qualify MAX_ITEMS replay cost; no native activation is implied.
 PR: none.
 Merge: Not merged.
 

@@ -1156,10 +1156,10 @@ No shipping Runtime, listener, native exposure/signing, recovery activation,
 frontend, live test or new financial policy. Evidence: F01–F14/X01–X05/S01–S04,
 P09/P18/P29–P31 fixtures and [ADR 0038](../architecture/0038-unit-financial-admission.md).
 
-- [ ] Versioned shared admission records and unit ownership replay atomically; old unit histories fail closed without changing legacy financial replay.
-- [ ] Current auth precedes dedupe; original epoch/deadlines/grant quota, cancel/attempt ownership and terminal refusals cannot be bypassed by retry or another unit.
-- [ ] Existing joined risk/holds constrain orders, payouts and leverage; trusted per-unit risk installation and adverse-fact retention do not introduce cross-margin or native exposure.
-- [ ] Exact-source adversarial/CAS/unknown/encryption/replay and workspace regressions pass; source/PR/CI/review limits and the pre-runtime MAX_ITEMS performance gate are recorded.
+- [x] Versioned shared admission records and unit ownership replay atomically; old unit histories fail closed without changing legacy financial replay.
+- [x] Current auth precedes dedupe; original epoch/deadlines/grant quota, cancel/attempt ownership and terminal refusals cannot be bypassed by retry or another unit.
+- [x] Existing joined risk/holds constrain orders, payouts and leverage; trusted per-unit risk installation and adverse-fact retention do not introduce cross-margin or native exposure.
+- [x] Exact-source adversarial/CAS/unknown/encryption/replay and workspace regressions pass; source/PR/CI/review limits and the pre-runtime MAX_ITEMS performance gate are recorded.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
