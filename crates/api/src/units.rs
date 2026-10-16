@@ -1,5 +1,7 @@
-//! Opt-in v2 contract and current-head scope preflight, not a financial handler.
-//! No listener, durable grant installation, quota consumption, signing or dispatch.
+//! Opt-in v2 scope preflight and separately bounded durable `history` capture.
+//! No financial admission, listener, quota consumption, signing or dispatch.
+
+pub mod history;
 
 use crate::{
     ConfidentialChannel, Error, Response, authorization,
@@ -200,6 +202,19 @@ impl Authorizer {
         grants: &impl Grants,
         now: u64,
     ) -> Result<Checked, Error> {
+        self.check_inner(journal, channel, bytes, grants, now, true)
+    }
+    // Durable capture validates a *new* owner-grant proposal after dedupe, so
+    // an expired original grant can still be recovered by its authenticated owner.
+    fn check_inner<B: Backend, P: Protection>(
+        &self,
+        journal: &mut units::Journal<B, P>,
+        channel: &impl ConfidentialChannel,
+        bytes: &PrivateBytes,
+        grants: &impl Grants,
+        now: u64,
+        validate_owner_grant: bool,
+    ) -> Result<Checked, Error> {
         let request = Request::decode(bytes.as_bytes())?;
         let req = &request.body;
         let config = journal.configuration();
@@ -255,7 +270,7 @@ impl Authorizer {
             epoch: req.epoch,
         };
         let grant = if is_owner {
-            if let Command::Grant(grant) = &req.command {
+            if validate_owner_grant && let Command::Grant(grant) = &req.command {
                 self.validate_grant(grant, owner.wallet, &descriptor.ledger, now)?;
             }
             None

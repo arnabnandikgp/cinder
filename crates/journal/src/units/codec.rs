@@ -7,7 +7,7 @@ pub(super) const GENESIS: u8 = 30;
 pub(super) const RECORD: u8 = 31;
 // Unit ownership/controller changes require a separate replay revision even
 // when the reused single-unit financial engine remains unchanged.
-const REVISION: u16 = 1;
+const REVISION: u16 = 2;
 pub(super) fn writer(tag: u8) -> Writer {
     let mut w = Writer::new(tag);
     w.raw(&REVISION.to_be_bytes());
@@ -53,6 +53,10 @@ pub(super) fn transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.raw(&tx.expected.hash);
     w.u64(tx.at);
     match &tx.change {
+        Change::Api(record) => {
+            w.byte(3);
+            api_record(&mut w, record);
+        }
         Change::Enroll { wallet, recipients } => {
             w.byte(0);
             w.raw(wallet);
@@ -85,6 +89,7 @@ pub(super) fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
     };
     let at = r.u64()?;
     let change = match r.byte()? {
+        3 => Change::Api(Box::new(read_api_record(&mut r)?)),
         0 => {
             let wallet = r.array()?;
             let count = r.count()?;
@@ -126,6 +131,7 @@ pub(super) fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
 pub(super) fn receipt(receipt: &Receipt) -> Result<Vec<u8>, Error> {
     let mut w = writer(34);
     match receipt {
+        Receipt::Api => w.byte(2),
         Receipt::Shared => w.byte(0),
         Receipt::Unit { unit, receipt } => {
             w.byte(1);
@@ -140,6 +146,13 @@ pub(super) fn state(s: &State) -> Result<[u8; 32], Error> {
     let mut w = writer(35);
     w.blob(&configuration(&s.config)?);
     w.u64(s.now);
+    w.count(s.api.len());
+    for accepted in &s.api {
+        let mut record = writer(37);
+        api_record(&mut record, &accepted.record);
+        record.u64(accepted.at);
+        w.raw(&Sha256::digest(record.finish()?));
+    }
     w.count(s.customers.len());
     for c in &s.customers {
         w.raw(&c.account.bytes());
@@ -159,6 +172,50 @@ pub(super) fn state(s: &State) -> Result<[u8; 32], Error> {
         w.raw(&wire::state_commitment(state)?);
     }
     Ok(Sha256::digest(w.finish()?).into())
+}
+
+fn api_record(w: &mut Writer, a: &api::Record) {
+    w.raw(&a.unit.bytes());
+    w.raw(&a.request.domain.network.bytes());
+    w.raw(&a.request.domain.deployment.bytes());
+    w.raw(&a.request.account.bytes());
+    w.raw(&a.request.request.bytes());
+    w.raw(&a.policy.get().to_be_bytes());
+    w.raw(&a.digest);
+    w.u64(a.epoch);
+    w.raw(&a.signer);
+    w.raw(&a.contract);
+    w.byte(match a.effect {
+        api::Effect::Recorded => 0,
+        api::Effect::Grant => 1,
+        api::Effect::Revoke => 2,
+    });
+    w.blob(a.wire.as_bytes());
+}
+fn read_api_record(r: &mut Reader<'_>) -> Result<api::Record, Error> {
+    Ok(api::Record {
+        unit: UnitId::new(r.array()?).map_err(|_| Error::Codec)?,
+        request: RequestKey {
+            domain: Domain {
+                network: NetworkId::new(r.array()?).map_err(|_| Error::Codec)?,
+                deployment: DeploymentId::new(r.array()?).map_err(|_| Error::Codec)?,
+            },
+            account: AccountId::new(r.array()?).map_err(|_| Error::Codec)?,
+            request: RequestId::new(r.array()?).map_err(|_| Error::Codec)?,
+        },
+        policy: PolicyVersion::new(u32::from_be_bytes(r.array()?)).map_err(|_| Error::Codec)?,
+        digest: r.array()?,
+        epoch: r.u64()?,
+        signer: r.array()?,
+        contract: r.array()?,
+        effect: match r.byte()? {
+            0 => api::Effect::Recorded,
+            1 => api::Effect::Grant,
+            2 => api::Effect::Revoke,
+            _ => return Err(Error::Codec),
+        },
+        wire: model::PrivateBytes::new(r.blob()?.to_vec())?,
+    })
 }
 
 pub(super) fn reservation(control: &model::Control) -> Result<[u8; 32], Error> {

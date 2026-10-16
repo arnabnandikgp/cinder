@@ -3,6 +3,7 @@
 //! This does not migrate the shipping single-unit journal or authenticate a
 //! caller. A trusted controller must qualify every supplied fact/authorization.
 
+pub mod api;
 mod codec;
 mod store;
 pub use store::{Committed, Journal};
@@ -109,6 +110,11 @@ impl Configuration {
     pub fn units(&self) -> &[Descriptor] {
         &self.units
     }
+    /// Exact canonical registry commitment, not native qualification.
+    pub fn commitment(&self) -> Result<[u8; 32], Error> {
+        use sha2::{Digest, Sha256};
+        Ok(Sha256::digest(codec::configuration(self)?).into())
+    }
 }
 
 /// Asset-specific recipient for a shared wallet owner.
@@ -160,6 +166,8 @@ impl fmt::Debug for Route {
 /// New-version mutation; no legacy implicit/default unit routing.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Change {
+    /// Trusted API controller's authenticated record; never financial admission.
+    Api(Box<api::Record>),
     /// Add an empty owner to every component, atomically, at epoch one.
     Enroll {
         /// Qualified owner's wallet verification key.
@@ -223,6 +231,8 @@ impl fmt::Debug for Transaction {
 /// Replay-verifiable outcome; never an exposure or signing authorization.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Receipt {
+    /// A recorded-only intent or administrative record, never financial acceptance.
+    Api,
     /// Successful atomic enrollment or shared authority advance.
     Shared,
     /// Original existing financial/control dispositions in the selected unit.
@@ -241,6 +251,7 @@ pub struct State {
     units: Vec<(UnitId, model::State)>,
     customers: Vec<Customer>,
     routes: Vec<Route>,
+    api: Vec<api::Accepted>,
     now: u64,
 }
 impl fmt::Debug for State {
@@ -260,6 +271,7 @@ impl State {
             units,
             customers: vec![],
             routes: vec![],
+            api: vec![],
             now: 0,
         })
     }
@@ -283,6 +295,10 @@ impl State {
     pub fn logical_time(&self) -> u64 {
         self.now
     }
+    /// Immutable private API records in this accepted state; not fresh authority.
+    pub fn api_records(&self) -> &[api::Accepted] {
+        &self.api
+    }
 
     fn advance(&self, tx: &Transaction) -> Result<(Self, Receipt), Error> {
         if tx.at < self.now {
@@ -290,6 +306,10 @@ impl State {
         }
         let mut s = self.clone();
         let receipt = match &tx.change {
+            Change::Api(record) => {
+                s.capture_api(tx, record)?;
+                Receipt::Api
+            }
             Change::Enroll { wallet, recipients } => {
                 if *wallet == [0; 32]
                     || recipients.len() != s.units.len()
@@ -333,29 +353,7 @@ impl State {
                 Receipt::Shared
             }
             Change::AdvanceAuthority { account, epoch } => {
-                let owner = s
-                    .customers
-                    .iter_mut()
-                    .find(|c| c.account == *account)
-                    .ok_or(Error::Invalid)?;
-                if *epoch <= owner.epoch {
-                    return Err(Error::Invalid);
-                }
-                for (_, state) in &mut s.units {
-                    let inner = shared_proposal(
-                        tx,
-                        vec![model::Control::Order(orders::Action::AdvanceAuthority {
-                            account: *account,
-                            epoch: *epoch,
-                        })],
-                    );
-                    let (next, result) = state.advance(&inner)?;
-                    if result.controls.is_some() {
-                        return Err(Error::Invalid);
-                    }
-                    *state = next;
-                }
-                owner.epoch = *epoch;
+                s.advance_authority(tx, *account, *epoch)?;
                 Receipt::Shared
             }
             Change::Unit { unit, proposal } => {
@@ -448,6 +446,10 @@ impl State {
                 model::Control::Reserve { request, .. } => {
                     if request.domain != self.config.domain
                         || !self.customers.iter().any(|c| c.account == request.account)
+                        || self
+                            .api
+                            .iter()
+                            .any(|r| r.record.request == *request && r.record.unit != unit)
                     {
                         return Ok(None);
                     }
@@ -496,6 +498,37 @@ impl State {
             }
         }
         Ok(Some(routes))
+    }
+    fn advance_authority(
+        &mut self,
+        tx: &Transaction,
+        account: AccountId,
+        epoch: u64,
+    ) -> Result<(), Error> {
+        let owner = self
+            .customers
+            .iter_mut()
+            .find(|c| c.account == account)
+            .ok_or(Error::Invalid)?;
+        if epoch <= owner.epoch {
+            return Err(Error::Invalid);
+        }
+        for (_, state) in &mut self.units {
+            let inner = shared_proposal(
+                tx,
+                vec![model::Control::Order(orders::Action::AdvanceAuthority {
+                    account,
+                    epoch,
+                })],
+            );
+            let (next, result) = state.advance(&inner)?;
+            if result.controls.is_some() {
+                return Err(Error::Invalid);
+            }
+            *state = next;
+        }
+        owner.epoch = epoch;
+        Ok(())
     }
 }
 

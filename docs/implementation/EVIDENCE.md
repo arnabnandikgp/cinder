@@ -7,6 +7,27 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P31 adds `journal::units::api` records and `api::units::history` capture/derived
+grant interpretation under the original common head. Real Ed25519 and record AEAD
+are exercised with disposable synthetic identities, local SQLite and explicit
+fault ports; journal-only placeholder payloads are not signed grant evidence.
+API records pin unit/economics and contract, administrative revoke is atomic,
+and financial capture cannot become an accepted order or spend budget. Unit replay
+revision 2 deliberately refuses revision-1 opt-in histories; legacy shipping
+codec/engine remain unchanged. [ADR 0037](../architecture/0037-unit-api-history.md)
+records the controller/Runtime join and migration limits. No native semantics,
+hardware result, API endpoint or financial policy is promoted by these fixtures.
+
+P29/P30 merged as #73/#74 on October 16 at
+`793a05cba5f9c3811d215fa27568b0009bfb6dbc` /
+`1e9cd2dfdddf824c208ca4282c303e1b65cd0bc1`. Each exact final head passed all eight
+hosted jobs. The sole P29 Codex finding is fixed/resolved; P30 full CodeRabbit
+review has no actionable comments. Fetched trunk is tree-identical to the reviewed
+P30 tip. TRACKER records the original code/test trees, review scope, generic
+docstring warning and new trunk-push CI timing. Closure promotes only the stated
+offline journal and signed-contract scope, not durable multi-unit admission,
+shipping Runtime/API v2, native capability or changed-image hardware results.
+
 P30 promotes the opt-in API v2 contract in `api::units` and low-level private SDK
 helpers, not a network service. Synthetic Rust/SDK vectors manually extend every
 pinned v1 command with explicit unit identity and check independent Ed25519 and

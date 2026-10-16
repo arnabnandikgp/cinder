@@ -58,6 +58,7 @@ implementation is a separate workstream, not the template for this architecture.
 | Backend onboarding | Opt-in new-history wallet ownership, discovery and unsigned escrow preparation; no frontend/deployment | P25 |
 | Execution-unit journal foundation | Opt-in new-history registry, component states and shared owners/epochs under one head; no shipping API/Runtime, dispatch or recovery activation | P29 / ADR 0035 |
 | Unit-bound API contract | Opt-in v2 signed unit/digest/reply binding and current-head scope preflight; trusted accepted-grant port, not durable admission or a listener; shipping API remains v1 | P30 / ADR 0036 |
+| Durable unit API history | Original signed records and accepted grants/global revoke share the journal; financial capture is recorded-only, with immutable derived grant cuts; no financial admission or runtime activation | P31 / ADR 0037 |
 | Release review | Production policy, governance, independent assurance and customer-funds gates remain open | P24 |
 
 The P03/P04 implementation is deliberately a single configured quote pool with one
