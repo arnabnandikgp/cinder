@@ -41,7 +41,8 @@ pub struct Policy {
     /// Local one-shot egress lifetime, 1..30000 ms. Native raw signatures do not
     /// contain this deadline and an already escaped request is not revoked by it.
     pub expiry_ms: u64,
-    /// Conservative configured requests per 60000ms window; not a venue claim.
+    /// This unit's allocation from a separately qualified shared egress/IP
+    /// allowance per 60000ms. Never clone a whole venue limit into each unit.
     pub credits: u32,
     /// Capacity unavailable to new orders, preserved for scoped cancellation.
     pub cleanup_reserve: u32,
@@ -114,6 +115,11 @@ pub enum Reply {
         retry_after_ms: Option<u64>,
     },
 }
+/// Private one-shot authenticated egress. No retries, redirects or parent plaintext.
+pub trait Transport {
+    /// Consume the signed request once, checking its local expiry before writing.
+    fn post(&mut self, request: Outbound) -> Reply;
+}
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct Plan {
     attempt: Vec<u8>,
@@ -134,6 +140,16 @@ struct Archive {
 }
 #[derive(Serialize, Deserialize)]
 enum Record {
+    Read {
+        request: Vec<u8>,
+        kind: u8,
+        cleanup: bool,
+    },
+    ReadResponse {
+        reservation: [u8; 32],
+        body: [u8; 32],
+        code: Option<u16>,
+    },
     Epoch {
         epoch: u64,
         agent: Option<[u8; 32]>,
@@ -191,6 +207,7 @@ impl Gateway {
             || policy.cleanup_reserve == 0
             || policy.credits <= policy.cleanup_reserve
             || key.verifying_key().to_bytes() == profile.scope.account()
+            || matches!(profile.target,crate::financial::Target::SubAccount {parent} if parent==key.verifying_key().to_bytes())
             || config.quote != profile.quote
             || config.markets.len() != profile.mappings.len()
             || config.markets.is_empty()
@@ -281,6 +298,7 @@ impl Gateway {
         if j.configuration() != &self.config
             || d.id != self.policy.unit
             || d.native_account != self.profile.scope.account()
+            || d.environment != self.profile.scope.network.commitment()
         {
             return Err(Error::Unqualified);
         }
@@ -322,7 +340,8 @@ impl Gateway {
                 }
                 match a.record {
                     Record::Epoch { epoch, agent } => {
-                        if epoch <= h.epoch {
+                        if epoch <= h.epoch || !tx.controls.is_empty() || receipt.controls.is_some()
+                        {
                             return Err(Error::Unqualified);
                         }
                         h.epoch = epoch;
@@ -359,7 +378,15 @@ impl Gateway {
                         h.plans.push(plan);
                     }
                     Record::Cooldown { until } => h.blocked = h.blocked.max(until),
-                    Record::Expose(_) | Record::Response { .. } => (),
+                    Record::Read { .. } => {
+                        if !tx.controls.is_empty() || receipt.controls.is_some() {
+                            return Err(Error::Unqualified);
+                        }
+                        if at - tx.at < WINDOW + self.policy.expiry_ms {
+                            h.used = h.used.checked_add(1).ok_or(Error::Limit)?;
+                        }
+                    }
+                    Record::Expose(_) | Record::Response { .. } | Record::ReadResponse { .. } => (),
                 }
             }
         }
@@ -427,6 +454,89 @@ impl Gateway {
         )?;
         j.commit(tx).map_err(|_| Error::Unavailable)?;
         Ok(())
+    }
+    pub(crate) fn reserve_read(
+        &self,
+        j: &mut impl Controller,
+        id: CommitId,
+        at: u64,
+        kind: u8,
+        body: &PrivateBytes,
+        cleanup: bool,
+    ) -> Result<(PrivateBytes, u64), Error> {
+        if j.transaction(id).is_some() {
+            return Err(Error::Unqualified);
+        }
+        let h = self.history(j, at)?;
+        let cap = if cleanup {
+            self.policy.credits
+        } else {
+            self.policy.credits - self.policy.cleanup_reserve
+        };
+        if at < h.blocked || h.used >= cap {
+            return Err(Error::Limit);
+        }
+        let tx = self.transaction(
+            j,
+            id,
+            at,
+            Record::Read {
+                request: body.as_bytes().to_vec(),
+                kind,
+                cleanup,
+            },
+        )?;
+        let marker = tx.evidence[0].clone();
+        let committed = j.commit(tx).map_err(|_| Error::Unavailable)?;
+        if committed.duplicate || committed.receipt.controls.is_some() {
+            return Err(Error::Unqualified);
+        }
+        Ok((
+            marker,
+            at.checked_add(self.policy.expiry_ms).ok_or(Error::Limit)?,
+        ))
+    }
+    pub(crate) fn read_result(
+        &self,
+        id: CommitId,
+        body: [u8; 32],
+        code: Option<u16>,
+        cooldown: Option<u64>,
+    ) -> Result<Vec<PrivateBytes>, Error> {
+        let mut evidence = vec![self.archive(Record::ReadResponse {
+            reservation: id.bytes(),
+            body,
+            code,
+        })?];
+        if let Some(until) = cooldown {
+            evidence.push(self.archive(Record::Cooldown { until })?);
+        }
+        Ok(evidence)
+    }
+    pub(crate) fn read_succeeded(
+        &self,
+        tx: &Transaction,
+        body_hash: [u8; 32],
+    ) -> Result<bool, Error> {
+        let mut successes = 0;
+        for e in &tx.evidence {
+            if let Some(bytes) = e.as_bytes().strip_prefix(MAGIC) {
+                let a: Archive = serde_json::from_slice(bytes).map_err(|_| Error::Invalid)?;
+                if a.contract != self.contract {
+                    return Err(Error::Unqualified);
+                }
+                if let Record::ReadResponse {
+                    body,
+                    code: Some(200),
+                    ..
+                } = a.record
+                    && body == body_hash
+                {
+                    successes += 1;
+                }
+            }
+        }
+        Ok(successes == 1)
     }
     fn plan_at(
         &self,

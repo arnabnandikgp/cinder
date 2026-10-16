@@ -1,5 +1,6 @@
 //! Opt-in unit handler on the existing confidential TLS/Noise carriers. Native
 //! workers and a governed deployment manifest are separate activation gates.
+pub mod native;
 use crate::{
     Error,
     transport::{Clock, Handler, Prepared, PreparedReply, Session},

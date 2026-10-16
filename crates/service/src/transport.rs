@@ -595,6 +595,16 @@ pub fn relay_egress(
     first_ipv4((host, 443).to_socket_addrs()?)?;
     relay_socket(listener, || connect_https(host), stop, RelayKind::Egress)
 }
+/// Fixed BULK paper-testnet tunnel. No caller-provided hostname, wallet,
+/// plaintext request, arbitrary proxy or implicit mainnet route.
+pub fn relay_bulk(
+    listener: crate::vsock::VsockListener,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    let host = "exchange-api.bulk.trade";
+    first_ipv4((host, 443).to_socket_addrs()?)?;
+    relay_socket(listener, || connect_https(host), stop, RelayKind::Egress)
+}
 /// Distinct fixed-origin native WSS relay. The parent copies ciphertext only;
 /// it cannot select an account, decode transfers or certify economic completion.
 pub fn relay_native_capture(

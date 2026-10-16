@@ -3,7 +3,7 @@
 Work in `cinder-tee`, based on `product/tee-v1`, never legacy `main`.
 Cinder is a private perp broker: individual customer entitlements over pooled
 venue execution, Pacifica first, AWS Nitro. BULK is a second-venue candidate with
-offline wire/fill/financial codecs only, not an activated integration (PLAN P26–P28).
+opt-in unit-bound execution/read controllers, not an activated integration.
 P29's opt-in `journal::units` foundation composes new empty unit states under
 one head with shared owners/epochs; it does not wire shipping Runtime/API,
 dispatch, funding or recovery. ADR 0035 defines its deliberately limited controls.
@@ -13,9 +13,11 @@ financial capture (ADR 0037). P32 adds opt-in atomic financial decisions joining
 original operations to unit-local risk/holds and accepted-order quota (ADR 0038),
 not native exposure or a listener. P33 adds an opt-in unit Handler/private read
 publication and explicit UnitClient (ADR 0039), not a shipping deployment manifest
-or native execution. Unit replay revision 3 requires new empty
-histories; no revision-1/2 migration is supplied. Shipping Runtime/PrivateClient
-stay v1; preflight/capture/admission never authorize native exposure.
+or native execution. P34 adds a sealed selected-component controller, agent-only
+BULK execution, bounded native reads and fill/fee ingestion (ADR 0040). Unit
+replay revision 4 requires new empty histories; no revision-1/2/3 migration is
+supplied. Shipping Runtime/PrivateClient stay v1; only durable native preparation
+and qualified adapter policy can authorize native exposure.
 Phoenix/PER, the website/demo and Mintlify docs are separate workstreams, not
 backend templates.
 
@@ -44,7 +46,7 @@ backend templates.
 | `crates/kernel` | Dependency-free `no_std` money, ledger, positions, risk and allocation |
 | `crates/journal` | One atomic accepted history, replay/holds, encrypted replication/freshness |
 | `crates/api`, `clients/private` | Owner/agent auth, private views, confidential browser/Node SDK |
-| `crates/pacifica`, `crates/bulk` | Pacifica observations/signing/funding; BULK offline codecs only, not an activated integration |
+| `crates/pacifica`, `crates/bulk` | Pacifica observations/signing/funding; opt-in BULK unit execution/reads/fill normalization, not live activation |
 | `crates/service`, `crates/web-channel`, `services/web-relay` | Enclave runtime, shared Noise core, opaque host relay |
 | `programs/cinder-vault`, `clients/vault` | Anchor custody/recovery, generated IDL/types, chain client |
 | `crates/ports`, `crates/test-support`, `scripts`, `tools` | Typed boundaries, explicit fixtures, checks, scoped qualification |

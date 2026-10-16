@@ -25,6 +25,13 @@ pub enum Origin {
     Mainnet,
 }
 impl Origin {
+    /// Exact native environment commitment for shared-unit registry selection.
+    pub fn commitment(self) -> [u8; 32] {
+        let mut h = Sha256::new();
+        h.update(b"CINDER-PACIFICA-ENVIRONMENT-1\0");
+        h.update(self.url());
+        h.finalize().into()
+    }
     /// Pinned origin; the path is independently selected by the action encoder.
     pub fn url(self) -> &'static str {
         match self {
@@ -246,6 +253,15 @@ impl std::fmt::Debug for Gateway {
     }
 }
 impl Gateway {
+    /// Bind actual loaded native identity/environment to the selected component.
+    /// No master-key fallback or active-history retargeting is permitted.
+    pub fn unit_binding(&self, unit: &cinder_journal::units::Descriptor) -> Result<(), Error> {
+        self.profile.unit_binding(unit)?;
+        if self.agent_key() == unit.native_account {
+            return Err(Error::Qualification);
+        }
+        Ok(())
+    }
     pub(crate) fn read_binding(&self) -> (&Profile, &Policy) {
         (&self.profile, &self.policy)
     }

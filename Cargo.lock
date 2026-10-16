@@ -390,6 +390,7 @@ dependencies = [
  "aws-sigv4",
  "base64",
  "cinder-api",
+ "cinder-bulk",
  "cinder-journal",
  "cinder-kernel",
  "cinder-pacifica",

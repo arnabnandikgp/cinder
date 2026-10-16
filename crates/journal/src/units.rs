@@ -1,4 +1,5 @@
-//! Opt-in, new-history unit composition. One accepted state/head, no dispatch.
+//! Opt-in, new-history unit composition. One accepted state/head with sealed
+//! component controllers; native qualification remains adapter-owned.
 //!
 //! This does not migrate the shipping single-unit journal or authenticate a
 //! caller. A trusted controller must qualify every supplied fact/authorization.

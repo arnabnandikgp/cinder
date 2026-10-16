@@ -1,6 +1,7 @@
 //! Synthetic native qualification only. Trusted journal API-header fixtures are
 //! NOT valid private API signatures; P33 tests own that separate verification.
-//! Actual Ed25519 native signatures are verified independently below. No I/O.
+//! Actual Ed25519 native signatures are verified independently below. No network,
+//! wallets or real funds; SQLite/protection fixtures are explicitly synthetic.
 #[path = "../../journal/tests/support/mod.rs"]
 mod support;
 use cinder_bulk::{
@@ -60,7 +61,7 @@ fn config() -> units::Configuration {
                 ledger.sources.push(vault);
                 units::Descriptor {
                     id: uid(n),
-                    environment: [90; 32],
+                    environment: Network::Testnet.commitment(),
                     native_account: [n + 1; 32],
                     funding_wallet: [n + 2; 32],
                     custody_config: [n + 3; 32],
@@ -291,10 +292,19 @@ fn fixture(t: &support::Temp) -> (Store, Arc<AtomicBool>) {
     (j, unknown)
 }
 fn admit(j: &mut Store) -> AttemptKey {
+    admit_named(j, 20, 5, 6, 30)
+}
+fn admit_named(
+    j: &mut Store,
+    request_id: u8,
+    accept_id: u8,
+    prepare_id: u8,
+    attempt_id: u8,
+) -> AttemptKey {
     let cfg = config();
     let c = &cfg.units()[0].ledger;
     let intent = orders::Intent {
-        request: request(20),
+        request: request(request_id),
         quantity: support::q(2),
         minimum: support::p(90),
         maximum: support::p(110),
@@ -323,10 +333,10 @@ fn admit(j: &mut Store) -> AttemptKey {
             },
         ],
     })];
-    let proposal = proposal(j, 5, controls, vec![]);
+    let proposal = proposal(j, accept_id, controls, vec![]);
     let record = units::api::Record {
         unit: uid(40),
-        request: request(20),
+        request: request(request_id),
         policy: c.policy,
         digest: [20; 32],
         epoch: 1,
@@ -355,12 +365,12 @@ fn admit(j: &mut Store) -> AttemptKey {
         }
     ));
     let key = AttemptKey {
-        request: request(20),
-        attempt: AttemptId::new([30; 32]).unwrap(),
+        request: request(request_id),
+        attempt: AttemptId::new([attempt_id; 32]).unwrap(),
     };
     commit(
         j,
-        6,
+        prepare_id,
         vec![Control::Order(orders::Action::Prepare { attempt: key })],
         vec![],
     );
@@ -409,6 +419,144 @@ fn dispatch(key: AttemptKey, n: u8) -> Dispatch {
         nonce: u64::from(n),
         at: 10,
     }
+}
+
+fn poll(n: u8) -> cinder_bulk::reads::Poll {
+    cinder_bulk::reads::Poll {
+        kind: Kind::Trades,
+        reservation: CommitId::new([n; 32]).unwrap(),
+        evidence: CommitId::new([n + 1; 32]).unwrap(),
+        range: Some((100, 101)),
+        continuation: None,
+        limit: 8,
+        at: 10,
+        cleanup: false,
+    }
+}
+fn page() -> PrivateBytes {
+    PrivateBytes::new(br#"{"data":[],"page":{"nextCursor":"retained-next","hasMore":true,"asOfSlot":101,"startSlot":100,"endSlot":101,"coverage":"partial","minAvailableSlot":0}}"#.to_vec()).unwrap()
+}
+#[test]
+fn read_queries_are_exact_unit_owned_bounded_and_cursors_require_retained_success() {
+    let t = support::Temp::new();
+    let (mut j, _) = fixture(&t);
+    let g = gateway(1);
+    let (r, completion) =
+        cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(80)).unwrap();
+    let query = r.consume(10).unwrap();
+    assert_eq!(query.network(), Network::Testnet);
+    assert_eq!(query.path(), "/api/v1/account");
+    assert_eq!(query.expires_at(), 510);
+    let body: serde_json::Value = serde_json::from_slice(query.body()).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({"type":"fills","user":bs58::encode([41;32]).into_string(),"limit":8,"startSlot":100,"endSlot":101})
+    );
+    let before = j.state().unwrap().unit(uid(40)).unwrap().clone();
+    cinder_bulk::reads::complete(
+        &g,
+        &mut j.select(uid(40)).unwrap(),
+        completion,
+        Reply::Response {
+            status: 200,
+            body: page(),
+            received_at: 10,
+            retry_after_ms: None,
+        },
+        10,
+    )
+    .unwrap();
+    assert_eq!(
+        j.state().unwrap().unit(uid(40)).unwrap().ledger(),
+        before.ledger()
+    );
+    let mut next = poll(82);
+    next.range = None;
+    next.continuation = Some(CommitId::new([81; 32]).unwrap());
+    let (r, _) = cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), next).unwrap();
+    let body: serde_json::Value = serde_json::from_slice(r.consume(10).unwrap().body()).unwrap();
+    assert_eq!(body["cursor"], "retained-next");
+    assert!(body.get("startSlot").is_none());
+    // The same durable per-unit budget covers reads and signed order dispatch.
+    assert!(matches!(
+        cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(84)),
+        Err(Error::Limit)
+    ));
+    assert!(cinder_bulk::reads::prepare(&g, &mut j.select(uid(50)).unwrap(), poll(86)).is_err());
+}
+#[test]
+fn failed_http_pages_cannot_normalize_facts_or_supply_continuation_and_429_is_durable() {
+    let t = support::Temp::new();
+    let (mut j, _) = fixture(&t);
+    let g = gateway(1);
+    let (_, completion) =
+        cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(80)).unwrap();
+    cinder_bulk::reads::complete(
+        &g,
+        &mut j.select(uid(40)).unwrap(),
+        completion,
+        Reply::Response {
+            status: 429,
+            body: page(),
+            received_at: 10,
+            retry_after_ms: Some(100),
+        },
+        10,
+    )
+    .unwrap();
+    let selected = j.select(uid(40)).unwrap();
+    let original = selected
+        .transaction(CommitId::new([81; 32]).unwrap())
+        .unwrap();
+    assert_eq!(original.inputs.len(), 1);
+    assert!(original.inputs[0].event.is_none());
+    let mut next = poll(82);
+    next.range = None;
+    next.continuation = Some(CommitId::new([81; 32]).unwrap());
+    assert!(cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), next).is_err());
+    assert!(matches!(
+        cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(84)),
+        Err(Error::Limit)
+    ));
+}
+#[test]
+fn read_expiry_wrong_family_and_uncertain_reservation_never_release_a_second_request() {
+    let t = support::Temp::new();
+    let (mut j, unknown) = fixture(&t);
+    let g = gateway(1);
+    for n in [0, 129] {
+        let mut p = poll(80);
+        p.limit = n;
+        assert!(cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), p).is_err());
+    }
+    let mut p = poll(80);
+    p.kind = Kind::TradeStream;
+    assert!(cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), p).is_err());
+    let (r, _) =
+        cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(80)).unwrap();
+    assert!(r.consume(510).is_err());
+    assert!(cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(80)).is_err());
+    unknown.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(82)),
+        Err(Error::Unavailable)
+    ));
+    assert!(j.state().is_err());
+    drop(j);
+    let mut j = Store::open(
+        Storage {
+            inner: SqliteBackend::open(&t.db, Migration::None).unwrap(),
+            unknown,
+        },
+        support::FixtureProtection,
+        config(),
+    )
+    .unwrap();
+    assert!(cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(82)).is_err());
+    assert!(matches!(
+        cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(84)),
+        Err(Error::Limit)
+    ));
 }
 
 #[test]
@@ -643,4 +791,171 @@ fn unsupported_qualification_wrong_conversion_and_master_key_never_activate() {
     )
     .unwrap();
     assert!(Gateway::new(c, profile, policy(), Zeroizing::new([10; 32]), 1).is_err());
+}
+
+#[test]
+fn subaccount_parent_master_and_wrong_native_environment_are_refused() {
+    let c = config().units()[0].ledger.clone();
+    let parent = SigningKey::from_bytes(&[10; 32]).verifying_key().to_bytes();
+    let p = financial::Profile::new(
+        Scope::new(c.sources[0].scope, Network::Testnet, [41; 32]).unwrap(),
+        c.quote,
+        0,
+        Target::SubAccount { parent },
+        vec![Mapping::new(
+            NativeMarket::new("BTC-USD", "1", "1", 0).unwrap(),
+            c.markets[0].unit(),
+        )],
+    )
+    .unwrap();
+    assert!(Gateway::new(c.clone(), p, policy(), Zeroizing::new([10; 32]), 1).is_err());
+    let p = financial::Profile::new(
+        Scope::new(c.sources[0].scope, Network::Mainnet, [41; 32]).unwrap(),
+        c.quote,
+        0,
+        Target::Master,
+        vec![Mapping::new(
+            NativeMarket::new("BTC-USD", "1", "1", 0).unwrap(),
+            c.markets[0].unit(),
+        )],
+    )
+    .unwrap();
+    let g = Gateway::new(c, p, policy(), Zeroizing::new([10; 32]), 1).unwrap();
+    let t = support::Temp::new();
+    let (mut j, _) = fixture(&t);
+    let before = j.head();
+    assert!(
+        g.initialize(
+            &mut j.select(uid(40)).unwrap(),
+            CommitId::new([7; 32]).unwrap(),
+            10
+        )
+        .is_err()
+    );
+    assert_eq!(j.head(), before);
+}
+
+fn cancel(j: &mut Store) -> AttemptKey {
+    let key = AttemptKey {
+        request: request(20),
+        attempt: AttemptId::new([31; 32]).unwrap(),
+    };
+    let p = proposal(
+        j,
+        14,
+        vec![Control::Order(orders::Action::PrepareCancel {
+            attempt: key,
+            authority_epoch: 1,
+            expires_at: 1000,
+        })],
+        vec![],
+    );
+    let cfg = config();
+    let c = &cfg.units()[0].ledger;
+    let record = units::api::Record {
+        unit: uid(40),
+        request: request(21),
+        policy: c.policy,
+        digest: [21; 32],
+        epoch: 1,
+        signer: [70; 32],
+        contract: [90; 32],
+        effect: units::api::Effect::Recorded,
+        wire: support::raw(b"trusted cancel-header fixture only"),
+    };
+    let result = j
+        .commit(units::Transaction {
+            id: p.id,
+            expected: p.expected,
+            at: 10,
+            change: units::Change::Admit(Box::new(units::api::Admission {
+                record,
+                kind: units::api::Kind::Cancel {
+                    target: request(20),
+                    attempt: key.attempt,
+                },
+                proposal: p,
+            })),
+        })
+        .unwrap();
+    assert!(matches!(
+        result.receipt,
+        units::Receipt::Admitted {
+            receipt: Receipt { controls: None, .. },
+            ..
+        }
+    ));
+    key
+}
+#[test]
+fn new_orders_cannot_consume_reserved_native_cancel_capacity_or_release_holds_on_cancel_ack() {
+    let t = support::Temp::new();
+    let (mut j, _) = fixture(&t);
+    let original = admit(&mut j);
+    let mut p = policy();
+    p.credits = 2;
+    let g = Gateway::new(
+        config().units()[0].ledger.clone(),
+        profile(),
+        p,
+        Zeroizing::new([10; 32]),
+        1,
+    )
+    .unwrap();
+    g.initialize(
+        &mut j.select(uid(40)).unwrap(),
+        CommitId::new([7; 32]).unwrap(),
+        10,
+    )
+    .unwrap();
+    let (_out, _pending) = g
+        .prepare_dispatch(&mut j.select(uid(40)).unwrap(), dispatch(original, 8))
+        .unwrap();
+    let other = admit_named(&mut j, 22, 10, 11, 32);
+    assert!(matches!(
+        g.prepare_dispatch(&mut j.select(uid(40)).unwrap(), dispatch(other, 13)),
+        Err(Error::Limit)
+    ));
+    let cleanup = cancel(&mut j);
+    let (out, c) = g
+        .prepare_dispatch(&mut j.select(uid(40)).unwrap(), dispatch(cleanup, 15))
+        .unwrap();
+    let value: serde_json::Value = serde_json::from_slice(out.body()).unwrap();
+    let oid = value
+        .pointer("/actions/0/cx/oid")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let reply = serde_json::json!({"status":"ok","response":{"type":"order","data":{"statuses":[{"cancelled":{"oid":oid}}]}}});
+    assert_eq!(
+        g.complete_dispatch(
+            &mut j.select(uid(40)).unwrap(),
+            c,
+            Reply::Response {
+                status: 200,
+                body: PrivateBytes::new(serde_json::to_vec(&reply).unwrap()).unwrap(),
+                received_at: 10,
+                retry_after_ms: None
+            },
+            10
+        )
+        .unwrap(),
+        Outcome::CancelAcknowledged
+    );
+    let s = j.state().unwrap().unit(uid(40)).unwrap();
+    assert!(s.orders()[0].cancel_acknowledged);
+    assert!(!s.orders()[0].complete());
+    assert!(s.holds()[0].active);
+}
+
+#[test]
+fn wrong_unit_exposure_and_foundation_preparation_cannot_create_native_deliveries() {
+    let t = support::Temp::new();
+    let (mut j, _) = fixture(&t);
+    let original = admit(&mut j);
+    let p = proposal(&j, 7, vec![Control::Expose(original)], vec![]);
+    let result = j.select(uid(50)).unwrap().commit(p).unwrap();
+    assert_eq!(result.receipt.controls, Some(ControlError::Invalid));
+    assert!(result.exposures.is_empty());
+    assert!(!j.state().unwrap().unit(uid(40)).unwrap().attempts()[0].possibly_exposed);
 }

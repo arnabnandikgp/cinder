@@ -100,6 +100,17 @@ pub fn ingest(
     id: CommitId,
     at: u64,
 ) -> Result<Committed, Error> {
+    ingest_with(gateway, j, message, id, at, true, vec![])
+}
+pub(crate) fn ingest_with(
+    gateway: &Gateway,
+    j: &mut impl Controller,
+    message: Message,
+    id: CommitId,
+    at: u64,
+    normalize: bool,
+    extra: Vec<PrivateBytes>,
+) -> Result<Committed, Error> {
     let (profile, revision) = gateway.observation_binding(j)?;
     if message.body.as_bytes().len() > fills::MAX_BODY || message.received_at > at {
         return Err(Error::Limit);
@@ -121,50 +132,55 @@ pub fn ingest(
         funds_observations: vec![],
         controls: vec![],
     };
+    tx.evidence.extend(extra);
     let mut fills = Vec::new();
     let unresolved;
-    match message.kind {
-        Kind::Trades => match fills::rest(
-            &profile.scope,
-            &profile
-                .mappings
-                .iter()
-                .map(|m| m.wire.clone())
-                .collect::<Vec<_>>(),
-            message.body.as_bytes(),
-        ) {
-            Ok(page) => {
-                fills = page.fills;
-                unresolved = !page.unmapped.is_empty();
+    if !normalize {
+        unresolved = true;
+    } else {
+        match message.kind {
+            Kind::Trades => match fills::rest(
+                &profile.scope,
+                &profile
+                    .mappings
+                    .iter()
+                    .map(|m| m.wire.clone())
+                    .collect::<Vec<_>>(),
+                message.body.as_bytes(),
+            ) {
+                Ok(page) => {
+                    fills = page.fills;
+                    unresolved = !page.unmapped.is_empty();
+                }
+                Err(_) => unresolved = true,
+            },
+            Kind::TradeStream => {
+                // Only an already configured symbol can select a mapping. Decode
+                // twice at most, not once per configured market.
+                if let Ok(body) = crate::raw::decode::<serde_json::Value>(message.body.as_bytes())
+                    && let Some(symbol) = body.pointer("/data/symbol").and_then(|v| v.as_str())
+                    && let Some(mapping) = profile.mapping(symbol)
+                    && let Ok(fill) =
+                        fills::stream(&profile.scope, &mapping.wire, message.body.as_bytes())
+                {
+                    fills.push(fill);
+                }
+                unresolved = fills.len() != 1;
             }
-            Err(_) => unresolved = true,
-        },
-        Kind::TradeStream => {
-            // Only an already configured symbol can select a mapping. Decode
-            // twice at most, not once per configured market.
-            if let Ok(body) = crate::raw::decode::<serde_json::Value>(message.body.as_bytes())
-                && let Some(symbol) = body.pointer("/data/symbol").and_then(|v| v.as_str())
-                && let Some(mapping) = profile.mapping(symbol)
-                && let Ok(fill) =
-                    fills::stream(&profile.scope, &mapping.wire, message.body.as_bytes())
-            {
-                fills.push(fill);
+            Kind::Account => {
+                unresolved = !financial::account::decode_account(profile, message.body.as_bytes())
+                    .is_ok_and(|s| s.held.is_empty());
             }
-            unresolved = fills.len() != 1;
-        }
-        Kind::Account => {
-            unresolved =
-                financial::account::decode_account(profile, message.body.as_bytes()).is_err();
-        }
-        Kind::Funding => {
-            // A native net payment does not determine private gross funding or
-            // its eligible inventory cut. Keep it pending qualification.
-            let _ = financial::history::funding(profile, message.body.as_bytes());
-            unresolved = true;
-        }
-        Kind::Risk => {
-            let _ = financial::history::risk(profile, message.body.as_bytes());
-            unresolved = true;
+            Kind::Funding => {
+                // A native net payment does not determine private gross funding or
+                // its eligible inventory cut. Keep it pending qualification.
+                let _ = financial::history::funding(profile, message.body.as_bytes());
+                unresolved = true;
+            }
+            Kind::Risk => {
+                let _ = financial::history::risk(profile, message.body.as_bytes());
+                unresolved = true;
+            }
         }
     }
     for (index, fill) in fills.iter().enumerate() {
@@ -196,4 +212,40 @@ pub fn ingest(
         });
     }
     j.commit(tx).map_err(|_| Error::Unavailable)
+}
+pub(crate) fn continuation(
+    gateway: &Gateway,
+    j: &impl Controller,
+    kind: Kind,
+    id: CommitId,
+) -> Result<String, Error> {
+    let (profile, _) = gateway.observation_binding(j)?;
+    let tx = j.transaction(id).ok_or(Error::Unqualified)?;
+    let mut records = tx
+        .evidence
+        .iter()
+        .filter_map(|e| e.as_bytes().strip_prefix(MAGIC));
+    let record = records.next().ok_or(Error::Unqualified)?;
+    if records.next().is_some()
+        || record.len() < 41
+        || record[..32] != profile.commitment()
+        || record[32] != kind as u8
+    {
+        return Err(Error::Unqualified);
+    }
+    if !gateway.read_succeeded(tx, Sha256::digest(&record[41..]).into())? {
+        return Err(Error::Unqualified);
+    }
+    let body = crate::raw::decode::<serde_json::Value>(&record[41..])?;
+    if body.pointer("/page/hasMore").and_then(|v| v.as_bool()) != Some(true) {
+        return Err(Error::Unqualified);
+    }
+    let cursor = body
+        .pointer("/page/nextCursor")
+        .and_then(|v| v.as_str())
+        .ok_or(Error::Invalid)?;
+    if cursor.is_empty() || cursor.len() > 1024 {
+        return Err(Error::Limit);
+    }
+    Ok(cursor.into())
 }
