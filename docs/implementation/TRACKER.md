@@ -38,7 +38,11 @@
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | closed | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), merged `793a05c` |
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
-| [P32 — Unit-scoped financial admission](PLAN.md#p32) | in progress | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), open; CI/review pending |
+| [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
+| [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | — |
+| [P34 — Unit execution and reconciliation](PLAN.md#p34) | open | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | — |
+| [P35 — Unit funding and recovery](PLAN.md#p35) | open | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | — |
+| [P36 — Joined second-venue acceptance](PLAN.md#p36) | open | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -47,6 +51,23 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### Four-layer integration stack authorized — 2026-10-16
+
+User approved P33–P36 as four stacked PRs and requested continuous progress
+through all independent offline work, without automatic merge. Native runs need
+their own scoped approval. The current approval permits at most 12 unsigned
+public market/fee/schema GETs on BULK testnet, no wallets, funds, RPC or AWS.
+Preserve the three unrelated untracked user paths listed in earlier handoffs.
+
+P32 final head `1396c61be91907bb45baa386f35613351366df2a` passed all eight hosted
+jobs and CodeRabbit; Codex had no findings at its code-identical reviewed head.
+No actionable inline threads remained. User-authorized, head-pinned squash merge
+completed at 16:03:58 UTC as `1134f9421d090caae9739868bcf860ba61e43157`.
+Fetched trunk and reviewed head have tree `27f326bcc9e84b2b44d71012bb4bafefb836cf5b`.
+P33 branch `tee/p33-unit-service` starts at that actual merge. No user files or
+financial policy changed. Next: meet the MAX_ITEMS history-cost gate, then wire
+unit requests and projections without regressing current-head publication.
 
 ### P32 published for review — 2026-10-16
 
@@ -6386,10 +6407,51 @@ Unexpected: tests must distinguish known noncommitted SQLite CAS failure from
 unknown append fencing. Payout acceptance reserves customer entitlement; queued
 amounts need not already be available at the payout location. Dispatch retains
 its separate FIFO/location qualification. No policy was changed to satisfy tests.
-Next: inspect #77's exact-head CI/review. Runtime wiring
-must first qualify MAX_ITEMS replay cost; no native activation is implied.
+Next: P33 shared-unit service/read/SDK integration with MAX_ITEMS cost evidence;
+no native activation is implied. Final review/CI and actual merge are recorded
+in the current handoff.
 PR: https://github.com/arnabnandikgp/cinder/pull/77.
-Merge: Not merged.
+Merge: 1134f9421d090caae9739868bcf860ba61e43157.
+
+## P33 — Unit service, reads and SDK
+
+Work: implementing the approved shared-unit handler, private projections and
+explicit SDK client, reusing existing witnessed final-release gates.
+Verification: focused tests running; exact-source matrix pending.
+Unexpected: recorded-only receipts need an explicit v2-only lifecycle extension;
+legacy decoders must refuse it. No v1-to-v2 default-unit fallback.
+Next: finish focused publication/performance/client tests, then exact-source checks.
+PR: none.
+Merge: none.
+
+## P34 — Unit execution and reconciliation
+
+Work: not started; scope and gates in PLAN.
+Verification: not run.
+Unexpected: refreshed public metadata GETs returned Cloudflare origin 502 for
+exchangeInfo and feeState; no new native capability was established.
+Next: unit-owned native preparation/exposure and observation reconciliation.
+PR: none.
+Merge: none.
+
+## P35 — Unit funding and recovery
+
+Work: not started; scope and gates in PLAN.
+Verification: not run.
+Unexpected: unsupported native credit/return cannot be bypassed by another unit.
+Next: compose existing custody/funds/recovery boundaries after execution routing.
+PR: none.
+Merge: none.
+
+## P36 — Joined second-venue acceptance
+
+Work: not started; scope and gates in PLAN.
+Verification: not run; current live approval is public metadata GETs only.
+Unexpected: actual native/hardware qualification requires a separate scoped run;
+offline fixtures cannot close that criterion.
+Next: joined offline acceptance and a bounded qualification proposal.
+PR: none.
+Merge: none.
 
 ## P24 — Release safety case
 

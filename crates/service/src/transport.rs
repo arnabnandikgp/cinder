@@ -99,6 +99,7 @@ pub struct PreparedReply {
 pub(crate) enum Prepared {
     Immediate(PrivateBytes),
     Accepted(crate::runtime::ReadCandidate),
+    Unit(crate::units::ReadCandidate),
 }
 impl PreparedReply {
     pub(crate) fn immediate(bytes: PrivateBytes) -> Self {
@@ -166,7 +167,7 @@ pub trait Handler: Send + Sync {
     ) -> Result<Option<PrivateBytes>, Error> {
         match prepared.inner {
             Prepared::Immediate(reply) => Ok(Some(reply)),
-            Prepared::Accepted(_) => Err(Error),
+            Prepared::Accepted(_) | Prepared::Unit(_) => Err(Error),
         }
     }
 }

@@ -82,6 +82,8 @@ impl Records {
                         request,
                         accepted,
                         at: tx.at,
+                        unit: None,
+                        recorded_only: false,
                     });
                 }
             }

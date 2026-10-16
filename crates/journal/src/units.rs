@@ -5,7 +5,7 @@
 
 pub mod api;
 mod codec;
-mod store;
+pub(crate) mod store;
 pub use store::{Committed, Journal};
 
 use crate::{Error, Head, model, onboarding, orders, wire};

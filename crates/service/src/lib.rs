@@ -27,6 +27,8 @@ pub mod recovery;
 pub mod release;
 pub mod runtime;
 pub mod transport;
+/// Opt-in shared-unit private handler; no shipping manifest or native activation.
+pub mod units;
 pub mod verifier;
 pub mod vsock;
 /// Attested Noise ingress into the same private financial handler as TLS.

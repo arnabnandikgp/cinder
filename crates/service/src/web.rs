@@ -351,8 +351,13 @@ impl Server {
                 let request = PrivateBytes::new(request.to_vec()).map_err(|_| Error)?;
                 if delivery == 3 {
                     // Never dispatch a mutation disguised as a subscription.
-                    let valid = cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r|
-                    matches!(r.command,cinder_api::wire::Command::Read(q) if q.cursor == [0;40]));
+                    let valid = if request.as_bytes().starts_with(b"CINDER-API\0\x00\x02") {
+                        cinder_api::units::Request::decode(request.as_bytes()).is_ok_and(|r|
+                        matches!(r.body.command,cinder_api::wire::Command::Read(q) if q.cursor == [0;40]))
+                    } else {
+                        cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r|
+                    matches!(r.command,cinder_api::wire::Command::Read(q) if q.cursor == [0;40]))
+                    };
                     if !valid || watch.is_some() {
                         return Err(Error);
                     }
@@ -462,6 +467,16 @@ impl Server {
     }
 }
 fn revision_of(bytes: &[u8]) -> Option<[u8; 32]> {
+    let unit_prefix = b"CINDER-API-REPLY\0\x00\x02";
+    let bytes = if bytes.starts_with(unit_prefix) {
+        let unit = bytes.get(unit_prefix.len()..unit_prefix.len() + 32)?;
+        if unit == [0; 32] {
+            return None;
+        }
+        bytes.get(unit_prefix.len() + 32..)?
+    } else {
+        bytes
+    };
     let prefix = b"CINDER-API-REPLY\0\x00\x01";
     if !bytes.starts_with(prefix) || bytes.get(prefix.len()..prefix.len() + 2)? != [3, 1] {
         return None;

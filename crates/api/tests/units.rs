@@ -1,4 +1,108 @@
 //! Synthetic unit scopes/accepted-grant port; no runnable v2 service or native I/O.
+#[test]
+fn unit_history_cache_hits_are_same_head_only_and_keep_current_freshness() {
+    let t = Temp::new();
+    let fail = Arc::new(AtomicBool::new(false));
+    let mut j = units::Journal::create(
+        WitnessFault {
+            inner: SqliteBackend::create(&t.db).unwrap(),
+            fail: fail.clone(),
+        },
+        cipher(),
+        config(),
+    )
+    .unwrap();
+    j.commit(enrollment(j.head())).unwrap();
+    let mut cache = api::history::Cache::default();
+    let first = cache.load(&mut j, &authorizer()).unwrap();
+    assert!(Arc::ptr_eq(
+        &first,
+        &cache.load(&mut j, &authorizer()).unwrap()
+    ));
+    let r = request(40, wire::Command::Grant(grant()), 9);
+    authorizer()
+        .capture(&mut j, &Channel::default(), &r.encode().unwrap(), 10)
+        .unwrap();
+    let second = cache.load(&mut j, &authorizer()).unwrap();
+    assert!(!Arc::ptr_eq(&first, &second));
+    assert!(
+        cache
+            .load(&mut j, &api::Authorizer::new(99, 1000).unwrap())
+            .is_err()
+    );
+    assert!(cache.load(&mut j, &authorizer()).is_ok());
+    fail.store(true, Ordering::SeqCst);
+    assert!(cache.load(&mut j, &authorizer()).is_err());
+    assert!(cache.load(&mut j, &authorizer()).is_err());
+}
+
+#[test]
+fn unit_history_max_items_cold_and_repeated_request_cost() {
+    use std::time::Instant;
+    let t = Temp::new();
+    let mut j = create(&t);
+    let r = request(40, order(), 9);
+    authorizer()
+        .capture(&mut j, &Channel::default(), &r.encode().unwrap(), 10)
+        .unwrap();
+    let contract = j.state().unwrap().api_records()[0].record.contract;
+    for n in 1..cinder_journal::wire::MAX_ITEMS {
+        let mut r = request(40, order(), 9);
+        let mut identity = [3; 32];
+        identity[..8].copy_from_slice(&(n as u64).to_be_bytes());
+        r.body.id = RequestId::new(identity).unwrap();
+        sign(&mut r, 9);
+        identity[31] = 4;
+        j.commit(units::Transaction {
+            id: CommitId::new(identity).unwrap(),
+            expected: j.head(),
+            at: 10,
+            change: units::Change::Api(Box::new(units::api::Record {
+                unit: r.unit,
+                request: RequestKey {
+                    domain: domain(),
+                    account: account(),
+                    request: r.body.id,
+                },
+                policy: r.body.policy,
+                digest: r.digest(),
+                epoch: 1,
+                signer: r.body.signer,
+                contract,
+                effect: units::api::Effect::Recorded,
+                wire: r.encode().unwrap(),
+            })),
+        })
+        .unwrap();
+    }
+    let mut cache = api::history::Cache::default();
+    let cold = Instant::now();
+    let first = cache.load(&mut j, &authorizer()).unwrap();
+    let cold = cold.elapsed();
+    let warm = Instant::now();
+    for _ in 0..64 {
+        let history = cache.load(&mut j, &authorizer()).unwrap();
+        assert!(Arc::ptr_eq(&first, &history));
+        authorizer()
+            .check(
+                &mut j,
+                &Channel::default(),
+                &request(40, wire::Command::View, 9).encode().unwrap(),
+                &*history,
+                10,
+            )
+            .unwrap();
+    }
+    eprintln!(
+        "unit history MAX_ITEMS={}: cold={cold:?}, 64 fresh authenticated same-head requests={:?}",
+        cinder_journal::wire::MAX_ITEMS,
+        warm.elapsed()
+    );
+    assert_eq!(
+        j.state().unwrap().api_records().len(),
+        cinder_journal::wire::MAX_ITEMS
+    );
+}
 #[path = "units/admission.rs"]
 mod admission_tests;
 #[path = "../../journal/tests/support/mod.rs"]

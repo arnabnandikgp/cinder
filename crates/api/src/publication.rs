@@ -91,10 +91,21 @@ impl<A: Admission> Service<A> {
         is_owner: bool,
         now: u64,
     ) -> Result<Response, Error> {
+        self.project_scoped(source, req, records, is_owner, now, None)
+    }
+    pub(crate) fn project_scoped(
+        &self,
+        source: &impl Source,
+        req: &Request,
+        records: &[crate::Record],
+        is_owner: bool,
+        now: u64,
+        unit: Option<cinder_kernel::identity::UnitId>,
+    ) -> Result<Response, Error> {
         let state = source.state().map_err(|_| Error::Unavailable)?;
         match &req.command {
             Command::Read(query) => self
-                .read(source, req, records, *query, is_owner, now)
+                .read_scoped(source, req, records, *query, is_owner, now, unit)
                 .map(Response::Read),
             Command::View => {
                 let book = state
@@ -126,7 +137,10 @@ impl<A: Admission> Service<A> {
                 }))
             }
             Command::Operation(id) => {
-                let record = records.find(req.account, *id).ok_or(Error::NotFound)?;
+                let record = records
+                    .iter()
+                    .find(|r| r.request.account == req.account && r.request.id == *id)
+                    .ok_or(Error::NotFound)?;
                 self.receipt(state, record).map(Response::Receipt)
             }
             _ => Err(Error::Invalid),

@@ -2,6 +2,7 @@
 //! not a handler returning financial Accepted receipts or a native capability.
 use super::*;
 use cinder_journal::{model::CommitId, units::api as retained};
+use std::{collections::BTreeMap, sync::Arc};
 
 /// Original private mutation and its capture result. Recorded financial requests
 /// have not passed admission; never map them to `Outcome::Accepted`.
@@ -27,7 +28,8 @@ impl fmt::Debug for Captured {
 pub struct History {
     pub(super) head: Head,
     pub(super) contract: [u8; 32],
-    rows: Vec<Captured>,
+    pub(super) rows: Vec<Captured>,
+    index: BTreeMap<(AccountId, RequestId), usize>,
     pub(super) grants: Vec<(Scope, GrantCut)>,
 }
 impl fmt::Debug for History {
@@ -44,25 +46,30 @@ impl History {
     ) -> Result<Self, Error> {
         journal.verified_state().map_err(|_| Error::Unavailable)?;
         let state = journal.state().map_err(|_| Error::Unavailable)?;
-        let mut w = Writer::new(b"CINDER-UNIT-API-CONTRACT\0\x00\x01");
-        w.raw(
-            &state
-                .configuration()
-                .commitment()
-                .map_err(|_| Error::Unavailable)?,
-        );
-        w.u64(auth.maximum_auth_lifetime);
-        w.u64(auth.maximum_grant_lifetime);
+        Self::interpret(
+            state,
+            journal.head(),
+            auth,
+            journal.transactions().map_err(|_| Error::Unavailable)?,
+        )
+    }
+    fn interpret<'a>(
+        state: &units::State,
+        head: Head,
+        auth: &Authorizer,
+        transactions: impl Iterator<Item = (&'a units::Transaction, &'a units::Receipt)>,
+    ) -> Result<Self, Error> {
         let mut history = Self {
-            head: journal.head(),
-            contract: Sha256::digest(&*w.0).into(),
+            head,
+            contract: fingerprint(state.configuration(), auth)?,
             rows: vec![],
+            index: BTreeMap::new(),
             grants: vec![],
         };
         for accepted in state.api_records() {
             history.push(accepted, state, auth)?;
         }
-        super::admission::validate(journal, &history)?;
+        super::admission::validate(state, transactions, &history)?;
         // Count actual admitted orders, never mere capture. Unattributed orders
         // cannot silently become zero agent usage when financial joining arrives.
         for descriptor in state.configuration().units() {
@@ -106,9 +113,7 @@ impl History {
         Ok(history)
     }
     pub(super) fn find(&self, account: AccountId, request: RequestId) -> Option<&Captured> {
-        self.rows
-            .iter()
-            .find(|r| r.request.body.account == account && r.request.body.id == request)
+        self.index.get(&(account, request)).map(|i| &self.rows[*i])
     }
     fn push(
         &mut self,
@@ -180,6 +185,7 @@ impl History {
                 },
             ));
         }
+        self.index.insert((b.account, b.id), self.rows.len());
         self.rows.push(Captured {
             request: req,
             at: a.at,
@@ -298,6 +304,96 @@ impl History {
         }
     }
 }
+
+pub(super) fn fingerprint(
+    config: &units::Configuration,
+    auth: &Authorizer,
+) -> Result<[u8; 32], Error> {
+    let mut w = Writer::new(b"CINDER-UNIT-API-CONTRACT\0\x00\x01");
+    w.raw(&config.commitment().map_err(|_| Error::Unavailable)?);
+    w.u64(auth.maximum_auth_lifetime);
+    w.u64(auth.maximum_grant_lifetime);
+    Ok(Sha256::digest(&*w.0).into())
+}
+
+/// Derived in-enclave interpretation of one exact accepted head. This is not a
+/// grant database, authorization memo or freshness witness. Every load checks
+/// current storage, including cache hits; changed configuration/auth limits miss.
+#[derive(Default)]
+pub struct Cache {
+    current: Option<Arc<History>>,
+}
+impl fmt::Debug for Cache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("UnitHistoryCache([PRIVATE])")
+    }
+}
+impl Cache {
+    /// Interpret the immutable publication under this request's own witness.
+    /// Final authorization and release are still required by the caller.
+    pub fn witnessed(
+        &mut self,
+        view: &cinder_journal::read::Verified,
+        auth: &Authorizer,
+    ) -> Result<Arc<History>, Error> {
+        use cinder_journal::read::Source;
+        let state = view.unit_state().map_err(|_| Error::Unavailable)?;
+        let contract = fingerprint(state.configuration(), auth)?;
+        if let Some(old) = &self.current
+            && old.head == view.head()
+            && old.contract == contract
+        {
+            return Ok(old.clone());
+        }
+        self.current = None;
+        let next = Arc::new(History::interpret(
+            state,
+            view.head(),
+            auth,
+            view.unit_transactions().map_err(|_| Error::Unavailable)?,
+        )?);
+        self.current = Some(next.clone());
+        Ok(next)
+    }
+    /// Reuse only unchanged authenticated history. Failed freshness/rebuild drops
+    /// the cache; an old Arc remains private data, never current authority.
+    pub fn load<B: Backend, P: Protection>(
+        &mut self,
+        journal: &mut units::Journal<B, P>,
+        auth: &Authorizer,
+    ) -> Result<Arc<History>, Error> {
+        if journal.verified_state().is_err() {
+            self.current = None;
+            return Err(Error::Unavailable);
+        }
+        self.accepted(journal, auth)
+    }
+    // Caller owns the writer and has independently checked freshness BEFORE
+    // acquiring the cache latch. No backend/witness I/O occurs in this method.
+    pub(super) fn accepted<B: Backend, P: Protection>(
+        &mut self,
+        journal: &units::Journal<B, P>,
+        auth: &Authorizer,
+    ) -> Result<Arc<History>, Error> {
+        let state = journal.state().map_err(|_| Error::Unavailable)?;
+        let contract = fingerprint(journal.configuration(), auth)?;
+        if let Some(old) = &self.current
+            && old.head == journal.head()
+            && old.contract == contract
+        {
+            return Ok(old.clone());
+        }
+        self.current = None;
+        let next = Arc::new(History::interpret(
+            state,
+            journal.head(),
+            auth,
+            journal.transactions().map_err(|_| Error::Unavailable)?,
+        )?);
+        self.current = Some(next.clone());
+        Ok(next)
+    }
+}
 impl Grants for History {
     fn lookup(
         &self,
@@ -327,7 +423,17 @@ impl Authorizer {
         now: u64,
     ) -> Result<Captured, Error> {
         let history = History::load(journal, self)?;
-        let checked = self.check_inner(journal, channel, bytes, &history, now, false)?;
+        self.capture_at(journal, channel, bytes, now, &history)
+    }
+    pub(super) fn capture_at<B: Backend, P: Protection>(
+        &self,
+        journal: &mut units::Journal<B, P>,
+        channel: &impl ConfidentialChannel,
+        bytes: &PrivateBytes,
+        now: u64,
+        history: &History,
+    ) -> Result<Captured, Error> {
+        let checked = self.check_inner(journal, channel, bytes, history, now, false)?;
         if checked.head() != history.head {
             return Err(Error::Unavailable);
         }

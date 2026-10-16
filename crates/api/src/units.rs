@@ -3,6 +3,7 @@
 
 pub mod admission;
 pub mod history;
+pub mod service;
 
 use crate::{
     ConfidentialChannel, Error, Response, authorization,
@@ -216,9 +217,22 @@ impl Authorizer {
         now: u64,
         validate_owner_grant: bool,
     ) -> Result<Checked, Error> {
+        let request = self.authenticate(journal.configuration(), channel, bytes, now)?;
+        let head = journal.head();
+        let state = journal.verified_state().map_err(|_| Error::Unavailable)?;
+        self.check_at(state, head, request, grants, now, validate_owner_grant)
+    }
+    /// Verify only the signed envelope before remote witness work. This result
+    /// supplies no current owner/grant or financial authorization.
+    pub fn authenticate(
+        &self,
+        config: &units::Configuration,
+        channel: &impl ConfidentialChannel,
+        bytes: &PrivateBytes,
+        now: u64,
+    ) -> Result<Request, Error> {
         let request = Request::decode(bytes.as_bytes())?;
         let req = &request.body;
-        let config = journal.configuration();
         let descriptor = config
             .units()
             .iter()
@@ -240,8 +254,18 @@ impl Authorizer {
             .map_err(|_| Error::Unauthorized)?
             .verify_strict(&request.message(), &Signature::from_bytes(&req.signature))
             .map_err(|_| Error::Unauthorized)?;
-        let head = journal.head();
-        let state = journal.verified_state().map_err(|_| Error::Unavailable)?;
+        Ok(request)
+    }
+    pub(super) fn check_at(
+        &self,
+        state: &units::State,
+        head: Head,
+        request: Request,
+        grants: &impl Grants,
+        now: u64,
+        validate_owner_grant: bool,
+    ) -> Result<Checked, Error> {
+        let req = &request.body;
         if now < state.logical_time() {
             return Err(Error::Unavailable);
         }

@@ -7,7 +7,7 @@ use crate::{
     replicated::{Anchor, Stream},
 };
 use cinder_kernel::{
-    identity::AccountId,
+    identity::{AccountId, UnitId},
     ledger::{Config, Owner},
 };
 use std::{
@@ -78,17 +78,49 @@ impl<B: Backend, P: Protection> Source for Journal<B, P> {
         self.customer_book_history(account)
     }
 }
-pub(super) struct View {
+pub(crate) struct View {
     binding: Binding,
     config: Config,
     state: Arc<State>,
     head: Head,
     history: Vec<Arc<Accepted>>,
+    units: Option<UnitData>,
+}
+struct UnitData {
+    state: crate::units::State,
+    history: Vec<Arc<crate::units::store::Accepted>>,
 }
 impl View {
+    pub(crate) fn units(
+        binding: Binding,
+        state: crate::units::State,
+        head: Head,
+        history: Vec<Arc<crate::units::store::Accepted>>,
+    ) -> Self {
+        // The legacy Source implementation refuses unit publications below.
+        let first = &state.configuration().units()[0];
+        Self {
+            binding,
+            config: first.ledger.clone(),
+            state: Arc::new(state.unit(first.id).expect("validated registry").clone()),
+            head,
+            history: vec![],
+            units: Some(UnitData { state, history }),
+        }
+    }
     fn knows(&self, head: Head) -> bool {
         if head == self.head {
             return true;
+        }
+        if let Some(u) = &self.units {
+            return if head.sequence == 0 {
+                u.history.first().is_some_and(|a| a.tx.expected == head)
+            } else {
+                usize::try_from(head.sequence - 1)
+                    .ok()
+                    .and_then(|n| u.history.get(n))
+                    .is_some_and(|a| a.head == head)
+            };
         }
         if head.sequence == 0 {
             return self.history.first().is_some_and(|a| a.tx.expected == head);
@@ -177,6 +209,9 @@ impl Source for Verified {
         &self.ticket.view.config
     }
     fn state(&self) -> Result<&State, Error> {
+        if self.ticket.view.units.is_some() {
+            return Err(Error::Invalid);
+        }
         Ok(&self.ticket.view.state)
     }
     fn head(&self) -> Head {
@@ -202,6 +237,15 @@ impl Source for Verified {
     }
 }
 impl Ticket {
+    /// Explicit unit registry for envelope verification before witness I/O.
+    /// This is not fresh authorization or a native capability.
+    pub fn unit_configuration(&self) -> Result<&crate::units::Configuration, Error> {
+        self.view
+            .units
+            .as_ref()
+            .map(|u| u.state.configuration())
+            .ok_or(Error::Invalid)
+    }
     /// Governed binding of this captured accepted publication.
     pub fn binding(&self) -> Binding {
         self.view.binding
@@ -212,6 +256,51 @@ impl Ticket {
     }
 }
 impl Verified {
+    /// Accepted shared unit state. The owning API still authenticates the user
+    /// and the final consuming release gate still controls publication.
+    pub fn unit_state(&self) -> Result<&crate::units::State, Error> {
+        self.ticket
+            .view
+            .units
+            .as_ref()
+            .map(|u| &u.state)
+            .ok_or(Error::Invalid)
+    }
+    /// Private trusted unit provenance, not customer-visible native evidence.
+    pub fn unit_transactions(
+        &self,
+    ) -> Result<impl Iterator<Item = (&crate::units::Transaction, &crate::units::Receipt)>, Error>
+    {
+        Ok(self
+            .ticket
+            .view
+            .units
+            .as_ref()
+            .ok_or(Error::Invalid)?
+            .history
+            .iter()
+            .map(|a| (&a.tx, &a.receipt)))
+    }
+    /// Select exactly one component for existing private financial projections.
+    pub fn unit(&self, unit: UnitId) -> Result<UnitSource<'_>, Error> {
+        let data = self.ticket.view.units.as_ref().ok_or(Error::Invalid)?;
+        let config = &data
+            .state
+            .configuration()
+            .units()
+            .iter()
+            .find(|d| d.id == unit)
+            .ok_or(Error::Invalid)?
+            .ledger;
+        let state = data.state.unit(unit).ok_or(Error::Invalid)?;
+        Ok(UnitSource {
+            data,
+            unit,
+            config,
+            state,
+            head: self.ticket.view.head,
+        })
+    }
     /// Governed binding, checked by the API against its loaded fingerprint.
     pub fn binding(&self) -> Binding {
         self.ticket.binding()
@@ -348,6 +437,29 @@ impl Drop for Writing {
     }
 }
 impl Publication {
+    pub(crate) fn start(view: View) -> (Self, Reader) {
+        let binding = view.binding;
+        let inner = Arc::new(Inner {
+            published: Mutex::new(Published {
+                generation: 1,
+                current: Some(Arc::new(view)),
+                pending: None,
+                preparing: false,
+            }),
+            fenced: AtomicBool::new(false),
+            readers: AtomicUsize::new(0),
+        });
+        (
+            Self {
+                inner: inner.clone(),
+                binding,
+            },
+            Reader { inner },
+        )
+    }
+    pub(crate) fn close(&self) {
+        self.inner.fence();
+    }
     pub(crate) fn checking(&self) -> PanicGuard {
         PanicGuard {
             inner: self.inner.clone(),
@@ -394,7 +506,7 @@ impl Writing {
         self.armed = false;
         Ok(())
     }
-    pub(super) fn publish(mut self, view: View) -> Result<(), Error> {
+    pub(crate) fn publish(mut self, view: View) -> Result<(), Error> {
         let view = Arc::new(view);
         let old = {
             let mut p = self.inner.locked().map_err(|_| Error::Poisoned)?;
@@ -450,12 +562,65 @@ impl<B: Backend, P: Protection> Journal<B, P> {
             state: self.state.clone(),
             head: self.head,
             history: self.history.clone(),
+            units: None,
         }
     }
     pub(super) fn close_publication(&self) {
         if let Some(p) = &self.publication {
             p.inner.fence();
         }
+    }
+}
+
+/// Sealed component projection from the same witnessed shared snapshot. It has
+/// no backend, signing key, mutable book or independently accepted head.
+pub struct UnitSource<'a> {
+    data: &'a UnitData,
+    unit: UnitId,
+    config: &'a Config,
+    state: &'a State,
+    head: Head,
+}
+impl sealed::Sealed for UnitSource<'_> {}
+impl Source for UnitSource<'_> {
+    fn configuration(&self) -> &Config {
+        self.config
+    }
+    fn state(&self) -> Result<&State, Error> {
+        Ok(self.state)
+    }
+    fn head(&self) -> Head {
+        self.head
+    }
+    fn transactions_with_receipts(&self) -> impl Iterator<Item = (&Transaction, &Receipt)> {
+        self.data
+            .history
+            .iter()
+            .filter_map(|a| match (&a.tx.change, &a.receipt) {
+                (
+                    crate::units::Change::Unit { unit, proposal },
+                    crate::units::Receipt::Unit { receipt, .. },
+                ) if *unit == self.unit => Some((&**proposal, receipt)),
+                (
+                    crate::units::Change::Admit(a),
+                    crate::units::Receipt::Admitted { unit, receipt },
+                ) if *unit == self.unit => Some((&a.proposal, receipt)),
+                _ => None,
+            })
+    }
+    fn customer_book_history(&self, account: AccountId) -> Result<Vec<BookChange>, Error> {
+        self.state
+            .ledger()
+            .book(Owner::Customer(account))
+            .map_err(|_| Error::Invalid)?;
+        Ok(self
+            .data
+            .history
+            .iter()
+            .flat_map(|a| &a.book_changes)
+            .filter(|(u, a, _)| *u == self.unit && *a == account)
+            .map(|(_, _, c)| c.clone())
+            .collect())
     }
 }
 
