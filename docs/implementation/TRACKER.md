@@ -34,7 +34,7 @@
 | [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | closed | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), merged `52a36ef` |
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
-| [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | in progress | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | local implementation |
+| [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | in progress | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), ready for review |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -79,8 +79,13 @@ not an implemented Runtime/journal/API migration. Native invocation, financial
 posting/activation, new-image/SBF/browser qualification, frontend and Pacifica's
 missing-credit work remain outside this PR. Earlier evidence is not upgraded.
 
-Next: publish the bounded PR and record its actual URL/current CI/review state.
-Review ADR 0034 before implementing joined unit state. No P28 merge is authorized.
+Published via native `gh stack` as ready [PR #72](https://github.com/arnabnandikgp/cinder/pull/72)
+above `product/tee-v1`; initial publication head `0809305` contains the checked
+source and documentation receipts. This publication follow-up changes only
+PLAN/TRACKER. Current-head hosted CI/review is newly pending, not inherited from
+P27 or the local checks. The phase remains in progress with Merge: none.
+Next: review the PR and ADR 0034 before implementing joined unit state. Native
+qualification stays separately gated. No P28 merge is authorized.
 Preserve unrelated untracked qualification example, user-journey doc and stays.
 
 ### P27 merged after review corrections — 2026-10-16
@@ -5792,10 +5797,10 @@ Merge: b818655a63ba10491cae2aa51877b52a340054c2.
 ## P28 — BULK financial observations and execution-unit contract
 
 Work: added bounded duplicate-safe raw JSON and exact account/position, funding-payment, forced-event and fee-quote observations in cinder-bulk. Explicit interpretation profiles bind source, unit/precision, grids and account kind without re-keying old economic events. Known/held row order, signed money/positions, native flags/reasons and missing/local/aggregate distinctions remain explicit. ADR 0033 defines financial posting gates; ADR 0034 proposes the two-unit state/permissions/capital/custody/recovery boundary without Runtime/journal/API/Solana changes. Plan, evidence, provenance and contributor entrypoints are updated; no new dependency or activation.
-Verification: source 2267a721f314fa8c35f41f2ab18dc8cd3564d00c / tree 945a924c754be845e5150c8bc687a593a34e0474 passes 46 BULK cases, strict default/all-feature all-target workspace lint/build, 692/692/629 Rust cases (expected ignored 10/10/9), 81 contract guards and 45 SDK/relay tests. Source-only 34-phase/60-document plan/link checks pass. The default profile required a complete rerun after a disk-full-damaged test artifact; commands and distinction are recorded in the current handoff. No native, RPC, wallet, faucet, cloud, SBF or browser run is claimed; P27 and old hardware results stay historical. Publication and hosted CI/review remain pending.
-Unexpected: native cumulative margin/position metrics are not standalone settlements; off-tick entry/funding/forced prices and risk-vault rows cannot become exact Cinder basis or fills. Partial aggregate reports and absent children/locks stay unknown. Documented isoPubkey null is valid for a base position/payment; present numeric null is not zero. Native funding sign is not the kernel's per-long-lot convention; gross private allocation remains separately qualified. One all-feature/default build hit local disk exhaustion, not a financial test regression; the damaged generated binary was rebuilt without a product change.
-Next: publish one bounded PR, record exact head/CI/review, then review the proposed unit contract before runtime composition. No live run or P28 merge authority.
-PR: none.
+Verification: source 2267a721f314fa8c35f41f2ab18dc8cd3564d00c / tree 945a924c754be845e5150c8bc687a593a34e0474 passes 46 BULK cases, strict default/all-feature all-target workspace lint/build, 692/692/629 Rust cases (expected ignored 10/10/9), 81 contract guards and 45 SDK/relay tests. Source-only 34-phase/60-document plan/link checks pass. The default profile required a complete rerun after a disk-full-damaged test artifact; commands and distinction are recorded in the current handoff. No native, RPC, wallet, faucet, cloud, SBF or browser run is claimed; P27 and old hardware results stay historical. Ready PR #72 is published; current-head hosted CI/review remains newly pending.
+Unexpected: native cumulative margin/position metrics are not standalone settlements; off-tick entry/funding/forced prices and risk-vault rows cannot become exact Cinder basis or fills. Partial aggregate reports and absent children/locks stay unknown. Documented isoPubkey null is valid for a base position/payment; present numeric null is not zero. Native funding sign is not the kernel's per-long-lot convention; gross private allocation remains separately qualified. The initial default-profile build hit local disk exhaustion, not a financial test regression; the damaged generated binary was rebuilt without a product change.
+Next: review #72 and the proposed unit contract before runtime composition. No live run or P28 merge authority.
+PR: https://github.com/arnabnandikgp/cinder/pull/72.
 Merge: none.
 
 ## P24 — Release safety case

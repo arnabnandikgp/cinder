@@ -1087,7 +1087,7 @@ reproducible synthetic fixtures live in `crates/bulk/tests/financial.rs`.
 - [x] Funding/fee/risk observations preserve source/owner/family/ID, exact signed amounts, pagination, adverse reasons and original bytes; duplicates/conflicts and unsupported lanes cannot fabricate credit or economic completeness.
 - [x] Financial mapping records cumulative versus event/settlement semantics and explicit qualification gaps; native ADL and risk-vault observations cannot independently trigger Cinder payouts or restoration.
 - [x] A concrete two-unit contract specifies one atomic history, unit-scoped books/identities/permissions/capital/custody/recovery and migration/test boundaries without implementing unreviewed runtime changes.
-- [ ] Focused adversarial fixtures and appropriate workspace regression/dependency/docs checks pass on recorded exact source; PR publication/review and deferred native qualifications are explicit.
+- [x] Focused adversarial fixtures and appropriate workspace regression/dependency/docs checks pass on recorded exact source; PR publication/review and deferred native qualifications are explicit.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
