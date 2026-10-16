@@ -46,10 +46,14 @@ pub(crate) fn authority(state: &State, req: &Request, now: u64) -> Result<(), Er
 
 pub(crate) fn agent(req: &Request, records: &Records, now: u64) -> Result<(), Error> {
     let grant = records.grant(req).ok_or(Error::Unauthorized)?;
+    permissions(&req.command, grant, now)
+}
+
+pub(crate) fn permissions(command: &Command, grant: &wire::Grant, now: u64) -> Result<(), Error> {
     if now >= grant.expires_at {
         return Err(Error::Unauthorized);
     }
-    match &req.command {
+    match command {
         Command::View | Command::Operation(_) | Command::Read(_)
             if grant.methods & wire::READ != 0 =>
         {

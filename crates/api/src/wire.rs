@@ -181,7 +181,7 @@ impl Command {
             }
         }
     }
-    fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+    pub(crate) fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
         Ok(match r.byte()? {
             8 => Self::Read(crate::reads::Query::decode(r)?),
             0 => Self::View,
@@ -274,7 +274,7 @@ impl Request {
         self.command.encode(&mut w);
         w.0
     }
-    fn economic_prefix(&self, w: &mut Writer) {
+    pub(crate) fn economic_prefix(&self, w: &mut Writer) {
         w.raw(&self.domain.network.bytes());
         w.raw(&self.domain.deployment.bytes());
         w.raw(&self.account.bytes());

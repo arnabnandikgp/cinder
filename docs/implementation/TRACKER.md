@@ -35,7 +35,8 @@
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
-| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; CI/review pending |
+| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; eight CI jobs pass; finding fixed/resolved |
+| [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | in progress | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), open; CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -44,6 +45,98 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P30 published as the next stacked PR — 2026-10-16
+
+Ready [#74](https://github.com/arnabnandikgp/cinder/pull/74) targets
+`tee/p29-execution-unit-journal` from `tee/p30-unit-api-contract`. Native
+`gh stack submit --auto --open` published the two-layer stack without merging.
+Opening head is `06cd1338545987fc58c36594d4d3b3617211f8ae`; it differs from
+implementation `f6554faaba8328e94739617dd9754b8c2fff450e` only in PLAN/TRACKER.
+This publication receipt also changes only those two documents, not checked
+production code or tests. Its new head requires its own hosted checks; no earlier
+green result is inherited. At opening head all eight hosted jobs were running,
+CodeRabbit pending, with no substantive review yet.
+
+All local check groups and the exact Rust/client tree distinction are recorded
+below. Phase criteria are technically complete for the bounded contract slice;
+P30 remains `in progress` pending review/CI and an authorized merge. Open parent
+#73 remains at `06f9d0ffbf1ecdadb3fcabc8ea1c2d55a9475ea6`, eight hosted jobs
+green, its sole Codex finding fixed/replied/resolved; CodeRabbit's fix-head
+re-review remains rate-limited. No stack layer has been merged. The three
+unrelated untracked user paths remain untouched. No containers, live native/
+RPC/AWS runs or frontend work were undertaken.
+
+Next: inspect #74's actual latest-head checks/reviews and address relevant
+findings. The next implementation boundary remains the durable API/controller
+join, not runtime activation based on scope preflight. Do not automatically
+merge or treat the trusted grant port as an implemented accepted-history adapter.
+
+### P30 offline qualification complete — 2026-10-16
+
+Implementation source `f6554faaba8328e94739617dd9754b8c2fff450e`, tree
+`ae8e340aa0322d0f1d170b4ee9c03c012af077bc`, is committed on
+`tee/p30-unit-api-contract` above open #73. Opt-in `api::units` and private SDK
+helpers implement ADR 0036: explicit signed unit/digest/reply binding and fresh
+shared-head owner/agent scope preflight. Existing v1 strategy bytes and shipping
+Runtime/PrivateClient remain unchanged. Grant cuts remain a trusted pure
+accepted-history port, not a shipping database or grant installation service.
+Preflight is not financial admission, quota consumption, cancel ownership,
+idempotency, signing, dispatch or a fresh-head guarantee for a later action.
+
+Checks used a clean tracked-source export, Rust 1.97.1 / Node 24.21.0, locked/
+offline Cargo, `CARGO_INCREMENTAL=0`, dev/test debug info disabled and the existing
+target cache. Standard `node scripts/check.mjs --group=contracts|lint|rust|client`
+groups were run separately (not a literal combined group argument):
+
+- Contracts: 81/81, 36 phases / 62 tracked documents; dependency boundaries pass.
+- Lint: format and strict default/all-feature all-target clippy/build pass.
+- Rust: all-feature debug/release 728/728 passed; shipping-default 665 passed.
+  Existing explicit hardware/expensive qualification ignores remain 10/10/9;
+  no unexpected ignore or skipped required test.
+- Client: relay 15/15 and private SDK 37/37, including TypeScript checking and
+  all seven new SDK cases. The twelve new Rust cases pass in every profile.
+- Production browser bundle builds and imports with all four new helpers exported.
+  This is bundle qualification, not a v2 listener, Chrome or hardware run.
+
+Exact Rust run tree was `74b9b382b413950b589662156c3c1c3ea648964e`.
+The first client run correctly failed because the new protocol test imported the
+full browser entry and therefore optional verifier packages absent from the
+private-only CI job. Removed that test-only import/assertion; production and Rust
+sources are identical between that tree and the committed tree above. Final
+contracts, lint and full client groups use the corrected tree; the client group
+passes without optional web-channel packages. The separately built browser
+bundle verifies the actual public exports. No CI dependency/install change or
+runtime deadline workaround was needed. The only removed files were regenerable
+`target/debug` build outputs to recover disk space; unrelated user files remain.
+
+Parent #73 is still open at `06f9d0ffbf1ecdadb3fcabc8ea1c2d55a9475ea6`.
+All eight hosted jobs pass at that exact head. Codex thread
+`PRRT_kwDOUXiYz86tJL6r` is fixed/replied/resolved. CodeRabbit reported no
+actionable finding through `2b63a5f`; new-head re-review is rate-limited, not
+independent approval of the fix. No merge is authorized or performed.
+Next: publish one ready P30 PR above #73 and record its actual head/CI/review.
+Later durable API/controller integration must implement the accepted-history
+grant port and atomically join intent ownership, dedupe, quota, holds, risk and
+head/epoch checks before any runtime/native activation. No live resources run.
+
+### P30 started above the reviewed P29 fix — 2026-10-16
+
+User authorized next planned work after relevant reviews. #73's valid Codex
+finding is fixed at `06f9d0ffbf1ecdadb3fcabc8ea1c2d55a9475ea6`; reply
+#4293263438 records the red-first and 21/21 debug/release results, strict
+workspace lint/build and 81 contracts. Thread `PRRT_kwDOUXiYz86tJL6r` is resolved.
+CodeRabbit had no actionable findings at its reviewed old head. New-head CI and
+any new review remain separate; #73 is open and has not been merged.
+
+`tee/p30-unit-api-contract` is stacked above #73 using native `gh stack add`.
+ADR 0036 selects a complete protocol/authentication contract slice: signed v2
+unit bytes/digests/replies, current shared-head scope preflight and SDK helpers.
+It deliberately does not wire shipping Runtime or invent financial admission.
+The trusted grant cut remains a port until durable API/controller integration;
+preflight cannot install/revoke, consume quota, sign or dispatch. No live action,
+frontend, dependency or financial-policy change. Next: implement/verify the
+contract and cross-unit adversarial vectors, then publish one dependent PR.
 
 ### P29 review correction; next slice authorized — 2026-10-16
 
@@ -5998,6 +6091,23 @@ order digests. No runtime deadline, financial policy or dependency was changed.
 Next: Review #73's latest-head CI/findings; keep the phase in progress until an
 authorized merge. Unit-bound API/controller/runtime composition remains separate.
 PR: https://github.com/arnabnandikgp/cinder/pull/73.
+Merge: Not merged.
+
+## P30 — Signed unit-bound API and SDK contract
+
+Work: Opt-in `api::units`, unchanged v1 shared command/permission helpers,
+immutable unit-state config accessor, private SDK v2 helpers, twelve Rust and
+seven SDK regressions; ADR 0036 and entrypoint/evidence docs. No shipping listener.
+Verification: Source `f6554faaba8328e94739617dd9754b8c2fff450e`; contracts 81,
+strict lint/build, Rust 728/728/665, relay 15 and SDK 37; exact run-tree differences
+and browser-bundle limits are recorded in the current handoff.
+Unexpected: Current-head grant evidence remains an explicit trusted accepted-history
+port; this phase does not masquerade as a durable grant/admission service.
+The clean-source client run caught a test-only optional browser dependency import;
+remove that import rather than expanding the private job's install surface.
+Next: Review #74's exact latest-head CI/findings; keep both layers open until an
+authorized merge. Later durable API/controller/runtime gates remain explicit.
+PR: https://github.com/arnabnandikgp/cinder/pull/74; ready, base `tee/p29-execution-unit-journal`.
 Merge: Not merged.
 
 ## P24 — Release safety case
