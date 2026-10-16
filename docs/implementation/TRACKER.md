@@ -44,16 +44,44 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P28 selected — 2026-10-16
+### P28 offline implementation verified — 2026-10-16
 
-User approved the next recommended slice. Branch
+User approved the financial-mapping/unit-contract slice. Branch
 `tee/p28-bulk-financial-observations` starts above merged P27 `b818655` and carries
-the local P27 closure receipt `ecea03a`, as PLAN requires. Implement isolated
-financial observations plus the concrete unit-state design; no Runtime/journal
-activation or external run is authorized. Scope and acceptance are in PLAN P28.
+the P27 closure receipt `ecea03a`, as PLAN requires. Exact source checkpoint
+`2267a721f314fa8c35f41f2ab18dc8cd3564d00c`, tracked tree
+`945a924c754be845e5150c8bc687a593a34e0474`, passes 46 BULK cases (26 existing
+wire/fill plus 20 financial), strict workspace lint/build, 81 contract guards
+and all three Rust profiles: **692/692/629**, with only expected **10/10/9**
+ignored entries. SDK/relay passes **45/45**. Plan/link guard reports 34 phases
+and 60 tracked documents. No dependency, lockfile or feature change.
+
+Reproduction: pinned Rust 1.97.1/Node 24.21.0, macOS ARM64, locked/offline,
+incremental and dev/test debug data disabled. Source-only export
+`/private/tmp/cinder-p28-source.f3Quu0` excludes unrelated user examples/docs/research
+and uses one Cargo writer with the ordinary target cache. Commands are
+`node scripts/check.mjs --group=contracts`, `--group=lint`, `--group=rust` and
+`--group=client`. The first Rust invocation passed both all-feature profiles;
+its default service-test artifact was truncated/non-executable by an explicit
+LLVM disk-full failure and never ran. After removing only that damaged generated
+artifact, the standard `rustSuite({ defaults: true })` entrypoint passes the
+complete default profile. This is a successful rerun, not a passing first attempt
+or a product correction. The regenerable debug cache was also cleared before the
+full run due low space; no source/research was deleted. Client checks use a link
+to the already locked installed TypeScript dependencies, not ignored research.
+Local logs `/private/tmp/cinder-p28-{contracts,lint,rust,default-rerun,client}.log`
+are diagnostic receipts, not checkout prerequisites.
+
+[ADR 0033](../architecture/0033-bulk-financial-observations.md) records financial
+interpretation/posting gates; [ADR 0034](../architecture/0034-execution-unit-boundary.md)
+is the proposed state/authorization/capital/custody/recovery contract for review,
+not an implemented Runtime/journal/API migration. Native invocation, financial
+posting/activation, new-image/SBF/browser qualification, frontend and Pacifica's
+missing-credit work remain outside this PR. Earlier evidence is not upgraded.
+
+Next: publish the bounded PR and record its actual URL/current CI/review state.
+Review ADR 0034 before implementing joined unit state. No P28 merge is authorized.
 Preserve unrelated untracked qualification example, user-journey doc and stays.
-Next: exact account/position, funding/fee/risk fixtures and source-specific mapping;
-then the unit contract and appropriate local checks/publication.
 
 ### P27 merged after review corrections — 2026-10-16
 
@@ -5763,10 +5791,10 @@ Merge: b818655a63ba10491cae2aa51877b52a340054c2.
 
 ## P28 — BULK financial observations and execution-unit contract
 
-Work: implementing bounded exact native financial observations and documenting the two-unit ownership contract; no financial posting or Runtime activation.
-Verification: pending, acceptance in PLAN P28. P27 results remain historical.
-Unexpected: native cumulative margin/position metrics are not standalone settlements; reported entry prices and risk-vault rows cannot be reinterpreted as exact Cinder basis or fills.
-Next: implement and test account/position and event mappings, document unit-state boundaries, then verify/publish one bounded PR.
+Work: added bounded duplicate-safe raw JSON and exact account/position, funding-payment, forced-event and fee-quote observations in cinder-bulk. Explicit interpretation profiles bind source, unit/precision, grids and account kind without re-keying old economic events. Known/held row order, signed money/positions, native flags/reasons and missing/local/aggregate distinctions remain explicit. ADR 0033 defines financial posting gates; ADR 0034 proposes the two-unit state/permissions/capital/custody/recovery boundary without Runtime/journal/API/Solana changes. Plan, evidence, provenance and contributor entrypoints are updated; no new dependency or activation.
+Verification: source 2267a721f314fa8c35f41f2ab18dc8cd3564d00c / tree 945a924c754be845e5150c8bc687a593a34e0474 passes 46 BULK cases, strict default/all-feature all-target workspace lint/build, 692/692/629 Rust cases (expected ignored 10/10/9), 81 contract guards and 45 SDK/relay tests. Source-only 34-phase/60-document plan/link checks pass. The default profile required a complete rerun after a disk-full-damaged test artifact; commands and distinction are recorded in the current handoff. No native, RPC, wallet, faucet, cloud, SBF or browser run is claimed; P27 and old hardware results stay historical. Publication and hosted CI/review remain pending.
+Unexpected: native cumulative margin/position metrics are not standalone settlements; off-tick entry/funding/forced prices and risk-vault rows cannot become exact Cinder basis or fills. Partial aggregate reports and absent children/locks stay unknown. Documented isoPubkey null is valid for a base position/payment; present numeric null is not zero. Native funding sign is not the kernel's per-long-lot convention; gross private allocation remains separately qualified. One all-feature/default build hit local disk exhaustion, not a financial test regression; the damaged generated binary was rebuilt without a product change.
+Next: publish one bounded PR, record exact head/CI/review, then review the proposed unit contract before runtime composition. No live run or P28 merge authority.
 PR: none.
 Merge: none.
 

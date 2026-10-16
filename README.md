@@ -32,8 +32,9 @@ frontend integration and deployment remain separate work.
 [BULK candidate work](docs/venues/bulk.md) adds offline exact wire/fill and financial
 observation codecs, not a second enabled venue. The
 [two-unit state contract](docs/architecture/0034-execution-unit-boundary.md) is a
-proposal for review, not an implemented multi-venue runtime. Native environment, accounting and
-funding/return evidence remain qualification gates; no cross-venue margin follows.
+proposal for review, not an implemented multi-venue runtime. Native environment,
+accounting and funding/return evidence remain qualification gates; no cross-venue
+margin follows.
 
 Tests, implementation, hardware evidence and production readiness are distinct.
 There is no audit, universal solvency proof, unconditional exit guarantee or
