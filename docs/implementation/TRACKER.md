@@ -43,6 +43,34 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### P27 review corrections — 2026-10-15
+
+User approved fixing the three substantive #71 findings and merging after
+verification. Fix checkpoint `4be6936e1e3ad27cc3d5ddf511900c045df87bcd`, tree
+`b31fd92be852e45aa32512c3421db7ecbcc52496`, addresses Codex #4287027650 /
+#4287027660 and CodeRabbit #4287105612. Three red-first cases fail on the old
+source, then pass: account-wide mixed-market fills, fixed-point off-tick IOC
+collars and zero with large bounded exponents. Two further regressions cover
+per-symbol grids/fee precision, unmapped raw-row retention, identity conflicts,
+duplicate/oversized mappings and original ordering. Negative-zero, invalid grammar,
+inexact atoms, wire bounds and resting tick checks remain enforced.
+
+The REST API now takes a bounded unique market list. It decodes configured symbols
+and returns source-attributed unmapped rows separately with exact original JSON;
+they are not reconciled fills, and reported complete page coverage grants no
+economic completion. No runtime, journal, financial contract, dependency, signing,
+network or native activity changes. ADR 0032 records these boundaries.
+
+Pinned local checks pass: 26 codec tests each in debug/release (no ignored cases),
+81 contracts (33 phases / 58 tracked documents), default/all-feature all-target
+Clippy/build and formatting. Contracts/lint/release use a clean tracked-source
+export, preserving unrelated user examples/docs/stays. Logs are
+`/private/tmp/cinder-p27-review-{red,focused,contracts,lint,release}.log`.
+The earlier whole-workspace 667/667/604 and 45-client results are historical;
+new-head hosted regressions/review must be checked before the authorized merge.
+The original `579f606` head had all eight hosted jobs green. This successor only
+records the correction receipt; publication, thread replies and CI are next.
+
 ### Verified P25/P26 merge and P27 codec work — 2026-10-15
 
 The user authorized merging #68/#69 and continuing the next bounded slice.
@@ -5673,7 +5701,8 @@ Merge: 0af365ebab93571d0815ec4d7406e5da44177857.
 Work: added isolated cinder-bulk exact decimal/exponent/grid, unsigned limit/cancel and scoped REST/WS fill codecs; explicit input limits, duplicate/conflict and coverage consistency with no financial authority. Added pinned-source sub-vector provenance and synthetic/adversarial tests. No shipping Runtime activation or new financial contract.
 Verification: exact source checkpoint 109165529ac469e239173859ae51785299549398 / tracked tree 3fd625849b5d0faf85f904bf16671a4f037bd22e passes all 21 focused codec tests, strict default/all-feature all-target lint/build, 667/667/604 Rust tests (only expected 10/10/9 ignored), 81 contracts with 33 phases/58 tracked documents and 45 SDK/relay tests. Clean tracked-source export excludes unrelated examples/docs; client checks use the same tracked code with existing locked installed dependencies. Commands are the four pinned scripts/check.mjs groups contracts/lint/rust/client, locked/offline with incremental and dev/test debug information disabled. Source is on tee/p27-bulk-adapter-foundation above actual merged trunk 0af365e. The three approved public testnet metadata GETs returned origin HTTP 502; no native schema/financial qualification, new SBF/browser/hardware run or shipping activation is claimed.
 Unexpected: upstream default_meta_order_ids use default zero account/nonce/index, not the accompanying signing context. Private hash-helper test preserves that oracle while public single-action hashing fixes index 0. Native cancellation tag is cx. New exact decimal source forms require raw-value preservation, not floating JSON values. Initial compiler/fixture interpretation errors were local, with no signing/dispatch. A preliminary broad run hit rustdoc E0463 after two source exports compiled concurrently into one cache; it is not a passing receipt. The final full single-writer rerun above passes without a product change for that harness error.
-Next: review P27. Hosted checks/independent review remain pending for the new head; initial published bc2addd has contracts green with seven other jobs and CodeRabbit pending/running. This publication-only successor does not change executable code or inherit prior CI. Native metadata availability, full financial mapping and joined unit-state design remain separate; no frontend, financial run or reopened Pacifica investigation.
+Review correction: Codex #4287027650/#4287027660 and CodeRabbit #4287105612 are valid. Fix checkpoint 4be6936e1e3ad27cc3d5ddf511900c045df87bcd passes 26 codec tests in both debug/release, 81 clean-source contracts and strict workspace lint/build. Three regressions fail on the old source first; two more cover per-market precision and retained unmapped/conflicting rows. Original 579f606 has eight hosted green jobs; correction-head CI is not inherited. Current handoff records details/logs.
+Next: publish corrections, reply/resolve findings and check exact-head CI/review before the user-authorized merge. Native metadata availability, full financial mapping and joined unit-state design remain separate; no frontend, financial run or reopened Pacifica investigation.
 PR: https://github.com/arnabnandikgp/cinder/pull/71, ready/open directly above product/tee-v1 through native gh stack.
 Merge: none.
 
