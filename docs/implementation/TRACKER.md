@@ -37,7 +37,7 @@
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | closed | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), merged `793a05c` |
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
-| [P31 — Durable unit-scoped API history](PLAN.md#p31) | in progress | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | — |
+| [P31 — Durable unit-scoped API history](PLAN.md#p31) | in progress | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), open; CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -46,6 +46,31 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P31 published for review — 2026-10-16
+
+Ready [#76](https://github.com/arnabnandikgp/cinder/pull/76) targets
+`product/tee-v1` from `tee/p31-unit-api-history`, published through native
+`gh stack init --base product/tee-v1 tee/p31-unit-api-history` /
+`gh stack submit --auto --open`. It is one new layer, not a reopened old stack.
+Opening head `870b02998b45ccabe590c637c8528761dacf5666` differs from checked
+implementation `5a1f182404b8f41dda827854ecbfd0f883b3de77` only in ADR/PLAN/TRACKER.
+This publication receipt is documentation-only too; code and tests are unchanged
+after exact-tree qualification. The branch includes the prior local merge receipt.
+
+At opening head contracts/inventory passed, the other seven hosted jobs were
+running, CodeRabbit pending and no substantive review yet. This receipt push's
+new head requires its own checks; earlier green results are historical, not
+inherited approval. P29/P30 are merged and their merged trunk's own eight hosted
+jobs pass at `1e9cd2dfdddf824c208ca4282c303e1b65cd0bc1`.
+P31 is locally complete for the recorded-history scope; keep it `in progress`
+until relevant review/CI and an authorized merge. No merge has been performed.
+
+Next: inspect #76's exact latest-head checks/findings, address relevant review,
+then obtain merge/next-slice direction. The next financial-controller slice must
+join original records, quota/cancel ownership, risk/holds and current head/epoch
+atomically before admission. Runtime/native activation is still later. No live
+resources or containers run; unrelated untracked user files remain untouched.
 
 ### P31 offline qualification complete — 2026-10-16
 
@@ -6247,9 +6272,9 @@ Rust 742/742/679 (existing ignored 10/10/9), relay 15 and SDK 37 pass. Focused A
 Unexpected: Owner-grant proposal validation must follow dedupe in durable capture
 so an authenticated owner can recover an expired original grant without reinstalling
 it. Raw P30 preflight retains its proposal checks; existing scope tests still pass.
-Next: Publish one ready PR against `product/tee-v1`, inspect its exact-head CI/
-review, and keep this bounded phase in progress until an authorized merge.
-PR: Not opened.
+Next: Inspect #76's exact latest-head CI/review; keep this bounded phase in progress
+until an authorized merge. The financial-controller join remains next, not live activation.
+PR: https://github.com/arnabnandikgp/cinder/pull/76.
 Merge: Not merged.
 
 ## P24 — Release safety case
