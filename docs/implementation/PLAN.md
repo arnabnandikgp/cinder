@@ -1089,6 +1089,26 @@ reproducible synthetic fixtures live in `crates/bulk/tests/financial.rs`.
 - [x] A concrete two-unit contract specifies one atomic history, unit-scoped books/identities/permissions/capital/custody/recovery and migration/test boundaries without implementing unreviewed runtime changes.
 - [x] Focused adversarial fixtures and appropriate workspace regression/dependency/docs checks pass on recorded exact source; PR publication/review and deferred native qualifications are explicit.
 
+<a id="p29"></a>
+## P29 — New-history execution-unit journal foundation
+
+Depends on: P28.
+
+Deliver: immutable unit registry and one durable deployment history containing
+existing per-unit financial states, shared enrollment/authority epochs and
+unit-owned foundation reservations. Reuse existing exact transitions, encrypted
+storage/CAS/freshness contracts and retain adverse facts on rejected controls.
+Keep legacy replay and shipping Runtime unchanged. No exposure, full order/funds
+admission, API/SDK migration, recovery activation, native/RPC/AWS run or frontend.
+Evidence: F01–F14/X01–X05/S01–S04, P05/P06 replay fixtures,
+[ADR 0034](../architecture/0034-execution-unit-boundary.md),
+[bounded implementation](../architecture/0035-unit-journal-foundation.md).
+
+- [x] Registry binds domain/native/custody/source/precision/key-policy ownership, starts empty and rejects duplicate or shared physical backing aliases without changing legacy codecs.
+- [x] Enrollment and revocation are atomic across units; reservation identities cannot change unit or commitment, and rejected controls do not discard actual observations.
+- [x] Replay, duplicate/conflict, wrong-unit source, independent inventory, CAS/unknown outcomes, freshness fencing, encrypted storage and legacy/new-format isolation pass deterministic offline tests.
+- [x] Appropriate exact-source workspace checks pass; implementation limits, PR/review/CI state and the next versioned API/controller/runtime gate are recorded without activation claims.
+
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
 

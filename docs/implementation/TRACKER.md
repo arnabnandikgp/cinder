@@ -34,7 +34,8 @@
 | [P25 — Backend onboarding and escrow preparation](PLAN.md#p25) | closed | A fresh wallet discovers and establishes its own private account and prepares escrow funding through the SDK without customer-specific startup configuration or a frontend. | [#68](https://github.com/arnabnandikgp/cinder/pull/68), merged `52a36ef` |
 | [P26 — Second-venue assessment and implementation boundary](PLAN.md#p26) | closed | A source-pinned candidate and explicit unit ownership/evidence gates guide one second venue without inventing native support or cross-venue collateral. | [#69](https://github.com/arnabnandikgp/cinder/pull/69), merged `0af365e` |
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
-| [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | in progress | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), ready for review |
+| [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
+| [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -43,6 +44,141 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P29 review correction; next slice authorized — 2026-10-16
+
+User requested relevant review fixes, then continuation with the next planned
+work. This is not merge or live-run permission: keep #73 open and stack the next
+bounded phase above it. Codex inline #4293050565 / thread
+`PRRT_kwDOUXiYz86tJL6r` is valid: the registry checked funding/payout collisions
+between units but not within a unit. Added a red-first one/two-unit regression,
+which fails against `2b63a5f`, then reject the same-unit alias as `Error::Invalid`.
+Native account = funding wallet remains valid; it is not the payout endpoint.
+All 21 focused tests pass in debug and release; strict default/all-feature
+all-target workspace lint/build and all 81 contract guards pass on the clean
+review-fix export. The red-first failure and correction are retained in the
+tracked regression; no dependency, financial equation or legacy codec changed.
+CodeRabbit comment #6212448954 reviewed through `2b63a5f` and reported no
+actionable findings. Existing CI at that head has seven successful jobs and the
+SBF job still running when inspected; no new-head success is inherited.
+
+Next: push the checked narrow fix, reply/resolve the validated thread, then
+add the signed unit-bound API/SDK contract slice to PLAN/TRACKER and implement it
+on a dependent branch. Preserve legacy API behavior and P29's no-dispatch gate.
+No frontend, venue/RPC/AWS test, schema migration or financial-policy change.
+
+### P29 published for review — 2026-10-16
+
+Ready PR [#73](https://github.com/arnabnandikgp/cinder/pull/73) targets
+`product/tee-v1` from `tee/p29-execution-unit-journal`, published through
+`gh stack init --base product/tee-v1` / `gh stack submit --auto --open`.
+Verified code is `8d6065dfdc5838a5478376ba2fdfce302f68edce`, source tree
+`7340ced180543dabf447948402d721645fcb599d`. Opening head
+`3e050fc3212849b03be04e3509c9a777c8560dd9` adds only the qualification receipt;
+this publication receipt is documentation-only too. No code changed afterward.
+
+All four local check groups passed as recorded below. At opening head, hosted
+contracts/inventory passed; the other seven hosted jobs and CodeRabbit were
+running/pending, with no substantive review yet. This docs-only receipt push
+requires the new head's own checks: earlier green results are historical, not
+current-head approval. P29 stays `in progress` pending review/CI and an authorized
+merge. The phase is locally implemented for its stated foundation scope, not
+multi-unit Runtime/API/native activation. No next implementation phase or merge
+is started automatically. Next: inspect #73's exact latest head/checks/reviews,
+address relevant findings, then seek merge/next-slice direction. Preserve the
+three unrelated untracked paths; no local tools/containers/live resources were
+installed, launched or left running.
+
+### P29 offline qualification complete — 2026-10-16
+
+Tested source `8d6065dfdc5838a5478376ba2fdfce302f68edce`, tree
+`7340ced180543dabf447948402d721645fcb599d`, is committed on
+`tee/p29-execution-unit-journal`. Exact staged source was exported to a clean
+temporary checkout, excluding the unrelated untracked qualification example,
+user-journey doc and stays. No code changed after those checks.
+
+The opt-in `journal::units` implementation has one immutable one/two-unit
+registry, one protected history/head, existing financial component states,
+shared wallet ownership/epochs and immutable reservation routes. The legacy
+normalizer's extra composition predicate only narrows accepted attribution;
+its ordinary entrypoint preserves the original checks. Unsupported controls
+retain actual facts with refused control receipts. No exposure is returned.
+
+On macOS with Rust 1.97.1 / Node 24.21.0, clean-source `node scripts/check.mjs`
+groups **contracts/lint/rust/client** all pass (locked/offline Cargo, shared
+target, incremental/debug information disabled). Results: **81** contract tests,
+**35** phases/**61** tracked docs; strict default/all-feature all-target lint and
+build; full Rust **715/715/652** passed in all-feature debug/release and shipping
+default, with only expected **10/10/9** ignored tests. All **20** new unit tests
+execute in each profile. Local relay **15** and SDK **30** tests pass against the
+exact-source binaries. No local Linux/container, fresh browser/SBF or ARM package
+run is claimed; unchanged additional qualification jobs remain hosted CI gates.
+
+Tests cover physical aliases, cross-asset/owner/source/request isolation, shared
+registration/revocation, retained late fills under refused controls, exact retry,
+restart, CAS, lost durable reply/panic, actual record AEAD, synthetic replicated
+witness/replica loss, 64 records and byte/record/format bounds. These are offline
+tests, not an audit, native isolation/backing proof or hardware qualification.
+P23 financial acceptance and G01–G05 remain unchanged. No live activity occurred.
+
+Next: publish this single bounded PR through the native stack workflow, record
+its exact head/CI/review state, then await review. Full signed economic-intent
+routing, unit-bound API/SDK/grants, financial controllers, shared read publication,
+global recovery fencing and joined Runtime acceptance remain later composition;
+they are not implicitly enabled or claimed complete here. No merge is authorized.
+
+### P29 approved and started — 2026-10-16
+
+User approved the new-history unit identity/registry and journal foundation.
+Implementation is on `tee/p29-execution-unit-journal`, carrying the local P28
+merge receipt. ADR 0035 bounds this slice: one shared head, existing per-unit
+financial states, atomic ownership/epochs and non-exposing foundation holds.
+The legacy journal and shipping Runtime/API remain unchanged; full controllers,
+versioned API/grants, recovery and joined Runtime acceptance follow separately.
+No live venue/RPC/AWS/wallet/frontend work or Pacifica credit investigation.
+Verification is pending; preserve unrelated untracked work. Next: implement and
+test registry, transitions, canonical replay and storage/freshness failure bounds.
+
+### P28 merged after review correction — 2026-10-16
+
+User authorized addressing relevant reviews and merging #72. Final exact head
+`71ed7c7fda4e8be94759f2bce660a6f5f3d92d32` passed all eight hosted jobs:
+contracts/inventory, strict Rust lint/build, full Rust regressions, SDK/relay,
+actual browser channel, retained-history growth, ARM64 package and compiled
+SBF/Surfpool transactions. Hosted Rust profiles pass **695/695/632**, with only
+expected **10/10/9** ignored entries. Original Codex #4292204502 is fixed and its
+thread has the source/test reply and resolved disposition. CodeRabbit's original
+`800bfe6` review had no actionable code findings; the follow-up was rate-limited,
+not a fresh independent re-review. Generic docstring warning remains nonblocking.
+
+All **49** BULK tests pass in debug/release; strict workspace lint/build and **81**
+clean-source contracts pass locally. Actual unchanged local Node/Chrome SDK runs
+pass **26** groups each. The old CI browser error was not reproduced locally;
+the corrected head's complete hosted browser qualification now passes. No runtime
+deadline or financial gate was relaxed. The separate local disk-full lint attempt
+and successful complete rerun remain explicitly recorded below.
+
+#72 merged at **2026-10-16 08:36:42 UTC** into `product/tee-v1` as
+`b4dce81d757c30d076e945082dd33e4c21a9269a`; fetched merged tree is identical to
+the verified final head. Native stack merge reported that #72 is not a hosted
+stack/stacked PR. After exact-head/base/state, all-eight-check and resolved-thread
+guards, the authorized fallback used `gh pr merge --squash --match-head-commit`.
+No admin bypass or governance change. Trunk classic protection remains false and
+effective rules empty, inspected rather than assumed. The local-only P27 receipt
+was already included in the merged feature history; its previous base ref remains
+reachable on that branch when aligning local trunk with the actual merge.
+
+P28 is closed for its offline observation/design scope only. The unit design is
+not an implemented Runtime/journal/API migration; BULK is not activated. No venue,
+RPC, wallet, faucet, AWS, frontend or Pacifica credit investigation occurred.
+
+Next proposed slice: new-history unit identity/registry and journal-state/replay
+foundation from ADR 0034, then versioned unit-bound API/runtime composition.
+Distinct backing, grants, custody and recovery stay unit-scoped under one accepted
+history; no cross-margin, automatic routing or live authority. No next phase is
+opened by this merge. This post-merge receipt is prepared locally on trunk for
+the next authorized PR, per PLAN; do not push it directly to trunk. Preserve the
+unrelated untracked qualification example, user-journey doc and stays.
 
 ### P28 review correction and authorized merge — 2026-10-16
 
@@ -5837,9 +5973,32 @@ Work: added bounded duplicate-safe raw JSON and exact account/position, funding-
 Verification: source 2267a721f314fa8c35f41f2ab18dc8cd3564d00c / tree 945a924c754be845e5150c8bc687a593a34e0474 passes 46 BULK cases, strict default/all-feature all-target workspace lint/build, 692/692/629 Rust cases (expected ignored 10/10/9), 81 contract guards and 45 SDK/relay tests. Source-only 34-phase/60-document plan/link checks pass. The default profile required a complete rerun after a disk-full-damaged test artifact; commands and distinction are recorded in the current handoff. No native, RPC, wallet, faucet, cloud, SBF or browser run is claimed; P27 and old hardware results stay historical. Ready PR #72 is published; current-head hosted CI/review remains newly pending.
 Unexpected: native cumulative margin/position metrics are not standalone settlements; off-tick entry/funding/forced prices and risk-vault rows cannot become exact Cinder basis or fills. Partial aggregate reports and absent children/locks stay unknown. Documented isoPubkey null is valid for a base position/payment; present numeric null is not zero. Native funding sign is not the kernel's per-long-lot convention; gross private allocation remains separately qualified. The initial default-profile build hit local disk exhaustion, not a financial test regression; the damaged generated binary was rebuilt without a product change.
 Review correction: Codex #4292204502's missing pendingOnFill inventory is fixed at dfe19e485b9303e4c4bc22d576f53d635e5dfcab / tree 6f0a52d356646dabbbb0cab208be3961a6b6b431. Two old-source red regressions and three final positive/negative groups qualify bounded raw retention, absent/empty, original nested precision and private diagnostics. All 49 BULK tests pass in debug/release, strict workspace lint/build and 81 clean-source contracts pass. CodeRabbit has no actionable findings; its generic docstring warning is nonblocking. The old-head browser failure is not reproduced by the unchanged local 26-group Node/Chrome pass; new-head CI is still pending. A complete strict lint retry passes after the separately recorded disk-full failure. Current handoff records commands/evidence limits. User authorized review fixes and merge, not another implementation phase or live run.
-Next: publish/reply/resolve, verify exact-head CI/review and merge #72; then propose the first bounded unit-state implementation slice.
+Final verification and merge: all eight hosted checks pass at 71ed7c7fda4e8be94759f2bce660a6f5f3d92d32, including full Rust profiles 695/695/632 (expected ignored 10/10/9), actual browser, retained-history and compiled SBF suites. Original review thread is replied/resolved; CodeRabbit follow-up was rate-limited, not a new review. The guarded authorized merge completed at 2026-10-16 08:36:42 UTC and fetched trunk is tree-identical to that checked head. Earlier pending text is historical. Current handoff records the native-stack refusal/head-pinned fallback and exact source limits.
+Next: propose the first bounded new-history unit-state/journal implementation slice; no next phase, live activity or frontend is authorized by this merge.
 PR: https://github.com/arnabnandikgp/cinder/pull/72.
-Merge: none.
+Merge: b4dce81d757c30d076e945082dd33e4c21a9269a.
+
+## P29 — New-history execution-unit journal foundation
+
+Work: Implemented `kernel::identity::UnitId`, `journal::units` registry/state/codec/
+store and twenty offline regressions, with ADR 0035 and updated entrypoints.
+Shipping Runtime/API and legacy replay stay unchanged; one new history, not a
+backend/journal per venue. Shared owner/epoch changes are atomic; reservation
+routes survive release/replay, and the new path cannot expose/sign.
+Verification: Source `8d6065d`, tree `7340ced180543dabf447948402d721645fcb599d`,
+passes all clean-source check groups: 81 contracts, strict default/all-feature
+all-target workspace lint/build, Rust 715/715/652 with expected ignored 10/10/9,
+relay 15 and SDK 30. Exact commands/environment and source limits are in the
+current handoff. Full code source: `8d6065dfdc5838a5478376ba2fdfce302f68edce`.
+Unexpected: A narrowing-only normalizer predicate retains original foreign
+request/attempt evidence without posting it to the wrong component. Unknown
+storage/freshness and unwinding fence the whole new handle. Foundation controls
+exclude exposure and full admission; reservation commitments are not signed
+order digests. No runtime deadline, financial policy or dependency was changed.
+Next: Review #73's latest-head CI/findings; keep the phase in progress until an
+authorized merge. Unit-bound API/controller/runtime composition remains separate.
+PR: https://github.com/arnabnandikgp/cinder/pull/73.
+Merge: Not merged.
 
 ## P24 — Release safety case
 

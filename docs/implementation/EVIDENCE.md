@@ -7,15 +7,25 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P29 implements the first approved ADR 0034 slice in `journal::units`: one new
+protected history containing existing component states, immutable registry,
+shared ownership/epochs and non-exposing reservation ownership. ADR 0035 states
+its restricted control contract and later API/controller/runtime gates. Tests in
+`crates/journal/tests/units.rs` use synthetic facts, local SQLite, fixture fault
+ports and the existing record AEAD; they do not promote any new native authority,
+custody address, active-history migration or changed-image hardware result.
+The legacy normalizer has an additional narrowing-only composition hook; its
+ordinary entrypoint retains the original rules. Exact checks belong to TRACKER.
+
 P28 promotes bounded financial observations from the same official client pin
 below, specifically `msgs/account.rs` and `msgs/history.rs`, with current public
 account/funding/ADL documentation rechecked October 16. The synthetic cases in
 `crates/bulk/tests/financial.rs` do not come from a funded native account. See
 [ADR 0033](../architecture/0033-bulk-financial-observations.md) for units, source
 identity, cumulative/event distinctions and financial posting gates.
-[ADR 0034](../architecture/0034-execution-unit-boundary.md) is a proposed two-unit
+[ADR 0034](../architecture/0034-execution-unit-boundary.md) records the two-unit
 state/authorization/capital/recovery contract, not a schema/runtime migration or
-executed composition test. No third-party code/dependency, live invocation,
+executed composition test in P28. No third-party code/dependency, live invocation,
 financial policy change or authority promotion is included. Exact local checks
 and publication state belong to TRACKER.
 

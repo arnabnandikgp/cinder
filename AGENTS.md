@@ -4,6 +4,9 @@ Work in `cinder-tee`, based on `product/tee-v1`, never legacy `main`.
 Cinder is a private perp broker: individual customer entitlements over pooled
 venue execution, Pacifica first, AWS Nitro. BULK is a second-venue candidate with
 offline wire/fill/financial codecs only, not an activated integration (PLAN P26–P28).
+P29's opt-in `journal::units` foundation composes new empty unit states under
+one head with shared owners/epochs; it does not wire shipping Runtime/API,
+dispatch, funding or recovery. ADR 0035 defines its deliberately limited controls.
 Phoenix/PER, the website/demo and Mintlify docs are separate workstreams, not
 backend templates.
 

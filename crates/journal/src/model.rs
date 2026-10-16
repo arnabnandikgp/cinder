@@ -660,6 +660,15 @@ impl State {
         }
     }
     pub(crate) fn advance(&self, tx: &Transaction) -> Result<(Self, Receipt), Error> {
+        self.advance_with_scope(tx, |_| true)
+    }
+    // Composition may narrow attribution, never relax existing source checks.
+    // Refused envelopes retain the exact original Input/fingerprint as usual.
+    pub(crate) fn advance_with_scope(
+        &self,
+        tx: &Transaction,
+        scope: impl Fn(&Input) -> bool,
+    ) -> Result<(Self, Receipt), Error> {
         let resolution_work = tx.controls.iter().fold(0_usize, |work, control| {
             if let Control::ResolveRaw(r) = control {
                 work.saturating_add(self.raw_inputs.len().saturating_add(tx.inputs.len()))
@@ -715,7 +724,7 @@ impl State {
         s.now = tx.at;
         let mut inputs = Vec::new();
         for (ordinal, input) in tx.inputs.iter().enumerate() {
-            let valid = input.authority_epoch != 0
+            let valid = scope(input) && input.authority_epoch != 0
                 && !input.event.as_ref().is_some_and(|e| matches!(&e.change,Change::Restoration(c) if !matches!(c,
                     cinder_kernel::ledger::restoration::RestorationChange::Observe{..}|cinder_kernel::ledger::restoration::RestorationChange::Receipt{..})))
                 && !input.event.as_ref().is_some_and(|e|matches!(&e.change,Change::Close(_)))

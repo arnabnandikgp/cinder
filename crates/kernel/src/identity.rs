@@ -42,6 +42,10 @@ id!(
     "Independent Cinder deployment, not just a venue's network."
 );
 id!(AccountId, "Private Cinder ledger owner identity.");
+id!(
+    UnitId,
+    "Immutable configured execution unit, not a venue symbol or customer account."
+);
 id!(VenueId, "Configured external venue identity.");
 id!(
     VenueAccountId,
