@@ -265,6 +265,57 @@ fn response_inventory_and_nested_objects_remain_bounded_and_secret_safe() {
     assert_eq!(format!("{:?}", view.positions[0]), "Position([PRIVATE])");
 }
 
+#[test]
+fn pending_on_fill_inventory_cannot_bypass_the_raw_row_limit() {
+    let mut input = snapshot();
+    input[0]["fullAccount"]["pendingOnFill"] = json!(vec![json!({}); 129]);
+    assert!(matches!(
+        account::decode_account(&profile(), &bytes(&input)),
+        Err(Error::Limit)
+    ));
+}
+
+#[test]
+fn malformed_pending_on_fill_inventory_cannot_be_ignored_as_absent() {
+    for invalid in [Value::Null, json!({}), json!([null]), json!([1])] {
+        let mut input = snapshot();
+        input[0]["fullAccount"]["pendingOnFill"] = invalid;
+        assert!(account::decode_account(&profile(), &bytes(&input)).is_err());
+    }
+    let input = String::from_utf8(bytes(&snapshot())).unwrap();
+    let input = input.replace(
+        "\"openOrders\":[]",
+        "\"openOrders\":[],\"pendingOnFill\":[{\"future\":1,\"future\":2}]",
+    );
+    assert!(account::decode_account(&profile(), input.as_bytes()).is_err());
+}
+
+#[test]
+fn pending_on_fill_plans_remain_private_raw_inventory_not_resting_orders() {
+    let absent = account::decode_account(&profile(), &bytes(&snapshot())).unwrap();
+    assert!(absent.pending_on_fill.is_none());
+    let mut input = snapshot();
+    input[0]["fullAccount"]["pendingOnFill"] = json!([]);
+    let empty = account::decode_account(&profile(), &bytes(&input)).unwrap();
+    assert_eq!(empty.pending_on_fill, Some(vec![]));
+
+    // Native nested actions stay opaque. Keep future fields and numeric lexemes;
+    // neither their presence nor their parent ID creates another resting order.
+    let plan = r#"{ "parentOrderId":"synthetic-parent", "actions":[{"futureAction":{"price":100.000000000000000001,"sequence":18446744073709551615}}] }"#;
+    let raw = String::from_utf8(bytes(&snapshot())).unwrap().replace(
+        "\"openOrders\":[]",
+        &format!("\"openOrders\":[],\"pendingOnFill\":[{plan}]"),
+    );
+    let view = account::decode_account(&profile(), raw.as_bytes()).unwrap();
+    let plans = view.pending_on_fill.as_ref().unwrap();
+    assert_eq!(plans.len(), 1);
+    assert_eq!(plans[0].body(), plan);
+    assert!(view.open_orders.is_empty());
+    assert_eq!(format!("{:?}", plans[0]), "RawRow([PRIVATE])");
+    assert_eq!(format!("{view:?}"), "FinancialSnapshot([PRIVATE])");
+    assert_ne!(absent.body_hash, view.body_hash);
+}
+
 fn funding_row() -> Value {
     json!({"owner":bs58::encode([1;32]).into_string(),"symbol":"BTC-USD","size":"-0.012","payment":"0.3","fundingRate":"0.0001","markPrice":"2500.123456789","iso":false,"isoPubkey":null,"slot":9007199254740993_u64,"sequence":18446744073709551615_u64,"timestamp":18446744073709551615_u64})
 }

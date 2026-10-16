@@ -97,8 +97,11 @@ authenticates its own upstream connection or completes a multi-page scan.
 
 Current account bodies do not echo the queried address. Their profile/body hash
 binds the caller's trusted request, not independent native authenticity. Kind and
-parent must match that request profile. Orders/protection/children/locks remain
-explicit inventories; unmodeled orders are not absent. Missing children/locks
+parent must match that request profile. Resting orders, queued `pendingOnFill`
+plans, protection, children and locks remain explicit inventories; unmodeled
+actions are not absent. Queued plans can create orders after a parent fill, but
+are not counted as resting orders or execution facts. Their bounded raw rows
+retain original nested actions and numeric lexemes. Missing plans/children/locks
 remain distinguishable from empty lists. Unknown optional margin fields are not
 zero-filled, including partial aggregate reports.
 

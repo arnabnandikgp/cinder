@@ -122,6 +122,8 @@ pub struct Snapshot {
     pub held: Vec<HeldRow>,
     /// Original bounded resting-order inventory; no terminal/hold-release authority.
     pub open_orders: Vec<RawRow>,
+    /// Optional queued on-fill plans; not live orders, and missing is not empty.
+    pub pending_on_fill: Option<Vec<RawRow>>,
     /// Reported child accounts, not implicitly added collateral or authority.
     pub children: Option<Vec<[u8; 32]>>,
     /// Native locks, retained separately. Missing is not substituted with empty.
@@ -237,6 +239,10 @@ pub fn decode_account(profile: &Profile, body: &[u8]) -> Result<Snapshot, Error>
         });
     }
     let open_orders = rows(account.get("openOrders")?)?;
+    let pending_on_fill = account
+        .optional::<Vec<Box<RawValue>>>("pendingOnFill")?
+        .map(rows)
+        .transpose()?;
     let child_rows = account.optional("subAccounts")?.map(rows).transpose()?;
     let children_reported = child_rows.is_some();
     let mut children = Vec::new();
@@ -261,6 +267,7 @@ pub fn decode_account(profile: &Profile, body: &[u8]) -> Result<Snapshot, Error>
         positions,
         held,
         open_orders,
+        pending_on_fill,
         children: children_reported.then_some(children),
         locks,
     })
