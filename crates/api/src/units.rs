@@ -1,6 +1,7 @@
 //! Opt-in v2 scope preflight and separately bounded durable `history` capture.
-//! No financial admission, listener, quota consumption, signing or dispatch.
+//! Opt-in financial admission is separate from capture. No listener/signing/dispatch.
 
+pub mod admission;
 pub mod history;
 
 use crate::{

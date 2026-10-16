@@ -25,10 +25,10 @@ impl fmt::Debug for Captured {
 /// Immutable accepted-history interpretation at one fresh head. No independent
 /// persistent store, financial state, or reusable authentication result.
 pub struct History {
-    head: Head,
-    contract: [u8; 32],
+    pub(super) head: Head,
+    pub(super) contract: [u8; 32],
     rows: Vec<Captured>,
-    grants: Vec<(Scope, GrantCut)>,
+    pub(super) grants: Vec<(Scope, GrantCut)>,
 }
 impl fmt::Debug for History {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -62,6 +62,7 @@ impl History {
         for accepted in state.api_records() {
             history.push(accepted, state, auth)?;
         }
+        super::admission::validate(journal, &history)?;
         // Count actual admitted orders, never mere capture. Unattributed orders
         // cannot silently become zero agent usage when financial joining arrives.
         for descriptor in state.configuration().units() {
@@ -104,7 +105,7 @@ impl History {
         }
         Ok(history)
     }
-    fn find(&self, account: AccountId, request: RequestId) -> Option<&Captured> {
+    pub(super) fn find(&self, account: AccountId, request: RequestId) -> Option<&Captured> {
         self.rows
             .iter()
             .find(|r| r.request.body.account == account && r.request.body.id == request)
@@ -187,7 +188,7 @@ impl History {
         });
         Ok(())
     }
-    fn effect(
+    pub(super) fn effect(
         &self,
         req: &Request,
         is_owner: bool,
@@ -433,14 +434,14 @@ impl Authorizer {
             .ok_or(Error::NotFound)
     }
 }
-fn key(req: &Request) -> RequestKey {
+pub(super) fn key(req: &Request) -> RequestKey {
     RequestKey {
         domain: req.body.domain,
         account: req.body.account,
         request: req.body.id,
     }
 }
-fn scope(req: &Request) -> Scope {
+pub(super) fn scope(req: &Request) -> Scope {
     Scope {
         domain: req.body.domain,
         unit: req.unit,

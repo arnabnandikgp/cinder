@@ -1158,6 +1158,148 @@ fn api_tx(head: Head, id: u8, record: units::api::Record) -> units::Transaction 
     global(head, id, Change::Api(Box::new(record)))
 }
 
+fn decision(
+    head: Head,
+    n: u8,
+    kind: units::api::Kind,
+    controls: Vec<Control>,
+    inputs: Vec<Input>,
+) -> units::Transaction {
+    let proposal = proposal(head, n, inputs, controls);
+    global(
+        head,
+        n,
+        Change::Admit(Box::new(units::api::Admission {
+            record: api_record(20, 40, units::api::Effect::Recorded),
+            kind,
+            proposal,
+        })),
+    )
+}
+#[test]
+fn financial_join_refusal_is_terminal_and_retains_actual_facts_without_routes() {
+    let t = Temp::new();
+    let mut j = seeded(&t);
+    let other = j.state().unwrap().unit(uid(50)).unwrap().clone();
+    let tx = decision(
+        j.head(),
+        4,
+        units::api::Kind::Order,
+        vec![reserve(20, 10)],
+        vec![credit(40, owner(70), 2, 25)],
+    );
+    let result = j.commit(tx.clone()).unwrap();
+    let units::Receipt::Admitted { receipt, .. } = &result.receipt else {
+        panic!("decision receipt");
+    };
+    assert_eq!(receipt.controls, Some(ControlError::Invalid));
+    assert_eq!(cash(j.state().unwrap(), 40), 125);
+    assert_eq!(j.state().unwrap().api_records().len(), 1);
+    assert_eq!(j.state().unwrap().api_decisions().len(), 1);
+    assert!(j.state().unwrap().route(request(20)).is_none());
+    assert!(j.state().unwrap().unit(uid(40)).unwrap().holds().is_empty());
+    assert_eq!(j.state().unwrap().unit(uid(50)).unwrap(), &other);
+    assert!(j.commit(tx).unwrap().duplicate);
+    let next = decision(
+        j.head(),
+        5,
+        units::api::Kind::Order,
+        vec![reserve(20, 10)],
+        vec![],
+    );
+    assert_eq!(j.commit(next).unwrap_err(), Error::Invalid);
+    drop(j);
+    assert_eq!(open(&t).state().unwrap().api_decisions().len(), 1);
+}
+#[test]
+fn financial_join_requires_original_record_epoch_headers_and_joined_risk() {
+    let t = Temp::new();
+    let mut j = seeded(&t);
+    let selection = cinder_journal::risk::Selection {
+        request: request(20),
+        market: support::q(0).unit(),
+        leverage: 20_000,
+        policy: PolicyVersion::new(1).unwrap(),
+        authority_epoch: 1,
+        expires_at: 1000,
+    };
+    let control = Control::Risk(cinder_journal::risk::Action::Select {
+        approval: orders::Approval {
+            account: owner(70),
+            intent_hash: selection.digest().unwrap(),
+            authority_epoch: 1,
+        },
+        selection: Box::new(selection),
+    });
+    let mut bad = decision(
+        j.head(),
+        4,
+        units::api::Kind::Leverage,
+        vec![control.clone()],
+        vec![],
+    );
+    if let Change::Admit(a) = &mut bad.change {
+        a.proposal.at += 1;
+    }
+    assert_eq!(j.commit(bad).unwrap_err(), Error::Invalid);
+    let result = j
+        .commit(decision(
+            j.head(),
+            4,
+            units::api::Kind::Leverage,
+            vec![control],
+            vec![],
+        ))
+        .unwrap();
+    assert!(matches!(
+        result.receipt,
+        units::Receipt::Admitted {
+            receipt: Receipt {
+                controls: Some(ControlError::Unqualified),
+                ..
+            },
+            ..
+        }
+    ));
+    let bypass = unit(j.head(), 5, 40, vec![], vec![reserve(20, 10)]);
+    assert_eq!(
+        outcome(&j.commit(bypass).unwrap().receipt).controls,
+        Some(ControlError::Invalid)
+    );
+    assert!(j.state().unwrap().route(request(20)).is_none());
+    assert_eq!(
+        format!("{:?}", j.state().unwrap().api_decisions()[0]),
+        "ApiDecision([PRIVATE])"
+    );
+}
+#[test]
+fn revision_two_unit_genesis_is_not_silently_upgraded_for_financial_decisions() {
+    let t = Temp::new();
+    drop(create(&t));
+    let mut frames = SqliteBackend::open(&t.db, Migration::None)
+        .unwrap()
+        .load()
+        .unwrap();
+    let frame = &mut frames[0];
+    let context = RecordContext {
+        domain: support::config().domain,
+        sequence: 0,
+        previous: [0; 32],
+    };
+    let mut body = FixtureProtection
+        .open(context, &frame.opaque)
+        .unwrap()
+        .as_bytes()
+        .to_vec();
+    body[13] = 2;
+    frame.opaque = FixtureProtection.seal(context, &body).unwrap();
+    rehash(frame);
+    assert_eq!(
+        units::Journal::open(Playback(frames), FixtureProtection, configuration()).unwrap_err(),
+        Error::Version
+    );
+}
+
 #[test]
 fn shared_api_headers_bind_contract_owner_policy_and_capacity_without_financial_effects() {
     let t = Temp::new();

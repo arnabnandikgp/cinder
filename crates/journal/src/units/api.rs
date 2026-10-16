@@ -6,7 +6,7 @@ use super::*;
 /// Financial capture and administrative completion are different contracts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Effect {
-    /// Original intent retained, without holds, admission, quota use or exposure.
+    /// Original intent retained; this record alone implies no financial effects.
     Recorded,
     /// Owner's accepted grant; application semantics live in the retained wire.
     Grant,
@@ -55,6 +55,172 @@ pub struct Accepted {
 impl fmt::Debug for Accepted {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ApiAccepted([PRIVATE])")
+    }
+}
+
+/// Typed financial command family, qualified against the original wire by API.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    /// Original bounded order, with holds computed by the trusted admission port.
+    Order,
+    /// Original admitted order and the signed cancellation attempt identity.
+    Cancel {
+        /// Original admitted order in the same customer/unit.
+        target: RequestKey,
+        /// Signed identity of this cancellation attempt.
+        attempt: AttemptId,
+    },
+    /// Owner's payout request, not a completed beneficiary payment.
+    Payout,
+    /// Owner's private initial-margin preference, not native account leverage.
+    Leverage,
+}
+impl fmt::Debug for Kind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ApiKind([PRIVATE])")
+    }
+}
+/// Trusted API-controller proposal; not a network DTO or native authorization.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Admission {
+    /// Exact original record; retries cannot replace it with refreshed auth.
+    pub record: Record,
+    /// Original command family and cancellation target.
+    pub kind: Kind,
+    /// One financial control, exact outer id/head/time; observations remain real.
+    pub proposal: model::Transaction,
+}
+impl fmt::Debug for Admission {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ApiAdmission([PRIVATE])")
+    }
+}
+/// Immutable decided operation; refusal is terminal for this request too.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Decision {
+    /// Original globally owned request.
+    pub request: RequestKey,
+    /// Original decision time, not retry time.
+    pub at: u64,
+    /// Replayed financial result, never native exposure or completion.
+    pub receipt: model::Receipt,
+}
+impl fmt::Debug for Decision {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ApiDecision([PRIVATE])")
+    }
+}
+
+impl State {
+    pub(super) fn admit_api(&mut self, tx: &Transaction, a: &Admission) -> Result<Receipt, Error> {
+        let r = &a.record;
+        let p = &a.proposal;
+        if r.effect != Effect::Recorded
+            || p.id != tx.id
+            || p.expected != tx.expected
+            || p.at != tx.at
+            || self.decisions.iter().any(|d| d.request == r.request)
+            || self.decisions.len() >= wire::MAX_ITEMS
+            || !self
+                .customers
+                .iter()
+                .any(|c| c.account == r.request.account && c.epoch == r.epoch)
+        {
+            return Err(Error::Invalid);
+        }
+        if let Some(old) = self.api.iter().find(|old| old.record.request == r.request) {
+            if old.record != *r {
+                return Err(Error::Conflict);
+            }
+        } else {
+            self.capture_api(tx, r)?;
+        }
+        let valid = match (a.kind, p.controls.as_slice()) {
+            (Kind::Order, [model::Control::Order(orders::Action::Accept { intent, .. })]) => {
+                intent.request == r.request
+                    && intent.authority_epoch == r.epoch
+                    && intent.policy == r.policy
+            }
+            (
+                Kind::Payout,
+                [model::Control::Funds(crate::funds::Action::Accept { intent, .. })],
+            ) => {
+                intent.request == r.request
+                    && intent.authority_epoch == r.epoch
+                    && intent.policy == r.policy
+            }
+            (
+                Kind::Leverage,
+                [model::Control::Risk(crate::risk::Action::Select { selection, .. })],
+            ) => {
+                selection.request == r.request
+                    && selection.authority_epoch == r.epoch
+                    && selection.policy == r.policy
+            }
+            (Kind::Cancel { target, attempt }, [control]) => {
+                let target_owned = target.domain == r.request.domain
+                    && target.account == r.request.account
+                    && self
+                        .decisions
+                        .iter()
+                        .any(|d| d.request == target && d.receipt.controls.is_none())
+                    && self
+                        .api
+                        .iter()
+                        .any(|old| old.record.request == target && old.record.unit == r.unit)
+                    && self.unit(r.unit).is_some_and(|s| {
+                        s.orders()
+                            .iter()
+                            .any(|o| o.intent.request == target && !o.complete())
+                    });
+                target_owned
+                    && match control {
+                        model::Control::Release(key) => *key == target,
+                        model::Control::Order(orders::Action::PrepareCancel {
+                            attempt: key,
+                            authority_epoch,
+                            ..
+                        }) => {
+                            key.request == target
+                                && key.attempt == attempt
+                                && *authority_epoch == r.epoch
+                        }
+                        _ => false,
+                    }
+            }
+            _ => false,
+        };
+        let financial = !matches!(a.kind, Kind::Cancel { .. });
+        let qualified = !financial || self.unit(r.unit).is_some_and(|s| s.has_joined_risk());
+        let mut facts = p.clone();
+        if !valid || !qualified {
+            facts.controls.clear();
+        }
+        let index = self
+            .units
+            .iter()
+            .position(|(u, _)| *u == r.unit)
+            .ok_or(Error::Invalid)?;
+        let (next, mut receipt) = self.units[index]
+            .1
+            .advance_with_scope(&facts, |i| self.input_owned(r.unit, i))?;
+        if !valid || !qualified {
+            receipt.controls = Some(if valid {
+                model::ControlError::Unqualified
+            } else {
+                model::ControlError::Invalid
+            });
+        }
+        self.units[index].1 = next;
+        self.decisions.push(Decision {
+            request: r.request,
+            at: tx.at,
+            receipt: receipt.clone(),
+        });
+        Ok(Receipt::Admitted {
+            unit: r.unit,
+            receipt,
+        })
     }
 }
 

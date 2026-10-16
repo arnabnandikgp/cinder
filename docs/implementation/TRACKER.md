@@ -37,7 +37,8 @@
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | closed | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), merged `793a05c` |
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
-| [P31 — Durable unit-scoped API history](PLAN.md#p31) | in progress | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), open; CI/review pending |
+| [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
+| [P32 — Unit-scoped financial admission](PLAN.md#p32) | in progress | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), open; CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -46,6 +47,99 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P32 published for review — 2026-10-16
+
+Ready [#77](https://github.com/arnabnandikgp/cinder/pull/77) targets
+`product/tee-v1` from `tee/p32-unit-financial-admission`, published using native
+`gh stack submit --auto --open`. One new layer only; no automatic merge.
+Opening head `1e7f0eda73f0a8bc8f3d00400193003326b29e28` differs from checked
+implementation `ee40273` only in PLAN/TRACKER. Publication documentation is
+also receipt-only: code/tests are unchanged after all four exact-tree groups.
+
+At opening-head inspection all eight hosted jobs were running, CodeRabbit was
+pending and there was no substantive review. This receipt's new head needs its
+own checks; older green results are not inherited CI approval. Local publication
+contracts/inventory pass; the source qualification handoff below records the
+full matrix. P31 is actually merged at `d23e33c`; its closure is not contingent
+on #77. Preserve the same three unrelated untracked user paths.
+
+Next: inspect #77's exact latest-head findings/checks, address relevant review,
+and obtain merge/next-slice direction. Runtime/read/recovery composition follows
+separately, including the MAX_ITEMS latency/cache gate before request wiring.
+No native capability, live venue/RPC/AWS activity or frontend integration started.
+
+### P32 offline qualification complete — 2026-10-16
+
+Implementation source `ee40273a6b81a2d98c347bc4e22d0c9784cc0f87`, tree
+`f49bd5b79de2a730a0b67a8e53b81dff3f22095f`, is checkpointed on
+`tee/p32-unit-financial-admission`. Clean tracked-source export
+`/private/tmp/cinder-p32-source.EbihLm` excludes the three unrelated untracked
+user paths. All four groups passed on that exact tree, using Rust 1.97.1 / Node
+24.21.0, locked/offline Cargo, existing caches, `CARGO_INCREMENTAL=0`, dev/test
+debug info disabled and one Cargo writer per target:
+
+- `node scripts/check.mjs --group=contracts`: 81/81 guards, 38 phases / 64 docs,
+  dependency/fixture boundaries pass.
+- `node scripts/check.mjs --group=lint`: format, strict default/all-feature
+  all-target clippy and all-feature build pass.
+- `node scripts/check.mjs --group=rust`: 760/760/697 pass for all-feature
+  debug/release/shipping-default; only existing explicit ignores 10/10/9.
+- `node scripts/check.mjs --group=client`: relay 15, SDK 37 and TypeScript pass.
+
+Focused API is 37 (15 new); unit-journal is 28 (3 new). New cases cover atomic
+record/admission conversion, original auth/epoch/deadlines, quota after cancel
+and owner retry, durable refusal, payout recipient/leverage/shared capacity,
+malformed trusted joins, before/after unknown append, stale writers including
+a race during hold computation, local containment, fact retention and revision-2
+refusal. Actual Ed25519/AEAD fixtures are disposable and synthetic; no native
+execution, changed-image hardware, local SBF/Chrome or production assurance is
+claimed. Existing full workspace fixtures retain their own evidence limits.
+
+Initial compilation required documentation on two public enum fields. Two new
+test assumptions were corrected: a known noncommitted CAS keeps cached state
+unchanged until reload; customer payout reservation is not immediate location
+liquidity. No engine, risk policy, deadline or test gate was weakened. No new
+dependency. Scoped self-review `/private/tmp/cinder-p32-review.html` is not an
+independent audit. Logs are `/private/tmp/cinder-p32-{contracts,lint,rust,client}.log`.
+
+After proving all 63 nonempty additions from local receipt `9802917` remain in
+merged TRACKER and its original commit stays reachable on the retained P31
+branch, aligned the unused local trunk ref to the actual merge. Native
+`gh stack init --base product/tee-v1 tee/p32-unit-financial-admission` adopts only
+this new layer. No reset/clean or user-file change. This qualification receipt
+changes only PLAN/TRACKER; code/tests are unchanged after exact-tree checks.
+
+Next: publish one ready P32 PR; inspect its exact head/CI/review. Keep P32
+`in progress` until relevant review and an authorized merge. No automatic merge,
+live resources, frontend, containers or deferred Pacifica-credit investigation.
+The next implementation boundary is runtime/read/recovery composition, with the
+MAX_ITEMS replay-latency/cache gate before request wiring, not native activation.
+
+### P31 reviewed/merged; P32 started — 2026-10-16
+
+User authorized relevant review fixes, merge and the next PR. #76's final head
+`44cedf5f1754d79d6794f6685b4fb311d2753f41` passed all eight hosted jobs and
+CodeRabbit. Codex reported no findings at code-identical `870b029`; no inline
+review threads exist. CodeRabbit review `5548379322` identified only the valid
+nonblocking full-history replay cost. Recorded the MAX_ITEMS latency/cache gate
+in ADR 0038 before runtime/read wiring; no speculative optimization in P31.
+Generic docstring coverage has no identified missing public contract.
+Scoped review artifact: `/private/tmp/cinder-p31-review.html`; not a full audit.
+Disposition posted as comment `6217732934`.
+
+Head-pinned squash merge completed at 2026-10-16 14:31:12 UTC as
+`d23e33c73458c51b6bffdc14980c18d4be157c83`. Fetched trunk and reviewed head share
+tree `dabdeb07a487cdf62c43ea6122a62d5bf69436ef`. No admin bypass or code change.
+P29/P30 local receipt `9802917` is retained in the old feature branch and its
+contents in the merged tree. Local trunk ref was left untouched; new branch
+`tee/p32-unit-financial-admission` starts directly at the fetched merge. No reset,
+cleanup, live resources or unrelated-file changes. New trunk-push CI is separate.
+
+P32 follows ADR 0038: journal decision contract, API controller, focused faults/
+finance tests, then clean-source full checks and one ready PR. One accepted
+history, unchanged economics and no Runtime/native activation. Next: implement
+the versioned atomic decision path before the API adapter.
 
 ### P31 published for review — 2026-10-16
 
@@ -6272,9 +6366,29 @@ Rust 742/742/679 (existing ignored 10/10/9), relay 15 and SDK 37 pass. Focused A
 Unexpected: Owner-grant proposal validation must follow dedupe in durable capture
 so an authenticated owner can recover an expired original grant without reinstalling
 it. Raw P30 preflight retains its proposal checks; existing scope tests still pass.
-Next: Inspect #76's exact latest-head CI/review; keep this bounded phase in progress
-until an authorized merge. The financial-controller join remains next, not live activation.
+Final verification: all eight hosted jobs and CodeRabbit pass at `44cedf5`;
+no blocking findings or inline threads. Current handoff records the performance
+follow-up, Codex/code identity and exact authorized merge receipt.
+Next: P32's bounded financial-controller join, not runtime/native activation.
 PR: https://github.com/arnabnandikgp/cinder/pull/76.
+Merge: d23e33c73458c51b6bffdc14980c18d4be157c83.
+
+## P32 — Unit-scoped financial admission
+
+Work: versioned journal decisions and opt-in API controller join original signed
+operations to existing unit-local order/cancel/payout/leverage controls, risk and
+holds. Refusals are terminal too. No independent book, native capability or listener.
+Verification: source `ee40273a6b81a2d98c347bc4e22d0c9784cc0f87`, tree
+`f49bd5b79de2a730a0b67a8e53b81dff3f22095f`: contracts 81, strict lint/build,
+Rust 760/760/697 (existing ignores 10/10/9), relay 15, SDK 37 and TypeScript pass.
+Focused API 37 and unit-journal 28 pass; 18 new cases. Current handoff records scope.
+Unexpected: tests must distinguish known noncommitted SQLite CAS failure from
+unknown append fencing. Payout acceptance reserves customer entitlement; queued
+amounts need not already be available at the payout location. Dispatch retains
+its separate FIFO/location qualification. No policy was changed to satisfy tests.
+Next: inspect #77's exact-head CI/review. Runtime wiring
+must first qualify MAX_ITEMS replay cost; no native activation is implied.
+PR: https://github.com/arnabnandikgp/cinder/pull/77.
 Merge: Not merged.
 
 ## P24 — Release safety case

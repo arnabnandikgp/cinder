@@ -7,6 +7,16 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P32 joins new or recorded signed v2 operations to unit-local financial controls
+in one accepted append. The existing exact engine supplies risk, holds, payout
+queue and leverage semantics; explicit synthetic policy is not calibrated
+native evidence. Immutable decisions retain refusals and original ownership;
+accepted orders alone consume agent budget. Fault tests distinguish a known CAS
+failure from an uncertain append, which fences every unit until explicit replay.
+Unit replay revision 3 refuses revisions 1/2; shipping engine/codecs and v1
+Runtime remain unchanged. [ADR 0038](../architecture/0038-unit-financial-admission.md)
+owns the scope, remaining runtime/performance gate and qualification limits.
+
 P31 adds `journal::units::api` records and `api::units::history` capture/derived
 grant interpretation under the original common head. Real Ed25519 and record AEAD
 are exercised with disposable synthetic identities, local SQLite and explicit

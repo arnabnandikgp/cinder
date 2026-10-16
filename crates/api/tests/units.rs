@@ -1,4 +1,6 @@
 //! Synthetic unit scopes/accepted-grant port; no runnable v2 service or native I/O.
+#[path = "units/admission.rs"]
+mod admission_tests;
 #[path = "../../journal/tests/support/mod.rs"]
 mod support;
 use cinder_api::{ConfidentialChannel, Error, Response, units as api, wire};
