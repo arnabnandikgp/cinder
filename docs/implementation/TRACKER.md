@@ -37,7 +37,8 @@
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | closed | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), merged `793a05c` |
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
-| [P31 — Durable unit-scoped API history](PLAN.md#p31) | in progress | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), open; CI/review pending |
+| [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
+| [P32 — Unit-scoped financial admission](PLAN.md#p32) | in progress | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -46,6 +47,31 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P31 reviewed/merged; P32 started — 2026-10-16
+
+User authorized relevant review fixes, merge and the next PR. #76's final head
+`44cedf5f1754d79d6794f6685b4fb311d2753f41` passed all eight hosted jobs and
+CodeRabbit. Codex reported no findings at code-identical `870b029`; no inline
+review threads exist. CodeRabbit review `5548379322` identified only the valid
+nonblocking full-history replay cost. Recorded the MAX_ITEMS latency/cache gate
+in ADR 0038 before runtime/read wiring; no speculative optimization in P31.
+Generic docstring coverage has no identified missing public contract.
+Scoped review artifact: `/private/tmp/cinder-p31-review.html`; not a full audit.
+Disposition posted as comment `6217732934`.
+
+Head-pinned squash merge completed at 2026-10-16 14:31:12 UTC as
+`d23e33c73458c51b6bffdc14980c18d4be157c83`. Fetched trunk and reviewed head share
+tree `dabdeb07a487cdf62c43ea6122a62d5bf69436ef`. No admin bypass or code change.
+P29/P30 local receipt `9802917` is retained in the old feature branch and its
+contents in the merged tree. Local trunk ref was left untouched; new branch
+`tee/p32-unit-financial-admission` starts directly at the fetched merge. No reset,
+cleanup, live resources or unrelated-file changes. New trunk-push CI is separate.
+
+P32 follows ADR 0038: journal decision contract, API controller, focused faults/
+finance tests, then clean-source full checks and one ready PR. One accepted
+history, unchanged economics and no Runtime/native activation. Next: implement
+the versioned atomic decision path before the API adapter.
 
 ### P31 published for review — 2026-10-16
 
@@ -6272,9 +6298,26 @@ Rust 742/742/679 (existing ignored 10/10/9), relay 15 and SDK 37 pass. Focused A
 Unexpected: Owner-grant proposal validation must follow dedupe in durable capture
 so an authenticated owner can recover an expired original grant without reinstalling
 it. Raw P30 preflight retains its proposal checks; existing scope tests still pass.
-Next: Inspect #76's exact latest-head CI/review; keep this bounded phase in progress
-until an authorized merge. The financial-controller join remains next, not live activation.
+Final verification: all eight hosted jobs and CodeRabbit pass at `44cedf5`;
+no blocking findings or inline threads. Current handoff records the performance
+follow-up, Codex/code identity and exact authorized merge receipt.
+Next: P32's bounded financial-controller join, not runtime/native activation.
 PR: https://github.com/arnabnandikgp/cinder/pull/76.
+Merge: d23e33c73458c51b6bffdc14980c18d4be157c83.
+
+## P32 — Unit-scoped financial admission
+
+Work: versioned journal decisions and opt-in API controller join original signed
+operations to existing unit-local order/cancel/payout/leverage controls, risk and
+holds. Refusals are terminal too. No independent book, native capability or listener.
+Verification: focused API cases and journal cases under active local qualification;
+exact-tree full checks and source receipt still pending.
+Unexpected: tests must distinguish known noncommitted SQLite CAS failure from
+unknown append fencing. Payout acceptance reserves customer entitlement; queued
+amounts need not already be available at the payout location. Dispatch retains
+its separate FIFO/location qualification. No policy was changed to satisfy tests.
+Next: finish fault regressions, clean-source full checks and publish one ready PR.
+PR: none.
 Merge: Not merged.
 
 ## P24 — Release safety case

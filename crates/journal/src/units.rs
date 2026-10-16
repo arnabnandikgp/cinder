@@ -168,6 +168,8 @@ impl fmt::Debug for Route {
 pub enum Change {
     /// Trusted API controller's authenticated record; never financial admission.
     Api(Box<api::Record>),
+    /// Trusted controller's original record and one joined financial decision.
+    Admit(Box<api::Admission>),
     /// Add an empty owner to every component, atomically, at epoch one.
     Enroll {
         /// Qualified owner's wallet verification key.
@@ -233,6 +235,13 @@ impl fmt::Debug for Transaction {
 pub enum Receipt {
     /// A recorded-only intent or administrative record, never financial acceptance.
     Api,
+    /// Durable financial decision, including refusal; never exposure authority.
+    Admitted {
+        /// Original owning unit.
+        unit: UnitId,
+        /// All-or-none controls; actual facts remain recorded on refusal.
+        receipt: model::Receipt,
+    },
     /// Successful atomic enrollment or shared authority advance.
     Shared,
     /// Original existing financial/control dispositions in the selected unit.
@@ -252,6 +261,7 @@ pub struct State {
     customers: Vec<Customer>,
     routes: Vec<Route>,
     api: Vec<api::Accepted>,
+    decisions: Vec<api::Decision>,
     now: u64,
 }
 impl fmt::Debug for State {
@@ -272,6 +282,7 @@ impl State {
             customers: vec![],
             routes: vec![],
             api: vec![],
+            decisions: vec![],
             now: 0,
         })
     }
@@ -299,6 +310,10 @@ impl State {
     pub fn api_records(&self) -> &[api::Accepted] {
         &self.api
     }
+    /// Immutable financial decisions, not native delivery capabilities.
+    pub fn api_decisions(&self) -> &[api::Decision] {
+        &self.decisions
+    }
 
     fn advance(&self, tx: &Transaction) -> Result<(Self, Receipt), Error> {
         if tx.at < self.now {
@@ -310,6 +325,7 @@ impl State {
                 s.capture_api(tx, record)?;
                 Receipt::Api
             }
+            Change::Admit(admission) => s.admit_api(tx, admission)?,
             Change::Enroll { wallet, recipients } => {
                 if *wallet == [0; 32]
                     || recipients.len() != s.units.len()
@@ -401,7 +417,17 @@ impl State {
             Change, FillTarget, close::CloseChange, economics::EconomicChange, funds::FundsChange,
             protection::ProtectionChange, restoration::RestorationChange,
         };
-        let owns = |request| self.route(request).is_some_and(|r| r.unit == unit);
+        let owns = |request| {
+            self.route(request).is_some_and(|r| r.unit == unit)
+                || self.decisions.iter().any(|d| {
+                    d.request == request
+                        && d.receipt.controls.is_none()
+                        && self
+                            .api
+                            .iter()
+                            .any(|a| a.record.request == request && a.record.unit == unit)
+                })
+        };
         let target = |target: &FillTarget| match target {
             FillTarget::Customer(key) => owns(key.request),
             FillTarget::House | FillTarget::Unattributed => true,
@@ -446,10 +472,7 @@ impl State {
                 model::Control::Reserve { request, .. } => {
                     if request.domain != self.config.domain
                         || !self.customers.iter().any(|c| c.account == request.account)
-                        || self
-                            .api
-                            .iter()
-                            .any(|r| r.record.request == *request && r.record.unit != unit)
+                        || self.api.iter().any(|r| r.record.request == *request)
                     {
                         return Ok(None);
                     }
@@ -493,7 +516,9 @@ impl State {
                     }
                 }
                 model::Control::Onboarding(onboarding::Action::Notice(_))
-                | model::Control::ResolveRaw(_) => (),
+                | model::Control::ResolveRaw(_)
+                | model::Control::Collateral(_)
+                | model::Control::Risk(crate::risk::Action::Install { .. }) => (),
                 _ => return Ok(None),
             }
         }

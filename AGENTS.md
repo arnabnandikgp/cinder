@@ -9,9 +9,11 @@ one head with shared owners/epochs; it does not wire shipping Runtime/API,
 dispatch, funding or recovery. ADR 0035 defines its deliberately limited controls.
 P30 adds opt-in signed unit-bound API v2/SDK helpers and current-head scope
 preflight (ADR 0036). P31 adds accepted grant/operation history and recorded-only
-financial capture (ADR 0037), not admission or a listener. Unit replay revision 2
-requires new empty histories; no revision-1 unit migration is supplied. Shipping
-Runtime/PrivateClient stay v1; capture/preflight never authorize exposure.
+financial capture (ADR 0037). P32 adds opt-in atomic financial decisions joining
+original operations to unit-local risk/holds and accepted-order quota (ADR 0038),
+not native exposure or a listener. Unit replay revision 3 requires new empty
+histories; no revision-1/2 migration is supplied. Shipping Runtime/PrivateClient
+stay v1; preflight/capture/admission never authorize native exposure.
 Phoenix/PER, the website/demo and Mintlify docs are separate workstreams, not
 backend templates.
 

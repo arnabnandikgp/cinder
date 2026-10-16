@@ -7,7 +7,7 @@ pub(super) const GENESIS: u8 = 30;
 pub(super) const RECORD: u8 = 31;
 // Unit ownership/controller changes require a separate replay revision even
 // when the reused single-unit financial engine remains unchanged.
-const REVISION: u16 = 2;
+const REVISION: u16 = 3;
 pub(super) fn writer(tag: u8) -> Writer {
     let mut w = Writer::new(tag);
     w.raw(&REVISION.to_be_bytes());
@@ -53,6 +53,21 @@ pub(super) fn transaction(tx: &Transaction) -> Result<Vec<u8>, Error> {
     w.raw(&tx.expected.hash);
     w.u64(tx.at);
     match &tx.change {
+        Change::Admit(a) => {
+            w.byte(4);
+            api_record(&mut w, &a.record);
+            match a.kind {
+                api::Kind::Order => w.byte(0),
+                api::Kind::Cancel { target, attempt } => {
+                    w.byte(1);
+                    w.item(&target);
+                    w.raw(&attempt.bytes());
+                }
+                api::Kind::Payout => w.byte(2),
+                api::Kind::Leverage => w.byte(3),
+            }
+            w.blob(&wire::encode_transaction(&a.proposal)?);
+        }
         Change::Api(record) => {
             w.byte(3);
             api_record(&mut w, record);
@@ -89,6 +104,24 @@ pub(super) fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
     };
     let at = r.u64()?;
     let change = match r.byte()? {
+        4 => {
+            let record = read_api_record(&mut r)?;
+            let kind = match r.byte()? {
+                0 => api::Kind::Order,
+                1 => api::Kind::Cancel {
+                    target: r.item()?,
+                    attempt: AttemptId::new(r.array()?).map_err(|_| Error::Codec)?,
+                },
+                2 => api::Kind::Payout,
+                3 => api::Kind::Leverage,
+                _ => return Err(Error::Codec),
+            };
+            Change::Admit(Box::new(api::Admission {
+                record,
+                kind,
+                proposal: wire::decode_transaction(r.blob()?)?,
+            }))
+        }
         3 => Change::Api(Box::new(read_api_record(&mut r)?)),
         0 => {
             let wallet = r.array()?;
@@ -131,6 +164,11 @@ pub(super) fn decode_transaction(bytes: &[u8]) -> Result<Transaction, Error> {
 pub(super) fn receipt(receipt: &Receipt) -> Result<Vec<u8>, Error> {
     let mut w = writer(34);
     match receipt {
+        Receipt::Admitted { unit, receipt } => {
+            w.byte(3);
+            w.raw(&unit.bytes());
+            w.blob(&wire::receipt(receipt)?);
+        }
         Receipt::Api => w.byte(2),
         Receipt::Shared => w.byte(0),
         Receipt::Unit { unit, receipt } => {
@@ -152,6 +190,12 @@ pub(super) fn state(s: &State) -> Result<[u8; 32], Error> {
         api_record(&mut record, &accepted.record);
         record.u64(accepted.at);
         w.raw(&Sha256::digest(record.finish()?));
+    }
+    w.count(s.decisions.len());
+    for decision in &s.decisions {
+        w.item(&decision.request);
+        w.u64(decision.at);
+        w.blob(&wire::receipt(&decision.receipt)?);
     }
     w.count(s.customers.len());
     for c in &s.customers {
