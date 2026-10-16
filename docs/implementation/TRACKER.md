@@ -36,6 +36,7 @@
 | [P27 — BULK exact wire and fill codec foundation](PLAN.md#p27) | closed | Exact offline native bytes, identities and fill facts remain separate from financial posting, live dispatch and causal-readiness authority. | [#71](https://github.com/arnabnandikgp/cinder/pull/71), merged `b818655` |
 | [P28 — BULK financial observations and execution-unit contract](PLAN.md#p28) | closed | Native financial observations retain explicit units, ownership and qualification limits; a reviewed two-unit contract precedes runtime composition. | [#72](https://github.com/arnabnandikgp/cinder/pull/72), merged `b4dce81` |
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | in progress | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), open; CI/review pending |
+| [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | in progress | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -44,6 +45,24 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P30 started above the reviewed P29 fix — 2026-10-16
+
+User authorized next planned work after relevant reviews. #73's valid Codex
+finding is fixed at `06f9d0ffbf1ecdadb3fcabc8ea1c2d55a9475ea6`; reply
+#4293263438 records the red-first and 21/21 debug/release results, strict
+workspace lint/build and 81 contracts. Thread `PRRT_kwDOUXiYz86tJL6r` is resolved.
+CodeRabbit had no actionable findings at its reviewed old head. New-head CI and
+any new review remain separate; #73 is open and has not been merged.
+
+`tee/p30-unit-api-contract` is stacked above #73 using native `gh stack add`.
+ADR 0036 selects a complete protocol/authentication contract slice: signed v2
+unit bytes/digests/replies, current shared-head scope preflight and SDK helpers.
+It deliberately does not wire shipping Runtime or invent financial admission.
+The trusted grant cut remains a port until durable API/controller integration;
+preflight cannot install/revoke, consume quota, sign or dispatch. No live action,
+frontend, dependency or financial-policy change. Next: implement/verify the
+contract and cross-unit adversarial vectors, then publish one dependent PR.
 
 ### P29 review correction; next slice authorized — 2026-10-16
 
@@ -5998,6 +6017,16 @@ order digests. No runtime deadline, financial policy or dependency was changed.
 Next: Review #73's latest-head CI/findings; keep the phase in progress until an
 authorized merge. Unit-bound API/controller/runtime composition remains separate.
 PR: https://github.com/arnabnandikgp/cinder/pull/73.
+Merge: Not merged.
+
+## P30 — Signed unit-bound API and SDK contract
+
+Work: Scope and acceptance in ADR 0036 / PLAN P30; implementation started above #73.
+Verification: Pending v2 protocol, auth-scope, SDK and legacy regressions.
+Unexpected: Current-head grant evidence remains an explicit trusted accepted-history
+port; this phase does not masquerade as a durable grant/admission service.
+Next: Implement and test one explicit v2 contract, then publish the dependent PR.
+PR: Not opened.
 Merge: Not merged.
 
 ## P24 — Release safety case

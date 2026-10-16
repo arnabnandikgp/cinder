@@ -263,6 +263,10 @@ impl State {
             now: 0,
         })
     }
+    /// Immutable registry of this accepted state; not a fresh native metadata cut.
+    pub fn configuration(&self) -> &Configuration {
+        &self.config
+    }
     /// Component view; does not aggregate collateral or check current freshness.
     pub fn unit(&self, id: UnitId) -> Option<&model::State> {
         self.units.iter().find(|(u, _)| *u == id).map(|(_, s)| s)

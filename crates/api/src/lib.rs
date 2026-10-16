@@ -7,6 +7,7 @@ pub mod onboarding;
 mod publication;
 pub mod reads;
 mod records;
+pub mod units;
 pub mod wire;
 use cinder_journal::{Backend, Journal, Protection, funds, model::*, orders, risk};
 use cinder_kernel::{

@@ -1109,6 +1109,24 @@ Evidence: F01–F14/X01–X05/S01–S04, P05/P06 replay fixtures,
 - [x] Replay, duplicate/conflict, wrong-unit source, independent inventory, CAS/unknown outcomes, freshness fencing, encrypted storage and legacy/new-format isolation pass deterministic offline tests.
 - [x] Appropriate exact-source workspace checks pass; implementation limits, PR/review/CI state and the next versioned API/controller/runtime gate are recorded without activation claims.
 
+<a id="p30"></a>
+## P30 — Signed unit-bound API and SDK contract
+
+Depends on: P29.
+
+Deliver: explicit v2 request/intent/reply unit binding, exact shared command
+semantics, current-head owner/agent scope preflight over the shared journal and
+browser/Node SDK encoding/signing/reply helpers. Preserve v1 and shipping Runtime.
+Preflight is not durable financial admission: no grant installation, quota
+consumption, native signing, dispatch, new endpoint, frontend or live test.
+Evidence: B08/S01/S02/X01–X04, P18/P21A vectors, P29 state/replay tests and
+[ADR 0036](../architecture/0036-unit-api-contract.md).
+
+- [ ] V2 binds UnitId in signed and stable economic bytes; independent Rust/SDK vectors agree; malformed/version/precision/size inputs and wrong-unit/unwrapped replies fail closed without v1 fallback.
+- [ ] Current-head scope verification checks owner/global epoch/component and typed accepted-grant cut; same owner/market across units cannot widen permissions, and global revocation survives replay.
+- [ ] SDK helpers snapshot signing bytes/metadata before async wallet work, preserve caller buffers and stable retry semantics, and perform no native/network action or implicit retry.
+- [ ] Appropriate exact-source workspace/SDK/legacy regressions pass; open predecessor #73 and this phase's scope, evidence, PR/CI/review state and remaining controller/runtime gates are recorded.
+
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
 

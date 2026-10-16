@@ -7,6 +7,18 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P30 promotes the opt-in API v2 contract in `api::units` and low-level private SDK
+helpers, not a network service. Synthetic Rust/SDK vectors manually extend every
+pinned v1 command with explicit unit identity and check independent Ed25519 and
+SHA-256 expectations. Local journal fixtures exercise current-head scope,
+same-owner/market isolation, shared revocation and freshness fencing. The accepted
+grant cut is an explicit trusted in-enclave port with no shipping implementation;
+fixtures do not establish durable grant installation, order quota consumption,
+cancel ownership or financial admission. [ADR 0036](../architecture/0036-unit-api-contract.md)
+records those remaining controller/Runtime gates. No native/chain/AWS capability,
+hardware result, new dependency or financial-policy assumption is promoted.
+Exact-source checks and open-stack state belong to TRACKER.
+
 P29 implements the first approved ADR 0034 slice in `journal::units`: one new
 protected history containing existing component states, immutable registry,
 shared ownership/epochs and non-exposing reservation ownership. ADR 0035 states

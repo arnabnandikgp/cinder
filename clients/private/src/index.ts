@@ -23,6 +23,11 @@ export type Command =
   | { kind: 'leverage'; market: Id; leverage: bigint; goodUntil: bigint };
 export interface Intent { domain: Domain; account: Id; id: Id; policy: number; command: Command }
 export interface Envelope extends Intent { epoch: bigint; signer: Id; session: Id; expiresAt: bigint }
+/** Opt-in v2 contract; current deployed/server profiles are not upgraded by this type. */
+export interface UnitIntent extends Intent { unit: Id }
+export interface UnitEnvelope extends Envelope { unit: Id }
+/** Private caller-owned result. Erase wire/digest after use in the verified channel. */
+export interface SignedUnitRequest { unit: Id; id: Id; policy: number; digest: Id; wire: Uint8Array }
 export type Outcome = 'rejected' | 'accepted' | 'dispatched' | 'acknowledged' | 'partial' | 'complete' | 'unknown';
 export interface Receipt {
   kind: 'receipt'; id: Id; digest: Id; policy: number; outcome: Outcome; filled: bigint;
@@ -148,6 +153,44 @@ export async function intentDigest(i: Intent): Promise<Uint8Array> {
   try { return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)); }
   finally { bytes.fill(0); }
 }
+function unitIntentBytes(i: UnitIntent): Uint8Array<ArrayBuffer> {
+  const w = new Writer('CINDER-API-INTENT\0\x00\x02'); prefix(w, i); w.key(i.unit); command(w, i.command);
+  return w.end();
+}
+/** V2 signature preimage includes UnitId; never wrap or reuse a v1 signature. */
+export function unitSigningMessage(e: UnitEnvelope): Uint8Array {
+  const w = new Writer('CINDER-API\0\x00\x02'); prefix(w, e); w.key(e.unit);
+  if (e.epoch <= 0n) fail();
+  w.n(e.epoch, 8); w.key(e.signer); w.key(e.session); w.n(e.expiresAt, 8); command(w, e.command);
+  const bytes = w.end();
+  if (bytes.length + 64 > 1024) { bytes.fill(0); fail(); }
+  return bytes;
+}
+/** Same-unit retry survives auth refresh; changing the unit changes economics. */
+export async function unitIntentDigest(i: UnitIntent): Promise<Uint8Array> {
+  const bytes = unitIntentBytes(i);
+  try { return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)); }
+  finally { bytes.fill(0); }
+}
+/** Pure signing helper, not a network client. Snapshot all bytes/metadata before
+ * awaiting a wallet. No channel fallback, native signing, nonce generation or retry. */
+export async function signUnitRequest(e: UnitEnvelope, signer: MessageSigner): Promise<SignedUnitRequest> {
+  const unit = id(e.unit), requestId = id(e.id), policy = e.policy;
+  if (!equal(id(signer.publicKey), id(e.signer))) fail();
+  const message = unitSigningMessage(e), intent = unitIntentBytes(e);
+  const scratch = message.slice();
+  let wire: Uint8Array | undefined, digest: Uint8Array | undefined;
+  try {
+    digest = new Uint8Array(await crypto.subtle.digest('SHA-256', intent));
+    const signature = await signer.signMessage(scratch);
+    if (!(signature instanceof Uint8Array) || signature.length !== 64) fail();
+    wire = new Uint8Array(message.length + 64); wire.set(message); wire.set(signature, message.length);
+    return { unit, id: requestId, policy, digest, wire };
+  } catch {
+    wire?.fill(0); digest?.fill(0);
+    throw new Error('Private unit signing unavailable');
+  } finally { message.fill(0); intent.fill(0); scratch.fill(0); }
+}
 class Reader {
   at: number; bytes: Uint8Array;
   constructor(bytes: Uint8Array, prefix = 'CINDER-API-REPLY\0\x00\x01') {
@@ -163,6 +206,13 @@ class Reader {
   rest() { return this.take(this.bytes.length-this.at); }
 }
 function option(r: Reader, bytes = 16, signed = true) { return r.boolean() ? r.n(bytes,signed) : undefined; }
+/** Strict v2 wrapper. Unit identity is required even for a redacted error; a v1
+ * reply or another unit is never interpreted as success/fallback. */
+export function decodeUnitResponse(bytes: Uint8Array, expectedUnit: Id): { unit: Id; response: Response } {
+  const r = new Reader(bytes, 'CINDER-API-REPLY\0\x00\x02'), unit = r.take(32);
+  if (!equal(unit, id(expectedUnit))) fail();
+  return { unit, response: decodeResponse(r.rest()) };
+}
 function unit(r: Reader) { const market=r.take(32), precision=Number(r.n(4)); if(!precision||!market.some(x=>x))fail();return {market,precision}; }
 function position(r: Reader): Position { return {...unit(r),lots:r.n(8,true),basis:r.n(16,true)}; }
 function grant(r: Reader): Grant { return {key:r.take(32),methods:Number(r.n(1)),market:r.take(32),maximumLots:r.n(8),maximumFee:r.n(16,true),maximumOrders:r.n(8),expiresAt:r.n(8)}; }
