@@ -52,7 +52,30 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P35 completion retention follow-up — 2026-10-17 (Asia/Kolkata)
+### Four-PR review corrections restacked — 2026-10-17 (Asia/Kolkata)
+
+Approved fixes are on their owning layers: P34 `ed83670` adds shared accepted
+time and preserves one-use native completions through writer contention; P35
+`1c8836f` applies that completion rule to the matching custody/withdrawal rejoins.
+P36 `e0b218b` independently pins the three mandatory joined/custody/recovery
+acceptance identities, runners, test locations, evidence labels and trace IDs.
+Deleting a case or substituting its runner/test can no longer silently remove
+its execution requirement. Red reproductions precede the focused passing tests.
+
+All descendants are restacked, not merged. Focused checks pass: Pacifica reads
+17/17, unit runtime 8/8, manifest guards 6/6 and strict all-feature/all-target
+Clippy. The complete exact-source offline matrix is next, then push the owning
+heads and reply to/resolve the five reviewed threads. New-head CI is not yet
+claimed. P33 has no code change; all phases remain in progress until actual
+acceptance/review/merge. Native financial/RPC/AWS qualification and frontend
+integration are outside this task; Pacifica missing credit remains deferred.
+
+## Historical handoffs
+
+The following session receipts preserve evidence for their exact sources. Their
+next actions and pending statuses are superseded by the current handoff above.
+
+### Historical: P35 completion retention follow-up — 2026-10-17 (Asia/Kolkata)
 
 P34 review corrections `ed83670` are inherited. P35 `1c8836f` uses the same
 completion-specific writer handoff at consumed custody/withdrawal rejoins;
@@ -206,7 +229,7 @@ attempt used equality on a non-PartialEq kind; replaced it with a pattern check.
 No gate was relaxed. P35/P36 must be restacked onto this correction; no live
 request or automatic merge. New-head hosted checks/review remain separate.
 
-### P36 joined lifecycle passes; stack review corrections — 2026-10-17
+### Historical: P36 joined lifecycle passes; stack review corrections — 2026-10-17
 
 Worktree `cinder-tee`, branch `tee/p36-joined-acceptance`. Three ready PRs form
 native GitHub stack #80: #78 → #79 → #81. No automatic merge or frontend work.
@@ -6731,7 +6754,7 @@ Verification: original full matrix passes. Prior review source `cc59226` has
 11/11 BULK and 21/21 Pacifica execution passes and eight hosted green jobs.
 New shared-time/completion regressions pass: reads 17/17, unit runtime 8/8,
 strict all-feature/all-target Clippy. Current handoff owns exact-source receipts;
-new-head hosted verification remains required; P35 is restacked.
+new-head hosted verification remains required; descendants are restacked.
 Unexpected: chronology is shared even when a component's state has not changed;
 one-use responses must not be consumed by a transient writer Busy. No resend,
 funding readiness, collateral cut or qualification rule was relaxed.
@@ -6762,7 +6785,9 @@ Work: actual SDK-to-Runtime-to-native-signature joined fixture and mandatory
 execution guards; UNIT-ACCEPTANCE matrix and separate qualification proposal.
 Verification: final corrected source `4507b60` passes contracts 82, strict
 lint/build, Rust 797/797/734 (intentional ignores 10/10/9), relay 15, SDK 42 and
-tsc. Current handoff owns exact tree, logs, review and predecessor CI status.
+tsc. Review correction `e0b218b` pins mandatory case identities independently of
+the manifest, with deletion/substitution regressions (6/6 guard tests). Current
+handoff owns exact tree, logs, review and predecessor CI status.
 Unexpected: fixture timestamps/deadlines/readiness must obey real admission;
 native/changed-image qualification remains separately scoped, not fixture proof.
 Next: finish current-head hosted CI/review. Fourth layer #82 is published in
