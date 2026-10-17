@@ -2,6 +2,28 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { manifest, validate } from "./check-acceptance.mjs";
+test("required unit evidence cannot disappear or be reassigned to another runner", () => {
+  const required = ["unit-sdk-joined", "unit-custody", "unit-recovery"];
+  for (const id of required) {
+    const missing = structuredClone(manifest);
+    missing.cases = missing.cases.filter(c => c.id !== id);
+    assert(validate(missing).includes(`Missing required case ${id}`), id);
+    for (const field of ["runner", "file", "test", "evidence", "requirements"]) {
+      const changed = structuredClone(manifest);
+      const entry = changed.cases.find(c => c.id === id);
+      assert(entry);
+      if (field === "runner") entry.runner = "browser";
+      if (field === "file") entry.file = "clients/private/tests/onboarding.test.ts";
+      if (field === "test") entry.test += "_renamed";
+      if (field === "evidence") entry.evidence = "local-sbf";
+      if (field === "requirements") entry.requirements = ["W01"];
+      assert(validate(changed).includes(`Changed required case ${id}`), `${id}/${field}`);
+    }
+  }
+  const missingAll = structuredClone(manifest);
+  missingAll.cases = missingAll.cases.filter(c => !required.includes(c.id));
+  assert(required.every(id => validate(missingAll).includes(`Missing required case ${id}`)));
+});
 test("manifest requires declarations, not stale comments, strings or longer identifiers", () => {
   for (const [id, stale] of [
     ["private-commands", "export async function runHttpRenamed() {}"],

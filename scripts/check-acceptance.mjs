@@ -18,6 +18,28 @@ const required = [
   ...Array.from({ length: 9 }, (_, i) => `W${String(i + 1).padStart(2, "0")}`),
   ...Array.from({ length: 10 }, (_, i) => `V${String(i + 1).padStart(2, "0")}`),
 ];
+// Independent policy roots, not derived from the manifest being checked. These
+// cases cannot disappear, change runner or silently lose their trace coverage.
+const mandatoryCases = [
+  {
+    id: "unit-sdk-joined", runner: "private",
+    file: "clients/private/tests/units-process.test.ts",
+    test: "joined SDK unit lifecycle preserves native attribution, shared revoke and restart without resend",
+    evidence: "synthetic", requirements: ["W01", "W02", "W03", "W06", "V09"],
+  },
+  {
+    id: "unit-custody", runner: "workspace",
+    file: "crates/journal/tests/unit_funding.rs",
+    test: "exact_batch_sweep_and_refund_are_exclusive_and_cannot_move_to_another_unit",
+    evidence: "synthetic", requirements: ["W03", "W04", "V01", "V09"],
+  },
+  {
+    id: "unit-recovery", runner: "workspace",
+    file: "crates/pacifica/tests/unit_funding.rs",
+    test: "unit_recovery_reuses_final_backing_and_lifetime_paid_counters_not_another_units_observation",
+    evidence: "synthetic", requirements: ["W04", "W05", "V08"],
+  },
+];
 // Trace the declaration forms used by this bounded manifest, not arbitrary text.
 // This is a source-presence guard; execution remains the runner's responsibility.
 function declaresTest(file, name, text) {
@@ -91,6 +113,16 @@ export function validate(
     coverage = new Set();
   if (!Array.isArray(m.cases) || !m.cases.length)
     errors.push("No acceptance cases");
+  for (const expected of mandatoryCases) {
+    const actual = (Array.isArray(m.cases) ? m.cases : []).find(c => c?.id === expected.id);
+    if (!actual) errors.push(`Missing required case ${expected.id}`);
+    else if (["runner", "file", "test", "evidence"].some(k => actual[k] !== expected[k])
+      || !Array.isArray(actual.requirements)
+      || actual.requirements.length !== expected.requirements.length
+      || new Set(actual.requirements).size !== expected.requirements.length
+      || expected.requirements.some(r => !actual.requirements.includes(r)))
+      errors.push(`Changed required case ${expected.id}`);
+  }
   for (const c of Array.isArray(m.cases) ? m.cases : []) {
     if (typeof c.id !== "string" || !c.id || seen.has(c.id))
       errors.push("Missing/duplicate case identity");
