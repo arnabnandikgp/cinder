@@ -17,6 +17,11 @@ pub trait Controller: Source {
     }
     /// Recheck the actual shared backend/witness before dependent work.
     fn verified_state(&mut self) -> Result<&State, Error>;
+    /// Accepted deployment chronology, not a fresh risk/price observation. A
+    /// selected component can lag this clock when another unit commits.
+    fn shared_logical_time(&self) -> Result<u64, Error> {
+        Ok(self.state()?.logical_time())
+    }
     /// Commit against the exact common head. Unknown outcomes never deliver an
     /// exposure; exact duplicate commits return no second local delivery.
     fn commit(&mut self, transaction: Transaction) -> Result<Committed, Error>;

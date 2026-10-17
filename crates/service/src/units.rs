@@ -432,11 +432,14 @@ mod tests {
     }
     type App = Runtime<Storage, RecordCipher, NoOrders>;
     fn fixture() -> (App, Arc<Shared>, Arc<Time>) {
+        fixture_with(config())
+    }
+    fn fixture_with(configuration: units::Configuration) -> (App, Arc<Shared>, Arc<Time>) {
         let shared = Arc::new(Shared::default());
         let mut journal = Journal::create(
             Storage(shared.clone()),
             RecordCipher::new(Zeroizing::new([42; 32]), 1, [89; 32]).unwrap(),
-            config(),
+            configuration,
         )
         .unwrap();
         journal
@@ -485,6 +488,144 @@ mod tests {
     }
     fn session() -> Session {
         Session::established(domain(), [8; 32], 5000)
+    }
+    #[test]
+    fn native_read_completion_waits_for_writer_and_retains_original_cooldown() {
+        use cinder_bulk::{execution as bulk, financial, reads};
+        let descriptors = config()
+            .units()
+            .iter()
+            .cloned()
+            .map(|mut d| {
+                if d.id == uid(40) {
+                    d.environment = cinder_bulk::Network::Testnet.commitment();
+                }
+                d
+            })
+            .collect();
+        let configuration = units::Configuration::new(domain(), descriptors).unwrap();
+        let d = &configuration.units()[0];
+        let profile = financial::Profile::new(
+            cinder_bulk::Scope::new(
+                d.ledger.sources[0].scope,
+                cinder_bulk::Network::Testnet,
+                d.native_account,
+            )
+            .unwrap(),
+            d.ledger.quote,
+            0,
+            financial::Target::Master,
+            vec![financial::Mapping::new(
+                cinder_bulk::precision::Market::new("BTC-USD", "1", "1", 0).unwrap(),
+                d.ledger.markets[0].unit(),
+            )],
+        )
+        .unwrap();
+        let gateway = bulk::Gateway::new(
+            d.ledger.clone(),
+            profile,
+            bulk::Policy {
+                unit: d.id,
+                revision: 1,
+                evidence: [88; 32],
+                qualification: bulk::Level::Qualified,
+                expiry_ms: 500,
+                credits: 100,
+                cleanup_reserve: 10,
+            },
+            Zeroizing::new([7; 32]),
+            1,
+        )
+        .unwrap();
+        let (app, _, _) = fixture_with(configuration);
+        app.initialize_bulk(uid(40), &gateway, CommitId::new([2; 32]).unwrap())
+            .unwrap();
+        let poll = |n| reads::Poll {
+            kind: cinder_bulk::observation::Kind::Account,
+            reservation: CommitId::new([n; 32]).unwrap(),
+            evidence: CommitId::new([n + 1; 32]).unwrap(),
+            range: None,
+            continuation: None,
+            limit: 1,
+            at: 10,
+            cleanup: false,
+        };
+        let (request, completion) = app.prepare_bulk_read(uid(40), &gateway, poll(20)).unwrap();
+        request.consume(10).unwrap();
+        let guard = app.journal.lock().unwrap();
+        std::thread::scope(|scope| {
+            let (entered, ready) = mpsc::channel();
+            let (done, result) = mpsc::channel();
+            let worker_app = &app;
+            let worker_gateway = &gateway;
+            scope.spawn(move || {
+                entered.send(()).unwrap();
+                let response = worker_app.complete_bulk_read(
+                    uid(40),
+                    worker_gateway,
+                    completion,
+                    bulk::Reply::Response {
+                        status: 429,
+                        body: PrivateBytes::new(b"bounded-429-fixture".to_vec()).unwrap(),
+                        received_at: 10,
+                        retry_after_ms: Some(100),
+                    },
+                );
+                done.send(response.is_ok()).unwrap();
+            });
+            ready.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert!(
+                result.recv_timeout(Duration::from_millis(50)).is_err(),
+                "one-use completion must wait, not be dropped on Busy"
+            );
+            assert!(
+                app.prepare_bulk_read(uid(40), &gateway, poll(22)).is_err(),
+                "ordinary preparation must remain nonblocking"
+            );
+            drop(guard);
+            assert!(result.recv_timeout(Duration::from_secs(5)).unwrap());
+        });
+        use cinder_journal::controller::Controller;
+        let mut writer = app.journal.lock().unwrap();
+        assert!(
+            writer
+                .select(uid(40))
+                .unwrap()
+                .transaction(CommitId::new([21; 32]).unwrap())
+                .is_some()
+        );
+        assert!(matches!(
+            reads::prepare(&gateway, &mut writer.select(uid(40)).unwrap(), poll(22)),
+            Err(cinder_bulk::Error::Limit)
+        ));
+    }
+    #[test]
+    fn completion_wait_rechecks_boot_fence_and_trusted_expiry_before_mutation() {
+        for expire in [false, true] {
+            let (app, _, time) = fixture();
+            let guard = app.journal.lock().unwrap();
+            let head = guard.head();
+            std::thread::scope(|scope| {
+                let (entered, ready) = mpsc::channel();
+                let (done, result) = mpsc::channel();
+                let worker = &app;
+                scope.spawn(move || {
+                    entered.send(()).unwrap();
+                    done.send(worker.completion_writer().is_ok()).unwrap();
+                });
+                ready.recv_timeout(Duration::from_secs(5)).unwrap();
+                assert!(result.recv_timeout(Duration::from_millis(50)).is_err());
+                if expire {
+                    time.0.store(10000, Ordering::SeqCst);
+                } else {
+                    app.fence();
+                }
+                drop(guard);
+                assert!(!result.recv_timeout(Duration::from_secs(5)).unwrap());
+            });
+            assert!(app.reader.capture().is_err());
+            assert_eq!(app.journal.lock().unwrap().head(), head);
+        }
     }
     fn request(unit: u8, id: u8, signer: u8, command: Command) -> PrivateBytes {
         let mut r = api::Request {

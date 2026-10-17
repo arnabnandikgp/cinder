@@ -402,7 +402,8 @@ pub fn complete<J: Controller>(
     if let Some(unit) = journal.descriptor() {
         gateway.unit_binding(unit)?;
     }
-    let logical = journal.verified_state()?.logical_time();
+    journal.verified_state()?;
+    let logical = journal.shared_logical_time()?;
     if completion.contract != gateway.release_commitment(journal.configuration())?
         || journal.transaction(completion.reserved.id) != Some(&completion.reserved)
         || journal.transaction(completion.evidence).is_some()

@@ -77,6 +77,9 @@ impl<B: Backend, P: Protection> Source for Selected<'_, B, P> {
     }
 }
 impl<B: Backend, P: Protection> Controller for Selected<'_, B, P> {
+    fn shared_logical_time(&self) -> Result<u64, Error> {
+        Ok(self.journal.state()?.logical_time())
+    }
     fn descriptor(&self) -> Option<&Descriptor> {
         self.journal
             .configuration()

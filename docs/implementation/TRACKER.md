@@ -40,19 +40,47 @@
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
 | [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
 | [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; final verification/review pending |
-| [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | — |
+| [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | open | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | — |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | open | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-17 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P34 adapter-boundary review correction — 2026-10-17
+### P34 async completion review corrections — 2026-10-17
+
+User approved the three functional fixes and tracker cleanup. CodeRabbit
+#4298965949/#4298965976 are valid: selected components now expose the common
+accepted logical time separately from local risk/observation time. Pacifica
+late read/429 and synchronous dispatch retention use the shared cut but preserve
+the original receive time. Trusted native completion workers wait for the one
+writer instead of dropping consumed capabilities on Busy; preparation/admission
+remains nonblocking. Boot fencing, poison fencing and trusted expiry are checked
+after waiting. No native egress occurs while holding the writer.
+
+Both runtime issues were reproduced against old code first. Exact focused
+checks now pass: Pacifica reads 17/17, unit runtime 8/8 including a held-writer
+actual BULK 429 and post-wait boot-fence/expiry refusal, strict all-feature/
+all-target workspace Clippy. Logs `/private/tmp/cinder-p34-review2-{time,
+contention,lint}.log`; original red logs use `red-time`/`red-contention`.
+The fixture first expected an error for a cooldown, but the existing API returns
+Ok(false); corrected that assertion, not the production gate. Two test-only
+visibility/channel-ownership compile errors were fixed before the red run.
+
+The owning P34 entry below now records actual PR #79 and prior 11/21 native
+passes; no stale no-PR/under-verification claim. October 17 is the correct local
+handoff date, not the UTC date or ADR's older original date. All four published
+heads were green before these changes; new heads require new CI/review. Next:
+restack P35/P36, apply the same completion retention to the withdrawal callback,
+finish exact-source matrix and publish approved fixes. No automatic merge,
+frontend, native financial/RPC/AWS activity or new qualification.
+
+### Historical: P34 adapter-boundary review correction — 2026-10-17
 
 Codex findings #4297788400/#4297788418 are valid. Selected Pacifica native
 history/read completion and observation replay/ingestion now enforce the exact
@@ -6514,23 +6542,18 @@ Merge: none.
 
 ## P34 — Unit execution and reconciliation
 
-Work: in progress on `tee/p34-unit-execution`: sealed selected-unit controller,
-Pacifica execution/read/observation reuse, unit revision 4 preparation/exposure,
-BULK agent-only signer/nonce/key epoch/budget/ACKs and native fill/fee ingestion.
-Native funding/forced-event causality remains unresolved, not synthetic posting.
-Verification: controller and BULK libraries compile offline; four focused native
-tests are being verified. No PR or qualification claim yet. P33 final-source
-groups pass locally: contracts 81, lint/build, Rust 770/770/707 (existing ignores
-10/10/9), relay 15, SDK 39 and TypeScript; exact exported P33 source is recorded
-in the forthcoming base-review receipt. P33's eight hosted jobs are green at
-`927f255`; reviews have valid SDK/cache/error/timestamp findings to fix on P33.
-Unexpected: native prepare initializes a zero-quantity position route; ACK tests
-must check zero quantity/cash, not assume an empty position vector. No gate was
-relaxed. Refreshed public metadata GETs returned Cloudflare origin 502 for
-exchangeInfo and feeState; no new native capability was established.
-Next: fix P33's relevant review on its own branch without losing this checkpoint,
-then continue P34 runtime/native egress wiring and adversarial tests before P35.
-PR: none.
+Work: sealed component controllers, unit-bound Pacifica/BULK native preparation,
+read/observation ingestion and fixed-origin opaque egress. No new funding rail.
+Verification: original full matrix passes. Prior review source `cc59226` has
+11/11 BULK and 21/21 Pacifica execution passes and eight hosted green jobs.
+New shared-time/completion regressions pass: reads 17/17, unit runtime 8/8,
+strict all-feature/all-target Clippy. Current handoff owns exact-source receipts;
+new-head hosted verification and descendant restacking remain required.
+Unexpected: chronology is shared even when a component's state has not changed;
+one-use responses must not be consumed by a transient writer Busy. No resend,
+funding readiness, collateral cut or qualification rule was relaxed.
+Next: restack and finish new-head verification/review; no automatic merge.
+PR: https://github.com/arnabnandikgp/cinder/pull/79.
 Merge: none.
 
 ## P35 — Unit funding and recovery

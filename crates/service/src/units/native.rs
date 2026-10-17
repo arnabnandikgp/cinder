@@ -31,7 +31,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         completion: cinder_bulk::reads::Completion,
         reply: bulk::Reply,
     ) -> Result<cinder_journal::Committed, Error> {
-        let mut writer = self.native_writer()?;
+        let mut writer = self.completion_writer()?;
         let at = self.now()?;
         cinder_bulk::reads::complete(
             gateway,
@@ -50,6 +50,21 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
             }
             Error
         })
+    }
+    /// Trusted worker completion already owns an escaped request's only response
+    /// correlation. Wait for the mutation owner instead of discarding it on Busy.
+    /// No venue I/O occurs here; ordinary admission/preparation stays try_lock.
+    /// Recheck boot fencing and the trusted clock after the wait, before use.
+    pub(super) fn completion_writer(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Journal<B, P>>, Error> {
+        self.now()?;
+        let writer = self.journal.lock().map_err(|_| {
+            self.fence();
+            Error
+        })?;
+        self.now()?;
+        Ok(writer)
     }
     /// Prepare only an existing financially admitted order. Raw customer/native
     /// actions cannot enter this method; epoch, risk and holds are rechecked.
@@ -132,7 +147,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         completion: pacifica::DispatchCompletion,
         reply: pacifica::Reply,
     ) -> Result<pacifica::Outcome, Error> {
-        let mut writer = self.native_writer()?;
+        let mut writer = self.completion_writer()?;
         let at = self.now()?;
         let mut selected = writer.select(unit).map_err(|_| Error)?;
         gateway
@@ -204,7 +219,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         completion: bulk::Completion,
         reply: bulk::Reply,
     ) -> Result<bulk::Outcome, Error> {
-        let mut writer = self.native_writer()?;
+        let mut writer = self.completion_writer()?;
         let at = self.now()?;
         gateway
             .complete_dispatch(

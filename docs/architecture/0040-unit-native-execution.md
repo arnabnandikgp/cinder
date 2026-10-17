@@ -20,6 +20,11 @@ Pacifica execution/reads/observations use this sealed boundary without replacing
 their semantics. Unit use additionally binds the exact native account, origin,
 configuration and non-master agent. Trusted unit Runtime workers hold the one
 writer only for preparation/completion; TLS I/O runs after the borrow ends.
+Late response retention uses the shared accepted logical time, not an inactive
+component's older clock; original receive timestamps and risk freshness remain
+distinct. Trusted completion workers wait for the writer rather than discard a
+one-use response on Busy, then recheck fencing/time. Ordinary admission remains
+nonblocking. Waiting is not native resend authority or a new settlement proof.
 
 ## BULK execution
 

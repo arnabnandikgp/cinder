@@ -83,6 +83,100 @@ struct Fake {
 }
 
 #[test]
+fn selected_late_read_and_cooldown_use_the_shared_cut_after_other_unit_progress() {
+    use cinder_journal::{controller::Controller, units};
+    use cinder_kernel::identity::*;
+    for status in [200, 429] {
+        let temp = Temp::new();
+        let mut p = profile();
+        p.config.customers.clear();
+        let a = UnitId::new([40; 32]).unwrap();
+        let b = UnitId::new([50; 32]).unwrap();
+        let descriptors = [40_u8, 50]
+            .into_iter()
+            .map(|n| {
+                let mut ledger = p.config.clone();
+                if n == 50 {
+                    ledger.venue = VenueId::new([51; 32]).unwrap();
+                    ledger.venue_account = VenueAccountId::new([52; 32]).unwrap();
+                    for source in &mut ledger.sources {
+                        source.scope.venue = ledger.venue;
+                        source.scope.account = ledger.venue_account;
+                    }
+                }
+                units::Descriptor {
+                    id: UnitId::new([n; 32]).unwrap(),
+                    environment: Origin::Testnet.commitment(),
+                    native_account: [n + 2; 32],
+                    funding_wallet: [n + 3; 32],
+                    custody_config: [n + 4; 32],
+                    payout_vault: [n + 5; 32],
+                    key_policy: [n + 6; 32],
+                    ledger,
+                }
+            })
+            .collect();
+        let cfg = units::Configuration::new(p.config.domain, descriptors).unwrap();
+        let mut j = units::Journal::create(
+            cinder_journal::sqlite::SqliteBackend::create(&temp.db).unwrap(),
+            FixtureProtection,
+            cfg,
+        )
+        .unwrap();
+        let g = Gateway::new(p, policy(), Zeroizing::new([7; 32]), 1).unwrap();
+        g.activate(&mut j.select(a).unwrap(), id(250), 0).unwrap();
+        let (request, completion) = reads::prepare_diagnostic(
+            &mut j.select(a).unwrap(),
+            &g,
+            reads::DiagnosticPoll {
+                kind: reads::Diagnostic::Loan,
+                reservation: id(1),
+                evidence: id(101),
+                at: 100,
+                cleanup: false,
+            },
+        )
+        .unwrap();
+        let mut transport = Fake::new(response(status, json!({"error":"late-response"})));
+        let reply = transport.get(request);
+        let before = j.state().unwrap().unit(a).unwrap().ledger().clone();
+        let expected = j.head();
+        j.select(b)
+            .unwrap()
+            .commit(Transaction {
+                id: id(200),
+                expected,
+                at: 500,
+                evidence: vec![PrivateBytes::new(b"other-unit-progress".to_vec()).unwrap()],
+                inputs: vec![],
+                controls: vec![],
+                order_observations: vec![],
+                funds_observations: vec![],
+            })
+            .unwrap();
+        assert_eq!(j.state().unwrap().logical_time(), 500);
+        assert_eq!(j.state().unwrap().unit(a).unwrap().logical_time(), 100);
+        let outcome = reads::complete(&mut j.select(a).unwrap(), &g, completion, reply).unwrap();
+        if status == 200 {
+            assert!(matches!(outcome, Outcome::Ingested(_)));
+            let selected = j.select(a).unwrap();
+            let tx = selected.transaction(id(101)).unwrap();
+            assert_eq!(tx.at, 500);
+            assert_eq!(tx.inputs[0].observed_at, 100);
+        } else {
+            assert!(matches!(outcome, Outcome::Limited));
+            assert!(
+                !g.read_available(&mut j.select(a).unwrap(), 500, true)
+                    .unwrap()
+            );
+            assert_eq!(j.select(a).unwrap().transactions().last().unwrap().at, 500);
+        }
+        assert_eq!(j.state().unwrap().unit(a).unwrap().ledger(), &before);
+        assert_eq!(transport.targets.len(), 1);
+    }
+}
+
+#[test]
 fn split_completion_preserves_receive_time_after_unrelated_commits_and_revocation() {
     for status in [200, 429] {
         let temp = Temp::new();

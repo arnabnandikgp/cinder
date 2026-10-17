@@ -659,7 +659,9 @@ impl Gateway {
         received_at: u64,
         retry_after_ms: Option<u64>,
     ) -> Result<(), Error> {
-        let at = received_at.max(journal.transactions().map(|t| t.at).max().unwrap_or(0));
+        let at = received_at
+            .max(journal.shared_logical_time()?)
+            .max(journal.transactions().map(|t| t.at).max().unwrap_or(0));
         self.history(journal, at)?;
         let source = journal
             .transaction(reservation)
@@ -854,7 +856,7 @@ impl Gateway {
             Reply::Response { received_at, .. } => *received_at,
             Reply::Unknown => dispatch.at,
         }
-        .max(journal.state()?.logical_time());
+        .max(journal.shared_logical_time()?);
         self.complete_dispatch(journal, completion, reply, at)
     }
     /// Validate, durably charge/expose and sign one request under the mutation
