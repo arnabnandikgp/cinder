@@ -30,6 +30,9 @@ preparation/completion. Exact signed-wire persistence precedes submission;
 chain/native I/O runs outside the lock. Original fees, counters, finality and
 qualified-credit checks remain. No public API exposes internal Approval, raw
 transfers, balance setters or operator recovery actions.
+The same completion-specific writer handoff retains consumed post-I/O chain
+work, exact signed-wire capabilities and withdrawal replies under contention;
+post-wait boot/freshness/expiry checks remain. New preparation stays nonblocking.
 
 ## Purpose-separated owner discovery
 

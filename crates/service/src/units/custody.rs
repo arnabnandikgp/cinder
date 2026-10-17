@@ -80,7 +80,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         };
         let read = port.collect_issue(request)?;
         let work = {
-            let mut w = self.native_writer()?;
+            let mut w = self.completion_writer()?;
             let at = self.now()?;
             read.expose(
                 &mut w.select(unit).map_err(|_| Error)?,
@@ -92,7 +92,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         let slot = work.slot();
         let simulation = port.simulate_issue(&work)?;
         let delivery = {
-            let mut w = self.native_writer()?;
+            let mut w = self.completion_writer()?;
             let at = self.now()?;
             port.persist_issue(
                 &mut w.select(unit).map_err(|_| Error)?,
@@ -134,7 +134,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
             request
         };
         let read = port.collect_reconcile(request)?;
-        let mut w = self.native_writer()?;
+        let mut w = self.completion_writer()?;
         let at = self.now()?;
         read.complete(&mut w.select(unit).map_err(|_| Error)?, controller, at)
     }
@@ -164,7 +164,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
             )
         };
         let read = port.collect_locator(&route, true, locator)?;
-        let mut w = self.native_writer()?;
+        let mut w = self.completion_writer()?;
         self.now()?;
         read.complete(&mut w.select(unit).map_err(|_| Error)?, controller)
     }
@@ -259,7 +259,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         action: funds::ChainAction,
         wire: funds::VerifiedWire,
     ) -> Result<funds::ChainDelivery, Error> {
-        let mut w = self.native_writer()?;
+        let mut w = self.completion_writer()?;
         let at = self.now()?;
         controller
             .persist_wire(
@@ -327,7 +327,7 @@ impl<B: Backend, P: Protection, A: cinder_api::Admission> Runtime<B, P, A> {
         completion: funds::WithdrawalCompletion,
         reply: Reply,
     ) -> Result<(), Error> {
-        let mut w = self.native_writer()?;
+        let mut w = self.completion_writer()?;
         let at = self.now()?;
         controller
             .complete_withdrawal(
