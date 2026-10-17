@@ -52,23 +52,45 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### Four-PR review corrections restacked — 2026-10-17 (Asia/Kolkata)
+### Five review findings corrected and verified — 2026-10-17 (Asia/Kolkata)
 
 Approved fixes are on their owning layers: P34 `ed83670` adds shared accepted
 time and preserves one-use native completions through writer contention; P35
-`1c8836f` applies that completion rule to the matching custody/withdrawal rejoins.
-P36 `e0b218b` independently pins the three mandatory joined/custody/recovery
+`1c8836f` applies that completion rule to the matching custody/withdrawal rejoins
+and `aa49749` refreshes its owning phase/PR receipt.
+P36 `5c2f0a1` independently pins the three mandatory joined/custody/recovery
 acceptance identities, runners, test locations, evidence labels and trace IDs.
 Deleting a case or substituting its runner/test can no longer silently remove
 its execution requirement. Red reproductions precede the focused passing tests.
 
 All descendants are restacked, not merged. Focused checks pass: Pacifica reads
-17/17, unit runtime 8/8, manifest guards 6/6 and strict all-feature/all-target
-Clippy. The complete exact-source offline matrix is next, then push the owning
-heads and reply to/resolve the five reviewed threads. New-head CI is not yet
-claimed. P33 has no code change; all phases remain in progress until actual
-acceptance/review/merge. Native financial/RPC/AWS qualification and frontend
-integration are outside this task; Pacifica missing credit remains deferred.
+17/17, unit runtime 8/8 and manifest guards 6/6. Full clean tracked source
+`90ffc85da34a4186798ef9fa746192543026cd12`, tree
+`dede82f8cccac55eee8903b594c48868b1cdcb47`, export
+`/private/tmp/cinder-review-final.S7aemx` passes all four groups under pinned Rust
+1.97.1 / Node 24.21.0, locked/offline Cargo and existing dependency/build caches:
+
+- contracts 83/83, implementation inventory and dependency/fixture boundaries;
+- format, strict default/all-feature all-target Clippy and all-feature build;
+- Rust 800/800/737 in all-feature debug/release and shipping-default debug;
+  the existing intentional ignores remain 10/10/9, not live/hardware evidence;
+- relay 15/15, SDK 42/42 (including mandatory joined lifecycle) and TypeScript.
+
+Logs `/private/tmp/cinder-review-final-{contracts,lint,rust,client}.log`.
+The same source's localhost HTTP/WebSocket process suite passes 26 groups each
+in Node and actual Chrome 155.0.8059.82, using the unchanged built transport core;
+log `/private/tmp/cinder-review-final-browser.log`. The subsequent rebase at
+`be52e92` changes only TRACKER against that checked source, not runtime/tests.
+This final verification receipt is also documentation-only. Author's scoped
+review `/private/tmp/cinder-stack-review-fixes-2026-10-17.html` is not an audit.
+
+Publication keeps #78 → #79 → #81 → #82 in native stack #80; original threads
+#4298965949/#4298965976/#4298965984/#4298359104/#4298426502 are addressed by these
+corrections, with commit/test receipts in their replies. P33 has no code change.
+New-head hosted results remain separate from the old green heads. Next: inspect
+current-head CI/review; no automatic merge. All phases remain in progress until
+actual acceptance/review/merge. Native financial/RPC/AWS qualification and
+frontend integration are outside this task; Pacifica missing credit is deferred.
 
 ## Historical handoffs
 
@@ -6785,7 +6807,7 @@ Work: actual SDK-to-Runtime-to-native-signature joined fixture and mandatory
 execution guards; UNIT-ACCEPTANCE matrix and separate qualification proposal.
 Verification: final corrected source `4507b60` passes contracts 82, strict
 lint/build, Rust 797/797/734 (intentional ignores 10/10/9), relay 15, SDK 42 and
-tsc. Review correction `e0b218b` pins mandatory case identities independently of
+tsc. Review correction `5c2f0a1` pins mandatory case identities independently of
 the manifest, with deletion/substitution regressions (6/6 guard tests). Current
 handoff owns exact tree, logs, review and predecessor CI status.
 Unexpected: fixture timestamps/deadlines/readiness must obey real admission;
