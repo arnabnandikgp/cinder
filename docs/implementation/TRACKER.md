@@ -41,7 +41,7 @@
 | [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
 | [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; final verification/review pending |
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
-| [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | — |
+| [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), open |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | open | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -52,7 +52,19 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P34 async completion review corrections — 2026-10-17
+### P35 completion retention follow-up — 2026-10-17 (Asia/Kolkata)
+
+P34 review corrections `ed83670` are inherited. P35 `1c8836f` uses the same
+completion-specific writer handoff at consumed custody/withdrawal rejoins;
+ordinary preparation remains nonblocking, network I/O stays outside the writer,
+and boot fencing/trusted expiry are rechecked after waiting. No rail, funding
+readiness, authority or financial policy was added. The owning phase now records
+actual implementation, prior verification and PR #81 instead of its initial stub.
+The complete restacked source matrix is running on the P36 tip; its current
+handoff will own exact results. Next: finish that matrix, publish the corrected
+stack and address the original review threads. No automatic merge or live work.
+
+### Historical: P34 async completion review corrections — 2026-10-17
 
 User approved the three functional fixes and tracker cleanup. CodeRabbit
 #4298965949/#4298965976 are valid: selected components now expose the common
@@ -6598,21 +6610,29 @@ Verification: original full matrix passes. Prior review source `cc59226` has
 11/11 BULK and 21/21 Pacifica execution passes and eight hosted green jobs.
 New shared-time/completion regressions pass: reads 17/17, unit runtime 8/8,
 strict all-feature/all-target Clippy. Current handoff owns exact-source receipts;
-new-head hosted verification and descendant restacking remain required.
+new-head hosted verification remains required; P35 is restacked.
 Unexpected: chronology is shared even when a component's state has not changed;
 one-use responses must not be consumed by a transient writer Busy. No resend,
 funding readiness, collateral cut or qualification rule was relaxed.
-Next: restack and finish new-head verification/review; no automatic merge.
+Next: finish new-head verification/review; no automatic merge.
 PR: https://github.com/arnabnandikgp/cinder/pull/79.
 Merge: none.
 
 ## P35 — Unit funding and recovery
 
-Work: not started; scope and gates in PLAN.
-Verification: not run.
-Unexpected: unsupported native credit/return cannot be bypassed by another unit.
-Next: compose existing custody/funds/recovery boundaries after execution routing.
-PR: none.
+Work: canonical signed owner bootstrap, validated loaded custody discovery,
+sealed Pacifica funding/chain workers, full-batch controls and atomic all-unit
+operator recovery. Native funding/return rails unsupported by BULK stay disabled.
+Verification: prior published source `d24373e` has eight green hosted jobs.
+Policy correction `a923037` passed three selected adapter cases, loaded discovery
+tampering/missing-controller checks, 28 unit-journal cases and strict Clippy.
+The shared-time/completion follow-up has focused Pacifica reads 17/17 and unit
+runtime 8/8 passes; the complete restacked P36 matrix is running separately.
+Unexpected: one-use post-I/O results must wait for the writer rather than be
+dropped on Busy. No financial gate was relaxed. Revision 6 starts empty histories
+and rejects 1–5; no migration or changed-image qualification is claimed.
+Next: finish exact-source stack verification/review; no automatic merge.
+PR: https://github.com/arnabnandikgp/cinder/pull/81.
 Merge: none.
 
 ## P36 — Joined second-venue acceptance
