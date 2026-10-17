@@ -39,10 +39,10 @@
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
 | [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
-| [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; existing findings addressed |
-| [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
-| [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), open |
-| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), open; offline verification passes |
+| [P33 — Unit service, reads and SDK](PLAN.md#p33) | closed | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), merged `3486b9f` |
+| [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
+| [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
+| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-17 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -52,7 +52,62 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### Five review findings corrected and verified — 2026-10-17 (Asia/Kolkata)
+### Four-PR stack merged; native qualification remains separate — 2026-10-17 (Asia/Kolkata)
+
+User explicitly authorized merge after CI passed. GitHub native stack #80 merged
+#78/#79/#81/#82 atomically into `product/tee-v1` at
+`3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b` (05:28:27–29 UTC).
+GitHub reports that same merge commit for all four PRs; all are MERGED.
+Fetched trunk and reviewed tip `3237023` have the identical tree
+`e3b0d7d8e71c3ad670fcfabc14110eccdd030f2e`. No source changes or rebases were
+needed for merge, so the exact reviewed source checks below remain applicable.
+
+| PR / phase | Exact green head | Original PR base |
+| --- | --- | --- |
+| #78 / P33 | `a1f40d23727efae6fba9b7e250d04933b7c01931` | `product/tee-v1` |
+| #79 / P34 | `ed836705c7e57661fc34561198f3c39a3eb3fb30` | `tee/p33-unit-service` |
+| #81 / P35 | `aa49749dc6d4ce83a99c92bf9ff9476889e740f6` | `tee/p34-unit-execution` |
+| #82 / P36 | `3237023ee9fdd903efe0710fb482cce16ee07d5e` | `tee/p35-unit-custody` |
+
+Each exact head has all eight hosted offline jobs successful. Superseded
+cancelled runs are not current failures or additional passes. No unresolved
+review threads remain; the five latest findings have fixes, regressions and
+evidence-backed replies. Local full matrix: contracts 83, strict lint/build,
+Rust 800/800/737 (existing intentional ignores 10/10/9), relay 15, SDK 42,
+TypeScript and Node/Chrome HTTP/WebSocket 26 groups each; exact provenance below.
+Trunk-push CI, if scheduled, is distinct from these verified PR-head results.
+
+P33–P35 close for their approved offline scope. P36's implementation and hosted
+offline acceptance are merged, but its native/changed-image criterion remains
+open. Multi-unit API/SDK, native execution/read/attribution, segregated custody
+composition and shared recovery cutover now have joined offline evidence, not a
+live funded two-venue deployment. Shipping v1 is unchanged; new-history unit
+revision 6 is opt-in. BULK funding/returns stay disabled, and Pacifica's missing
+credit investigation stays deferred. P23 live financial acceptance and P24
+production/release gates remain open. No frontend, RPC, venue or AWS action ran.
+
+Next: discuss/approve qualification proposal A (current BULK metadata followed
+by a bounded disposable paper-account execution/agent check). Then assemble the
+non-fixture multi-unit release configuration and separately qualify its Nitro
+image. Funding/returns/venue-backed recovery require supported rails and separate
+evidence; do not promote fixtures or old image results. No new live authority is
+implied by merge. Trunk currently has no classic branch protection or applicable
+ruleset; checks were verified manually, and governance was not changed.
+
+Merge bookkeeping is committed only on local `tee/p36-merge-receipt` for the next
+authorized PR, not directly pushed to trunk or retrofitted into merged PRs.
+Local trunk is fast-forwarded; the same three unrelated untracked paths remain.
+Documentation verification: all 83 contract tests, implementation-plan/inventory
+and workspace-boundary checks pass; `git diff --check` is clean. Log:
+`/private/tmp/cinder-p36-merge-receipt-contracts.log`. No runtime change/retest or
+claim of a new hardware result is introduced by this receipt.
+
+## Historical handoffs
+
+The following session receipts preserve evidence for their exact sources. Their
+next actions and pending statuses are superseded by the current handoff above.
+
+### Historical: Five review findings corrected and verified — 2026-10-17 (Asia/Kolkata)
 
 Approved fixes are on their owning layers: P34 `ed83670` adds shared accepted
 time and preserves one-use native completions through writer contention; P35
@@ -91,11 +146,6 @@ New-head hosted results remain separate from the old green heads. Next: inspect
 current-head CI/review; no automatic merge. All phases remain in progress until
 actual acceptance/review/merge. Native financial/RPC/AWS qualification and
 frontend integration are outside this task; Pacifica missing credit is deferred.
-
-## Historical handoffs
-
-The following session receipts preserve evidence for their exact sources. Their
-next actions and pending statuses are superseded by the current handoff above.
 
 ### Historical: P35 completion retention follow-up — 2026-10-17 (Asia/Kolkata)
 
@@ -6764,9 +6814,11 @@ jobs and all existing actionable threads are addressed. Final stack matrix
 also passes; current handoff records exact provenance and evidence limits.
 Unexpected: recorded-only receipts need an explicit v2-only lifecycle extension;
 legacy decoders must refuse it. No v1-to-v2 default-unit fallback.
-Next: verify the current review corrections and complete the open four-PR stack.
+Closure: reviewed green head `a1f40d2` merged via native stack #80; all four PLAN
+criteria satisfied. No live activation or changed-image qualification follows.
+Next: P36's separately approved native qualification, not more P33 implementation.
 PR: https://github.com/arnabnandikgp/cinder/pull/78.
-Merge: none.
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b.
 
 ## P34 — Unit execution and reconciliation
 
@@ -6776,13 +6828,15 @@ Verification: original full matrix passes. Prior review source `cc59226` has
 11/11 BULK and 21/21 Pacifica execution passes and eight hosted green jobs.
 New shared-time/completion regressions pass: reads 17/17, unit runtime 8/8,
 strict all-feature/all-target Clippy. Current handoff owns exact-source receipts;
-new-head hosted verification remains required; descendants are restacked.
+exact final head `ed83670` has all eight hosted jobs green and no unresolved
+threads. Descendants merged in the same atomic stack operation.
 Unexpected: chronology is shared even when a component's state has not changed;
 one-use responses must not be consumed by a transient writer Busy. No resend,
 funding readiness, collateral cut or qualification rule was relaxed.
-Next: finish new-head verification/review; no automatic merge.
+Closure: approved offline criteria satisfied; native capability gaps stay disabled.
+Next: P36's native qualification; no additional P34 code is pending.
 PR: https://github.com/arnabnandikgp/cinder/pull/79.
-Merge: none.
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b.
 
 ## P35 — Unit funding and recovery
 
@@ -6793,13 +6847,16 @@ Verification: prior published source `d24373e` has eight green hosted jobs.
 Policy correction `a923037` passed three selected adapter cases, loaded discovery
 tampering/missing-controller checks, 28 unit-journal cases and strict Clippy.
 The shared-time/completion follow-up has focused Pacifica reads 17/17 and unit
-runtime 8/8 passes; the complete restacked P36 matrix is running separately.
+runtime 8/8 passes; the complete restacked P36 matrix passes. Exact final head
+`aa49749` has all eight hosted jobs green with no unresolved threads.
 Unexpected: one-use post-I/O results must wait for the writer rather than be
 dropped on Busy. No financial gate was relaxed. Revision 6 starts empty histories
 and rejects 1–5; no migration or changed-image qualification is claimed.
-Next: finish exact-source stack verification/review; no automatic merge.
+Closure: approved offline criteria satisfied and merged; no native BULK funding
+controller or venue-backed live recovery is implied.
+Next: P36's supported native-rail qualification before activation.
 PR: https://github.com/arnabnandikgp/cinder/pull/81.
-Merge: none.
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b.
 
 ## P36 — Joined second-venue acceptance
 
@@ -6812,11 +6869,15 @@ the manifest, with deletion/substitution regressions (6/6 guard tests). Current
 handoff owns exact tree, logs, review and predecessor CI status.
 Unexpected: fixture timestamps/deadlines/readiness must obey real admission;
 native/changed-image qualification remains separately scoped, not fixture proof.
-Next: finish current-head hosted CI/review. Fourth layer #82 is published in
-native stack #80; see current handoff for opening head and checked source. Keep
-native/hardware criterion open until supported approved runs actually complete.
+Merged offline scope: final reviewed head `3237023` has all eight hosted jobs
+green and no unresolved threads. Corrected local matrix is 83 contracts,
+Rust 800/800/737, strict lint/build, relay 15, SDK 42/TypeScript and Node/Chrome
+26 groups each. Current handoff preserves exact source, tree and merge evidence.
+Next: separately approved native capability probes, non-fixture release assembly
+and changed-image Nitro qualification. PLAN's final criterion remains open;
+merging the implementation is not a live funding/trade/recovery qualification.
 PR: https://github.com/arnabnandikgp/cinder/pull/82.
-Merge: none.
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b; native qualification incomplete.
 
 ## P24 — Release safety case
 

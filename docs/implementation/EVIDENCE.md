@@ -5,6 +5,17 @@ Snapshot: 2026-09-30. This is a curated map, not an archive upload. The original
 broken public links. [BASELINE](BASELINE.md) and [CONFORMANCE](CONFORMANCE.md) carry
 the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
+## Two-unit implementation merge — 2026-10-17
+
+P33–P36 (#78/#79/#81/#82) merged into `product/tee-v1` through native stack #80
+at `3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b`. Each exact final PR head passed
+all eight hosted offline jobs with no unresolved review threads. The merged tree
+is identical to reviewed tip `3237023`; TRACKER owns the full heads, local matrix,
+review disposition and evidence limits. P33–P35 close for their approved offline
+scope; P36 keeps its native/changed-image criterion open. Merge does not qualify
+native BULK funding/returns, a consumed live two-unit manifest or a new Nitro
+image, and does not reopen Pacifica's deferred missing-credit investigation.
+
 ## Venue-directed custody revision — 2026-10-15
 
 P36 adds [joined two-unit acceptance](UNIT-ACCEPTANCE.md): actual private SDK
