@@ -4,7 +4,7 @@
 //! qualified ports; these mathematical matches are not a proof of those ports.
 use crate::Error;
 use cinder_journal::model::CommitId;
-use cinder_journal::{Backend, Head, Journal, Protection};
+use cinder_journal::{Head, controller::Controller as JournalController};
 use cinder_kernel::identity::EventKey;
 use cinder_pacifica::funding::{Controller, recovery::CustodyState};
 use cinder_web_channel::Entropy;
@@ -108,16 +108,21 @@ fn key_record(
 /// encrypted journal before cutover. Immutable in V1: no parent replacement,
 /// stale-key substitution or undocumented operator reissue. Run through an
 /// attested private configuration/onboarding port, not a public relay route.
-pub fn register_keys<B: Backend, P: Protection>(
+pub fn register_keys<J: JournalController>(
     controller: &Controller,
-    j: &mut Journal<B, P>,
+    j: &mut J,
     id: CommitId,
     at: u64,
     keys: &[RecipientKey],
 ) -> Result<(), Error> {
+    controller
+        .release_commitment(j.configuration())
+        .map_err(|_| Error)?;
+    if let Some(unit) = j.descriptor() {
+        controller.unit_binding(unit).map_err(|_| Error)?;
+    }
     let state = j.verified_state().map_err(|_| Error)?;
-    if state.recovery_sealed()
-        || state.recovery_epoch().is_some()
+    if state.in_recovery()
         || j.transactions().any(|t| {
             t.evidence
                 .iter()
@@ -142,11 +147,17 @@ pub fn register_keys<B: Backend, P: Protection>(
 }
 /// Verify the complete immutable recipient inventory against the fresh journal.
 /// Reopening never registers, replaces or rotates keys, including after cutover.
-pub fn require_registered<B: Backend, P: Protection>(
+pub fn require_registered<J: JournalController>(
     controller: &Controller,
-    j: &mut Journal<B, P>,
+    j: &mut J,
     keys: &[RecipientKey],
 ) -> Result<(), Error> {
+    controller
+        .release_commitment(j.configuration())
+        .map_err(|_| Error)?;
+    if let Some(unit) = j.descriptor() {
+        controller.unit_binding(unit).map_err(|_| Error)?;
+    }
     j.verified_state().map_err(|_| Error)?;
     let registered = key_record(controller, j.state().map_err(|_| Error)?, keys)?;
     let mut records = j
@@ -543,10 +554,10 @@ impl Prepared {
     }
     /// Recheck current authoritative head AND custody counters/backing immediately
     /// before publication. Any late fact invalidates this prepared result.
-    pub fn recheck<B: Backend, P: Protection>(
+    pub fn recheck<J: JournalController>(
         &self,
         controller: &Controller,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         check: EventKey,
         custody: &CustodyState,
     ) -> Result<(), Error> {
@@ -568,9 +579,9 @@ impl Prepared {
 /// omit an offline customer. No package is declared available before BOTH exact
 /// readbacks. Error leaves orphan ciphertext only, never stage authority.
 #[allow(clippy::too_many_arguments)]
-pub fn prepare<B: Backend, P: Protection>(
+pub fn prepare<J: JournalController>(
     controller: &Controller,
-    j: &mut Journal<B, P>,
+    j: &mut J,
     expected: Head,
     check: EventKey,
     custody: &CustodyState,

@@ -112,7 +112,8 @@ fn optional(w: &mut Writer, n: Option<i128>) {
     }
 }
 impl<A: Admission> Service<A> {
-    pub(crate) fn read(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn read_scoped(
         &self,
         journal: &impl Source,
         req: &Request,
@@ -120,6 +121,7 @@ impl<A: Admission> Service<A> {
         q: Query,
         owner: bool,
         now: u64,
+        unit: Option<cinder_kernel::identity::UnitId>,
     ) -> Result<Page, Error> {
         q.validate()?;
         let state = journal.state().map_err(|_| Error::Unavailable)?;
@@ -428,7 +430,12 @@ impl<A: Admission> Service<A> {
             _ => return Err(Error::Invalid),
         }
         let mut hash = Sha256::new();
-        hash.update(b"CINDER-PRIVATE-READ-1\0");
+        if let Some(unit) = unit {
+            hash.update(b"CINDER-UNIT-PRIVATE-READ-2\0");
+            hash.update(unit.bytes());
+        } else {
+            hash.update(b"CINDER-PRIVATE-READ-1\0");
+        }
         hash.update(req.domain.network.bytes());
         hash.update(req.domain.deployment.bytes());
         hash.update(req.account.bytes());

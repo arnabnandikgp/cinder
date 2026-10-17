@@ -6,7 +6,8 @@ use crate::{
     observation::{self, Kind, MAX_BODY, MAX_ROWS, Message},
 };
 use cinder_journal::{
-    Backend, Committed, Journal, Protection,
+    Committed,
+    controller::Controller,
     model::{CommitId, Transaction},
 };
 use serde::{Deserialize, Serialize};
@@ -210,8 +211,8 @@ impl std::fmt::Debug for Completion {
         f.write_str("ReadCompletion([PRIVATE])")
     }
 }
-fn reserve<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+fn reserve<J: Controller>(
+    journal: &mut J,
     gateway: &Gateway,
     input: Reservation,
     query: Query,
@@ -234,8 +235,8 @@ fn reserve<B: Backend, P: Protection>(
 }
 /// Reserve once under the mutation owner, then hand only this request to I/O.
 /// Completion is a separate, single-use private token, not a freshness cache.
-pub fn prepare_diagnostic<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+pub fn prepare_diagnostic<J: Controller>(
+    journal: &mut J,
     gateway: &Gateway,
     input: DiagnosticPoll,
 ) -> Result<(Request, Completion), Error> {
@@ -267,8 +268,8 @@ pub fn prepare_diagnostic<B: Backend, P: Protection>(
     )
 }
 /// Prepare one exact account/cursor request. No automatic paging or retries.
-pub fn prepare_poll<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+pub fn prepare_poll<J: Controller>(
+    journal: &mut J,
     gateway: &Gateway,
     input: Poll,
 ) -> Result<(Request, Completion), Error> {
@@ -307,8 +308,8 @@ pub fn prepare_poll<B: Backend, P: Protection>(
 }
 /// Fixed-origin testnet GET prepared by the demo funding controller. The private
 /// request marker and read spend are one durable transaction before I/O.
-pub(crate) fn prepare_demo<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+pub(crate) fn prepare_demo<J: Controller>(
+    journal: &mut J,
     gateway: &Gateway,
     metadata: crate::funding::demo::Metadata,
 ) -> Result<(Request, Completion), Error> {
@@ -353,8 +354,8 @@ pub(crate) fn prepare_demo<B: Backend, P: Protection>(
 }
 /// Fixed testnet setup reads. Raw bytes are retained as private evidence rather
 /// than unresolved economic inputs or fabricated cash/reconciliation events.
-pub(crate) fn prepare_setup<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+pub(crate) fn prepare_setup<J: Controller>(
+    journal: &mut J,
     gateway: &Gateway,
     metadata: crate::funding::setup::Metadata,
 ) -> Result<(Request, Completion), Error> {
@@ -392,13 +393,17 @@ pub(crate) fn prepare_setup<B: Backend, P: Protection>(
 /// may advance the head; do not discard adverse native observations merely for
 /// that change. Verify configuration and the original accepted reservation, then
 /// commit at the current logical cut while preserving the actual receive time.
-pub fn complete<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+pub fn complete<J: Controller>(
+    journal: &mut J,
     gateway: &Gateway,
     completion: Completion,
     reply: Reply,
 ) -> Result<Outcome, Error> {
-    let logical = journal.verified_state()?.logical_time();
+    if let Some(unit) = journal.descriptor() {
+        gateway.unit_binding(unit)?;
+    }
+    journal.verified_state()?;
+    let logical = journal.shared_logical_time()?;
     if completion.contract != gateway.release_commitment(journal.configuration())?
         || journal.transaction(completion.reserved.id) != Some(&completion.reserved)
         || journal.transaction(completion.evidence).is_some()
@@ -510,8 +515,8 @@ pub fn complete<B: Backend, P: Protection>(
 /// Archive bounded non-429 responses, including missing accounts, without
 /// economic effects. A 429 instead persists the existing shared cooldown record.
 /// This is not a provider of Setup/Credit/Withdrawal/Coverage.
-pub fn diagnostic<B: Backend, P: Protection, T: Transport>(
-    journal: &mut Journal<B, P>,
+pub fn diagnostic<J: Controller, T: Transport>(
+    journal: &mut J,
     gateway: &Gateway,
     input: DiagnosticPoll,
     transport: &mut T,
@@ -524,8 +529,8 @@ pub fn diagnostic<B: Backend, P: Protection, T: Transport>(
 /// Only ordinary `ingest` is used: LI, terminal statuses, cursor exhaustion and
 /// successful TLS do not fabricate a `Coverage` or source cut. A caller must
 /// retain committed cursor progress; this function never auto-pages or retries.
-pub fn poll<B: Backend, P: Protection, T: Transport>(
-    journal: &mut Journal<B, P>,
+pub fn poll<J: Controller, T: Transport>(
+    journal: &mut J,
     gateway: &Gateway,
     input: Poll,
     transport: &mut T,

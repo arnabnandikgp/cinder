@@ -125,10 +125,7 @@ struct Scan {
     requests: Vec<Metadata>,
     replies: Vec<Archive>,
 }
-fn scan<B: Backend, P: Protection>(
-    j: &mut Journal<B, P>,
-    binding: [u8; 32],
-) -> Result<Scan, Error> {
+fn scan<J: JournalController>(j: &mut J, binding: [u8; 32]) -> Result<Scan, Error> {
     j.verified_state()?;
     let mut result = Scan {
         requests: vec![],
@@ -180,9 +177,9 @@ impl Controller {
     /// At most the existing explicit demo policy's GET budget/lifetime, in fixed
     /// Settings -> Loan -> Account rounds. Lost replies count, including restart.
     /// Settings are never mutated, and freshness does not imply completeness.
-    pub fn prepare_setup_poll<B: Backend, P: Protection>(
+    pub fn prepare_setup_poll<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         p: &demo::Policy,
         input: Poll,
@@ -249,9 +246,9 @@ impl Controller {
     /// Separately retain the approved initial demo assumption when opted in.
     /// Missing cache, stale/malformed data and noncoherent rounds stay pending.
     /// Replaying the same observation does not append a second controller record.
-    pub fn observe_setup_reads<B: Backend, P: Protection>(
+    pub fn observe_setup_reads<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         p: &demo::Policy,
         id: CommitId,
@@ -320,7 +317,7 @@ impl Controller {
         }
         Ok(true)
     }
-    fn demo_idle<B: Backend, P: Protection>(&self, j: &Journal<B, P>) -> Result<bool, Error> {
+    fn demo_idle<J: JournalController>(&self, j: &J) -> Result<bool, Error> {
         let s = j.state()?;
         Ok(!s.frozen()
             && s.recovery_epoch().is_none()
@@ -383,9 +380,9 @@ impl Controller {
     }
     /// Readiness for a new internally authorized initial ingress intent. This
     /// returns no approval, capability or strong native-readiness certificate.
-    pub fn initial_demo_ingress_ready<B: Backend, P: Protection>(
+    pub fn initial_demo_ingress_ready<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         p: &demo::Policy,
         at: u64,
@@ -415,9 +412,9 @@ impl Controller {
                 .all(|p| p.quantity().lots() == 0 && p.basis().atoms() == 0)
             && h.plans.iter().all(|plan| plan.rail == Rail::Release))
     }
-    fn demo_ingress_setup<B: Backend, P: Protection>(
+    fn demo_ingress_setup<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         p: &demo::Policy,
         dispatch: Dispatch,
@@ -472,9 +469,9 @@ impl Controller {
     }
     /// Prepare one accepted initial demo ingress intent. All ordinary journal
     /// authority/risk/liquidity checks still apply; no readiness flag is raised.
-    pub fn prepare_demo_ingress<B: Backend, P: Protection>(
+    pub fn prepare_demo_ingress<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         p: &demo::Policy,
         dispatch: Dispatch,
@@ -484,9 +481,9 @@ impl Controller {
     }
     /// Validate an EXISTING accepted original before chain I/O. This creates no
     /// approval, intent, attempt, signature or capability; exposure rechecks it.
-    pub fn validate_demo_ingress<B: Backend, P: Protection>(
+    pub fn validate_demo_ingress<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         p: &demo::Policy,
         dispatch: Dispatch,
@@ -521,9 +518,9 @@ impl Controller {
     }
     /// Persist/expose only the first bounded Release or Deposit, explicitly
     /// tagging its setup assurance. Not an AWS/live activation or send approval.
-    pub fn expose_demo_ingress<B: Backend, P: Protection>(
+    pub fn expose_demo_ingress<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         p: &demo::Policy,
         dispatch: Dispatch,

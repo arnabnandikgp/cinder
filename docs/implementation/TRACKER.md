@@ -38,15 +38,376 @@
 | [P29 — New-history execution-unit journal foundation](PLAN.md#p29) | closed | Explicit unit components share one durable head, customer ownership and revocation without sharing assets or exposure authority. | [#73](https://github.com/arnabnandikgp/cinder/pull/73), merged `793a05c` |
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
-| [P32 — Unit-scoped financial admission](PLAN.md#p32) | in progress | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), open; CI/review pending |
+| [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
+| [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; existing findings addressed |
+| [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
+| [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), open |
+| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), open; offline verification passes |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-16. Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-17 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### Five review findings corrected and verified — 2026-10-17 (Asia/Kolkata)
+
+Approved fixes are on their owning layers: P34 `ed83670` adds shared accepted
+time and preserves one-use native completions through writer contention; P35
+`1c8836f` applies that completion rule to the matching custody/withdrawal rejoins
+and `aa49749` refreshes its owning phase/PR receipt.
+P36 `5c2f0a1` independently pins the three mandatory joined/custody/recovery
+acceptance identities, runners, test locations, evidence labels and trace IDs.
+Deleting a case or substituting its runner/test can no longer silently remove
+its execution requirement. Red reproductions precede the focused passing tests.
+
+All descendants are restacked, not merged. Focused checks pass: Pacifica reads
+17/17, unit runtime 8/8 and manifest guards 6/6. Full clean tracked source
+`90ffc85da34a4186798ef9fa746192543026cd12`, tree
+`dede82f8cccac55eee8903b594c48868b1cdcb47`, export
+`/private/tmp/cinder-review-final.S7aemx` passes all four groups under pinned Rust
+1.97.1 / Node 24.21.0, locked/offline Cargo and existing dependency/build caches:
+
+- contracts 83/83, implementation inventory and dependency/fixture boundaries;
+- format, strict default/all-feature all-target Clippy and all-feature build;
+- Rust 800/800/737 in all-feature debug/release and shipping-default debug;
+  the existing intentional ignores remain 10/10/9, not live/hardware evidence;
+- relay 15/15, SDK 42/42 (including mandatory joined lifecycle) and TypeScript.
+
+Logs `/private/tmp/cinder-review-final-{contracts,lint,rust,client}.log`.
+The same source's localhost HTTP/WebSocket process suite passes 26 groups each
+in Node and actual Chrome 155.0.8059.82, using the unchanged built transport core;
+log `/private/tmp/cinder-review-final-browser.log`. The subsequent rebase at
+`be52e92` changes only TRACKER against that checked source, not runtime/tests.
+This final verification receipt is also documentation-only. Author's scoped
+review `/private/tmp/cinder-stack-review-fixes-2026-10-17.html` is not an audit.
+
+Publication keeps #78 → #79 → #81 → #82 in native stack #80; original threads
+#4298965949/#4298965976/#4298965984/#4298359104/#4298426502 are addressed by these
+corrections, with commit/test receipts in their replies. P33 has no code change.
+New-head hosted results remain separate from the old green heads. Next: inspect
+current-head CI/review; no automatic merge. All phases remain in progress until
+actual acceptance/review/merge. Native financial/RPC/AWS qualification and
+frontend integration are outside this task; Pacifica missing credit is deferred.
+
+## Historical handoffs
+
+The following session receipts preserve evidence for their exact sources. Their
+next actions and pending statuses are superseded by the current handoff above.
+
+### Historical: P35 completion retention follow-up — 2026-10-17 (Asia/Kolkata)
+
+P34 review corrections `ed83670` are inherited. P35 `1c8836f` uses the same
+completion-specific writer handoff at consumed custody/withdrawal rejoins;
+ordinary preparation remains nonblocking, network I/O stays outside the writer,
+and boot fencing/trusted expiry are rechecked after waiting. No rail, funding
+readiness, authority or financial policy was added. The owning phase now records
+actual implementation, prior verification and PR #81 instead of its initial stub.
+The complete restacked source matrix is running on the P36 tip; its current
+handoff will own exact results. Next: finish that matrix, publish the corrected
+stack and address the original review threads. No automatic merge or live work.
+
+### Historical: P34 async completion review corrections — 2026-10-17
+
+User approved the three functional fixes and tracker cleanup. CodeRabbit
+#4298965949/#4298965976 are valid: selected components now expose the common
+accepted logical time separately from local risk/observation time. Pacifica
+late read/429 and synchronous dispatch retention use the shared cut but preserve
+the original receive time. Trusted native completion workers wait for the one
+writer instead of dropping consumed capabilities on Busy; preparation/admission
+remains nonblocking. Boot fencing, poison fencing and trusted expiry are checked
+after waiting. No native egress occurs while holding the writer.
+
+Both runtime issues were reproduced against old code first. Exact focused
+checks now pass: Pacifica reads 17/17, unit runtime 8/8 including a held-writer
+actual BULK 429 and post-wait boot-fence/expiry refusal, strict all-feature/
+all-target workspace Clippy. Logs `/private/tmp/cinder-p34-review2-{time,
+contention,lint}.log`; original red logs use `red-time`/`red-contention`.
+The fixture first expected an error for a cooldown, but the existing API returns
+Ok(false); corrected that assertion, not the production gate. Two test-only
+visibility/channel-ownership compile errors were fixed before the red run.
+
+The owning P34 entry below now records actual PR #79 and prior 11/21 native
+passes; no stale no-PR/under-verification claim. October 17 is the correct local
+handoff date, not the UTC date or ADR's older original date. All four published
+heads were green before these changes; new heads require new CI/review. Next:
+restack P35/P36, apply the same completion retention to the withdrawal callback,
+finish exact-source matrix and publish approved fixes. No automatic merge,
+frontend, native financial/RPC/AWS activity or new qualification.
+
+### Historical: Four-layer stack published — 2026-10-17
+
+All four ready PRs are linked in native GitHub stack #80, bottom-up:
+[#78](https://github.com/arnabnandikgp/cinder/pull/78) →
+[#79](https://github.com/arnabnandikgp/cinder/pull/79) →
+[#81](https://github.com/arnabnandikgp/cinder/pull/81) →
+[#82](https://github.com/arnabnandikgp/cinder/pull/82).
+P36 targets `tee/p35-unit-custody`, not trunk. Opening head
+`fdad105fa25b5f0d5f67d50c859a1e5997878a27`, tree
+`b9c9d030eb35a55422251416c4071e6bb9333d13`, differs from checked `4507b60`
+only in EVIDENCE/PLAN/TRACKER. This publication receipt is also docs-only.
+At inspection #82 contracts are green, seven other hosted jobs are running,
+CodeRabbit status is green but no substantive new review is claimed. P34's
+single targeted browser rerun is workflow attempt 2, in progress. Old failures
+and old green heads remain historical; no merge is authorized or performed.
+
+The independent offline P33–P36 implementation work is complete and reviewable.
+P36's actual native/changed-image qualification criterion remains open. Next:
+review current-head #82/stack findings and CI, then obtain a separate bounded
+native run approval if desired using UNIT-QUALIFICATION-PROPOSAL. Do not deploy
+the fixture constructor or use it to claim a working BULK funding rail, live
+manifest, privacy hardware or financial round trip. The deferred Pacifica
+credit issue stays deferred. No frontend, wallet/faucet, RPC or AWS work started.
+
+### Historical: P36 final corrected source verified — 2026-10-17
+
+Checked source `4507b60d498433e8d4613253b145e2e3d694d7f3`, tree
+`deccae44e26ea1c29cf43ef28ddb18d6412d34d6`, clean tracked export
+`/private/tmp/cinder-p36-final.hM0rSx`. Rust 1.97.1 / Node 24.21.0, locked/offline
+Cargo, existing caches, incremental/debug info disabled, one Cargo writer.
+All four final groups pass:
+
+- contracts: 82/82, actual graph, fixture boundaries and implementation inventory;
+- lint: format, strict default/all-feature all-target Clippy and all-feature build;
+- Rust: 797/797/734 in all-feature debug/release and shipping-default debug;
+  existing intentional ignores 10/10/9, not hardware passes;
+- client: relay 15/15, SDK 42/42 including joined native-signature lifecycle,
+  and TypeScript checking.
+
+Logs `/private/tmp/cinder-p36-final-{contracts,lint,rust,client}.log`.
+Author's scoped review `/private/tmp/cinder-p36-review.html` is not an independent
+audit. Final bookkeeping-only successors do not change the checked runtime.
+No source test failure remains in this matrix. Earlier first-source checks also
+passed but do not substitute for this corrected-source result.
+
+P34 corrections pushed at `cc59226af4e4fa910430ce22916e8c05083bfac3`;
+P35 restacked and pushed with exact old-head force-with-lease at
+`d24373e2b9169b24985c66855650eecdb230479e`. Seven still-open existing findings
+across #78/#79/#81 were replied to with exact fixes/evidence and resolved;
+three other #78 threads were already resolved. No new inline findings at the
+latest inspection. CodeRabbit was rate-limited on #79/#81, not a completed review.
+
+Hosted snapshot: #78 `a1f40d2` has eight green jobs; #81 `d24373e` has seven
+green with vault still running. #79 `cc59226` has six green, vault running and
+browser failed at `http-fixture.mjs`'s five-second Missing fixture notification,
+after both Node/Chrome cryptographic groups passed. The descendant #81 browser
+job passes. Exact failed log `/private/tmp/cinder-p34-browser-failure.log`;
+The precise localhost suite passes all 26 HTTP/WebSocket process groups each in
+Node 24.21.0 / actual Chrome 155.0.8059.82, including notification, queue overflow,
+restart and revocation. Log `/private/tmp/cinder-p36-browser-http.log`. No source,
+timeout or assertion was relaxed. One targeted rerun of the failed P34 browser
+job was requested; original cause is not established from a non-reproduction.
+Do not claim this current-head hosted browser failure green from older evidence.
+
+Next: publish/link the fourth open PR, record the single browser rerun result,
+then request only separately scoped native qualification if the user chooses it.
+[UNIT-ACCEPTANCE](UNIT-ACCEPTANCE.md) and the unapproved
+[proposal](UNIT-QUALIFICATION-PROPOSAL.md) own live limits. BULK funding/returns,
+consumed live two-unit manifest and changed-image Nitro remain gates; Pacifica
+missing credit stays deferred. No automatic merge, frontend or live financial/
+RPC/AWS activity. Both clean review worktrees were removed; all source remains
+in Git. Preserve the same three unrelated untracked user paths.
+
+### Historical: P35 policy/discovery review correction — 2026-10-17
+
+Codex #4298003187/#4298003192 are valid. Selected funding now checks the entire
+loaded controller release commitment against descriptor `key_policy` before any
+binding/history mutation. Changed fee, movement, epoch or setup policy cannot
+become the first accepted controller. This pin is the funding-role policy, not
+an assertion that a complete two-venue deployment manifest has been assembled.
+Unit Runtime with onboarding must use `open_with_custody`; it checks every
+advertised program/config/mint/route/pool/domain/epoch/decimal/maximum-deposit
+against the actual loaded controller before attaching the journal/publication.
+The ordinary open constructor refuses an unvalidated onboarding inventory.
+Canonical API-only policy construction is not native qualification.
+
+New policy tampering and discovery-economics cases include positive controls and
+missing-controller refusal. Unit replay revision 6 starts empty, rejects 1–5
+and leaves the legacy financial engine unchanged. Checked source `a923037`
+passes all three actual selected funding/recovery tests, the loaded discovery
+positive/tampering/missing-controller runtime case, all 28 unit journal cases
+and strict all-feature/all-target workspace Clippy. Clean export
+`/private/tmp/cinder-p35-review.cq4ab6`; logs
+`/private/tmp/cinder-p35-review-{policy,discovery,journal,lint}.log`.
+No live funding/venue/RPC/AWS action or automatic merge. Restack P36 onto this
+correction; new-head hosted checks and complete-stack regressions are separate.
+
+### Historical: P34 adapter-boundary review correction — 2026-10-17
+
+Codex findings #4297788400/#4297788418 are valid. Selected Pacifica native
+history/read completion and observation replay/ingestion now enforce the exact
+descriptor account/environment at the adapter boundary, not only the Runtime
+wrapper. Wrong selected identities refuse before mutation, including duplicate
+ingestion. BULK successful HTTP trade pages must match the retained explicit
+slot range; malformed/mismatched pages stay unresolved and cannot authorize a
+continuation. Original body and query budget remain retained, not retried.
+New wrong-identity and three wrong-range regressions supplement the existing
+positive paths. Exact-source offline BULK execution 11/11, Pacifica execution
+21/21 and strict all-feature/all-target workspace Clippy pass. Logs:
+`/private/tmp/cinder-p34-review-{native,pacifica,lint}.log`. The first compile
+attempt used equality on a non-PartialEq kind; replaced it with a pattern check.
+No gate was relaxed. P35/P36 must be restacked onto this correction; no live
+request or automatic merge. New-head hosted checks/review remain separate.
+
+### Historical: P36 joined lifecycle passes; stack review corrections — 2026-10-17
+
+Worktree `cinder-tee`, branch `tee/p36-joined-acceptance`. Three ready PRs form
+native GitHub stack #80: #78 → #79 → #81. No automatic merge or frontend work.
+The P36 local-fixture driver joins actual UnitOnboardingClient/UnitClient owner
+and delegated signatures, unit Runtime/API/risk/holds, replicated encrypted
+journal and both native adapters. Node independently verifies both native
+signatures. Partial/duplicate/late fill attribution, original-ID lookup, unknown
+no-resend, unit-local gap containment, global revoke, reopen and global boot
+fence pass in the focused SDK process test. Fixture IPC bypasses the encrypted
+carrier; existing carrier suites remain separate evidence. Fixed disposable
+keys, synthetic setup/balances and readiness never qualify a live release.
+
+Clean export `/private/tmp/cinder-p36-check.UBo9xY` passes format, both strict
+Clippy configurations and all-target/all-feature build. Contracts pass; full
+Rust/client groups are running. Focused SDK, TypeScript and all five acceptance
+manifest guards pass (`/private/tmp/cinder-p36-{sdk,tsc,manifest}.log`). Initial
+fixture failures were grant/order deadline ordering, missing explicit synthetic
+native readiness and a fill timestamp preceding dispatch. Corrected fixtures,
+not production gates. The manifest now requires actual execution of the joined
+SDK case and unit custody/recovery cases, not merely source text.
+
+P34 source `8cad0bb3de1f84a9ccd27418f5458a95e8fe9072`, tree
+`0252caa5932f97df800a5ee0bf900d616eb9e397`, passed all four local groups (81
+contracts, strict lint/build, all three Rust profiles, relay 15, SDK 40, tsc).
+P35 source `07fb0bfc1eac0163a56e4eee2186cbb40f21d64d`, tree
+`3b25c4270d4f75f3470492f7800ee67c3de00fe9`, passed all four local groups
+(81 contracts, strict lint/build, all Rust profiles, relay 15, SDK 41, tsc),
+plus actual selected-adapter custody/recovery and legacy funding regressions.
+Logs `/private/tmp/cinder-p35-{lint,contracts,rust,client,adapter,packages}.log`.
+
+Latest hosted inspection: all eight jobs green at #78 `a1f40d2`, #79 `8cad0bb`
+and #81 `07fb0bf`. CodeRabbit completed #78's original review but is rate-limited
+on #79/#81; its green status is not substantive review. Codex has two P34
+findings (adapter binding and retained read range), and two P35 findings (funding
+release policy and discovery economics). Validate/fix on the owning branches,
+then restack before final P36 qualification/publication; do not inherit old CI.
+
+See [UNIT-ACCEPTANCE](UNIT-ACCEPTANCE.md) for exact offline/live limits and
+[UNIT-QUALIFICATION-PROPOSAL](UNIT-QUALIFICATION-PROPOSAL.md) for unapproved
+future native/changed-image runs. BULK funding/returns remain disabled, consumed
+live two-unit role/egress/chain manifest remains unqualified and Pacifica's
+missing-credit investigation stays deferred. Only two approved public GETs
+were made, both origin 502; no native financial, wallet/RPC or AWS action.
+Next: resolve valid boundary findings, finish exact-source regression, publish
+the fourth PR and link the full open stack. Preserve the three unrelated paths.
+
+### Historical P34 verified locally; P35 underway — 2026-10-16
+
+P34 source `8cad0bb` (building on rebased checkpoint `69da0ff`) adds sealed
+component controllers, native signing/read budgets, exact account/environment
+binding and typed runtime/opaque egress. Ten focused BULK cases pass. Clean
+source lint/default+all-feature Clippy/all-target build, all three full Rust
+profiles and client group (relay 15, SDK 40 and TypeScript) pass. The original
+contracts run found the synthetic expected graph still described codecs-only;
+updated the fixture, retained reverse-edge/pin/feature negatives, and all 81
+contract tests plus actual graph/inventory pass at committed source `8cad0bb`.
+Logs `/private/tmp/cinder-p34-{lint,rust,client,contracts-final}.log`.
+No native financial/RPC/AWS activity; two approved public metadata GETs returned
+origin 502 and provide no new qualification. P34 publication remains pending.
+
+P35 now composes existing Pacifica funds/recovery through the sealed controller,
+retains canonical owner bootstrap proofs, and adds an atomic all-unit recovery
+cutover. Unit replay revision 5 starts new empty histories, not migration. Three
+new signed bootstrap tests and three unit custody/cutover tests pass locally.
+The allocation fixture initially omitted the existing required current native
+reconciliation/collateral cut; supplied that synthetic evidence, with no relaxed
+admission rule. Typed runtime worker completion wiring is being compiled.
+BULK funding remains disabled; the deferred Pacifica missing-credit investigation
+has not been reopened. Next: finish P35 adversarial/legacy checks, publish the
+remaining PR layers and complete P36 joined offline acceptance/qualification
+proposal. No automatic merge or frontend work is authorized.
+
+### P33 review fixes verified — 2026-10-16
+
+Review-fix source `2142c0897c91b3848d4eacb333bc8eed154da516`, tree
+`77ec5fca94e37e3d6c666fd8e49b1c2c69e2fa96`, addresses CodeRabbit's browser
+export/cache/error findings and Codex's read-authentication and capture-time
+findings. UnitClient is exported publicly; shared cache replay and replaced
+history destruction occur outside its latch, with a deterministic concurrent
+hit/newer-build test. Read-auth failures return private unit errors without
+leaking read slots or closing an otherwise valid session. Admission no longer
+rewrites original operation timestamps. Readiness here always means PR review
+readiness, not native/production qualification or merge approval.
+
+Exact fix-source local checks pass: all API tests (9 lib, 3 interop, 9 onboarding,
+27 legacy private, 43 unit); six focused unit-runtime cases; complete client group
+(relay 15, SDK 40 and TypeScript), strict all-feature/all-target clippy, format,
+contracts/inventory and diff checks. Logs `/private/tmp/cinder-p33-review-*.log`;
+scoped review `/private/tmp/cinder-p33-review.html`, not an independent audit.
+The first client attempt lacked the temporary worktree's dependency symlink;
+reused installed dependencies and reran successfully. No dependency/test gate
+changed to satisfy it.
+
+Before these fixes, final source `de271d7` in clean export
+`/private/tmp/cinder-p33-final.B00ESB` passed all four groups: contracts 81,
+lint/build, Rust 770/770/707 (explicit ignores 10/10/9), relay 15, SDK 39 and
+TypeScript. All eight hosted jobs passed at documentation-only successor
+`927f255eedd968439085320f6b3741fce178a27b`. These are historical, not inherited
+new-head CI approval. The review-fix push needs its own hosted checks/review.
+
+P34 is preserved at local checkpoint `968d468` on `tee/p34-unit-execution`:
+selected-unit controller and BULK signer/observation code compile; its four
+focused native tests pass. The temporary P33 source worktree excludes the three
+unrelated user paths. Next: push this base fix, rebase the unpublished P34
+checkpoint onto it, then finish native runtime/egress and adversarial work before
+P35/P36. No live financial/RPC/AWS activity, automatic merge or frontend work.
+
+### P33 published; remaining stack continues — 2026-10-16
+
+PR #78 (ready for review) targets `product/tee-v1` through native `gh stack`; implementation
+head `de271d706aedc68180d6d9aadc7e9d5f0684f0aa`, tree
+`9677b1872c9fdf6268a2040f7171951c752981e5`. No native activation or merge.
+Unit Handler, all eleven private read families, v2-only recorded status,
+unit-bound receipt/cursor/SDK/subscription paths and common witnessed publication
+are implemented. Startup verifies original API history. ADR 0039 is the contract.
+
+Five focused runtime tests and nine SDK unit tests pass. The first clean export
+passed strict default/all-feature lint/build, contracts 81 and inventory (42
+phases/66 docs); full Rust matrix is running. That export predates final valid-
+projector/startup/poll and SDK scratch-erasure refinements; its results are not
+claimed as exact-head qualification. Final focused/hosted checks remain pending.
+Local source export `/private/tmp/cinder-p33-check.SRoo5n`; logs
+`/private/tmp/cinder-p33-{contracts,lint,rust,runtime,units}.log`.
+
+MAX_ITEMS=1024 cold interpretation measured ~292 ms; 64 fresh same-head signed
+and authenticated requests ~44 ms. These local synthetic results exclude native,
+remote witness and Nitro latency. Corrected two new fixture assumptions: request
+IDs are deployment/customer-global even across units; SQLite alone is not a
+freshness witness. No actual gate was relaxed. Cache misses retain full signature/
+join validation; same-head reuse still performs current auth/freshness.
+
+Approved metadata refresh completed exactly two unsigned GETs (exchangeInfo,
+feeState), both Cloudflare origin HTTP 502, no retry or financial/RPC/AWS action.
+Exact headers/bodies/receipt are in ignored
+`work/venues/bulk/reassessment-2026-10-16/run-q9qwUP/`; no new capability inferred.
+
+Next: finish P33 exact-head verification while building P34 unit execution/
+reconciliation, then P35 funding/recovery and P36 joined acceptance. User asked
+for all four as an open PR stack, not a stop after P33 or automatic merges.
+
+### Four-layer integration stack authorized — 2026-10-16
+
+User approved P33–P36 as four stacked PRs and requested continuous progress
+through all independent offline work, without automatic merge. Native runs need
+their own scoped approval. The current approval permits at most 12 unsigned
+public market/fee/schema GETs on BULK testnet, no wallets, funds, RPC or AWS.
+Preserve the three unrelated untracked user paths listed in earlier handoffs.
+
+P32 final head `1396c61be91907bb45baa386f35613351366df2a` passed all eight hosted
+jobs and CodeRabbit; Codex had no findings at its code-identical reviewed head.
+No actionable inline threads remained. User-authorized, head-pinned squash merge
+completed at 16:03:58 UTC as `1134f9421d090caae9739868bcf860ba61e43157`.
+Fetched trunk and reviewed head have tree `27f326bcc9e84b2b44d71012bb4bafefb836cf5b`.
+P33 branch `tee/p33-unit-service` starts at that actual merge. No user files or
+financial policy changed. Next: meet the MAX_ITEMS history-cost gate, then wire
+unit requests and projections without regressing current-head publication.
 
 ### P32 published for review — 2026-10-16
 
@@ -6386,10 +6747,76 @@ Unexpected: tests must distinguish known noncommitted SQLite CAS failure from
 unknown append fencing. Payout acceptance reserves customer entitlement; queued
 amounts need not already be available at the payout location. Dispatch retains
 its separate FIFO/location qualification. No policy was changed to satisfy tests.
-Next: inspect #77's exact-head CI/review. Runtime wiring
-must first qualify MAX_ITEMS replay cost; no native activation is implied.
+Next: P33 shared-unit service/read/SDK integration with MAX_ITEMS cost evidence;
+no native activation is implied. Final review/CI and actual merge are recorded
+in the current handoff.
 PR: https://github.com/arnabnandikgp/cinder/pull/77.
-Merge: Not merged.
+Merge: 1134f9421d090caae9739868bcf860ba61e43157.
+
+## P33 — Unit service, reads and SDK
+
+Work: implemented the opt-in shared-unit handler, private projections and explicit
+SDK client, reusing existing witnessed final-release gates; ADR 0039.
+Verification: original final source passed all four groups. Review-fix source
+`2142c08` passes all API, six focused unit-runtime, client 15/40, TypeScript,
+strict Clippy, format and contracts; current #78 `a1f40d2` has eight hosted green
+jobs and all existing actionable threads are addressed. Final stack matrix
+also passes; current handoff records exact provenance and evidence limits.
+Unexpected: recorded-only receipts need an explicit v2-only lifecycle extension;
+legacy decoders must refuse it. No v1-to-v2 default-unit fallback.
+Next: verify the current review corrections and complete the open four-PR stack.
+PR: https://github.com/arnabnandikgp/cinder/pull/78.
+Merge: none.
+
+## P34 — Unit execution and reconciliation
+
+Work: sealed component controllers, unit-bound Pacifica/BULK native preparation,
+read/observation ingestion and fixed-origin opaque egress. No new funding rail.
+Verification: original full matrix passes. Prior review source `cc59226` has
+11/11 BULK and 21/21 Pacifica execution passes and eight hosted green jobs.
+New shared-time/completion regressions pass: reads 17/17, unit runtime 8/8,
+strict all-feature/all-target Clippy. Current handoff owns exact-source receipts;
+new-head hosted verification remains required; descendants are restacked.
+Unexpected: chronology is shared even when a component's state has not changed;
+one-use responses must not be consumed by a transient writer Busy. No resend,
+funding readiness, collateral cut or qualification rule was relaxed.
+Next: finish new-head verification/review; no automatic merge.
+PR: https://github.com/arnabnandikgp/cinder/pull/79.
+Merge: none.
+
+## P35 — Unit funding and recovery
+
+Work: canonical signed owner bootstrap, validated loaded custody discovery,
+sealed Pacifica funding/chain workers, full-batch controls and atomic all-unit
+operator recovery. Native funding/return rails unsupported by BULK stay disabled.
+Verification: prior published source `d24373e` has eight green hosted jobs.
+Policy correction `a923037` passed three selected adapter cases, loaded discovery
+tampering/missing-controller checks, 28 unit-journal cases and strict Clippy.
+The shared-time/completion follow-up has focused Pacifica reads 17/17 and unit
+runtime 8/8 passes; the complete restacked P36 matrix is running separately.
+Unexpected: one-use post-I/O results must wait for the writer rather than be
+dropped on Busy. No financial gate was relaxed. Revision 6 starts empty histories
+and rejects 1–5; no migration or changed-image qualification is claimed.
+Next: finish exact-source stack verification/review; no automatic merge.
+PR: https://github.com/arnabnandikgp/cinder/pull/81.
+Merge: none.
+
+## P36 — Joined second-venue acceptance
+
+Work: actual SDK-to-Runtime-to-native-signature joined fixture and mandatory
+execution guards; UNIT-ACCEPTANCE matrix and separate qualification proposal.
+Verification: final corrected source `4507b60` passes contracts 82, strict
+lint/build, Rust 797/797/734 (intentional ignores 10/10/9), relay 15, SDK 42 and
+tsc. Review correction `5c2f0a1` pins mandatory case identities independently of
+the manifest, with deletion/substitution regressions (6/6 guard tests). Current
+handoff owns exact tree, logs, review and predecessor CI status.
+Unexpected: fixture timestamps/deadlines/readiness must obey real admission;
+native/changed-image qualification remains separately scoped, not fixture proof.
+Next: finish current-head hosted CI/review. Fourth layer #82 is published in
+native stack #80; see current handoff for opening head and checked source. Keep
+native/hardware criterion open until supported approved runs actually complete.
+PR: https://github.com/arnabnandikgp/cinder/pull/82.
+Merge: none.
 
 ## P24 — Release safety case
 

@@ -28,7 +28,7 @@ export interface UnitIntent extends Intent { unit: Id }
 export interface UnitEnvelope extends Envelope { unit: Id }
 /** Private caller-owned result. Erase wire/digest after use in the verified channel. */
 export interface SignedUnitRequest { unit: Id; id: Id; policy: number; digest: Id; wire: Uint8Array }
-export type Outcome = 'rejected' | 'accepted' | 'dispatched' | 'acknowledged' | 'partial' | 'complete' | 'unknown';
+export type Outcome = 'rejected' | 'accepted' | 'dispatched' | 'acknowledged' | 'partial' | 'complete' | 'unknown' | 'recorded';
 export interface Receipt {
   kind: 'receipt'; id: Id; digest: Id; policy: number; outcome: Outcome; filled: bigint;
   paid: bigint; railFees: bigint; feeCap: bigint; possiblyExposed: boolean; allowPartial: boolean;
@@ -211,7 +211,8 @@ function option(r: Reader, bytes = 16, signed = true) { return r.boolean() ? r.n
 export function decodeUnitResponse(bytes: Uint8Array, expectedUnit: Id): { unit: Id; response: Response } {
   const r = new Reader(bytes, 'CINDER-API-REPLY\0\x00\x02'), unit = r.take(32);
   if (!equal(unit, id(expectedUnit))) fail();
-  return { unit, response: decodeResponse(r.rest()) };
+  const body=r.rest();
+  try{return { unit, response: decodeBody(body, true) };}finally{body.fill(0);}
 }
 function unit(r: Reader) { const market=r.take(32), precision=Number(r.n(4)); if(!precision||!market.some(x=>x))fail();return {market,precision}; }
 function position(r: Reader): Position { return {...unit(r),lots:r.n(8,true),basis:r.n(16,true)}; }
@@ -235,7 +236,7 @@ function accountRow(r: Reader): AccountRow {
   if(r.boolean())out.risk={equity:r.n(16,true),initial:r.n(16,true),maintenance:r.n(16,true),outcomeRequirement:r.n(16,true),otherHeld:r.n(16,true),free:r.n(16,true)};
   out.accountingEquity=option(r);if(!out.epoch||out.held<0n)fail();return out;
 }
-function readRow(family: ReadFamily, bytes: Uint8Array): ReadRow {
+function readRow(family: ReadFamily, bytes: Uint8Array, scoped = false): ReadRow {
   const r=new Reader(bytes,'');let out:ReadRow;
   switch(family){
     case 'ingress':{
@@ -250,7 +251,7 @@ function readRow(family: ReadFamily, bytes: Uint8Array): ReadRow {
       const leverage=r.boolean()?{cap:r.n(8),selected:r.n(8)}:undefined;
       if(valuation?.mark===0n||leverage&&(leverage.cap===0n||leverage.selected===0n||leverage.selected>leverage.cap))fail();
       out={kind:'position',...p,valuation,leverage};break;}
-    case 'operations':case 'openOrders':{const committedAt=r.n(8),c=readCommand(r),reply=decodeResponse(r.rest());if(reply.kind!=='receipt')fail();out={kind:'operation',committedAt,command:c,receipt:reply};break;}
+    case 'operations':case 'openOrders':{const committedAt=r.n(8),c=readCommand(r),reply=decodeBody(r.rest(),scoped);if(reply.kind!=='receipt')fail();out={kind:'operation',committedAt,command:c,receipt:reply};break;}
     case 'fills':out={kind:'fill',request:r.take(32),...unit(r),lots:r.n(8,true),price:r.n(8),fee:r.n(16,true),observedAt:option(r,8,false)};break;
     case 'funding':out={kind:'funding',...unit(r),lots:r.n(8,true),payment:option(r),settled:r.boolean(),observedAt:option(r,8,false)};break;
     case 'movements':{const committedAt=r.n(8);const book=()=>{const cash=r.n(16,true),funding=r.n(16,true),n=r.count();if(n>64)fail();return {cash,funding,positions:Array.from({length:n},()=>position(r))};};out={kind:'movement',committedAt,before:book(),after:book()};break;}
@@ -260,13 +261,16 @@ function readRow(family: ReadFamily, bytes: Uint8Array): ReadRow {
     case 'markets':out={kind:'market',...unit(r),quote:r.take(32),quotePrecision:Number(r.n(4)),numerator:r.n(8),denominator:r.n(8),modes:Number(r.n(1)),leverageCap:option(r,8,false)};
       if(!out.quote.some(x=>x)||!out.quotePrecision||out.numerator<=0n||out.denominator<=0n||out.modes!==7||out.leverageCap===0n)fail();break;
     case 'updates':{const tag=r.n(1);if(tag===2n)out=accountRow(r);else if(tag===0n)out={kind:'position',...position(r)};
-      else if(tag===1n){const reply=decodeResponse(r.rest());if(reply.kind!=='receipt')fail();out={kind:'receipt',receipt:reply};}else fail();break;}
+      else if(tag===1n){const reply=decodeBody(r.rest(),scoped);if(reply.kind!=='receipt')fail();out={kind:'receipt',receipt:reply};}else fail();break;}
     default:fail();
   }
   r.done();return out;
 }
 /** Strict bounded replies; cash/funding/margin/fee cap are not conflated. */
 export function decodeResponse(bytes: Uint8Array): Response {
+  return decodeBody(bytes, false);
+}
+function decodeBody(bytes: Uint8Array, scoped: boolean): Response {
   const r = new Reader(bytes); const tag = r.n(1); let out: Response;
   if (tag === 0n) {
     const epoch = r.n(8), cash = r.n(16, true), funding = r.n(16, true), held = r.n(16, true);
@@ -277,6 +281,7 @@ export function decodeResponse(bytes: Uint8Array): Response {
   } else if (tag === 1n) {
     const requestId = r.take(32), digest = r.take(32), policy = Number(r.n(4));
     const outcomes: Outcome[] = ['rejected', 'accepted', 'dispatched', 'acknowledged', 'partial', 'complete', 'unknown'];
+    if(scoped)outcomes.push('recorded');
     const outcome = outcomes[Number(r.n(1))]; if (!outcome || policy === 0 || requestId.every(x => x === 0)) fail();
     out = { kind: 'receipt', id: requestId, digest, policy, outcome, filled: r.n(8, true), paid: r.n(16, true),
       railFees: r.n(16, true), feeCap: r.n(16, true), possiblyExposed: r.boolean(), allowPartial: r.boolean() };
@@ -294,7 +299,7 @@ export function decodeResponse(bytes: Uint8Array): Response {
     if(r.n(1)!==1n)fail();const family=READ_FAMILIES[Number(r.n(1))];if(!family)fail();
     const revision=r.take(32),next=r.take(40),evaluatedAt=r.n(8),count=r.count();if(count>64||!revision.some(x=>x))fail();
     if(next.subarray(0,32).some(x=>x)!==next.subarray(32).some(x=>x)||next.some(x=>x)&&!equal(next.subarray(0,32),revision))fail();
-    const rows=Array.from({length:count},()=>{const size=Number(r.n(4));if(size<1||size>1_048_576)fail();return readRow(family,r.take(size));});
+    const rows=Array.from({length:count},()=>{const size=Number(r.n(4));if(size<1||size>1_048_576)fail();return readRow(family,r.take(size),scoped);});
     out={kind:'page',family,revision,next,evaluatedAt,rows};
   } else if (tag === 2n) {
     const codes: ErrorCode[] = ['invalid', 'unauthorized', 'not-found', 'conflict', 'unavailable'];
@@ -304,14 +309,16 @@ export function decodeResponse(bytes: Uint8Array): Response {
 }
 /** Wallet-only bootstrap; an agent signer cannot act on an owner's account.
  * Requests use the same attested encrypted channel, never a public signup API. */
-export class OnboardingClient {
+class BootstrapClient {
   readonly #channel: ConfidentialChannel; readonly #signer: MessageSigner;
   readonly #domain: Domain; readonly #policy: number;
-  constructor(channel: ConfidentialChannel, signer: MessageSigner, config: {domain: Domain; policy: number}) {
+  readonly #unit?:Id; readonly #contract?:Id;
+  constructor(channel: ConfidentialChannel, signer: MessageSigner, config: {domain: Domain; policy: number}, scoped?:{unit:Id;contract:Id}) {
     this.#channel=channel;this.#signer=signer;
     this.#domain={network:id(config.domain.network),deployment:id(config.domain.deployment)};
     if(!Number.isInteger(config.policy)||config.policy<1||config.policy>0xffffffff)fail();
     this.#policy=config.policy;
+    if(scoped){this.#unit=id(scoped.unit);this.#contract=id(scoped.contract);}
   }
   /** Create once or retrieve current epoch. Does not reset grants or paid counters. */
   open(expiresAt:bigint):Promise<Discovery|{kind:'error';code:ErrorCode}>{return this.#exchange(expiresAt);}
@@ -328,14 +335,17 @@ export class OnboardingClient {
       if(notice.epoch<=0n||!(notice.signature instanceof Uint8Array)||notice.signature.length!==64||!notice.signature.some(x=>x))fail();
       w.n(1n,1);w.n(notice.epoch,8);w.key(notice.operation);w.chunks.push(new Uint8Array(notice.signature));
     }else w.n(0n,1);
-    const message=w.end(),wire=new Uint8Array(message.length+64);
+    const original=w.end();
+    const message=this.#unit?new Uint8Array([...utf8.encode('CINDER-UNIT-ONBOARD\0\x00\x01'),...this.#unit,...this.#contract!,...original]):original;
+    if(this.#unit)original.fill(0);
+    const wire=new Uint8Array(message.length+64);
     try{
       const toSign=message.slice();let signature:Uint8Array;
       try{signature=await this.#signer.signMessage(toSign);}finally{toSign.fill(0);}
       if(!(signature instanceof Uint8Array)||signature.length!==64)fail();wire.set(message);wire.set(signature,message.length);
       const reply=await this.#channel.exchange(wire);
       try{
-        const result=decodeResponse(reply);if(result.kind==='error')return result;if(result.kind!=='discovery')fail();
+        const result=this.#unit?decodeUnitResponse(reply,this.#unit).response:decodeResponse(reply);if(result.kind==='error')return result;if(result.kind!=='discovery')fail();
         const identity=new Uint8Array([...utf8.encode('CINDER-ACCOUNT-1\0'),...this.#domain.network,...this.#domain.deployment,...wallet]);
         try{const expected=new Uint8Array(await crypto.subtle.digest('SHA-256',identity));if(!equal(result.account,expected))fail();}finally{identity.fill(0);}
         return result;
@@ -344,13 +354,24 @@ export class OnboardingClient {
     finally{message.fill(0);wire.fill(0);wallet.fill(0);}
   }
 }
+/** Legacy single-route owner bootstrap. Never defaults into a shared unit. */
+export class OnboardingClient extends BootstrapClient {
+  constructor(channel:ConfidentialChannel,signer:MessageSigner,config:{domain:Domain;policy:number}){super(channel,signer,config);}
+}
+/** Explicit owner bootstrap for a shared deployment. Pin the independently
+ * approved custody contract; never copy an unauthenticated relay hint. */
+export class UnitOnboardingClient extends BootstrapClient {
+  constructor(channel:ConfidentialChannel,signer:MessageSigner,config:{domain:Domain;policy:number;unit:Id;contract:Id}){super(channel,signer,config,config);}
+}
 
-export class PrivateClient {
+class Client {
   readonly #domain: Domain; readonly #account: Id; readonly #policy: number;
+  readonly #unit?: Id;
   readonly #channel: ConfidentialChannel; readonly #signer: MessageSigner;
-  constructor(channel: ConfidentialChannel, signer: MessageSigner, config: { domain: Domain; account: Id; policy: number }) {
+  constructor(channel: ConfidentialChannel, signer: MessageSigner, config: { domain: Domain; account: Id; policy: number }, unit?: Id) {
     this.#domain = { network: id(config.domain.network), deployment: id(config.domain.deployment) };
     this.#account = id(config.account); this.#policy = config.policy; this.#channel = channel; this.#signer = signer;
+    this.#unit = unit === undefined ? undefined : id(unit);
   }
   /** Server-driven replacement snapshots of a signed read projection. Page
    * cursors fetch the remaining retained range; no automatic trade retry. */
@@ -360,17 +381,18 @@ export class PrivateClient {
     const query:ReadQuery={...input.query,cursor:input.query.cursor?.slice()};
     const env:Envelope={domain:this.#domain,account:this.#account,id:id(input.id),policy:this.#policy,epoch:input.epoch,
       signer:id(this.#signer.publicKey),session:id(ctx.binding),expiresAt:input.expiresAt,command:{kind:'read',query}};
-    const message=signingMessage(env),wire=new Uint8Array(message.length+64);let stream:AsyncIterable<Uint8Array>;
+    const message=this.#unit?unitSigningMessage({...env,unit:this.#unit}):signingMessage(env),wire=new Uint8Array(message.length+64);let stream:AsyncIterable<Uint8Array>;
     try{wire.set(message);const scratch=message.slice();let signature;
       try{signature=await this.#signer.signMessage(scratch);}finally{scratch.fill(0);}
       if(!(signature instanceof Uint8Array)||signature.length!==64)fail();wire.set(signature,message.length);
       stream=await this.#channel.subscribe(wire);
     }finally{message.fill(0);wire.fill(0);}
     const family=query.family;
+    const unit=this.#unit?.slice();
     const iterator=stream[Symbol.asyncIterator]();
     const source:AsyncIterable<Uint8Array>={[Symbol.asyncIterator]:()=>iterator};
     return privateIterable(async function*(){for await(const bytes of source){try{
-      const reply=decodeResponse(bytes);if(reply.kind!=='page'||reply.family!==family)throw new Error('Private subscription unavailable; resynchronize');yield reply;
+      const reply=unit?decodeUnitResponse(bytes,unit).response:decodeResponse(bytes);if(reply.kind!=='page'||reply.family!==family)throw new Error('Private subscription unavailable; resynchronize');yield reply;
     }finally{bytes.fill(0);}}},()=>iterator.return?.());
   }
   /** No retries or native nonce generation. On uncertainty query the original ID.
@@ -383,8 +405,9 @@ export class PrivateClient {
       command: input.command, epoch: input.epoch, signer: id(this.#signer.publicKey), session: id(ctx.binding), expiresAt: input.expiresAt };
     const kind = input.command.kind, family=kind==='read'?input.command.query.family:undefined,
       target = kind === 'operation' ? id((input.command as { target: Id }).target) : env.id.slice();
-    const message = signingMessage(env), wire = new Uint8Array(message.length + 64);
-    const digest = await intentDigest(env);
+    const scoped=this.#unit?{...env,unit:this.#unit}:undefined;
+    const message = scoped?unitSigningMessage(scoped):signingMessage(env), wire = new Uint8Array(message.length + 64);
+    const digest = scoped?await unitIntentDigest(scoped):await intentDigest(env);
     try {
       wire.set(message); const toSign = message.slice(); let signature: Uint8Array;
       try { signature = await this.#signer.signMessage(toSign); } finally { toSign.fill(0); }
@@ -392,7 +415,7 @@ export class PrivateClient {
       wire.set(signature, message.length);
       const reply = await this.#channel.exchange(wire);
       try {
-        const response = decodeResponse(reply);
+        const response = this.#unit?decodeUnitResponse(reply,this.#unit).response:decodeResponse(reply);
         if (response.kind === 'error') return response;
         if (kind === 'view') { if (response.kind !== 'view') fail(); }
         else if(kind==='read'){if(response.kind!=='page'||response.family!==family)fail();}
@@ -403,5 +426,19 @@ export class PrivateClient {
     } catch {
       throw new Error('Private request unavailable; reconcile the stable operation before retry');
     } finally { message.fill(0); wire.fill(0); digest.fill(0); }
+  }
+}
+
+/** Existing single-unit v1 protocol. Never falls back to or infers a v2 unit. */
+export class PrivateClient extends Client {
+  constructor(channel:ConfidentialChannel,signer:MessageSigner,config:{domain:Domain;account:Id;policy:number}){
+    super(channel,signer,config);
+  }
+}
+/** Explicit opt-in shared-journal unit protocol. All private replies and update
+ * pages must repeat this unit; legacy or other-unit responses are refused. */
+export class UnitClient extends Client {
+  constructor(channel:ConfidentialChannel,signer:MessageSigner,config:{domain:Domain;account:Id;policy:number;unit:Id}){
+    super(channel,signer,config,config.unit);
   }
 }

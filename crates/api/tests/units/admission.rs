@@ -4,6 +4,226 @@ use cinder_api::Admission as _;
 use cinder_journal::{collateral, orders, risk};
 use cinder_kernel::ledger::{evidence::*, *};
 
+fn read_view(
+    j: &mut Store,
+    service: &api::service::Service<Holds>,
+) -> (cinder_journal::read::Reader, cinder_journal::read::Binding) {
+    let binding = cinder_journal::read::Binding {
+        stream: cinder_journal::replicated::Stream {
+            domain: domain(),
+            id: [91; 32],
+        },
+        epoch: 1,
+        api: service.commitment(j.configuration()).unwrap(),
+    };
+    (j.attach_reader(binding).unwrap(), binding)
+}
+struct ReadWitness(Head);
+impl cinder_journal::read::Witness for ReadWitness {
+    fn read(
+        &self,
+        _: cinder_journal::replicated::Stream,
+    ) -> Result<cinder_journal::replicated::Anchor, cinder_journal::Error> {
+        Ok(cinder_journal::replicated::Anchor {
+            epoch: 1,
+            head: Some(self.0),
+        })
+    }
+}
+fn read(
+    service: &api::service::Service<Holds>,
+    reader: &cinder_journal::read::Reader,
+    head: Head,
+    request: &api::Request,
+) -> Result<Response, Error> {
+    let ticket = reader.capture().unwrap();
+    service.authenticate_read(
+        ticket.unit_configuration().unwrap(),
+        &Channel::default(),
+        &request.encode().unwrap(),
+        10,
+    )?;
+    let verified = reader.verify(ticket, &ReadWitness(head)).unwrap();
+    let result = service.read(
+        &verified,
+        &Channel::default(),
+        &request.encode().unwrap(),
+        10,
+    );
+    verified
+        .release(std::time::Instant::now() + std::time::Duration::from_secs(1))
+        .unwrap();
+    result
+}
+
+#[test]
+fn unit_service_reads_recording_admission_lifecycle_without_legacy_digest_or_other_unit_data() {
+    let t = Temp::new();
+    let mut j = seed(&t);
+    let service = api::service::Service::new(authorizer(), Holds(100));
+    let staged = named(90, order(), 9);
+    authorizer()
+        .capture(&mut j, &Channel::default(), &staged.encode().unwrap(), 10)
+        .unwrap();
+    let (reader, _) = read_view(&mut j, &service);
+    let lookup = named(91, wire::Command::Operation(staged.body.id), 9);
+    let Response::Receipt(r) = read(&service, &reader, j.head(), &lookup).unwrap() else {
+        panic!()
+    };
+    assert_eq!(r.outcome, cinder_api::Outcome::Recorded);
+    assert_eq!(r.digest, staged.digest());
+    assert!(component(&j).holds().is_empty());
+    let Response::Receipt(r) = service
+        .mutate(&mut j, &Channel::default(), &staged.encode().unwrap(), 10)
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(r.outcome, cinder_api::Outcome::Accepted);
+    assert_eq!(r.digest, staged.digest());
+    let Response::Receipt(r) = read(&service, &reader, j.head(), &lookup).unwrap() else {
+        panic!()
+    };
+    assert_eq!(r.outcome, cinder_api::Outcome::Accepted);
+    for which in [40, 50] {
+        for kind in 0..cinder_api::reads::KINDS {
+            let r = request(
+                which,
+                wire::Command::Read(cinder_api::reads::Query {
+                    kind,
+                    cursor: [0; 40],
+                    limit: 64,
+                }),
+                9,
+            );
+            assert!(matches!(
+                read(&service, &reader, j.head(), &r),
+                Ok(Response::Read(_))
+            ));
+        }
+        let r = request(which, wire::Command::View, 9);
+        let Response::View(v) = read(&service, &reader, j.head(), &r).unwrap() else {
+            panic!()
+        };
+        assert_eq!(v.cash, if which == 40 { 2000 } else { 0 });
+        assert_eq!(v.operations.len(), usize::from(which == 40));
+    }
+    let other = request(50, wire::Command::Operation(staged.body.id), 9);
+    assert!(matches!(
+        read(&service, &reader, j.head(), &other),
+        Err(Error::NotFound)
+    ));
+}
+
+#[test]
+fn shared_publication_invalidates_prepared_unit_reads_on_other_unit_revoke_and_refuses_legacy_source()
+ {
+    use cinder_journal::read::{Failure, Source};
+    let t = Temp::new();
+    let mut j = seed(&t);
+    grant_agent(&mut j);
+    let service = api::service::Service::new(authorizer(), Holds(100));
+    let (reader, _) = read_view(&mut j, &service);
+    let view = reader
+        .verify(reader.capture().unwrap(), &ReadWitness(j.head()))
+        .unwrap();
+    assert!(Source::state(&view).is_err());
+    let agent = named(91, wire::Command::View, 10);
+    service
+        .read(&view, &Channel::default(), &agent.encode().unwrap(), 10)
+        .unwrap();
+    let other = request(50, wire::Command::View, 10);
+    assert!(matches!(
+        service.read(&view, &Channel::default(), &other.encode().unwrap(), 10),
+        Err(Error::Unauthorized)
+    ));
+    let revoke = request(50, wire::Command::Revoke, 9);
+    service
+        .mutate(&mut j, &Channel::default(), &revoke.encode().unwrap(), 10)
+        .unwrap();
+    assert_eq!(
+        view.release(std::time::Instant::now() + std::time::Duration::from_secs(1)),
+        Err(Failure::Raced)
+    );
+    assert!(matches!(
+        read(&service, &reader, j.head(), &agent),
+        Err(Error::Unauthorized)
+    ));
+}
+
+#[test]
+fn unit_cursor_is_not_reusable_on_another_unit_even_for_identical_market_rows() {
+    let t = Temp::new();
+    let mut j = seed(&t);
+    let service = api::service::Service::new(authorizer(), Holds(100));
+    let (reader, _) = read_view(&mut j, &service);
+    let query = cinder_api::reads::Query {
+        kind: 8,
+        cursor: [0; 40],
+        limit: 1,
+    };
+    let a = request(40, wire::Command::Read(query), 9);
+    let b = request(50, wire::Command::Read(query), 9);
+    let Response::Read(a) = read(&service, &reader, j.head(), &a).unwrap() else {
+        panic!()
+    };
+    let Response::Read(b) = read(&service, &reader, j.head(), &b).unwrap() else {
+        panic!()
+    };
+    assert_ne!(a.revision, b.revision);
+    let mut cursor = [0; 40];
+    cursor[..32].copy_from_slice(&a.revision);
+    cursor[39] = 1;
+    let other = request(
+        50,
+        wire::Command::Read(cinder_api::reads::Query { cursor, ..query }),
+        9,
+    );
+    assert!(matches!(
+        read(&service, &reader, j.head(), &other),
+        Err(Error::Conflict)
+    ));
+}
+
+#[test]
+fn operation_capture_timestamp_remains_original_after_later_admission() {
+    let t = Temp::new();
+    let mut j = seed(&t);
+    let service = api::service::Service::new(authorizer(), Holds(100));
+    let staged = named(90, order(), 9);
+    authorizer()
+        .capture(&mut j, &Channel::default(), &staged.encode().unwrap(), 10)
+        .unwrap();
+    let (reader, _) = read_view(&mut j, &service);
+    service
+        .mutate(&mut j, &Channel::default(), &staged.encode().unwrap(), 20)
+        .unwrap();
+    for kind in [2, 3] {
+        let view = reader
+            .verify(reader.capture().unwrap(), &ReadWitness(j.head()))
+            .unwrap();
+        let req = request(
+            40,
+            wire::Command::Read(cinder_api::reads::Query {
+                kind,
+                cursor: [0; 40],
+                limit: 64,
+            }),
+            9,
+        );
+        let Response::Read(page) = service
+            .read(&view, &Channel::default(), &req.encode().unwrap(), 20)
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(page.rows.len(), 1);
+        assert_eq!(&page.rows[0].as_bytes()[..8], &10_u64.to_be_bytes());
+        view.release(std::time::Instant::now() + std::time::Duration::from_secs(1))
+            .unwrap();
+    }
+}
+
 fn financial_config() -> units::Configuration {
     let mut descriptors = config().units().to_vec();
     for d in &mut descriptors {

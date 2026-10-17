@@ -3,7 +3,7 @@ use crate::{
     Error, chain_code, chain_receipt as receipt,
     chain_rpc::{Accounts, Finalized},
 };
-use cinder_journal::{Backend, Journal, Protection, model::*};
+use cinder_journal::{controller::Controller as JournalController, model::*};
 use cinder_kernel::{amounts::QuoteAtoms, identity::*, ledger::*};
 use cinder_pacifica::funding::chain::CustomerDeposit;
 use openssl::sha::sha256;
@@ -49,15 +49,15 @@ impl Locator {
     }
 }
 /// Verify a retained applied deposit, not merely the presence of its commit ID.
-pub(crate) fn recorded<B: Backend, P: Protection>(
-    journal: &Journal<B, P>,
+pub(crate) fn recorded<J: JournalController>(
+    journal: &J,
     locator: &Locator,
 ) -> Result<bool, Error> {
     Ok(recorded_amount(journal, locator)?.is_some())
 }
 /// Original attributed deposit amount, never the current aggregate vault balance.
-pub(crate) fn recorded_amount<B: Backend, P: Protection>(
-    journal: &Journal<B, P>,
+pub(crate) fn recorded_amount<J: JournalController>(
+    journal: &J,
     locator: &Locator,
 ) -> Result<Option<QuoteAtoms>, Error> {
     let id = locator.commit(journal.configuration().domain)?;
@@ -152,8 +152,8 @@ pub(crate) fn valid_transaction(
 /// No native credit, API permission or wallet signing is created. Aggregate token
 /// balances cannot substitute for original transaction deltas and immutable receipt.
 #[allow(clippy::too_many_arguments)]
-pub fn recognize<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+pub fn recognize<J: JournalController>(
+    journal: &mut J,
     locator: &Locator,
     deposit: CustomerDeposit,
     tx: Finalized,

@@ -1161,6 +1161,66 @@ P09/P18/P29–P31 fixtures and [ADR 0038](../architecture/0038-unit-financial-ad
 - [x] Existing joined risk/holds constrain orders, payouts and leverage; trusted per-unit risk installation and adverse-fact retention do not introduce cross-margin or native exposure.
 - [x] Exact-source adversarial/CAS/unknown/encryption/replay and workspace regressions pass; source/PR/CI/review limits and the pre-runtime MAX_ITEMS performance gate are recorded.
 
+<a id="p33"></a>
+## P33 — Unit service, private reads and SDK
+
+Depends on: P32.
+
+Deliver: an explicit opt-in unit service/SDK path, preserving one journal,
+owner/global revocation, recorded-only versus decided lifecycle, private read
+scope and final publication gates. Shipping v1 remains explicit, never fallback.
+Evidence: ADRs 0034–0039, P18/P21A/P23 publication races and P29–P32 fixtures.
+
+- [x] Measure repeated requests at MAX_ITEMS and implement only necessary derived head-keyed indexing/cache; freshness and replay validation remain authoritative.
+- [x] Unit reads and operation receipts cannot leak another component, mistake recording for acceptance or reuse a cursor across units; current revocation/fencing governs publication.
+- [x] Runnable handler and SDK request/update paths bind unit and stable operation identity with no implicit retries or changed native authority.
+- [x] Focused performance, auth, read/update, restart/race and legacy regressions pass; exact source, review and remaining activation gates are recorded.
+
+<a id="p34"></a>
+## P34 — Unit execution and financial reconciliation
+
+Depends on: P33.
+
+Deliver: component-owned native preparations/exposure and BULK codec-to-engine
+reconciliation alongside Pacifica, under one shared durable history. No global
+readiness inferred from an ACK or an unqualified account snapshot.
+Evidence: X01–X05, P13/P14/P27/P28 codecs, ADR 0034 and pinned native sources.
+
+- [x] Original operation, attempt, unit/account, exact bytes and holds commit before signing/exposure; unknown outcomes block blind resend.
+- [x] Fills, funding, fees, forced events and reconciliation preserve actual ownership/precision and ingest adverse facts while new admission is frozen. Unqualified native funding/ADL causes stay retained and unresolved, not fabricated financial events.
+- [x] Cross-unit IDs, partial/late/duplicate/conflicting facts, crashes and shared freshness faults are contained or fenced as specified.
+- [x] Offline joined execution tests and legacy regressions pass; every unsupported native capability stays disabled pending its own qualification. Final adapter/range review regressions and corrected-stack matrix pass; current-head hosted status is in TRACKER.
+
+<a id="p35"></a>
+## P35 — Unit funding, payouts and recovery
+
+Depends on: P34.
+
+Deliver: existing custody/funds/recovery machinery composed by execution unit,
+with explicit native funding/return evidence adapters. No new financial promises
+or automatic on-chain program proliferation. Evidence: ADR 0030, P15–P17/P21/
+P23B/P23C, unit registry backing aliases and each venue's verified rail contract.
+
+- [x] Exact escrow batches/routes and native funding ownership remain unit-bound; source handoff and qualified arrival never credit the customer twice.
+- [x] Unsupported or uncertain native credit/return remains pending and restricts dependent trading/payouts without cross-unit substitution.
+- [x] Normal/recovery payouts preserve shared paid counters, final reconciliation, fenced authority and segregated actual backing.
+- [x] Offline faults/partial movement/replay/wrong-unit/recovery tests pass; native rail gaps and approval requirements are explicit rather than mocked qualification. Final loaded-policy/discovery review regressions and corrected-stack matrix pass; current-head hosted status is in TRACKER.
+
+<a id="p36"></a>
+## P36 — Joined second-venue acceptance and qualification
+
+Depends on: P35.
+
+Deliver: reproducible SDK/service-to-journal-to-adapter acceptance for two units,
+plus bounded native/hardware qualification where separately approved and
+supported. Record offline completion separately from live integration completion.
+Evidence: W acceptance matrix, P22/P23 harnesses, native capability receipts.
+
+- [x] Joined lifecycle/adversarial fixtures cover admission, native preparation, partial fills, financial reconciliation, custody and recovery without independent balances. The SDK trading process, selected-adapter custody/recovery and existing carrier/SBF suites are complementary evidence, not one live financial round trip.
+- [x] Concurrency/restart/revocation/cross-unit/freshness failures preserve accounting and publication; cached projections never become authority.
+- [ ] Clean-checkout CI exercises all new offline tests without ignored research, wallets or external requests. The final clean tracked-source runner passes locally; hosted P36 results remain pending publication.
+- [ ] Approved native/changed-image hardware runs have exact source and cleanup receipts; blocked/deferred capabilities are named and never counted as qualified.
+
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
 

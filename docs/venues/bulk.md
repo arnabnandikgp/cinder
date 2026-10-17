@@ -22,6 +22,15 @@ apply; no new native, RPC, wallet, faucet or cloud run occurred in this slice.
 
 ## Evidence and source pins
 
+October 17 implementation update: P33–P36 add the opt-in shared-unit service,
+agent-only signing/read budgets, exact ordinary fill/fee postings and existing
+unit custody/recovery composition. [Joined acceptance](../implementation/UNIT-ACCEPTANCE.md)
+uses explicit synthetic native/collateral ports, not live qualification. BULK
+funding/returns and unsupported causal coverage remain disabled/unresolved.
+October 16's separately approved two unsigned public metadata GETs also returned
+origin 502; no private financial/RPC/AWS activity or new capability was established.
+The earlier assessment paragraphs retain their dated scope, not current code status.
+
 - Official client: [`56f6676611a0c05dbd187d406dced26168516070`](https://github.com/Bulk-trade/bulk-client/tree/56f6676611a0c05dbd187d406dced26168516070),
   committed 2026-10-14. Compared with historical research pin
   `2df898d7af1cf0625649896293a3137dc1d6de43`.

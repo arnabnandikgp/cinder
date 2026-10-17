@@ -5,7 +5,7 @@ use crate::{
     customer_deposit::Locator,
 };
 use cinder_journal::{
-    Backend, Journal, Protection,
+    controller::Controller as JournalController,
     escrow::Batch,
     model::{CommitId, PrivateBytes},
 };
@@ -133,10 +133,7 @@ pub(crate) fn id(locator: &Locator, domain: Domain) -> Result<CommitId, Error> {
     bytes.extend(&locator.signature);
     CommitId::new(openssl::sha::sha256(&bytes)).map_err(|_| Error)
 }
-pub(crate) fn recorded<B: Backend, P: Protection>(
-    j: &Journal<B, P>,
-    locator: &Locator,
-) -> Result<bool, Error> {
+pub(crate) fn recorded<J: JournalController>(j: &J, locator: &Locator) -> Result<bool, Error> {
     let id = id(locator, j.configuration().domain)?;
     let Some(receipt) = j.transaction_receipt(id) else {
         return Ok(false);
@@ -160,8 +157,8 @@ pub(crate) fn recorded<B: Backend, P: Protection>(
 /// Same authenticated RPC/code boundary as legacy ingress, but no initial cash
 /// posting. A refund already finalized when observed becomes terminal inventory.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn recognize<B: Backend, P: Protection>(
-    j: &mut Journal<B, P>,
+pub(crate) fn recognize<J: JournalController>(
+    j: &mut J,
     funding: &Controller,
     locator: &Locator,
     deposit: CustomerDeposit,

@@ -2,6 +2,28 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { manifest, validate } from "./check-acceptance.mjs";
+test("required unit evidence cannot disappear or be reassigned to another runner", () => {
+  const required = ["unit-sdk-joined", "unit-custody", "unit-recovery"];
+  for (const id of required) {
+    const missing = structuredClone(manifest);
+    missing.cases = missing.cases.filter(c => c.id !== id);
+    assert(validate(missing).includes(`Missing required case ${id}`), id);
+    for (const field of ["runner", "file", "test", "evidence", "requirements"]) {
+      const changed = structuredClone(manifest);
+      const entry = changed.cases.find(c => c.id === id);
+      assert(entry);
+      if (field === "runner") entry.runner = "browser";
+      if (field === "file") entry.file = "clients/private/tests/onboarding.test.ts";
+      if (field === "test") entry.test += "_renamed";
+      if (field === "evidence") entry.evidence = "local-sbf";
+      if (field === "requirements") entry.requirements = ["W01"];
+      assert(validate(changed).includes(`Changed required case ${id}`), `${id}/${field}`);
+    }
+  }
+  const missingAll = structuredClone(manifest);
+  missingAll.cases = missingAll.cases.filter(c => !required.includes(c.id));
+  assert(required.every(id => validate(missingAll).includes(`Missing required case ${id}`)));
+});
 test("manifest requires declarations, not stale comments, strings or longer identifiers", () => {
   for (const [id, stale] of [
     ["private-commands", "export async function runHttpRenamed() {}"],
@@ -9,6 +31,8 @@ test("manifest requires declarations, not stale comments, strings or longer iden
     ["private-commands", "// export async function runHttp() {}"],
     ["private-commands", "/*\nexport async function runHttp() {}\n*/"],
     ["private-commands", 'const stale = "runHttp";'],
+    ["unit-sdk-joined", "// test('joined SDK unit lifecycle preserves native attribution, shared revoke and restart without resend',()=>{});"],
+    ["unit-sdk-joined", "const name = 'joined SDK unit lifecycle preserves native attribution, shared revoke and restart without resend';"],
     [
       "differential",
       "// property_seeded_joined_ledger_matches_independent_reference_at_every_cut",
@@ -35,6 +59,10 @@ test("manifest requires declarations, not stale comments, strings or longer iden
         : readFileSync(new URL(`../${path}`, import.meta.url));
     assert(validate(manifest, read).includes(`Missing test ${id}`), stale);
   }
+});
+test('private joined acceptance must be discovered in the approved SDK test root',()=>{
+  const m=structuredClone(manifest),entry=m.cases.find(c=>c.id==='unit-sdk-joined');assert(entry);
+  entry.file='tools/web-channel/wrong.test.mjs';assert(validate(m).some(e=>e.includes('Invalid private source')));
 });
 test("tracked fixed-seed manifest traces all source families and portable scenarios", () =>
   assert.deepEqual(validate(manifest), []));

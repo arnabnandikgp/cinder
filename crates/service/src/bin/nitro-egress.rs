@@ -3,7 +3,7 @@ fn run() -> Result<(), cinder_service::Error> {
     use cinder_pacifica::execution::Origin;
     use cinder_service::{
         Error,
-        transport::{relay_chain, relay_egress, relay_native_capture, stop_on_stdin},
+        transport::{relay_bulk, relay_chain, relay_egress, relay_native_capture, stop_on_stdin},
         vsock::{Target, VsockListener},
     };
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -24,13 +24,14 @@ fn run() -> Result<(), cinder_service::Error> {
         "pacifica-mainnet" => Some((Origin::Mainnet, false)),
         "pacifica-testnet-ws" => Some((Origin::Testnet, true)),
         "pacifica-mainnet-ws" => Some((Origin::Mainnet, true)),
-        "solana-devnet" | "helius-devnet" => None,
+        "solana-devnet" | "helius-devnet" | "bulk-testnet" => None,
         _ => return Err(Error),
     };
     let listener = VsockListener::bind(port, cid)?;
     match origin {
         Some((origin, false)) => relay_egress(listener, origin, stop_on_stdin()),
         Some((origin, true)) => relay_native_capture(listener, origin, stop_on_stdin()),
+        None if route == "bulk-testnet" => relay_bulk(listener, stop_on_stdin()),
         None => relay_chain(
             listener,
             if route == "helius-devnet" {

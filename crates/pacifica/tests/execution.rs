@@ -52,6 +52,70 @@ fn gateway() -> Gateway {
 }
 
 #[test]
+fn selected_adapter_entrypoints_refuse_wrong_native_identity_without_mutation() {
+    for mismatch in 0..3 {
+        let t = Temp::new();
+        let mut p = profile();
+        p.config.customers.clear();
+        let g = Gateway::new(p.clone(), policy(), Zeroizing::new([7; 32]), 1).unwrap();
+        let mut u = cinder_journal::units::Descriptor {
+            id: UnitId::new([40; 32]).unwrap(),
+            environment: Origin::Testnet.commitment(),
+            native_account: [42; 32],
+            funding_wallet: [43; 32],
+            custody_config: [44; 32],
+            payout_vault: [45; 32],
+            key_policy: [46; 32],
+            ledger: p.config.clone(),
+        };
+        if mismatch == 0 {
+            u.native_account = [47; 32];
+        }
+        if mismatch == 1 {
+            u.environment = Origin::Mainnet.commitment();
+        }
+        let cfg =
+            cinder_journal::units::Configuration::new(p.config.domain, vec![u.clone()]).unwrap();
+        let mut j = cinder_journal::units::Journal::create(
+            cinder_journal::sqlite::SqliteBackend::create(&t.db).unwrap(),
+            FixtureProtection,
+            cfg,
+        )
+        .unwrap();
+        let head = j.head();
+        let mut selected = j.select(u.id).unwrap();
+        if mismatch < 2 {
+            assert!(g.activate(&mut selected, id(2), 10).is_err());
+            assert!(g.prepare_dispatch(&mut selected, dispatch(3, 10)).is_err());
+            assert!(g.reserve_read(&mut selected, id(3), 10, false).is_err());
+            assert!(observation::replay(&mut selected, &p).is_err());
+            assert!(
+                observation::ingest(
+                    &mut selected,
+                    &p,
+                    Message {
+                        kind: Kind::Disconnect,
+                        account: p.account.clone(),
+                        cursor: None,
+                        received_at: 10,
+                        body: "{}".into(),
+                    },
+                    id(4),
+                    10
+                )
+                .is_err()
+            );
+            assert_eq!(j.head(), head);
+        } else {
+            g.activate(&mut selected, id(2), 10).unwrap();
+            g.reserve_read(&mut selected, id(3), 10, false).unwrap();
+            observation::replay(&mut selected, &p).unwrap();
+            assert_ne!(j.head(), head);
+        }
+    }
+}
+
+#[test]
 fn read_only_gateway_retains_unknown_trading_and_refuses_all_dispatch_without_exposure() {
     let mut profile = profile();
     profile.fills = Level::Unknown;

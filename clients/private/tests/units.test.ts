@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
-import { signingMessage, intentDigest, unitSigningMessage, unitIntentDigest, signUnitRequest, decodeUnitResponse,
+import { signingMessage, intentDigest, unitSigningMessage, unitIntentDigest, signUnitRequest, decodeUnitResponse, decodeResponse, UnitClient,
   type UnitEnvelope, type Command } from '../src/index.ts';
 
 const id = (n:number) => new Uint8Array(32).fill(n);
@@ -22,6 +22,32 @@ function envelope(command:Command=commands[2],unit=40):UnitEnvelope {
 }
 const magic = Buffer.from('CINDER-API\0\x00\x01'), economicEnd = magic.length + 132, commandStart = economicEnd + 80;
 const hex = (b:Uint8Array) => Buffer.from(b).toString('hex');
+test('public browser entrypoint exports the explicit unit client',()=>{
+  const entry=readFileSync(new URL('../src/browser.ts',import.meta.url),'utf8');
+  assert.match(entry,/export\s*\{[^}]*\bUnitClient\b[^}]*\}\s*from\s*['"]\.\/index\.ts['"]/);
+});
+const wrap = (body:Uint8Array,unit=40) => new Uint8Array(Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x02'),Buffer.from(id(unit)),body]));
+const viewReply = () => new Uint8Array(Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x01\x00'),Buffer.from([0,0,0,0,0,0,0,1]),Buffer.alloc(64)]));
+
+test('UnitClient signs explicit unit on requests/updates and rejects legacy or different-unit replies without retry',async()=>{
+  let calls=0,seen:Uint8Array|undefined,reply=wrap(viewReply());
+  const channel={context:()=>({...domain,binding:id(8),expiresAt:100n}),async exchange(wire:Uint8Array){calls++;seen=wire.slice();return reply.slice();}};
+  const client=new UnitClient(channel,signer,{domain,account:id(1),policy:1,unit:id(40)});
+  const input={id:id(40),epoch:1n,expiresAt:90n,command:{kind:'view'} as Command};
+  assert.equal((await client.request(input)).kind,'view');
+  assert.ok(seen);assert.equal(seen[magic.length-1],2);assert.deepEqual(seen.subarray(economicEnd,economicEnd+32),id(40));
+  reply=wrap(viewReply(),50);await assert.rejects(client.request(input));assert.equal(calls,2);
+  reply=viewReply();await assert.rejects(client.request(input));assert.equal(calls,3);
+  reply=wrap(new Uint8Array(Buffer.from('CINDER-API-REPLY\0\x00\x01\x02\x04')));
+  assert.deepEqual(await client.request(input),{kind:'error',code:'unavailable'});assert.equal(calls,4);
+});
+
+test('recorded-only receipt extension is accepted only in an explicit unit envelope',()=>{
+  const body=Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x01\x01'),Buffer.from(id(40)),Buffer.from(id(41)),Buffer.from([0,0,0,1,7]),Buffer.alloc(58)]);
+  const r=decodeUnitResponse(wrap(body),id(40)).response;
+  assert.equal(r.kind,'receipt');if(r.kind!=='receipt')throw Error();assert.equal(r.outcome,'recorded');
+  assert.throws(()=>decodeResponse(body));
+});
 
 test('v2 unit protocol matches manual extensions of shared Rust vectors with independent Node signatures',async()=>{
   const vectors=readFileSync(new URL('../../../crates/api/tests/fixtures/vectors.tsv',import.meta.url),'utf8').trim().split('\n');

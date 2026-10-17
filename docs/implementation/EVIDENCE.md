@@ -7,6 +7,26 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Venue-directed custody revision — 2026-10-15
 
+P36 adds [joined two-unit acceptance](UNIT-ACCEPTANCE.md): actual private SDK
+signatures, Runtime/API admission, one protected journal and independently
+verified BULK/Pacifica native signatures under bounded synthetic external ports.
+Its feature-gated private IPC is not a confidential carrier, funding rail or
+changed-image hardware run. Mandatory declaration/execution guards retain the
+SDK and selected custody/recovery cases. P35's reviewed funding-policy pin and
+loaded discovery validation use new-history revision 6, rejecting 1–5 without
+migration. The [qualification proposal](UNIT-QUALIFICATION-PROPOSAL.md) is not
+live authority; unsupported BULK funding and consumed two-unit release manifest
+remain gates. Exact source/checks/review receipts belong in TRACKER.
+
+P33–P35 extend the opt-in unit path: witnessed private reads/UnitClient (ADR 0039),
+selected native execution/reads/ordinary fills (ADR 0040), and canonical owner
+custody discovery, unit funds composition and shared recovery cutover (ADR 0041).
+New unit revisions require empty histories, not shipping v1 migration. Native
+signatures/owner proofs use disposable synthetic identities; native financial
+and hardware qualification remain separate. October 16's approved refresh used
+two unsigned BULK public metadata GETs, both origin 502, and establishes no new
+native private API/funding capability. Exact checks/PR receipts live in TRACKER.
+
 P32 joins new or recorded signed v2 operations to unit-local financial controls
 in one accepted append. The existing exact engine supplies risk, holds, payout
 queue and leverage semantics; explicit synthetic policy is not calibrated

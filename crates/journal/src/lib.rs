@@ -1,6 +1,7 @@
 //! Atomic private persistence. No native transport, signer or deployed witness.
 
 pub mod collateral;
+pub mod controller;
 pub mod encrypted;
 pub mod escrow;
 pub mod funds;

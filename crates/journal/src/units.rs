@@ -1,11 +1,14 @@
-//! Opt-in, new-history unit composition. One accepted state/head, no dispatch.
+//! Opt-in, new-history unit composition. One accepted state/head with sealed
+//! component controllers; native qualification remains adapter-owned.
 //!
 //! This does not migrate the shipping single-unit journal or authenticate a
 //! caller. A trusted controller must qualify every supplied fact/authorization.
 
 pub mod api;
 mod codec;
-mod store;
+mod controller;
+pub use controller::Selected;
+pub(crate) mod store;
 pub use store::{Committed, Journal};
 
 use crate::{Error, Head, model, onboarding, orders, wire};
@@ -30,7 +33,9 @@ pub struct Descriptor {
     pub custody_config: [u8; 32],
     /// Unit-exclusive program-controlled return/payout vault.
     pub payout_vault: [u8; 32],
-    /// Commitment to separate native key-role instances and release policy.
+    /// For a funded unit, the exact loaded funding-controller release commitment
+    /// (roles, route, epoch and limits). Native execution has a separate adapter
+    /// commitment; this field is not a complete deployment manifest.
     pub key_policy: [u8; 32],
     /// Existing exact units, source scopes, policy and empty initial books.
     pub ledger: Config,
@@ -166,6 +171,28 @@ impl fmt::Debug for Route {
 /// New-version mutation; no legacy implicit/default unit routing.
 #[derive(Clone, PartialEq, Eq)]
 pub enum Change {
+    /// Owner bootstrap authenticated by the purpose-separated API controller;
+    /// retain original proof for startup verification, never a financial credit.
+    EnrollOwner {
+        /// Qualified owner's key.
+        wallet: [u8; 32],
+        /// Canonical recipient for every configured unit.
+        recipients: Vec<Recipient>,
+        /// Original owner-signed private bootstrap bytes.
+        proof: model::PrivateBytes,
+    },
+    /// Trusted operator cutover of every unit under one head. Retained fence
+    /// binds independently verified native/custody/writer fencing, not a heartbeat.
+    BeginRecovery {
+        /// Exact versions in immutable registry order; all units are required.
+        versions: Vec<(UnitId, u64)>,
+        /// Distinct recovery operator's qualified authority epoch.
+        authority_epoch: u64,
+        /// Bounded recovery dispatch deadline, not native settlement proof.
+        valid_until: u64,
+        /// Authenticated cutover evidence commitment, never a host assertion.
+        fence: [u8; 32],
+    },
     /// Trusted API controller's authenticated record; never financial admission.
     Api(Box<api::Record>),
     /// Trusted controller's original record and one joined financial decision.
@@ -306,6 +333,11 @@ impl State {
     pub fn logical_time(&self) -> u64 {
         self.now
     }
+    /// Every component accepted the same atomic recovery cutover. This is not
+    /// proof of native key revocation or permission to publish an on-chain root.
+    pub fn in_recovery(&self) -> bool {
+        self.units.iter().all(|(_, s)| s.in_recovery())
+    }
     /// Immutable private API records in this accepted state; not fresh authority.
     pub fn api_records(&self) -> &[api::Accepted] {
         &self.api
@@ -321,12 +353,47 @@ impl State {
         }
         let mut s = self.clone();
         let receipt = match &tx.change {
+            Change::BeginRecovery {
+                versions,
+                authority_epoch,
+                valid_until,
+                fence,
+            } => {
+                if versions.len() != s.units.len() || s.units.iter().any(|(_, s)| s.in_recovery()) {
+                    return Err(Error::Invalid);
+                }
+                for ((unit, state), (expected_unit, expected_version)) in
+                    s.units.iter_mut().zip(versions)
+                {
+                    if unit != expected_unit {
+                        return Err(Error::Invalid);
+                    }
+                    let inner = shared_proposal(
+                        tx,
+                        vec![model::Control::Recovery(crate::recovery::Action::Begin {
+                            expected_version: *expected_version,
+                            authority_epoch: *authority_epoch,
+                            valid_until: *valid_until,
+                            fence: *fence,
+                        })],
+                    );
+                    let (next, result) = state.advance(&inner)?;
+                    if result.controls.is_some() {
+                        return Err(Error::Invalid);
+                    }
+                    *state = next;
+                }
+                Receipt::Shared
+            }
             Change::Api(record) => {
                 s.capture_api(tx, record)?;
                 Receipt::Api
             }
             Change::Admit(admission) => s.admit_api(tx, admission)?,
-            Change::Enroll { wallet, recipients } => {
+            Change::Enroll { wallet, recipients }
+            | Change::EnrollOwner {
+                wallet, recipients, ..
+            } => {
                 if *wallet == [0; 32]
                     || recipients.len() != s.units.len()
                     || s.customers.len() >= wire::MAX_ITEMS
@@ -467,8 +534,114 @@ impl State {
         tx: &model::Transaction,
     ) -> Result<Option<Vec<Route>>, Error> {
         let mut routes = self.routes.clone();
+        let owns = |routes: &[Route], request| {
+            routes
+                .iter()
+                .any(|r| r.unit == unit && r.request == request)
+                || self.admitted(unit, request)
+        };
+        let current = self.unit(unit).ok_or(Error::Invalid)?;
         for control in &tx.controls {
             match control {
+                model::Control::Escrow(action) => {
+                    use crate::escrow::Action;
+                    match action {
+                        Action::Pending(batch) => {
+                            if !self.pin_route(unit, batch.request, control, &mut routes)? {
+                                return Ok(None);
+                            }
+                        }
+                        Action::Fund {
+                            request, intent, ..
+                        }
+                        | Action::Recall {
+                            request, intent, ..
+                        } => {
+                            if !owns(&routes, *request)
+                                || !self.pin_route(unit, intent.request, control, &mut routes)?
+                            {
+                                return Ok(None);
+                            }
+                        }
+                        Action::Prepare { attempt, .. }
+                        | Action::Failed(attempt)
+                        | Action::Unsent(attempt)
+                        | Action::Handoff { attempt, .. } => {
+                            if !owns(&routes, attempt.request) {
+                                return Ok(None);
+                            }
+                        }
+                        Action::Cancel(request)
+                        | Action::Refund(request)
+                        | Action::Finish(request)
+                        | Action::FinishReturn(request) => {
+                            // Pending+Refund may be one observed inventory transition.
+                            if !routes
+                                .iter()
+                                .any(|r| r.unit == unit && r.request == *request)
+                            {
+                                return Ok(None);
+                            }
+                        }
+                    }
+                }
+                model::Control::Funds(action) => {
+                    use crate::funds::Action;
+                    match action {
+                        Action::RecoveryAccept { intent, .. } => {
+                            if !self.in_recovery()
+                                || !self.pin_route(unit, intent.request, control, &mut routes)?
+                            {
+                                return Ok(None);
+                            }
+                        }
+                        Action::Prepare { attempt, .. } => {
+                            if !owns(&routes, attempt.request) {
+                                return Ok(None);
+                            }
+                        }
+                        Action::CancelUnexposed(request) | Action::Finalize(request) => {
+                            if !owns(&routes, *request) {
+                                return Ok(None);
+                            }
+                        }
+                        Action::Freeze | Action::NativeCreditReady(_) => (),
+                        // Ordinary acceptance requires the signed API decision or
+                        // original escrow Fund; demo assumptions cannot activate units.
+                        Action::Accept { .. }
+                        | Action::FlatAccept { .. }
+                        | Action::ConfirmDemoDeposit(_) => return Ok(None),
+                    }
+                }
+                model::Control::Recovery(crate::recovery::Action::Seal { .. })
+                    if self.in_recovery() => {}
+                model::Control::Order(orders::Action::Prepare { attempt }) => {
+                    if !self.admitted(unit, attempt.request) {
+                        return Ok(None);
+                    }
+                }
+                model::Control::Order(orders::Action::Release { request }) => {
+                    if !self.admitted(unit, *request) {
+                        return Ok(None);
+                    }
+                }
+                model::Control::Expose(attempt) => {
+                    let prepared_here = tx.controls.iter().any(|c| matches!(c,
+                        model::Control::Escrow(crate::escrow::Action::Prepare {attempt:key,..})
+                        | model::Control::Funds(crate::funds::Action::Prepare {attempt:key,..}) if key==attempt));
+                    let routed = owns(&routes, attempt.request)
+                        && (prepared_here
+                            || current.attempts().iter().any(|a| {
+                                a.key == *attempt
+                                    && matches!(
+                                        a.kind,
+                                        model::AttemptKind::Funds | model::AttemptKind::Escrow
+                                    )
+                            }));
+                    if !self.admitted(unit, attempt.request) && !routed {
+                        return Ok(None);
+                    }
+                }
                 model::Control::Reserve { request, .. } => {
                     if request.domain != self.config.domain
                         || !self.customers.iter().any(|c| c.account == request.account)
@@ -523,6 +696,42 @@ impl State {
             }
         }
         Ok(Some(routes))
+    }
+    fn pin_route(
+        &self,
+        unit: UnitId,
+        request: RequestKey,
+        control: &model::Control,
+        routes: &mut Vec<Route>,
+    ) -> Result<bool, Error> {
+        if request.domain != self.config.domain
+            || !self.customers.iter().any(|c| c.account == request.account)
+            || self.api.iter().any(|a| a.record.request == request)
+        {
+            return Ok(false);
+        }
+        let reservation_digest = codec::reservation(control)?;
+        if let Some(old) = routes.iter().find(|r| r.request == request) {
+            return Ok(old.unit == unit && old.reservation_digest == reservation_digest);
+        }
+        if routes.len() >= wire::MAX_ITEMS {
+            return Err(Error::Limit);
+        }
+        routes.push(Route {
+            request,
+            unit,
+            reservation_digest,
+        });
+        Ok(true)
+    }
+    fn admitted(&self, unit: UnitId, request: RequestKey) -> bool {
+        self.api
+            .iter()
+            .any(|a| a.record.unit == unit && a.record.request == request)
+            && self
+                .decisions
+                .iter()
+                .any(|d| d.request == request && d.receipt.controls.is_none())
     }
     fn advance_authority(
         &mut self,

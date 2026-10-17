@@ -5,7 +5,7 @@ use crate::{
     execution::{Dispatch, Gateway, Outbound, Reply, Transport},
     profile::*,
 };
-use cinder_journal::{Backend, Journal, Protection, funds, model::*};
+use cinder_journal::{controller::Controller as JournalController, funds, model::*};
 use cinder_kernel::{
     amounts::QuoteAtoms,
     codec::Canonical,
@@ -501,12 +501,37 @@ impl std::fmt::Debug for Controller {
     }
 }
 impl Controller {
+    /// Bind the existing funding signer/custody route to one immutable component.
+    /// Unit mode requires exact-batch composition, not the old common-vault demo.
+    pub fn unit_binding(&self, unit: &cinder_journal::units::Descriptor) -> Result<(), Error> {
+        self.profile.unit_binding(unit)?;
+        if self.escrow.is_none()
+            || self.release_commitment(&unit.ledger)? != unit.key_policy
+            || self.route.broker != unit.funding_wallet
+            || self.route.config != unit.custody_config
+            || self.route.vault != unit.payout_vault
+            || self.route.config
+                != chain::pda(
+                    self.route.program,
+                    &[
+                        b"cinder_vault",
+                        &self.route.domain,
+                        &self.route.pool,
+                        &self.route.mint,
+                    ],
+                )?
+            || self.route.vault != chain::pda(self.route.program, &[b"tokens", &self.route.config])?
+        {
+            return Err(Error::Qualification);
+        }
+        Ok(())
+    }
     /// Forecast a caller's qualified working-collateral target. The financial risk
     /// controller selects the target; this method does not derive leverage from
     /// notional or allow trading against the forecast.
-    pub fn funding_need<B: Backend, P: Protection>(
+    pub fn funding_need<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         at: u64,
         target: u64,
     ) -> Result<FundingNeed, Error> {
@@ -751,9 +776,9 @@ impl Controller {
         );
         Ok(PrivateBytes::new(bytes)?)
     }
-    fn tx<B: Backend, P: Protection>(
+    fn tx<J: JournalController>(
         &self,
-        j: &Journal<B, P>,
+        j: &J,
         id: CommitId,
         at: u64,
         record: Record,
@@ -769,14 +794,13 @@ impl Controller {
             controls: vec![],
         })
     }
-    fn history<B: Backend, P: Protection>(
-        &self,
-        j: &mut Journal<B, P>,
-        at: u64,
-    ) -> Result<History, Error> {
+    fn history<J: JournalController>(&self, j: &mut J, at: u64) -> Result<History, Error> {
         j.verified_state()?;
         if j.configuration() != &self.profile.config {
             return Err(Error::Qualification);
+        }
+        if let Some(unit) = j.descriptor() {
+            self.unit_binding(unit)?;
         }
         let mut result = History::default();
         for (tx, receipt) in j.transactions_with_receipts() {
@@ -892,18 +916,14 @@ impl Controller {
             })
     }
     /// Read whether this exact route is installed in verified journal history.
-    pub fn bound<B: Backend, P: Protection>(
-        &self,
-        j: &mut Journal<B, P>,
-        at: u64,
-    ) -> Result<bool, Error> {
+    pub fn bound<J: JournalController>(&self, j: &mut J, at: u64) -> Result<bool, Error> {
         Ok(self.history(j, at)?.bound)
     }
     /// Trusted route install. It fences native risk until source-qualified setup;
     /// contract changes cannot reinterpret a prior operation or reset its identity.
-    pub fn bind<B: Backend, P: Protection>(
+    pub fn bind<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
     ) -> Result<(), Error> {
@@ -918,9 +938,9 @@ impl Controller {
     }
     /// Record actual settings even when they fail. Fresh-account deposit-first
     /// lending exceptions are NOT automatically promoted from research permission.
-    pub fn observe_setup<B: Backend, P: Protection>(
+    pub fn observe_setup<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         setup: Setup,
@@ -958,9 +978,9 @@ impl Controller {
     /// Prepare an already accepted, authenticated original ingress intent. This
     /// does not approve a new intent, create assets, expose a signature or send.
     /// The common journal still checks current authority, liquidity and risk.
-    pub fn prepare_ingress<B: Backend, P: Protection>(
+    pub fn prepare_ingress<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         dispatch: Dispatch,
     ) -> Result<Rail, Error> {
         let history = self.history(j, dispatch.at)?;
@@ -969,9 +989,9 @@ impl Controller {
         }
         self.prepare_ingress_inner(j, dispatch)
     }
-    fn prepare_ingress_inner<B: Backend, P: Protection>(
+    fn prepare_ingress_inner<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         dispatch: Dispatch,
     ) -> Result<Rail, Error> {
         if j.transaction(dispatch.commit).is_some() {
@@ -1022,18 +1042,18 @@ impl Controller {
         checked(j.commit(tx)?)?;
         Ok(rail)
     }
-    fn plan<B: Backend, P: Protection>(
+    fn plan<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         dispatch: Dispatch,
         rail: Rail,
         counters: Counters,
     ) -> Result<Plan, Error> {
         self.plan_inner(j, dispatch, rail, counters, None)
     }
-    fn plan_inner<B: Backend, P: Protection>(
+    fn plan_inner<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         dispatch: Dispatch,
         rail: Rail,
         counters: Counters,
@@ -1151,9 +1171,9 @@ impl Controller {
     /// Persist and expose one unsigned physical-rail capability. The receiving
     /// chain port must persist exact signed bytes before submission; after restart
     /// the plan is reconciliation-only, never permission to build a second wire.
-    pub fn expose_chain<B: Backend, P: Protection>(
+    pub fn expose_chain<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         dispatch: Dispatch,
         rail: Rail,
         counters: Counters,
@@ -1164,9 +1184,9 @@ impl Controller {
         let plan = self.plan(j, dispatch, rail, counters)?;
         self.expose_chain_plan(j, dispatch, plan)
     }
-    fn expose_chain_plan<B: Backend, P: Protection>(
+    fn expose_chain_plan<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         dispatch: Dispatch,
         plan: Plan,
     ) -> Result<ChainAction, Error> {
@@ -1191,9 +1211,9 @@ impl Controller {
     }
     /// Sign/send one native withdrawal against an already prepared funds mandate.
     /// HTTP replies are retained but never post cash or release commitments.
-    pub fn withdraw<B: Backend, P: Protection, T: Transport>(
+    pub fn withdraw<J: JournalController, T: Transport>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         gateway: &Gateway,
         dispatch: Dispatch,
         transport: &mut T,
@@ -1209,9 +1229,9 @@ impl Controller {
     }
     /// Validate, reserve capacity, durably expose and sign one original native
     /// withdrawal under the mutation owner. Send the request outside that owner.
-    pub fn prepare_withdrawal<B: Backend, P: Protection>(
+    pub fn prepare_withdrawal<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         gateway: &Gateway,
         dispatch: Dispatch,
     ) -> Result<(Outbound, WithdrawalCompletion), Error> {
@@ -1280,9 +1300,9 @@ impl Controller {
     }
     /// Retain a correlated actual reply at the current head, including after a
     /// concurrent revoke. ACK retention is not native debit or payment finality.
-    pub fn complete_withdrawal<B: Backend, P: Protection>(
+    pub fn complete_withdrawal<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         gateway: &Gateway,
         completion: WithdrawalCompletion,
         reply: Reply,
@@ -1354,9 +1374,9 @@ impl Controller {
     /// Rebuild the original request -> batch binding from the durably retained
     /// authenticated response. This neither posts cash nor authorizes resending.
     /// A missing/failed/malformed reply stays unresolved, including after restart.
-    pub fn withdrawal_acknowledgment<B: Backend, P: Protection>(
+    pub fn withdrawal_acknowledgment<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         attempt: AttemptKey,
         at: u64,
     ) -> Result<Option<evidence::WithdrawalAcknowledgment>, Error> {
@@ -1392,9 +1412,9 @@ impl Controller {
     /// Correlate an authenticated transfer event to an acknowledged original
     /// request. No source frontier, terminal debit or finalized payment is created.
     /// A changed fee remains visible in the observation, not overwritten by the ACK.
-    pub fn linked_withdrawal_transfer<B: Backend, P: Protection>(
+    pub fn linked_withdrawal_transfer<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         attempt: AttemptKey,
         message: evidence::TransferMessage<'_>,
     ) -> Result<evidence::TransferObservation, Error> {
@@ -1421,9 +1441,9 @@ impl Controller {
     /// Correlate an authenticated deposit event to the original, successfully
     /// finalized chain deposit. A partial/whole amount is still an observation:
     /// this does not infer final credit totals, fees or a native causal frontier.
-    pub fn linked_deposit_transfer<B: Backend, P: Protection>(
+    pub fn linked_deposit_transfer<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         attempt: AttemptKey,
         message: evidence::TransferMessage<'_>,
     ) -> Result<evidence::TransferObservation, Error> {
@@ -1452,9 +1472,9 @@ impl Controller {
         }
         Ok(observation)
     }
-    fn existing<B: Backend, P: Protection>(
+    fn existing<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         attempt: AttemptKey,
         at: u64,
     ) -> Result<Plan, Error> {
@@ -1466,9 +1486,9 @@ impl Controller {
     }
     /// Read the original unsigned contract for verification/reconciliation only.
     /// This is not a delivery capability and cannot authorize a second signed wire.
-    pub fn original_chain_contract<B: Backend, P: Protection>(
+    pub fn original_chain_contract<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         attempt: AttemptKey,
         at: u64,
     ) -> Result<PrivateBytes, Error> {
@@ -1485,9 +1505,9 @@ impl Controller {
     }
     /// Locate and re-verify the one originally persisted wire. After restart
     /// this is evidence only, never a ChainDelivery or authority to sign again.
-    pub fn retained_wire<B: Backend, P: Protection>(
+    pub fn retained_wire<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         attempt: AttemptKey,
         at: u64,
     ) -> Result<Option<VerifiedWire>, Error> {
@@ -1522,17 +1542,17 @@ impl Controller {
     /// Recheck current journal authority and the retained physical plan before
     /// local signature creation after unlocked simulation I/O. This grants no
     /// send or replacement-wire capability; persist_wire repeats these checks.
-    pub fn validate_chain_signing<B: Backend, P: Protection>(
+    pub fn validate_chain_signing<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         action: &ChainAction,
         at: u64,
     ) -> Result<(), Error> {
         self.signing_plan(j, action, at).map(|_| ())
     }
-    fn signing_plan<B: Backend, P: Protection>(
+    fn signing_plan<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         action: &ChainAction,
         at: u64,
     ) -> Result<Plan, Error> {
@@ -1565,9 +1585,9 @@ impl Controller {
     /// Persist the verified ORIGINAL signed chain wire before any submission.
     /// Lost/uncertain commits return no delivery. Restart may only reconcile the
     /// retained wire/signature/operation, not create a different blockhash/signature.
-    pub fn persist_wire<B: Backend, P: Protection>(
+    pub fn persist_wire<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         action: ChainAction,
@@ -1615,9 +1635,9 @@ impl Controller {
     /// Close an expired physical plan only when verified journal history proves
     /// no send capability was ever retained. Expiry alone cannot close a retained
     /// wire, and this rule never applies to native HTTP withdrawals.
-    pub fn close_unsent_chain<B: Backend, P: Protection>(
+    pub fn close_unsent_chain<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         attempt: AttemptKey,
@@ -1777,9 +1797,9 @@ impl Controller {
     }
     /// Record actual finalized custody effects atomically. Native deposit posts only
     /// broker debit; a later independently correlated venue credit completes it.
-    pub fn observe_chain<B: Backend, P: Protection>(
+    pub fn observe_chain<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         r: ChainReceipt,
@@ -1943,9 +1963,9 @@ impl Controller {
     }
     /// Apply operation-linked actual credit, never aggregate balance/ACK credit.
     /// Partial credits retain the remaining transit and block native new risk.
-    pub fn observe_credit<B: Backend, P: Protection>(
+    pub fn observe_credit<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         c: Credit,
@@ -2082,9 +2102,9 @@ impl Controller {
     }
     /// Reconcile the ORIGINAL withdrawn operation after timeout/restart. Fees
     /// follow P08's attributed house-cost rules; a native batch nonce is no credit.
-    pub fn observe_withdrawal<B: Backend, P: Protection>(
+    pub fn observe_withdrawal<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         id: CommitId,
         at: u64,
         w: Withdrawal,
@@ -2169,11 +2189,7 @@ impl Controller {
     }
     /// Inspect real residuals after interruption/partial return/cleanup, never
     /// write an unexplained balancing amount or presume transit has arrived.
-    pub fn residuals<B: Backend, P: Protection>(
-        &self,
-        j: &mut Journal<B, P>,
-        at: u64,
-    ) -> Result<Residuals, Error> {
+    pub fn residuals<J: JournalController>(&self, j: &mut J, at: u64) -> Result<Residuals, Error> {
         let history = self.history(j, at)?;
         let state = j.state()?;
         let ledger = state.ledger();

@@ -99,6 +99,7 @@ pub struct PreparedReply {
 pub(crate) enum Prepared {
     Immediate(PrivateBytes),
     Accepted(crate::runtime::ReadCandidate),
+    Unit(crate::units::ReadCandidate),
 }
 impl PreparedReply {
     pub(crate) fn immediate(bytes: PrivateBytes) -> Self {
@@ -166,7 +167,7 @@ pub trait Handler: Send + Sync {
     ) -> Result<Option<PrivateBytes>, Error> {
         match prepared.inner {
             Prepared::Immediate(reply) => Ok(Some(reply)),
-            Prepared::Accepted(_) => Err(Error),
+            Prepared::Accepted(_) | Prepared::Unit(_) => Err(Error),
         }
     }
 }
@@ -591,6 +592,16 @@ pub fn relay_egress(
 ) -> Result<(), Error> {
     let host = crate::egress::host(origin);
     // Fail fast at startup, but do not retain an address beyond that check.
+    first_ipv4((host, 443).to_socket_addrs()?)?;
+    relay_socket(listener, || connect_https(host), stop, RelayKind::Egress)
+}
+/// Fixed BULK paper-testnet tunnel. No caller-provided hostname, wallet,
+/// plaintext request, arbitrary proxy or implicit mainnet route.
+pub fn relay_bulk(
+    listener: crate::vsock::VsockListener,
+    stop: Arc<AtomicBool>,
+) -> Result<(), Error> {
+    let host = "exchange-api.bulk.trade";
     first_ipv4((host, 443).to_socket_addrs()?)?;
     relay_socket(listener, || connect_https(host), stop, RelayKind::Egress)
 }

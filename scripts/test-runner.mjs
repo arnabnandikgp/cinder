@@ -114,7 +114,9 @@ export async function nodeSuite(suite, { pattern, cwd, env } = {}) {
                 `${c.prefix ?? (c.id === "normal" ? "P22" : "P21")} ${carrier} ${c.test}`,
             ),
           ).filter(name=>!pattern||new RegExp(pattern).test(name))
-      : [];
+      : suite === 'private'
+        ? manifest.cases.filter(c=>c.runner==='private').map(c=>c.test).filter(name=>!pattern||new RegExp(pattern).test(name))
+        : [];
   await checked(
     process.execPath,
     [

@@ -45,7 +45,18 @@ impl Authorizer {
         now: u64,
     ) -> Result<Decided, Error> {
         let history = History::load(journal, self)?;
-        let checked = self.check_inner(journal, channel, bytes, &history, now, false)?;
+        self.admit_at(journal, channel, bytes, admission, now, &history)
+    }
+    pub(super) fn admit_at<B: Backend, P: Protection>(
+        &self,
+        journal: &mut units::Journal<B, P>,
+        channel: &impl ConfidentialChannel,
+        bytes: &PrivateBytes,
+        admission: &impl crate::Admission,
+        now: u64,
+        history: &History,
+    ) -> Result<Decided, Error> {
+        let checked = self.check_inner(journal, channel, bytes, history, now, false)?;
         if checked.head() != history.head {
             return Err(Error::Unavailable);
         }
@@ -92,7 +103,7 @@ impl Authorizer {
             .ok_or(Error::Unavailable)?;
         // An owner recovering an agent's staged request must still honor its
         // original scope/expiry/budget, rather than turn it into an owner order.
-        original_authority(original, &history, owner.wallet, now)?;
+        original_authority(original, history, owner.wallet, now)?;
         if !matches!(original.body.command, Command::Cancel { .. })
             && !state
                 .unit(original.unit)
@@ -427,12 +438,12 @@ fn control(
 
 /// Reinterpret trusted journal joins before they supply grants/financial history.
 /// Replay verifies engine decisions; this checks original API semantics too.
-pub(super) fn validate<B: Backend, P: Protection>(
-    journal: &units::Journal<B, P>,
+pub(super) fn validate<'a>(
+    state: &units::State,
+    transactions: impl Iterator<Item = (&'a units::Transaction, &'a units::Receipt)>,
     history: &History,
 ) -> Result<(), Error> {
-    let state = journal.state().map_err(|_| Error::Unavailable)?;
-    for (tx, _) in journal.transactions().map_err(|_| Error::Unavailable)? {
+    for (tx, _) in transactions {
         let units::Change::Admit(a) = &tx.change else {
             continue;
         };

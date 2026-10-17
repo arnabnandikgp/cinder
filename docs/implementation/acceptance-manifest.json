@@ -23,6 +23,30 @@
   },
   "cases": [
     {
+      "id": "unit-sdk-joined",
+      "runner": "private",
+      "file": "clients/private/tests/units-process.test.ts",
+      "test": "joined SDK unit lifecycle preserves native attribution, shared revoke and restart without resend",
+      "requirements": ["W01", "W02", "W03", "W06", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "unit-custody",
+      "runner": "workspace",
+      "file": "crates/journal/tests/unit_funding.rs",
+      "test": "exact_batch_sweep_and_refund_are_exclusive_and_cannot_move_to_another_unit",
+      "requirements": ["W03", "W04", "V01", "V09"],
+      "evidence": "synthetic"
+    },
+    {
+      "id": "unit-recovery",
+      "runner": "workspace",
+      "file": "crates/pacifica/tests/unit_funding.rs",
+      "test": "unit_recovery_reuses_final_backing_and_lifetime_paid_counters_not_another_units_observation",
+      "requirements": ["W04", "W05", "V08"],
+      "evidence": "synthetic"
+    },
+    {
       "id": "onboarding",
       "prefix": "P25",
       "runner": "vault",
@@ -242,6 +266,8 @@
     }
   ],
   "notQualified": [
+    "bulk-native-funding-and-return-rails",
+    "live-two-unit-release-manifest-and-native-authority",
     "live-native-causal-completeness",
     "current-nitro-image",
     "independent-freshness-and-object-stores",

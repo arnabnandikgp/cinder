@@ -238,8 +238,8 @@ struct Scan {
     requests: Vec<Metadata>,
     replies: Vec<Archive>,
 }
-fn scan<B: Backend, P: Protection>(
-    j: &mut Journal<B, P>,
+fn scan<J: JournalController>(
+    j: &mut J,
     attempt: AttemptKey,
     binding: [u8; 32],
 ) -> Result<Scan, Error> {
@@ -360,9 +360,9 @@ impl Controller {
     /// Select the unique existing original deposit for the measured scheduler.
     /// Missing setup/plan/finality waits without I/O; conflicting history refuses.
     /// This never creates an intent, exposes a transfer or grants signing authority.
-    pub fn demo_deposit_candidate<B: Backend, P: Protection>(
+    pub fn demo_deposit_candidate<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         policy: &Policy,
         at: u64,
@@ -412,9 +412,9 @@ impl Controller {
         self.demo_original(j, policy, binding, attempt, at)?;
         Ok(Some(attempt))
     }
-    fn demo_original<B: Backend, P: Protection>(
+    fn demo_original<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         policy: &Policy,
         binding: [u8; 32],
         attempt: AttemptKey,
@@ -460,9 +460,9 @@ impl Controller {
     }
     /// Prepare one bounded read; no loop, sleep, socket or money-movement retry.
     /// All cadence/page/budget state is rebuilt from the same durable journal.
-    pub fn prepare_demo_deposit_poll<B: Backend, P: Protection>(
+    pub fn prepare_demo_deposit_poll<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         policy: &Policy,
         p: Poll,
@@ -573,9 +573,9 @@ impl Controller {
     /// Atomically post the full original credit and its explicit weaker closure.
     /// Only source-authenticated retained GET evidence is eligible at this port.
     /// No balance-only attribution, arbitrary cut, readiness or recovery grant.
-    pub fn confirm_demo_deposit<B: Backend, P: Protection>(
+    pub fn confirm_demo_deposit<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         g: &Gateway,
         policy: &Policy,
         attempt: AttemptKey,

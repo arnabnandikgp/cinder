@@ -90,6 +90,28 @@ pub struct Profile {
     pub perp_tag: u64,
 }
 impl Profile {
+    /// Exact physical/environment binding for a shared execution unit. Native
+    /// snapshots cannot select another account under the same Cinder source ID.
+    pub fn unit_binding(&self, unit: &cinder_journal::units::Descriptor) -> Result<(), Error> {
+        self.commitment()?;
+        let native = bs58::decode(&self.account)
+            .into_vec()
+            .map_err(|_| Error::Qualification)?;
+        let environment = if self.environment == crate::execution::Origin::Testnet.url() {
+            crate::execution::Origin::Testnet
+        } else if self.environment == crate::execution::Origin::Mainnet.url() {
+            crate::execution::Origin::Mainnet
+        } else {
+            return Err(Error::Qualification);
+        };
+        if self.config != unit.ledger
+            || native.as_slice() != unit.native_account
+            || environment.commitment() != unit.environment
+        {
+            return Err(Error::Qualification);
+        }
+        Ok(())
+    }
     /// Validate bounded mapping and bind every field used by normalization.
     pub fn commitment(&self) -> Result<[u8; 32], Error> {
         if self.revision == 0

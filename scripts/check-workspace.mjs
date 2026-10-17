@@ -19,9 +19,9 @@ const allowed = new Map([
   ['cinder-journal', ['cinder-kernel:normal', 'rusqlite:normal', 'sha2:normal', 'chacha20poly1305:normal', 'zeroize:normal']],
   ['cinder-pacifica', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'ed25519-dalek:normal', 'bs58:normal', 'zeroize:normal']],
   ['cinder-api', ['cinder-kernel:normal', 'cinder-journal:normal', 'sha2:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
-  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'cinder-web-channel:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal', 'serde:normal', 'serde_json:normal', 'base64:normal', 'aws-sigv4:normal', 'aws-credential-types:normal', 'tungstenite:normal', 'log:normal']],
+  ['cinder-service', ['cinder-kernel:normal', 'cinder-journal:normal', 'cinder-api:normal', 'cinder-pacifica:normal', 'cinder-bulk:normal', 'cinder-web-channel:normal', 'openssl:normal', 'aws-nitro-enclaves-cose:normal', 'aws-nitro-enclaves-nsm-api:normal', 'serde_cbor:normal', 'zeroize:normal', 'socket2:normal', 'serde:normal', 'serde_json:normal', 'base64:normal', 'aws-sigv4:normal', 'aws-credential-types:normal', 'tungstenite:normal', 'log:normal']],
   ['cinder-web-channel', ['snow:normal', 'zeroize:normal', 'sha2:normal', 'getrandom:normal', 'wasm-bindgen:normal']],
-  ['cinder-bulk', ['cinder-kernel:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'bs58:normal']],
+  ['cinder-bulk', ['cinder-kernel:normal', 'cinder-journal:normal', 'serde:normal', 'serde_json:normal', 'sha2:normal', 'bs58:normal', 'ed25519-dalek:normal', 'zeroize:normal']],
 ]);
 
 export function validateWorkspace(metadata) {

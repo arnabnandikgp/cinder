@@ -1,6 +1,6 @@
 //! Durable evidence ingestion. Derived views are diagnostics, never another ledger.
 use crate::{Error, client_id, native::*, profile::*};
-use cinder_journal::{Backend, Committed, Journal, Protection, model::*};
+use cinder_journal::{Committed, controller::Controller, model::*};
 use cinder_kernel::{
     amounts::*,
     identity::*,
@@ -544,10 +544,10 @@ fn archive(
 }
 /// Replay diagnostic views from accepted encrypted-journal evidence only.
 /// New/changed profiles cannot silently reinterpret previously accepted history.
-pub fn replay<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
-    profile: &Profile,
-) -> Result<View, Error> {
+pub fn replay<J: Controller>(journal: &mut J, profile: &Profile) -> Result<View, Error> {
+    if let Some(unit) = journal.descriptor() {
+        profile.unit_binding(unit)?;
+    }
     if journal.configuration() != &profile.config {
         return Err(Error::Qualification);
     }
@@ -572,8 +572,8 @@ pub fn replay<B: Backend, P: Protection>(
 /// Ingest one bounded response atomically with its normalized facts and provenance.
 /// Cursor progress is derived only after commit. Unknown storage outcomes cannot
 /// advance the caller's view. Source LI never becomes `Input.source_cut`.
-pub fn ingest<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+pub fn ingest<J: Controller>(
+    journal: &mut J,
     profile: &Profile,
     message: Message,
     id: CommitId,
@@ -584,8 +584,8 @@ pub fn ingest<B: Backend, P: Protection>(
 /// Ingest fills with a separately qualified causal certificate. Supply it before
 /// first attribution: replay cannot upgrade an earlier unqualified fill's cut.
 /// Ordinary ingestion never calls this port automatically.
-pub fn ingest_covered<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+pub fn ingest_covered<J: Controller>(
+    journal: &mut J,
     profile: &Profile,
     message: Message,
     id: CommitId,
@@ -602,14 +602,17 @@ pub fn ingest_covered<B: Backend, P: Protection>(
     }
     ingest_inner(journal, profile, message, id, at, Some(coverage))
 }
-fn ingest_inner<B: Backend, P: Protection>(
-    journal: &mut Journal<B, P>,
+fn ingest_inner<J: Controller>(
+    journal: &mut J,
     profile: &Profile,
     message: Message,
     id: CommitId,
     at: u64,
     coverage: Option<Coverage>,
 ) -> Result<Committed, Error> {
+    if let Some(unit) = journal.descriptor() {
+        profile.unit_binding(unit)?;
+    }
     if message.body.len() > MAX_BODY
         || message.account.len() > 256
         || message.cursor.as_ref().is_some_and(|c| c.len() > 256)

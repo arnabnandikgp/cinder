@@ -6,7 +6,7 @@ use crate::{
     chain_rpc::{self, Client, Transport},
     transport::Clock,
 };
-use cinder_journal::{Backend, Journal, Protection, model::CommitId};
+use cinder_journal::{controller::Controller as JournalController, model::CommitId};
 use cinder_kernel::{
     identity::AttemptKey,
     ledger::{Location, funds::Destination},
@@ -263,9 +263,9 @@ impl DepositRead {
     /// Rejoin the same mutation owner with fresh authority. Original receipt,
     /// code, current token accounts and configured customer binding are all
     /// checked by the existing recognizer before the one journal commit.
-    pub(crate) fn complete<B: Backend, P: Protection>(
+    pub(crate) fn complete<J: JournalController>(
         self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
     ) -> Result<Outcome, Error> {
         j.verified_state().map_err(|_| Error)?;
@@ -315,10 +315,7 @@ fn id() -> Result<CommitId, Error> {
     openssl::rand::rand_bytes(&mut b)?;
     CommitId::new(b).map_err(|_| Error)
 }
-fn rail<B: Backend, P: Protection>(
-    j: &mut Journal<B, P>,
-    attempt: AttemptKey,
-) -> Result<(Rail, bool), Error> {
+fn rail<J: JournalController>(j: &mut J, attempt: AttemptKey) -> Result<(Rail, bool), Error> {
     if j.verified_state()
         .map_err(|_| Error)?
         .escrows()
@@ -353,9 +350,9 @@ fn rail<B: Backend, P: Protection>(
 impl<T: Transport> Port<T> {
     /// Observe one configured owner-signed deposit. This is a read-only chain
     /// path, not a native funding activation or customer signing service.
-    pub fn observe_deposit<B: Backend, P: Protection>(
+    pub fn observe_deposit<J: JournalController>(
         &mut self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         index: usize,
     ) -> Result<Outcome, Error> {
@@ -496,9 +493,9 @@ impl<T: Transport> Port<T> {
     }
     /// Issue one already-admitted, unexposed mandate. No automatic funds target,
     /// no changes to user economics, and no signature before simulation succeeds.
-    pub fn issue<B: Backend, P: Protection>(
+    pub fn issue<J: JournalController>(
         &mut self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         attempt: AttemptKey,
     ) -> Result<Outcome, Error> {
@@ -507,9 +504,9 @@ impl<T: Transport> Port<T> {
     /// Explicit approved demo setup selection for an already accepted initial
     /// Release/Deposit. This does not admit an intent or activate a manifest;
     /// absent/failed demo setup never falls back to the strong issuance path.
-    pub fn issue_demo_ingress<B: Backend, P: Protection>(
+    pub fn issue_demo_ingress<J: JournalController>(
         &mut self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         gateway: &Gateway,
         policy: &cinder_pacifica::funding::demo::Policy,
@@ -517,9 +514,9 @@ impl<T: Transport> Port<T> {
     ) -> Result<Outcome, Error> {
         self.issue_using(j, funding, attempt, Some((gateway, policy)))
     }
-    fn issue_using<B: Backend, P: Protection>(
+    fn issue_using<J: JournalController>(
         &mut self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         attempt: AttemptKey,
         demo: Option<(&Gateway, &cinder_pacifica::funding::demo::Policy)>,
@@ -534,9 +531,9 @@ impl<T: Transport> Port<T> {
     }
     /// Reconcile the ORIGINAL retained signature. No new blockhash/signature or
     /// send capability is created, including when missing/pruned/expired.
-    pub fn reconcile<B: Backend, P: Protection>(
+    pub fn reconcile<J: JournalController>(
         &mut self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         funding: &Controller,
         attempt: AttemptKey,
     ) -> Result<Outcome, Error> {

@@ -1,7 +1,7 @@
 //! Native signing after durable exposure. No HTTP client or key-loading I/O.
 use crate::{Error, client_id, observation, profile::*};
 use cinder_journal::{
-    Backend, Journal, Protection,
+    controller::Controller,
     model::*,
     orders::{Observation, Status, TimeInForce},
 };
@@ -25,6 +25,13 @@ pub enum Origin {
     Mainnet,
 }
 impl Origin {
+    /// Exact native environment commitment for shared-unit registry selection.
+    pub fn commitment(self) -> [u8; 32] {
+        let mut h = Sha256::new();
+        h.update(b"CINDER-PACIFICA-ENVIRONMENT-1\0");
+        h.update(self.url());
+        h.finalize().into()
+    }
     /// Pinned origin; the path is independently selected by the action encoder.
     pub fn url(self) -> &'static str {
         match self {
@@ -246,6 +253,15 @@ impl std::fmt::Debug for Gateway {
     }
 }
 impl Gateway {
+    /// Bind actual loaded native identity/environment to the selected component.
+    /// No master-key fallback or active-history retargeting is permitted.
+    pub fn unit_binding(&self, unit: &cinder_journal::units::Descriptor) -> Result<(), Error> {
+        self.profile.unit_binding(unit)?;
+        if self.agent_key() == unit.native_account {
+            return Err(Error::Qualification);
+        }
+        Ok(())
+    }
     pub(crate) fn read_binding(&self) -> (&Profile, &Policy) {
         (&self.profile, &self.policy)
     }
@@ -358,12 +374,11 @@ impl Gateway {
         );
         Ok(PrivateBytes::new(bytes)?)
     }
-    fn history<B: Backend, P: Protection>(
-        &self,
-        journal: &mut Journal<B, P>,
-        at: u64,
-    ) -> Result<History, Error> {
+    fn history<J: Controller>(&self, journal: &mut J, at: u64) -> Result<History, Error> {
         journal.verified_state()?;
+        if let Some(unit) = journal.descriptor() {
+            self.unit_binding(unit)?;
+        }
         if journal.configuration() != &self.profile.config {
             return Err(Error::Qualification);
         }
@@ -428,9 +443,9 @@ impl Gateway {
             Ok(())
         }
     }
-    fn transaction<B: Backend, P: Protection>(
+    fn transaction<J: Controller>(
         &self,
-        journal: &Journal<B, P>,
+        journal: &J,
         id: CommitId,
         at: u64,
         record: Record,
@@ -449,9 +464,9 @@ impl Gateway {
     /// Same pooled credit bucket for P16's separately authorized funds signer.
     /// The coordinator adds its immutable plan and financial exposure to this
     /// transaction before one atomic commit. This is not a signing endpoint.
-    pub(crate) fn funding_transaction<B: Backend, P: Protection>(
+    pub(crate) fn funding_transaction<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         id: CommitId,
         at: u64,
         profile: &Profile,
@@ -478,9 +493,9 @@ impl Gateway {
         )
     }
     /// Recheck writer/key fencing immediately before a P16 funds signature.
-    pub(crate) fn funding_current<B: Backend, P: Protection>(
+    pub(crate) fn funding_current<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         at: u64,
     ) -> Result<(), Error> {
         self.active(&self.history(journal, at)?)
@@ -499,9 +514,9 @@ impl Gateway {
     }
     /// Trusted administrator/key-release port, not a customer/API method. Record
     /// a strictly newer key epoch; rotations do not reset spent API credits.
-    pub fn activate<B: Backend, P: Protection>(
+    pub fn activate<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         id: CommitId,
         at: u64,
     ) -> Result<(), Error> {
@@ -523,9 +538,9 @@ impl Gateway {
     }
     /// Boot only: install a fresh read-budget identity, or resume the exact active
     /// identity. Never revive a revoked epoch or reset accumulated credits.
-    pub fn initialize_reads<B: Backend, P: Protection>(
+    pub fn initialize_reads<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         id: CommitId,
         at: u64,
     ) -> Result<(), Error> {
@@ -538,9 +553,9 @@ impl Gateway {
     }
     /// Trusted administrator port: durably fence this key even across restarts.
     /// Revoking an escaped native credential at the venue is a separate operation.
-    pub fn deactivate<B: Backend, P: Protection>(
+    pub fn deactivate<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         id: CommitId,
         at: u64,
     ) -> Result<(), Error> {
@@ -561,18 +576,18 @@ impl Gateway {
     /// Reserve worst-case read credits in the same pool/IP budget before I/O.
     /// Only the trusted reconciliation scheduler may set cleanup=true; ordinary
     /// customer reads cannot consume the protected cleanup budget.
-    pub fn reserve_read<B: Backend, P: Protection>(
+    pub fn reserve_read<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         id: CommitId,
         at: u64,
         cleanup: bool,
     ) -> Result<ReadPermit, Error> {
         self.reserve_read_with(journal, id, at, cleanup, None)
     }
-    pub(crate) fn reserve_read_with<B: Backend, P: Protection>(
+    pub(crate) fn reserve_read_with<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         id: CommitId,
         at: u64,
         cleanup: bool,
@@ -608,9 +623,9 @@ impl Gateway {
     }
     /// Preflight the shared durable read budget without spending/refunding it.
     /// Only capacity/cooldown is a false result; invalid authority/history fails.
-    pub fn read_available<B: Backend, P: Protection>(
+    pub fn read_available<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         at: u64,
         cleanup: bool,
     ) -> Result<bool, Error> {
@@ -622,9 +637,9 @@ impl Gateway {
         }
     }
     /// Resume this account's committed cursor. A cursor is not terminal coverage.
-    pub fn read_cursor<B: Backend, P: Protection>(
+    pub fn read_cursor<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         kind: observation::Kind,
     ) -> Result<Option<String>, Error> {
         Ok(observation::replay(journal, &self.profile)?
@@ -637,14 +652,16 @@ impl Gateway {
     /// Call after consuming its permit, before further dispatch. The reservation
     /// binds pool/policy provenance; no active signer is required for a late reply
     /// after rotation. Exact retries are idempotent; changed replies conflict.
-    pub fn record_read_limit<B: Backend, P: Protection>(
+    pub fn record_read_limit<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         reservation: CommitId,
         received_at: u64,
         retry_after_ms: Option<u64>,
     ) -> Result<(), Error> {
-        let at = received_at.max(journal.transactions().map(|t| t.at).max().unwrap_or(0));
+        let at = received_at
+            .max(journal.shared_logical_time()?)
+            .max(journal.transactions().map(|t| t.at).max().unwrap_or(0));
         self.history(journal, at)?;
         let source = journal
             .transaction(reservation)
@@ -805,9 +822,9 @@ impl Gateway {
     }
     /// Validate, charge, durably expose, sign and send once. There is deliberately
     /// no automatic retry after a timeout, 429, lost commit or process restart.
-    pub fn dispatch<B: Backend, P: Protection, T: Transport>(
+    pub fn dispatch<J: Controller, T: Transport>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         dispatch: Dispatch,
         transport: &mut T,
     ) -> Result<Outcome, Error> {
@@ -818,17 +835,17 @@ impl Gateway {
     /// offline fixtures exercise this port, not mainnet/customer-fund authority.
     /// Ordinary dispatch cannot use this scope. No restoration or healthy-user
     /// liquidation outside operator-assisted recovery is enabled.
-    pub fn dispatch_recovery<B: Backend, P: Protection, T: Transport>(
+    pub fn dispatch_recovery<J: Controller, T: Transport>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         dispatch: Dispatch,
         transport: &mut T,
     ) -> Result<Outcome, Error> {
         self.dispatch_scoped(journal, dispatch, transport, true)
     }
-    fn dispatch_scoped<B: Backend, P: Protection, T: Transport>(
+    fn dispatch_scoped<J: Controller, T: Transport>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         dispatch: Dispatch,
         transport: &mut T,
         recovery: bool,
@@ -839,22 +856,22 @@ impl Gateway {
             Reply::Response { received_at, .. } => *received_at,
             Reply::Unknown => dispatch.at,
         }
-        .max(journal.state()?.logical_time());
+        .max(journal.shared_logical_time()?);
         self.complete_dispatch(journal, completion, reply, at)
     }
     /// Validate, durably charge/expose and sign one request under the mutation
     /// owner. The returned one-use request is sent without holding that owner.
     /// No retry is authorized when the request or reply is lost.
-    pub fn prepare_dispatch<B: Backend, P: Protection>(
+    pub fn prepare_dispatch<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         dispatch: Dispatch,
     ) -> Result<(Outbound, DispatchCompletion), Error> {
         self.prepare_dispatch_scoped(journal, dispatch, false)
     }
-    fn prepare_dispatch_scoped<B: Backend, P: Protection>(
+    fn prepare_dispatch_scoped<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         dispatch: Dispatch,
         recovery: bool,
     ) -> Result<(Outbound, DispatchCompletion), Error> {
@@ -937,9 +954,9 @@ impl Gateway {
     /// Archive a correlated actual reply against the CURRENT journal head. A
     /// concurrent revoke does not erase an already sent action or its late ACK.
     /// The trusted completion time is not substituted for the observed time.
-    pub fn complete_dispatch<B: Backend, P: Protection>(
+    pub fn complete_dispatch<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         completion: DispatchCompletion,
         reply: Reply,
         at: u64,
@@ -958,9 +975,9 @@ impl Gateway {
         }
         self.record_reply(journal, completion.dispatch, &completion.plan, reply, at)
     }
-    fn record_reply<B: Backend, P: Protection>(
+    fn record_reply<J: Controller>(
         &self,
-        journal: &mut Journal<B, P>,
+        journal: &mut J,
         dispatch: Dispatch,
         plan: &Plan,
         reply: Reply,

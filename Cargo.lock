@@ -338,10 +338,13 @@ name = "cinder-bulk"
 version = "0.1.0"
 dependencies = [
  "bs58",
+ "cinder-journal",
  "cinder-kernel",
+ "ed25519-dalek",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "zeroize",
 ]
 
 [[package]]
@@ -387,6 +390,7 @@ dependencies = [
  "aws-sigv4",
  "base64",
  "cinder-api",
+ "cinder-bulk",
  "cinder-journal",
  "cinder-kernel",
  "cinder-pacifica",

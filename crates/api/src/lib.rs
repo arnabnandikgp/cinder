@@ -103,6 +103,8 @@ pub trait Admission {
 /// Current durable outcome, not a transport acknowledgement or guaranteed fill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
+    /// V2 only: retained financial intent without a financial decision or hold.
+    Recorded,
     /// Controls rejected atomically; stable ID is retained and cannot retrade.
     Rejected,
     /// Durably accepted, with no possibly exposed attempt.
@@ -224,6 +226,7 @@ impl Response {
                     Outcome::Partial => 4,
                     Outcome::Complete => 5,
                     Outcome::Unknown => 6,
+                    Outcome::Recorded => 7,
                 });
                 w.raw(&r.filled.to_be_bytes());
                 w.i128(r.paid);
@@ -257,6 +260,8 @@ struct Record {
     request: Request,
     accepted: bool,
     at: u64,
+    unit: Option<UnitId>,
+    recorded_only: bool,
 }
 /// Runtime handler has no independently authoritative balances or replay database.
 pub struct Service<A> {
@@ -449,6 +454,8 @@ impl<A: Admission> Service<A> {
             request: req,
             accepted: committed.receipt.controls.is_none(),
             at: now,
+            unit: None,
+            recorded_only: false,
         };
         self.receipt(journal.state().map_err(|_| Error::Unavailable)?, &record)
             .map(Response::Receipt)
@@ -701,9 +708,20 @@ impl<A: Admission> Service<A> {
         };
         let mut r = Receipt {
             id: req.id,
-            digest: req.digest(),
+            digest: record.unit.map_or_else(
+                || req.digest(),
+                |unit| {
+                    units::Request {
+                        unit,
+                        body: req.clone(),
+                    }
+                    .digest()
+                },
+            ),
             policy: req.policy,
-            outcome: if record.accepted {
+            outcome: if record.recorded_only {
+                Outcome::Recorded
+            } else if record.accepted {
                 Outcome::Complete
             } else {
                 Outcome::Rejected

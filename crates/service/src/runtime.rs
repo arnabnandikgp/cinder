@@ -1481,6 +1481,7 @@ impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
                 return Ok(Some(reply));
             }
             Prepared::Accepted(candidate) => candidate,
+            Prepared::Unit(_) => return Err(Error),
         };
         let ReadCandidate {
             verified,

@@ -1,9 +1,13 @@
-//! Exact BULK codecs, not a qualified venue adapter or financial controller.
-//! No I/O, secret key, signing, ledger posting, funding or readiness authority.
+//! BULK codecs and opt-in unit-bound execution/read controllers. No ambient I/O,
+//! wallet loader, master signer, automatic retry or live qualification is implied.
+//! Unsupported funding/forced-event semantics remain disabled or unresolved.
+pub mod execution;
 pub mod fills;
 pub mod financial;
+pub mod observation;
 pub mod precision;
 mod raw;
+pub mod reads;
 pub mod wire;
 
 use cinder_kernel::identity::EventScope;
@@ -12,6 +16,10 @@ use sha2::{Digest, Sha256};
 /// Secret-safe codec failure, never containing account/response/order data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
+    /// Current authority, evidence, immutable profile or capability is not qualified.
+    Unqualified,
+    /// Durability/freshness failed; outcome may be unknown, never retry implicitly.
+    Unavailable,
     /// Malformed, ambiguous or off-grid data.
     Invalid,
     /// A bounded representation or work limit was exceeded.
@@ -32,6 +40,16 @@ pub enum Network {
     Testnet = 2,
     /// Separately configured native development domain.
     Devnet = 3,
+}
+impl Network {
+    /// Immutable native signing-environment commitment for the unit registry;
+    /// distinct from the Solana cluster or a response-selected URL alias.
+    pub fn commitment(self) -> [u8; 32] {
+        let mut h = Sha256::new();
+        h.update(b"CINDER-BULK-ENVIRONMENT-1\0");
+        h.update([self as u8]);
+        h.finalize().into()
+    }
 }
 
 /// Trusted request/source binding; never inferred from response fields.

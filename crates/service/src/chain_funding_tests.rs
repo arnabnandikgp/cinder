@@ -4,7 +4,9 @@ use super::*;
 use crate::chain_rpc::{Account, Response};
 use crate::runtime::initialization_support as support;
 use base64::{Engine, engine::general_purpose::STANDARD};
-use cinder_journal::{collateral, funds as lifecycle, model::*, orders, sqlite::*};
+use cinder_journal::{
+    Backend, Journal, Protection, collateral, funds as lifecycle, model::*, orders, sqlite::*,
+};
 use cinder_kernel::{
     amounts::QuoteAtoms,
     identity::*,

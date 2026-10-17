@@ -1,10 +1,10 @@
 //! P21 binding of the settled journal cut to the already-installed custody route.
 //! Decoded observations come from a separately authenticated chain port. Matching
 //! them is not RPC authentication, native-key fencing, a tail seal or activation.
-use super::{Controller, Rail};
+use super::{Controller, JournalController, Rail};
 use crate::Error;
 use cinder_journal::{
-    Backend, Head, Journal, Protection,
+    Head,
     recovery::{Cut, CutError},
 };
 use cinder_kernel::{
@@ -190,9 +190,9 @@ impl Controller {
     /// Reuse the installed P16 atom/beneficiary binding and accepted plan/receipt
     /// history. P15 counters originate at zero; unsupported preexisting counter
     /// baselines need explicit migration, not inferred reset or an operator input.
-    pub fn recovery_backing<B: Backend, P: Protection>(
+    pub fn recovery_backing<J: JournalController>(
         &self,
-        j: &mut Journal<B, P>,
+        j: &mut J,
         expected: Head,
         check: EventKey,
         observed: &CustodyState,

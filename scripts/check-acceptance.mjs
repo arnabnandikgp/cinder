@@ -18,6 +18,28 @@ const required = [
   ...Array.from({ length: 9 }, (_, i) => `W${String(i + 1).padStart(2, "0")}`),
   ...Array.from({ length: 10 }, (_, i) => `V${String(i + 1).padStart(2, "0")}`),
 ];
+// Independent policy roots, not derived from the manifest being checked. These
+// cases cannot disappear, change runner or silently lose their trace coverage.
+const mandatoryCases = [
+  {
+    id: "unit-sdk-joined", runner: "private",
+    file: "clients/private/tests/units-process.test.ts",
+    test: "joined SDK unit lifecycle preserves native attribution, shared revoke and restart without resend",
+    evidence: "synthetic", requirements: ["W01", "W02", "W03", "W06", "V09"],
+  },
+  {
+    id: "unit-custody", runner: "workspace",
+    file: "crates/journal/tests/unit_funding.rs",
+    test: "exact_batch_sweep_and_refund_are_exclusive_and_cannot_move_to_another_unit",
+    evidence: "synthetic", requirements: ["W03", "W04", "V01", "V09"],
+  },
+  {
+    id: "unit-recovery", runner: "workspace",
+    file: "crates/pacifica/tests/unit_funding.rs",
+    test: "unit_recovery_reuses_final_backing_and_lifetime_paid_counters_not_another_units_observation",
+    evidence: "synthetic", requirements: ["W04", "W05", "V08"],
+  },
+];
 // Trace the declaration forms used by this bounded manifest, not arbitrary text.
 // This is a source-presence guard; execution remains the runner's responsibility.
 function declaresTest(file, name, text) {
@@ -32,7 +54,8 @@ function declaresTest(file, name, text) {
       `^[ \\t]*(?:export\\s+)?(?:async\\s+)?function\\s+${escaped}\\s*\\(`,
       "m",
     ).test(source);
-  // Node test names here are suffixes of a carrier-specific template literal.
+  if (new RegExp(`^\\s*test\\(\\s*['"]${escaped}['"]\\s*,`, 'm').test(source)) return true;
+  // Other Node test names are suffixes of a carrier-specific template literal.
   return new RegExp(
     "^[ \\t]*(?:for\\s*\\([^\\n]*\\)\\s*)?test\\(\\s*`[^`\\n]* " +
       escaped +
@@ -90,16 +113,27 @@ export function validate(
     coverage = new Set();
   if (!Array.isArray(m.cases) || !m.cases.length)
     errors.push("No acceptance cases");
+  for (const expected of mandatoryCases) {
+    const actual = (Array.isArray(m.cases) ? m.cases : []).find(c => c?.id === expected.id);
+    if (!actual) errors.push(`Missing required case ${expected.id}`);
+    else if (["runner", "file", "test", "evidence"].some(k => actual[k] !== expected[k])
+      || !Array.isArray(actual.requirements)
+      || actual.requirements.length !== expected.requirements.length
+      || new Set(actual.requirements).size !== expected.requirements.length
+      || expected.requirements.some(r => !actual.requirements.includes(r)))
+      errors.push(`Changed required case ${expected.id}`);
+  }
   for (const c of Array.isArray(m.cases) ? m.cases : []) {
     if (typeof c.id !== "string" || !c.id || seen.has(c.id))
       errors.push("Missing/duplicate case identity");
     seen.add(c.id);
     if(c.prefix!==undefined&&!['P21','P22','P23C','P25'].includes(c.prefix))errors.push(`Invalid test prefix ${c.id}`);
     if (
-      !["workspace", "browser", "vault"].includes(c.runner) ||
+      !["workspace", "browser", "vault", "private"].includes(c.runner) ||
       !["synthetic", "local-sbf"].includes(c.evidence)
     )
       errors.push(`Invalid evidence/runner ${c.id}`);
+    if(c.runner==='private' && !/^clients\/private\/tests\/[a-zA-Z0-9_-]+\.test\.ts$/.test(c.file)) errors.push(`Invalid private source ${c.id}`);
     if (!safe(c.file) || typeof c.test !== "string" || !c.test)
       errors.push(`Unsafe/missing test ${c.id}`);
     else

@@ -116,6 +116,10 @@ impl Policy {
     pub fn recipient(&self, owner: [u8; 32]) -> Result<[u8; 32], Error> {
         pda(ATA, &[&owner, &TOKEN, &self.mint])
     }
+    /// Canonical program-controlled return vault for this custody config.
+    pub fn payout_vault(&self) -> Result<[u8; 32], Error> {
+        pda(self.program, &[b"tokens", &self.config])
+    }
 }
 /// A fresh owner proof, independent of an as-yet unknown private account/epoch.
 #[derive(Clone, PartialEq, Eq)]

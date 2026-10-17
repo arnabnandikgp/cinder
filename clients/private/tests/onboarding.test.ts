@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,createPrivateKey,createPublicKey,sign,verify} from 'node:crypto';
-import {OnboardingClient,decodeResponse,type ConfidentialChannel} from '../src/index.ts';
+import {OnboardingClient,UnitOnboardingClient,decodeResponse,type ConfidentialChannel} from '../src/index.ts';
 const id=(n:number)=>new Uint8Array(32).fill(n),domain={network:id(1),deployment:id(2)};
 const secret=createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.alloc(32,33)]),format:'der',type:'pkcs8'});
 const publicKey=new Uint8Array(createPublicKey(secret).export({format:'der',type:'spki'}).subarray(-32));
@@ -11,6 +11,22 @@ const account=createHash('sha256').update(Buffer.concat([Buffer.from('CINDER-ACC
 function reply(pending=[id(44)]){return new Uint8Array(Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x01'),Buffer.from([4]),account,number(1n,8),Buffer.from(id(55)),number(2n,2),
   ...[2,10,4,11,12,13,14].map(n=>Buffer.from(id(n))),Buffer.from([6]),number(1n,8),number(1000n,8),number(BigInt(pending.length),8),...pending.map(x=>Buffer.from(x))]));}
 const context=()=>({...domain,binding:id(8),expiresAt:1000n});
+test('unit bootstrap independently signs custody contract and unit, rejects foreign replies without retry',async()=>{
+  let calls=0;let wrong=false;let retained:Uint8Array|undefined;
+  const unit=id(40),contract=id(70);
+  const channel:ConfidentialChannel={context,async exchange(wire){calls++;retained=wire.slice();
+    const bytes=Buffer.from(wire),message=bytes.subarray(0,-64);
+    assert(verify(null,message,createPublicKey(secret),bytes.subarray(-64)));
+    const prefix=Buffer.byteLength('CINDER-UNIT-ONBOARD\0\x00\x01');
+    assert(message.subarray(0,prefix).equals(Buffer.from('CINDER-UNIT-ONBOARD\0\x00\x01')));
+    assert.deepEqual(message.subarray(prefix,prefix+32),Buffer.from(id(40)));assert.deepEqual(message.subarray(prefix+32,prefix+64),Buffer.from(id(70)));
+    assert(message.subarray(prefix+64,prefix+64+Buffer.byteLength('CINDER-ONBOARD\0\x00\x01')).equals(Buffer.from('CINDER-ONBOARD\0\x00\x01')));
+    return new Uint8Array(Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x02'),Buffer.from(id(wrong?50:40)),Buffer.from(reply([]))]));
+  }};
+  const sdk=new UnitOnboardingClient(channel,signer,{domain,policy:1,unit,contract});unit.fill(1);contract.fill(1);
+  const r=await sdk.open(900n);assert.equal(r.kind,'discovery');assert(retained?.some(x=>x));
+  wrong=true;await assert.rejects(sdk.open(900n),/unavailable/);assert.equal(calls,2);
+});
 test('onboarding signs the purpose/domain/wallet/session envelope and never aliases identities or signature hints',async()=>{
   const operation=Buffer.from(id(44)),signature=Buffer.alloc(64,45);let calls=0;
   const channel:ConfidentialChannel={context,async exchange(wire){calls++;

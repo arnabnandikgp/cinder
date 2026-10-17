@@ -1273,31 +1273,33 @@ fn financial_join_requires_original_record_epoch_headers_and_joined_risk() {
     );
 }
 #[test]
-fn revision_two_unit_genesis_is_not_silently_upgraded_for_financial_decisions() {
-    let t = Temp::new();
-    drop(create(&t));
-    let mut frames = SqliteBackend::open(&t.db, Migration::None)
-        .unwrap()
-        .load()
-        .unwrap();
-    let frame = &mut frames[0];
-    let context = RecordContext {
-        domain: support::config().domain,
-        sequence: 0,
-        previous: [0; 32],
-    };
-    let mut body = FixtureProtection
-        .open(context, &frame.opaque)
-        .unwrap()
-        .as_bytes()
-        .to_vec();
-    body[13] = 2;
-    frame.opaque = FixtureProtection.seal(context, &body).unwrap();
-    rehash(frame);
-    assert_eq!(
-        units::Journal::open(Playback(frames), FixtureProtection, configuration()).unwrap_err(),
-        Error::Version
-    );
+fn prior_unit_genesis_revisions_are_not_silently_upgraded_for_native_execution() {
+    for revision in [1, 2, 3, 4, 5] {
+        let t = Temp::new();
+        drop(create(&t));
+        let mut frames = SqliteBackend::open(&t.db, Migration::None)
+            .unwrap()
+            .load()
+            .unwrap();
+        let frame = &mut frames[0];
+        let context = RecordContext {
+            domain: support::config().domain,
+            sequence: 0,
+            previous: [0; 32],
+        };
+        let mut body = FixtureProtection
+            .open(context, &frame.opaque)
+            .unwrap()
+            .as_bytes()
+            .to_vec();
+        body[13] = revision;
+        frame.opaque = FixtureProtection.seal(context, &body).unwrap();
+        rehash(frame);
+        assert_eq!(
+            units::Journal::open(Playback(frames), FixtureProtection, configuration()).unwrap_err(),
+            Error::Version
+        );
+    }
 }
 
 #[test]

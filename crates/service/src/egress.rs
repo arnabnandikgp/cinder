@@ -84,6 +84,130 @@ pub struct Egress {
     trust: Trust,
     clock: Arc<dyn Clock>,
 }
+/// BULK testnet-only private TLS egress. No master key, funding endpoint,
+/// mainnet/devnet origin, redirect, ambient HTTP proxy or retry is exposed.
+pub struct BulkEgress {
+    target: Target,
+    trust: Trust,
+    clock: Arc<dyn Clock>,
+}
+impl BulkEgress {
+    /// Bind fixed parent tunnel, approved root and qualified clock. Construction
+    /// opens no socket and does not authorize a native run or capability.
+    pub fn new(target: Target, trust: Trust, clock: Arc<dyn Clock>) -> Result<Self, Error> {
+        if target.is_enclave() {
+            return Err(Error);
+        }
+        Ok(Self {
+            target,
+            trust,
+            clock,
+        })
+    }
+    /// Measured release component for the exact consumed egress route/root.
+    pub fn commitment(&self) -> [u8; 32] {
+        sha256(
+            &[
+                b"CINDER-BULK-EGRESS-1\0".as_slice(),
+                b"https://exchange-api.bulk.trade",
+                &self.target.encode(),
+                &self.trust.digest,
+            ]
+            .concat(),
+        )
+    }
+    fn once(
+        &self,
+        request: cinder_bulk::execution::Outbound,
+    ) -> Result<cinder_bulk::execution::Reply, Error> {
+        if request.network() != cinder_bulk::Network::Testnet || request.path() != "/api/v1/order" {
+            return Err(Error);
+        }
+        let start = Instant::now();
+        let now = self.clock.now()?;
+        if now >= request.expires_at() {
+            return Err(Error);
+        }
+        let wire = encode("exchange-api.bulk.trade", request.path(), request.body())?;
+        let reply = TlsRoute {
+            target: self.target,
+            trust: &self.trust,
+            clock: &*self.clock,
+            host: "exchange-api.bulk.trade",
+            max_body: MAX_BODY,
+        }
+        .deliver(&wire, now, start, Some(request.expires_at()))?;
+        Ok(match reply {
+            Reply::Unknown => cinder_bulk::execution::Reply::Unknown,
+            Reply::Response {
+                status,
+                body,
+                received_at,
+                retry_after_ms,
+            } => cinder_bulk::execution::Reply::Response {
+                status,
+                body,
+                received_at,
+                retry_after_ms,
+            },
+        })
+    }
+    fn read_once(
+        &self,
+        request: cinder_bulk::reads::Request,
+    ) -> Result<cinder_bulk::execution::Reply, Error> {
+        let start = Instant::now();
+        let now = self.clock.now()?;
+        let query = request.consume(now).map_err(|_| Error)?;
+        if query.network() != cinder_bulk::Network::Testnet || query.path() != "/api/v1/account" {
+            return Err(Error);
+        }
+        let wire = encode("exchange-api.bulk.trade", query.path(), query.body())?;
+        let reply = TlsRoute {
+            target: self.target,
+            trust: &self.trust,
+            clock: &*self.clock,
+            host: "exchange-api.bulk.trade",
+            max_body: cinder_bulk::fills::MAX_BODY,
+        }
+        .deliver(&wire, now, start, Some(query.expires_at()))?;
+        Ok(match reply {
+            Reply::Unknown => cinder_bulk::execution::Reply::Unknown,
+            Reply::Response {
+                status,
+                body,
+                received_at,
+                retry_after_ms,
+            } => cinder_bulk::execution::Reply::Response {
+                status,
+                body,
+                received_at,
+                retry_after_ms,
+            },
+        })
+    }
+}
+impl cinder_bulk::reads::Transport for BulkEgress {
+    fn query(&mut self, request: cinder_bulk::reads::Request) -> cinder_bulk::execution::Reply {
+        self.read_once(request)
+            .unwrap_or(cinder_bulk::execution::Reply::Unknown)
+    }
+}
+impl cinder_bulk::execution::Transport for BulkEgress {
+    fn post(&mut self, request: cinder_bulk::execution::Outbound) -> cinder_bulk::execution::Reply {
+        self.once(request)
+            .unwrap_or(cinder_bulk::execution::Reply::Unknown)
+    }
+}
+// The exact same TLS/framing/time checks for both native adapters. Destination
+// selection remains separately typed and allowlisted before entering this seam.
+struct TlsRoute<'a> {
+    target: Target,
+    trust: &'a Trust,
+    clock: &'a dyn Clock,
+    host: &'a str,
+    max_body: usize,
+}
 impl Egress {
     /// Select the consumed native origin, parent CID 3 port, root and clock.
     /// Does not open a socket, obtain credentials or activate native capabilities.
@@ -145,15 +269,33 @@ impl Egress {
         start: Instant,
         expires_at: Option<u64>,
     ) -> Result<Reply, Error> {
+        TlsRoute {
+            target: self.target,
+            trust: &self.trust,
+            clock: &*self.clock,
+            host: host(self.origin),
+            max_body: MAX_BODY,
+        }
+        .deliver(wire, now, start, expires_at)
+    }
+}
+impl TlsRoute<'_> {
+    fn deliver(
+        &self,
+        wire: &[u8],
+        now: u64,
+        start: Instant,
+        expires_at: Option<u64>,
+    ) -> Result<Reply, Error> {
         let socket = VsockStream::connect(self.target)?;
         let result = exchange_checked(
             socket,
-            &self.trust,
-            host(self.origin),
+            self.trust,
+            self.host,
             now,
             wire,
             start,
-            (MAX_BODY, || {
+            (self.max_body, || {
                 let current = self.clock.now()?;
                 if current < now || expires_at.is_some_and(|until| current >= until) {
                     return Err(Error);
@@ -193,14 +335,15 @@ pub(crate) fn host(origin: Origin) -> &'static str {
     }
 }
 fn encode(host: &str, path: &str, body: &[u8]) -> Result<Zeroizing<Vec<u8>>, Error> {
-    if !matches!(host, "test-api.pacifica.fi" | "api.pacifica.fi")
-        || !matches!(
+    let route = match host {
+        "test-api.pacifica.fi" | "api.pacifica.fi" => matches!(
             path,
             "/api/v1/orders/create" | "/api/v1/orders/cancel" | "/api/v1/account/withdraw"
-        )
-        || body.is_empty()
-        || body.len() > MAX_BODY
-    {
+        ),
+        "exchange-api.bulk.trade" => matches!(path, "/api/v1/order" | "/api/v1/account"),
+        _ => false,
+    };
+    if !route || body.is_empty() || body.len() > MAX_BODY {
         return Err(Error);
     }
     let mut wire = Zeroizing::new(format!("POST {path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\nContent-Length: {}\r\n\r\n", body.len()).into_bytes());
@@ -764,6 +907,25 @@ mod tests {
             };
             assert_eq!(result.is_ok(), succeeds);
             worker.join().unwrap();
+        }
+    }
+    #[test]
+    fn bulk_routes_do_not_enable_cross_venue_withdrawals_or_query_injection() {
+        // NEGATIVE tests only: all these host/path combinations must REFUSE.
+        for (host, path) in [
+            ("api.pacifica.fi", "/api/v1/order"),
+            ("exchange-api.bulk.trade", "/api/v1/orders/create"),
+            ("exchange-api.bulk.trade", "/api/v1/account/withdraw"),
+            ("exchange-api.bulk.trade", "/api/v1/account?type=fills"),
+        ] {
+            assert!(encode(host, path, b"{}").is_err());
+        }
+        for path in ["/api/v1/order", "/api/v1/account"] {
+            let wire = encode("exchange-api.bulk.trade", path, b"{}").unwrap();
+            assert!(wire.starts_with(
+                format!("POST {path} HTTP/1.1\r\nHost: exchange-api.bulk.trade\r\n").as_bytes()
+            ));
+            assert!(!wire.windows(14).any(|s| s == b"Authorization:"));
         }
     }
 }
