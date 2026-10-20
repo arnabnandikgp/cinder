@@ -46,7 +46,7 @@
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; eight hosted jobs green at `ed0e98e`, user review ongoing |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), ready above #83; hosted CI/review pending |
 | [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), ready above #84; offline acceptance passed, review/CI pending |
-| [P40 — Changed-image experimental parity](PLAN.md#p40) | open | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | — |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | Preparing exact read-only release above #86; no AWS resources created |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -55,6 +55,23 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P40 read-only qualification preparation — 2026-10-20
+
+Current branch `tee/p40-unit-qualification`, above ready #86 in stack #85.
+The user refreshed AWS login and installed the exact fresh P40 setup policies;
+both policy documents have been read back and compared successfully. Non-root
+identity is `cinder_new`. No resource has been created or native/RPC call sent.
+Current AMI/type/price/network checks and exact source/image build remain ahead.
+
+Trusted local seven-role conversion, final preparation and bootstrap pass with
+disposable secrets; all wrapped roles fit KMS. Missing role/zero secret nonce/key
+are refused. Strict helper lint passes. The converter creates only empty managed
+books with zero dispatch caps and one read per unit/boot; it drops legacy money
+authorities. Its private outputs never belong on the parent. Schedule, source /
+image gates and evidence limitations are in operations/unit-qualification.md.
+P39 additionally passes all 18 optimized unit Runtime/deployment tests. The
+approved read-only scope cannot qualify the live assembled financial criterion.
 
 ### P39/P40 continuation — 2026-10-20
 
@@ -7196,10 +7213,18 @@ Merge: none.
 ## P40 — Changed-image experimental parity
 
 Work: current hardware/read-only approval is recorded in the current handoff;
-exact changed-image preparation and scoped policies follow P39.
-Verification: not run; acceptance in PLAN P40.
+exact changed-image preparation and scoped policies are in progress above #86.
+Trusted local read-only converter adds seven-role preparation/bootstrap without
+shipping money authority; finite schedule is in operations/unit-qualification.md.
+Verification: local seven-role conversion/preparation passes, all wrapped bodies
+fit KMS (largest 2,420 bytes in the short local witness fixture); missing role,
+zero nonce/key refuse. Real STS sizes remain a pre-release check. P39 optimized
+unit Runtime/deployment checks also pass (18). User reports policy installation;
+non-root identity is verified, exact documents/image and launch checks pending.
 Unexpected: unsupported native funding/return rails remain outside parity claims.
-Next: finish P39, prepare exact changed-image proposal and capability matrix.
+The approved hardware scope excludes orders and cannot close the live assembled
+financial criterion by importing fixture readiness.
+Next: verify exact policies, export/build exact source and qualify on one host.
 PR: none.
 Merge: none.
 
