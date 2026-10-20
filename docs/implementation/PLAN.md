@@ -1256,7 +1256,7 @@ P36 acceptance and P37 native receipts.
 - [x] Manifest/role/registry/egress contracts reject aliases, mismatches and legacy fallback; versions 1–6 retain their encoding and behavior.
 - [x] Actual adapters, private API and replicated/fresh journal derive the application commitment; no fixture keys, balances, readiness or custody controller is deployed.
 - [x] Entrypoint supplies the unit handler to both confidential carriers; finite lease, restart, managed owner inventory and sticky fencing are tested offline.
-- [ ] Trusted preparation, regression tests and operator handoff are tracked in the stacked PR; changed-image qualification remains separate.
+- [x] Trusted preparation, regression tests and operator handoff are tracked in [#84](https://github.com/arnabnandikgp/cinder/pull/84), stacked above #83; changed-image qualification remains separate. Technical acceptance is complete; review/CI/merge are not inferred from local checks.
 
 <a id="p39"></a>
 ## P39 — Joined deployed-unit worker and SDK acceptance

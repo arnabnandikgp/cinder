@@ -44,7 +44,7 @@
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; eight hosted jobs green at `ed0e98e`, user review ongoing |
-| [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | local stack above #83 |
+| [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), ready above #83; hosted CI/review pending |
 | [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | open | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | — |
 | [P40 — Changed-image experimental parity](PLAN.md#p40) | open | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
@@ -64,7 +64,13 @@ Sequence: P38 deployment assembly → P39 joined workers/SDK → P40 changed-ima
 qualification/parity receipt. No frontend, financial redesign or production
 claim. Unsupported BULK funds rails and Pacifica's missing credit stay separate.
 Current branch `tee/p38-unit-deployment`, stacked above #83. No AWS/venue/RPC
-requests in this slice. Publication receipt will be added below.
+requests in this slice. Ready [#84](https://github.com/arnabnandikgp/cinder/pull/84)
+is stacked above #83 in native stack #85; neither PR was merged.
+
+Publication source: `209b43e4ca9d57c91f112f542c2d96a46b3d9b67`, tree
+`f07ff5e63d6d37feb98d777339a67add4390e74f`. This receipt-only successor
+changes no Rust/tests. Hosted CI/review for #84 is newly pending; #83's green
+checks do not qualify it. Both PR heads/parents are verified at publication.
 
 Implemented: version-7 exact seven-role inventory, per-unit private config
 capsules/agent keys, registry/native/egress/application binding, same real enclave
@@ -7113,9 +7119,11 @@ and final optimized guard regressions, 95 contracts, strict lint/build and
 Unexpected: KMS plaintext limits require separate unit configuration capsules;
 managed empty owner inventory avoids inventing a BULK custody/discovery policy;
 secret random body blinding prevents a public owner-list hash oracle.
-Next: publish stacked PR for review, then P39 joined workers/encrypted SDK;
+Next: review/CI for #84, then P39 joined workers/encrypted SDK;
 P40 separately qualifies the changed image. Native funds remain off.
-PR: local branch tee/p38-unit-deployment above #83; publication pending.
+PR: https://github.com/arnabnandikgp/cinder/pull/84; ready above #83 in native stack #85.
+Publication source: 209b43e4ca9d57c91f112f542c2d96a46b3d9b67; current handoff
+owns final local verification and pending new-head hosted/review status.
 Merge: none.
 
 ## P39 — Joined deployed-unit workers/SDK
