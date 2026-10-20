@@ -43,7 +43,7 @@
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
-| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | Local paper lifecycle + source-backed codec correction complete; review/merge pending |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; native paper/local checks complete, hosted CI/review pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -117,11 +117,22 @@ No partial/IOC fill or nonzero fee calibration, financial completeness, native
 funding/ADL, shipping Gateway activation or supported BULK bridge is claimed.
 P36 changed-image qualification, Pacifica missing credit and P24 remain open.
 
-Next: review/publish this bounded evidence/tooling slice, then prepare the
-non-fixture multi-unit configuration for separately qualified changed-image Nitro.
-P37 remains `in progress` pending review/merge; no PR or hosted result is claimed.
+Publication correction: the established phase-per-PR workflow still applies;
+completed implementation slices should not stop at a local commit unless the
+user requests that. Ready [PR #83](https://github.com/arnabnandikgp/cinder/pull/83)
+is published through the native single-layer stack, base `product/tee-v1`
+`3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b`. Its published implementation head is
+`bd7f8551c441c8a4d5037afc9d97fe3d9611fa22`; the source/tree checked above is
+unchanged. All eight hosted jobs and CodeRabbit were newly pending/in progress
+when inspected, not inherited local passes. This publication-receipt-only
+successor needs its own current-head hosted status; no new native call ran.
+
+Next: CI/review and relevant fixes for #83, then prepare the non-fixture multi-unit
+configuration for separately qualified changed-image Nitro. P37 stays
+`in progress` until acceptance/review and authorized merge. No merge was performed.
 Unrelated untracked `qualification-v2.rs`, `docs/user-journey.md` and `stays/`
-remain untouched. Source/test and receipt commits are local.
+remain untouched. Source/test and earlier merge/metadata receipts are included
+in #83 rather than left on unpublished branches.
 
 ## Historical handoffs
 
@@ -7022,9 +7033,11 @@ unchanged native fills re-decode offline after the source-backed correction.
 Unexpected: empty sampled depth did not preclude fills; use known reserved cleanup,
 not speculative retry. Fee-tier 404 is unavailable; unknown coverage stays unknown.
 No bridge, funding/risk/forced-event completeness or production readiness claimed.
-Next: review/publish the bounded slice, then non-fixture multi-unit configuration
+Next: CI/review of #83 and relevant fixes, then non-fixture multi-unit configuration
 and separately qualified Nitro image; unsupported BULK financial rails stay off.
-PR: none yet; branch local, no hosted P37 result or merge claimed.
+PR: https://github.com/arnabnandikgp/cinder/pull/83; ready against product/tee-v1.
+Publication head: bd7f8551c441c8a4d5037afc9d97fe3d9611fa22; hosted CI/review newly
+pending, not inherited from local checks. Receipt-only successor changes no code.
 Merge receipts from #78/#79/#81/#82 accompany this branch.
 Merge: none.
 
