@@ -47,6 +47,46 @@ cover a resting probe plus an IOC open plus an IOC close. Do not silently add a
 third order, raise the notional budget or leave an opening trade without a close
 allowance. Finalize the counted opening/cleanup actions against actual minima.
 
+<a id="observed-metadata-receipt--2026-10-20"></a>
+### Observed metadata receipt — 2026-10-20
+
+The user separately approved **two unsigned GETs only**. Preflight source
+`b8cac32` ran once from 12:26:51.781 to 12:26:52.477 UTC; both returned HTTP 200.
+Private original artifacts are retained in
+`work/venues/bulk/run-20261020.TG1ntr/preflight`. They are optional ignored run
+evidence, not a checkout/CI dependency. Manifest commitment:
+`ca4d5e7cfcc33b0253e92c4e5579065257b8fce6dfb9d8da3c3a7c400434d0f3`.
+Source commitment:
+`1bca26fa43df1b2eeec83294498817c2ab3a3407f196444d8f6c7ac739a5b0b1`.
+The run terminated `metadata-observed` with two requests; its expired approval
+must not be reused or treated as permission for a signed paper run.
+
+| Fixed paper-origin path | Status | Original bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `/api/v1/exchangeInfo` | 200 | 5,809 | `822eaf7f215d93d84d812abd3cd451ca04239814e0bac160d0de3c7870c97748` |
+| `/api/v1/feeState` | 200 | 1,416 | `d535319c5abe9b33cd0b0005eb9a861e03efa9f50d40ff5793f55e22d5bf80d2` |
+
+Original response hashes/lengths were independently rechecked. Exchange info
+lists 17 markets, all `TRADING`. BTC-USD reports `minNotional: 1.0`,
+`tickSize: 0.01`, `sizeDecimals: 8`, and `sizeIncrement: 1e-8`
+(exact decimal `0.00000001`). Its advertised native maximum leverage is 40;
+that does not select Cinder's leverage policy. Native TIFs include GTC, IOC, ALO,
+ALO_SLIDE and ALO_JOIN; this observation does not expand Cinder's supported TIFs.
+Revalidate actual prices/grids before a separately approved signed run; these
+values are a dated observation, not permanent configuration or execution proof.
+
+Fee state retains exact wide `stamp: 1792499212510152669`, slot `10475828`,
+`globalPolicyActive: false`, zero active instrument overrides, no scheduled
+policies and zero reported settled fills. This public response does **not**
+establish an account's execution fees, a financial completeness frontier,
+zero-fee trading, fee-tier savings or mainnet policy. Original numeric bytes
+remain authoritative; no floating-point financial values were posted.
+
+No wallets, signatures, account setup, faucet, orders, transfers, Solana RPC or
+AWS were used. Earlier 502 responses remain historical; this success establishes
+only these two observations. Next: approve the corrected paper-account lifecycle
+and its counted cleanup allowance in [proposal A](../implementation/UNIT-QUALIFICATION-PROPOSAL.md#a-native-paper-account-capability-before-hardware).
+
 ## Funding/return investigation: facts versus remaining questions
 
 The [official retained builder contract](https://github.com/Bulk-trade/bulk-client/blob/5012611bd0fd36e12523cd15bac763f3a600b1e9/docs/solana-deposit-withdraw-intent.md)

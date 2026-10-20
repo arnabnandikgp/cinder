@@ -43,7 +43,7 @@
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
-| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | Local preparation; live approval pending |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | Local preparation + two successful metadata GETs; signed paper scope pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -53,7 +53,7 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P37 native qualification preparation — 2026-10-20 (Asia/Kolkata)
+### P37 metadata observed; signed paper scope pending — 2026-10-20 (Asia/Kolkata)
 
 User accepts Pacifica's current bounded experimental integration level as the
 BULK target, not launch readiness. Work branch `tee/p37-bulk-native-qualification`
@@ -78,23 +78,38 @@ records exact pins, public references and three test-bridge/credit/return questi
 No dependency or native upstream code was installed/executed. Documentation is
 not a native observation; no capability or funding policy is promoted.
 
-Unexpected planning correction: a resting probe plus IOC opening plus IOC close
-needs three counted order attempts; the earlier two-attempt proposal cannot
-promise all three. Confirm actual minimums and reserve cleanup before signing;
-do not silently raise either count or paper notional. The current async question
-requests 12 public reads, one fresh account/two agents, two attempts totaling $10
-paper notional, 12 signed requests/24 account reads/30 minutes; approval is pending,
-and its limits cannot authorize an uncounted closing order or another scenario.
-
-Next: complete offline/current-source checks and obtain the scoped native-run
-answer; offline checks are now complete. A no-network preparation created
-`work/venues/bulk/run-20261020.TG1ntr/preflight`, manifest commitment
+The user's latest approval was specifically for two unsigned GETs, not the
+earlier unanswered broader async paper-run question. Source `b8cac32` ran once
+at 12:26:51.781–12:26:52.477 UTC. Both exchangeInfo and feeState returned HTTP
+200; result `metadata-observed`. Exact original bytes/hashes are retained in
+`work/venues/bulk/run-20261020.TG1ntr/preflight`; manifest commitment
 `ca4d5e7cfcc33b0253e92c4e5579065257b8fce6dfb9d8da3c3a7c400434d0f3`,
-with execution approval explicitly pending. Run metadata preflight first after
-the current scoped answer. If usable, finalize the paper scenario
-within approved limits before any exposure. No live venue API, financial, RPC,
-frontend or AWS call has occurred in this preparation. P36 live qualification,
-unsupported BULK rails, Pacifica missing credit and P24 remain explicitly open.
+source commitment `1bca26fa43df1b2eeec83294498817c2ab3a3407f196444d8f6c7ac739a5b0b1`.
+Both raw hashes/lengths independently rechecked. No further native request ran.
+The [dated receipt](../venues/bulk-native-qualification.md#observed-metadata-receipt--2026-10-20)
+records 17 markets and BTC-USD's observed $1 minimum, $0.01 tick and 0.00000001
+size increment. Public fee state is not account execution-fee or zero-fee proof.
+No key/account/faucet, signature, order, transfer, RPC, frontend or AWS activity.
+
+Receipt-only follow-up: `node scripts/check.mjs --group=contracts` passes all
+89 tests plus plan/link and workspace checks; log
+`/private/tmp/cinder-p37-metadata-result-contracts.log`. The first documentation
+check caught four links needing explicit anchors; anchors were added and the
+full contract group rerun successfully, without changing the validator. Raw
+evidence is ignored/private; only four documentation files change. No runtime
+matrix, hosted CI or signed/native lifecycle success is inferred from this pass.
+
+Unexpected planning correction: resting, IOC opening and IOC closing need three
+counted order attempts. [Revised proposal A](UNIT-QUALIFICATION-PROPOSAL.md)
+reserves up to five attempts/$20 cumulative paper notional **including cleanup**,
+14 signed requests/24 account reads/12 public reads/30 minutes, one disposable
+account and at most two agents. It is not approved by the two-GET permission.
+
+Next: obtain separate approval of that corrected paper lifecycle before fresh
+keys, account setup, faucet or signing. Do not reuse the expired metadata
+approval. P36 live qualification, unsupported BULK rails, Pacifica missing credit
+and P24 remain explicitly open. Current branch is local; no PR/hosted CI/merge
+is claimed for P37 or its merge-receipt ancestor.
 
 ## Historical handoffs
 
@@ -6928,12 +6943,15 @@ Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b; native qualification incomplete
 Work: source-bound unsigned metadata preflight and offline failure tests;
 fresh official SDK/keychain comparison and targeted funding/return questions.
 Verification: six new offline cases, all 89 contracts and all 60 existing BULK
-adapter tests pass; no Rust/runtime change. Source-bound manifest preparation
-made zero network requests. Actual native execution has not started.
+adapter tests pass; no Rust/runtime change. Separately approved two-GET native
+metadata run on source `b8cac32` completed with two HTTP 200s; original evidence
+and exact BTC grid/minimum are recorded in the current handoff/venue receipt.
+No signed native execution, account setup or financial activity has started.
 Unexpected: opening and cleanup orders must each fit the explicit attempt and
 notional allowance; correct the proposed scenario before any exposure.
-Next: scoped approval, current metadata, then bounded native lifecycle evidence.
-PR: none yet; awaiting the scoped run answer before collecting native evidence.
+Next: separate approval of revised counted paper lifecycle/cleanup scope, then
+bounded native agent/order/cancel/fill evidence. Metadata permission is exhausted.
+PR: none yet; branch remains local, no hosted P37 result or merge claimed.
 Merge receipts from #78/#79/#81/#82 accompany this branch.
 Merge: none.
 

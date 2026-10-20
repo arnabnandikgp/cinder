@@ -1,35 +1,47 @@
 # Proposed second-venue qualification — not live authority
 
-Date: 2026-10-17. This proposal follows the [offline acceptance boundary](UNIT-ACCEPTANCE.md).
+Updated: 2026-10-20. This proposal follows the [offline acceptance boundary](UNIT-ACCEPTANCE.md).
 No financial/RPC/AWS action is authorized by this document or old test permissions.
 
+<a id="a-native-paper-account-capability-before-hardware"></a>
 ## A. Native paper-account capability, before hardware
 
-First obtain useful current official metadata/schema evidence. The last two
-approved public requests returned origin 502. A separately approved run could
-allow at most 12 unsigned metadata reads and then one disposable native paper
-account with two fresh agents, official faucet funds only. No existing wallets,
-Solana RPC, L1 transfers, mainnet, customer assets or cloud resources.
+Current metadata prerequisite is complete: the separately approved two-GET run
+at source `b8cac32` returned HTTP 200 for exchange info and fee state on October
+20. The [receipt](../venues/bulk-native-qualification.md#observed-metadata-receipt--2026-10-20)
+records BTC-USD's $1 native minimum and exact price/size grid. Earlier 502s are
+historical. This approval covered no account or signed activity. The following
+revised paper scope is **proposed, not approved**, and replaces the earlier
+two-order/$10 suggestion, which could not cover resting, opening and closing.
 
-Suggested bound, subject to explicit approval and confirmed native minimums:
+Suggested bound, subject to separate explicit approval:
 
-- One paper account; at most two agent registrations and their revocations.
-- At most two order attempts total: one small bounded resting/cancel probe and
-  one bounded immediate-execution probe, aggregate order notional no more than
-  10 paper USD. If native minimums exceed this, stop rather than increase it.
-- At most 12 signed native POSTs and 24 private account reads, 30-minute run.
+- One fresh disposable paper account; official faucet funds only; at most two
+  fresh agent registrations and their revocations. No existing wallets, internal
+  or external transfers, Solana RPC/L1 transactions, mainnet/customer assets,
+  cloud resources or frontend integration.
+- At most five order attempts **including cleanup**: a bounded resting/cancel
+  probe, bounded IOC opening and confirmed-position closing, with remaining
+  attempts reserved for known residual exposure. At most 20 paper USD cumulative
+  order notional including all closing attempts, not collateral or leverage.
+  Revalidate current minimums/grid and reserve close capacity before opening;
+  stop rather than increase caps if the scenario cannot fit.
+- At most 14 signed native requests, 24 private account reads and 12 unsigned
+  public metadata/book reads, 30-minute run. These are ceilings, not targets.
   Fixed official testnet origin, no redirect, arbitrary endpoint or hidden retry.
 - Explicit nonce/original-action persistence before signing. Any uncertain
   original is reconciled, never blindly resent. Small test collateral does not
   justify ambiguous behavior or false confirmation.
-- Independently verify agent scope/revocation, original order IDs, actual
-  partial-fill/fee identity/precision and observed response schemas. Record exact
+- Independently verify agent scope/revocation, original order IDs, observed
+  fills/fee identity/precision and response schemas; record whether partial fills
+  actually occur rather than force or invent that coverage. Record exact
   source versions and sanitized receipts; no keys/signed wires in public logs.
 - Cancel/close known disposable paper exposure within the same cap where
   possible, revoke agents and record remaining uncertainty. Inability to clean
   up is reported, not declared success. No BULK funding bridge is tested here.
 
-This establishes only native paper capabilities, not custody, margin isolation,
+This would establish only native paper capabilities, not qualification of the
+assembled Cinder gateway, custody, margin isolation,
 fee aggregation, complete ADL/funding coverage or mainnet parity. Scope or native
 minimum changes require discussion, not an automatic increase.
 

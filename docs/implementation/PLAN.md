@@ -1237,7 +1237,7 @@ results, existing BULK wire/execution tests and [run proposal](UNIT-QUALIFICATIO
 
 - [x] Reusable fixed-origin unsigned preflight retains original bounded responses, rejects changed approval/source/deadline and tests failures offline without wallets, external requests or retries.
 - [x] Refresh primary client/keychain revisions and inspect ordinary signing/funding compatibility; identify exact test-rail/credit/settlement questions without importing dependencies or choosing a new custody contract.
-- [ ] Observe actual current metadata under explicit approval; examples/source schemas alone cannot choose native market grids or notional minima.
+- [x] Observe actual current metadata under explicit approval; examples/source schemas alone cannot choose native market grids or notional minima. Two approved GETs at source `b8cac32` returned HTTP 200 on 2026-10-20; the [dated receipt](../venues/bulk-native-qualification.md#observed-metadata-receipt--2026-10-20) retains exact hashes and BTC-USD's observed $1 minimum/grid. No signed action was authorized.
 - [ ] Under separately bounded current paper scope, test fresh-account agents/revocation, original order/cancel/fill/fee linkage and reserved cleanup using Cinder's existing wire/adapter contracts. Paper funds are not a Solana deposit or financial activation.
 - [ ] Record exact native outcomes, remaining semantics and disabled rails; promote only sanitized regressions needed by observed behavior. Keep CI offline and frontend/AWS/production work out of this slice.
 
