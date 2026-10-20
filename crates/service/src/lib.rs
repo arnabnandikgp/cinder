@@ -1,5 +1,7 @@
 //! Attestation-gated TLS transport and bounded opaque relay. Real NSM, key
 //! release, trusted time and independent witness ports are qualified by P20.
+/// Closed measured legacy/unit entrypoint selection; no host-selected fallback.
+pub mod application;
 pub mod attestation;
 pub mod boot;
 /// Streamed approved executable verification without unbounded RPC responses.
@@ -27,7 +29,7 @@ pub mod recovery;
 pub mod release;
 pub mod runtime;
 pub mod transport;
-/// Opt-in shared-unit private handler; no shipping manifest or native activation.
+/// Opt-in shared-unit handler and inactive measured two-unit deployment assembly.
 pub mod units;
 pub mod verifier;
 pub mod vsock;

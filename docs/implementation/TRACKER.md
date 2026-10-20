@@ -43,7 +43,10 @@
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
-| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; native paper/local checks complete, hosted CI/review pending |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; eight hosted jobs green at `ed0e98e`, user review ongoing |
+| [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | local stack above #83 |
+| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | open | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | — |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | open | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -52,6 +55,52 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P38 deployment assembly — 2026-10-20
+
+User approved the next stacked PR while reviewing #83 and requests a finite
+few-PR route to Pacifica's current experimental level before another venue.
+Sequence: P38 deployment assembly → P39 joined workers/SDK → P40 changed-image
+qualification/parity receipt. No frontend, financial redesign or production
+claim. Unsupported BULK funds rails and Pacifica's missing credit stay separate.
+Current branch `tee/p38-unit-deployment`, stacked above #83. No AWS/venue/RPC
+requests in this slice. Publication receipt will be added below.
+
+Implemented: version-7 exact seven-role inventory, per-unit private config
+capsules/agent keys, registry/native/egress/application binding, same real enclave
+entrypoint selection for TLS/Noise, shared protected cloud storage assembly and
+managed empty-owner startup/restart. No public custody bootstrap or native/funds
+worker. New BULK Unknown/testnet gateway archives only raw observations and
+refuses signature exposure/financial normalization. Actual unit view/revoke
+signatures and shared epoch survive encrypted restart. Stop/clock/independent
+epoch fences are sticky. Trusted preparation validates all wrapped plaintexts
+before filesystem output. Existing versions 1–6 retain omitted-field encoding.
+
+Local verification on pinned Rust 1.97.1 / Node 24.21.0, no containers/live I/O:
+`cargo test --workspace --all-features --locked --offline` passes **811** tests,
+with **10** existing intentional ignores; eight new tests are seven deployment
+groups and one BULK read-only group. `node scripts/check.mjs --group=contracts`
+passes **95** contracts and plan/workspace checks. `--group=lint` passes formatting,
+strict default/all-feature all-target Clippy and all-target build. Relay **15**
+and SDK/process **42** tests pass. Both changed packages pass **255** tests
+(**7** existing hardware-only ignores) in debug and optimized profiles. Final
+privacy review then added a secret configuration-body nonce against guessed
+owner inventories: all **255** changed-package debug tests and all **7** optimized
+deployment groups pass with that guard. The final BULK signing regression also
+installs the matching agent epoch before testing refusal; its optimized rerun
+passes. Final lint/build/contract checks cover this publication source. Logs under
+`/private/tmp/cinder-p38-{debug,contracts,lint,client}.log` are local receipts,
+not a clean-checkout dependency. Additional final receipts use the same prefix
+with `final-` names. The 811-test whole-workspace receipt predates only the final
+nonce guard/test strengthening; final affected-package/optimized checks cover
+those changes rather than rerunning unchanged dependency suites. Hosted status
+for this new head is not inherited. No new hardware/image claim is made.
+
+Initial local checks caught two Result-handling compile errors, a wrong fixture
+clock argument and the preparation enum's large variant; all corrected before
+the final passes. No financial gate or security check was relaxed. Predecessor
+#83 remains unchanged/open at `ed0e98e64997e677665712f547ec14d822a71d9c`; all eight
+hosted jobs are green at that head. No predecessor review/merge is claimed here.
 
 ### P37 paper lifecycle complete; compatibility corrected — 2026-10-20
 
@@ -7050,6 +7099,41 @@ PR: https://github.com/arnabnandikgp/cinder/pull/83; ready against product/tee-v
 Publication head: bd7f8551c441c8a4d5037afc9d97fe3d9611fa22; hosted CI/review newly
 pending, not inherited from local checks. Receipt-only successor changes no code.
 Merge receipts from #78/#79/#81/#82 accompany this branch.
+Merge: none.
+
+## P38 — Measured two-unit deployment
+
+Work: explicit version-7 registry/egress/role contract and actual enclave handler
+selection; separate bounded private unit configurations and agent capsules,
+blinded private owner configuration, actual read-only gateways and shared
+protected storage, managed empty owners, typed trusted preparation and runbook.
+Verification: whole-workspace 811/10 ignored, changed packages 255/7 ignored
+and final optimized guard regressions, 95 contracts, strict lint/build and
+15 relay/42 SDK tests pass. Current handoff distinguishes exact-source runs.
+Unexpected: KMS plaintext limits require separate unit configuration capsules;
+managed empty owner inventory avoids inventing a BULK custody/discovery policy;
+secret random body blinding prevents a public owner-list hash oracle.
+Next: publish stacked PR for review, then P39 joined workers/encrypted SDK;
+P40 separately qualifies the changed image. Native funds remain off.
+PR: local branch tee/p38-unit-deployment above #83; publication pending.
+Merge: none.
+
+## P39 — Joined deployed-unit workers/SDK
+
+Work: not started.
+Verification: not run; acceptance in PLAN P39.
+Unexpected: none yet.
+Next: finish P38, then bounded worker/SDK integration using existing controllers.
+PR: none.
+Merge: none.
+
+## P40 — Changed-image experimental parity
+
+Work: not started.
+Verification: not run; acceptance in PLAN P40.
+Unexpected: unsupported native funding/return rails remain outside parity claims.
+Next: finish P39, prepare exact changed-image proposal and capability matrix.
+PR: none.
 Merge: none.
 
 ## P24 — Release safety case

@@ -250,6 +250,7 @@ fn run() -> Result<(), Error> {
         return Err(Error);
     }
     let manifest = Manifest {
+        units: None,
         demo_deposit: None,
         version: 1,
         chain: None,

@@ -341,6 +341,7 @@ fn trusted_preparation_keeps_role_plaintexts_local_and_emits_only_public_receipt
         (6, true),
     ] {
         let mut manifest = Manifest {
+            units: None,
             version: 1,
             history: None,
             native_capture: None,

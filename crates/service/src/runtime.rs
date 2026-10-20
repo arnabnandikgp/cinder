@@ -205,6 +205,9 @@ impl Configuration {
         mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
     ) -> Result<Loaded, Error> {
         manifest.validate()?;
+        if manifest.version == 7 {
+            return Err(Error);
+        }
         if self.escrow.is_some()
             && (manifest.gates.funding
                 || manifest.version == 6
@@ -516,6 +519,67 @@ impl Backend for Storage {
         }
     }
 }
+/// Both deployment modes use the same authenticated replicas and independent
+/// witness. This opens no ledger and never decides history format from objects.
+pub(crate) fn open_storage(
+    manifest: &Manifest,
+    parent: Credential,
+    private_witness: Credential,
+    stream: Stream,
+    clock: Arc<dyn Clock>,
+) -> Result<
+    (
+        Storage,
+        cinder_journal::replicated::Anchor,
+        Arc<dyn ReadWitness>,
+    ),
+    Error,
+> {
+    if parent.access == private_witness.access {
+        return Err(Error);
+    }
+    let copy = || Credential {
+        access: parent.access.clone(),
+        secret: parent.secret.clone(),
+        token: parent.token.clone(),
+        expires: parent.expires,
+    };
+    let first = Client::new(manifest.first.clone(), copy(), clock.clone())?;
+    let second = Client::new(manifest.second.clone(), copy(), clock.clone())?;
+    let mut witness = DynamoWitness::new(
+        Client::new(manifest.witness.clone(), private_witness, clock)?,
+        stream,
+    )?;
+    let anchor = witness.read(stream).map_err(|_| Error)?;
+    let reader: Arc<dyn ReadWitness> = Arc::new(witness.reader());
+    if anchor.epoch != manifest.epoch {
+        return Err(Error);
+    }
+    let backend = match &manifest.history {
+        None => Storage::Frames(
+            Replicated::new(
+                stream,
+                manifest.epoch,
+                S3Replica::new(first, stream)?,
+                S3Replica::new(second, stream)?,
+                witness,
+            )
+            .map_err(|_| Error)?,
+        ),
+        Some(policy) => Storage::Packs(
+            Packed::with_limits(
+                stream,
+                manifest.epoch,
+                S3Packs::new(first, stream, policy)?,
+                S3Packs::new(second, stream, policy)?,
+                witness,
+                policy.limits()?,
+            )
+            .map_err(|_| Error)?,
+        ),
+    };
+    Ok((backend, anchor, reader))
+}
 impl Loaded {
     /// Actual application component for trusted provisioning before KMS Encrypt.
     pub fn commitment(&self) -> [u8; 32] {
@@ -553,50 +617,8 @@ impl Loaded {
             domain: self.config.domain,
             id: manifest.stream,
         };
-        let copy = || Credential {
-            access: parent.access.clone(),
-            secret: parent.secret.clone(),
-            token: parent.token.clone(),
-            expires: parent.expires,
-        };
-        // The parent credential cannot be reused as the witness credential.
-        if parent.access == self.witness.access {
-            return Err(Error);
-        }
-        let first = Client::new(manifest.first.clone(), copy(), clock.clone())?;
-        let second = Client::new(manifest.second.clone(), copy(), clock.clone())?;
-        let mut witness = DynamoWitness::new(
-            Client::new(manifest.witness.clone(), self.witness, clock.clone())?,
-            stream,
-        )?;
-        let anchor = witness.read(stream).map_err(|_| Error)?;
-        let read_witness = witness.reader();
-        if anchor.epoch != manifest.epoch {
-            return Err(Error);
-        }
-        let backend = match &manifest.history {
-            None => Storage::Frames(
-                Replicated::new(
-                    stream,
-                    manifest.epoch,
-                    S3Replica::new(first, stream)?,
-                    S3Replica::new(second, stream)?,
-                    witness,
-                )
-                .map_err(|_| Error)?,
-            ),
-            Some(policy) => Storage::Packs(
-                Packed::with_limits(
-                    stream,
-                    manifest.epoch,
-                    S3Packs::new(first, stream, policy)?,
-                    S3Packs::new(second, stream, policy)?,
-                    witness,
-                    policy.limits()?,
-                )
-                .map_err(|_| Error)?,
-            ),
-        };
+        let (backend, anchor, read_witness) =
+            open_storage(manifest, parent, self.witness, stream, clock.clone())?;
         let cipher = RecordCipher::new(self.storage, manifest.generation, manifest.stream)
             .map_err(|_| Error)?;
         let fresh = anchor.head.is_none();
@@ -673,7 +695,7 @@ impl Loaded {
             gates: manifest.gates.clone(),
             reads: Some(ReadRuntime {
                 reader,
-                witness: Arc::new(read_witness),
+                witness: read_witness,
             }),
         })
     }

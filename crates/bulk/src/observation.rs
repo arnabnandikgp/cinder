@@ -135,7 +135,7 @@ pub(crate) fn ingest_with(
     tx.evidence.extend(extra);
     let mut fills = Vec::new();
     let unresolved;
-    if !normalize {
+    if !normalize || !gateway.financial_observations() {
         unresolved = true;
     } else {
         match message.kind {

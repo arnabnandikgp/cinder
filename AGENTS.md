@@ -18,15 +18,19 @@ BULK execution, bounded native reads and fill/fee ingestion (ADR 0040). Unit
 replay revision 6 requires new empty histories; no revision-1/2/3/4/5 migration is
 supplied. P35 adds opt-in canonical owner/unit discovery, sealed-controller funds
 and atomic all-unit operator recovery cutover (ADR 0041), not a qualified BULK
-funding rail. Shipping Runtime/PrivateClient stay v1; only durable native preparation
+funding rail. The legacy Runtime/PrivateClient stay v1; only durable native preparation
 and qualified adapter policy can authorize native exposure.
 Phoenix/PER, the website/demo and Mintlify docs are separate workstreams, not
 backend templates.
 P36's [joined acceptance](docs/implementation/UNIT-ACCEPTANCE.md) exercises the
 actual SDK/unit Runtime/native adapters with synthetic ports. Its private-pipe
 driver is local-fixture-only, not an encrypted endpoint or shipping release.
-Native two-unit role/egress/chain manifest and changed-image qualification remain
-separate gates; never deploy fixture keys/readiness/balances or claim a BULK rail.
+P38 adds an explicit version-7 two-unit measured assembly and private managed
+empty-owner inventory. Its native trading/funding/polling gates are disabled;
+it exposes no public custody discovery or BULK funds controller. Separate agent
+and unit-configuration capsules fit bounded KMS plaintexts. Joined native workers
+and changed-image qualification remain P39/P40 gates; never deploy fixture
+keys/readiness/balances or claim a BULK rail.
 
 ## Product context
 

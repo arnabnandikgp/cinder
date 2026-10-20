@@ -1241,6 +1241,51 @@ results, existing BULK wire/execution tests and [run proposal](UNIT-QUALIFICATIO
 - [x] Under separately bounded current paper scope, test fresh-account agents/revocation, original order/cancel/fill/fee linkage and reserved cleanup using Cinder's existing wire/adapter contracts. The [October 20 receipt](../venues/bulk-paper-20261020.md) records two maker fills/open-close, cancel, both revocations, zero-fill IOC, full cleanup and source-backed absent-ID compatibility. Partial/IOC fills, nonzero fees and financial Gateway qualification are not claimed. Paper funds are not a Solana deposit or financial activation.
 - [x] Record exact native outcomes, remaining semantics and disabled rails; promote only sanitized regressions needed by observed behavior. Tracked fixture/tests cover the native pair identity rule, null/mismatch/conflict refusal and raw retention. Fee-tier 404 and unsupported funding/return rails remain explicit. CI stays offline; no frontend/AWS/production action.
 
+<a id="p38"></a>
+## P38 — Measured two-unit deployment assembly
+
+Depends on: P37.
+
+Deliver: explicit version-7 two-unit manifest, separate Pacifica/BULK agent and
+private configuration capsules, trusted preparation and the real enclave
+TLS/Noise entrypoint over one protected unit journal. Managed empty owners are
+not public custody onboarding. Trading, funding and polling stay disabled.
+Evidence: [ADR 0042](../architecture/0042-unit-deployment.md), ADRs 0039–0041,
+P36 acceptance and P37 native receipts.
+
+- [x] Manifest/role/registry/egress contracts reject aliases, mismatches and legacy fallback; versions 1–6 retain their encoding and behavior.
+- [x] Actual adapters, private API and replicated/fresh journal derive the application commitment; no fixture keys, balances, readiness or custody controller is deployed.
+- [x] Entrypoint supplies the unit handler to both confidential carriers; finite lease, restart, managed owner inventory and sticky fencing are tested offline.
+- [ ] Trusted preparation, regression tests and operator handoff are tracked in the stacked PR; changed-image qualification remains separate.
+
+<a id="p39"></a>
+## P39 — Joined deployed-unit worker and SDK acceptance
+
+Depends on: P38.
+
+Deliver: bounded native read/execution workers and encrypted UnitClient
+acceptance against the deployable composition, with qualified paper policy and
+explicit capital/risk setup. Reuse P36/P37, not a second accounting model.
+Evidence: ADR 0040, UNIT-ACCEPTANCE and native paper receipts.
+
+- [ ] Workers bind durable intent, escaped execution, observations and reconciliation to the original unit; network I/O never holds the financial writer.
+- [ ] Actual confidential carriers and Node/browser SDK cover both units, restart/revoke/fencing and cross-unit negatives with offline regressions.
+- [ ] Unqualified funding, uncertain credit, incomplete forced-event coverage and unavailable fee tiers cannot authorize trading or payouts.
+
+<a id="p40"></a>
+## P40 — Changed-image experimental parity qualification
+
+Depends on: P39.
+
+Deliver: separately approved bounded Nitro qualification and a final
+Pacifica/BULK experimental capability comparison. This finishes the current
+second-venue workstream, not production/customer-funds readiness.
+Evidence: measured source/image receipts, P36–P39 tests and cleanup.
+
+- [ ] Exact changed image/roles, attestation, private SDK, durable restart and independent fencing pass on Nitro under current scoped approval.
+- [ ] Supported paper lifecycle runs through the assembled service, not only a direct venue runner; unobserved cases remain named gaps.
+- [ ] Capability matrix and cleanup receipt separate unsupported funding/return rails; review this boundary before integrating a third venue.
+
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
 

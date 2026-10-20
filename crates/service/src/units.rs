@@ -1,7 +1,9 @@
-//! Opt-in unit handler on the existing confidential TLS/Noise carriers. Native
-//! workers and a governed deployment manifest are separate activation gates.
+//! Opt-in unit handler on the existing confidential TLS/Noise carriers. The
+//! measured deployment assembly is inactive; native worker activation is separate.
 /// Typed trusted custody workers; native/chain I/O stays outside the writer.
 pub mod custody;
+/// Measured new-history deployment; independent of the local acceptance fixture.
+pub mod deployment;
 pub mod native;
 use crate::{
     Error,

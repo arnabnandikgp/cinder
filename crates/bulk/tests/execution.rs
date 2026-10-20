@@ -421,6 +421,92 @@ fn dispatch(key: AttemptKey, n: u8) -> Dispatch {
     }
 }
 
+#[test]
+fn unknown_testnet_gateway_can_archive_reads_but_cannot_sign_or_post_a_fill() {
+    let mut unknown = policy();
+    unknown.qualification = Level::Unknown;
+    let c = config().units()[0].ledger.clone();
+    assert!(
+        Gateway::new(
+            c.clone(),
+            profile(),
+            unknown.clone(),
+            Zeroizing::new([10; 32]),
+            1
+        )
+        .is_err()
+    );
+    let g = Gateway::new_read_only(
+        c.clone(),
+        profile(),
+        unknown.clone(),
+        Zeroizing::new([10; 32]),
+        1,
+    )
+    .unwrap();
+    let mainnet = financial::Profile::new(
+        Scope::new(c.sources[0].scope, Network::Mainnet, [41; 32]).unwrap(),
+        c.quote,
+        0,
+        Target::Master,
+        vec![Mapping::new(
+            NativeMarket::new("BTC-USD", "1", "1", 0).unwrap(),
+            c.markets[0].unit(),
+        )],
+    )
+    .unwrap();
+    assert!(Gateway::new_read_only(c, mainnet, unknown, Zeroizing::new([10; 32]), 1).is_err());
+    let t = support::Temp::new();
+    let (mut j, _) = fixture(&t);
+    let key = admit(&mut j);
+    // Install the matching local key epoch first: refusal must come from the
+    // read-only qualification, not accidentally from a missing agent record.
+    g.initialize(
+        &mut j.select(uid(40)).unwrap(),
+        CommitId::new([7; 32]).unwrap(),
+        10,
+    )
+    .unwrap();
+    let head = j.head();
+    assert!(
+        g.prepare_dispatch(&mut j.select(uid(40)).unwrap(), dispatch(key, 8))
+            .is_err()
+    );
+    assert_eq!(j.head(), head); // refusal precedes exposure/nonce/budget mutation.
+    let ledger = j.state().unwrap().unit(uid(40)).unwrap().ledger().clone();
+    observation::ingest(
+        &g,
+        &mut j.select(uid(40)).unwrap(),
+        Message {
+            kind: Kind::TradeStream,
+            body: stream([99; 32], 100),
+            received_at: 10,
+        },
+        CommitId::new([10; 32]).unwrap(),
+        10,
+    )
+    .unwrap();
+    assert_ne!(j.head(), head); // original raw response retained.
+    assert_eq!(j.state().unwrap().unit(uid(40)).unwrap().ledger(), &ledger);
+    let (r, c) =
+        cinder_bulk::reads::prepare(&g, &mut j.select(uid(40)).unwrap(), poll(80)).unwrap();
+    r.consume(10).unwrap();
+    cinder_bulk::reads::complete(
+        &g,
+        &mut j.select(uid(40)).unwrap(),
+        c,
+        Reply::Response {
+            status: 200,
+            body: page(),
+            received_at: 10,
+            retry_after_ms: None,
+        },
+        10,
+    )
+    .unwrap();
+    assert_eq!(j.state().unwrap().unit(uid(40)).unwrap().ledger(), &ledger);
+}
+
 fn poll(n: u8) -> cinder_bulk::reads::Poll {
     cinder_bulk::reads::Poll {
         kind: Kind::Trades,

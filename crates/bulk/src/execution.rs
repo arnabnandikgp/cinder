@@ -198,11 +198,36 @@ impl Gateway {
         seed: Zeroizing<[u8; 32]>,
         epoch: u64,
     ) -> Result<Self, Error> {
+        if policy.qualification != Level::Qualified {
+            return Err(Error::Unqualified);
+        }
+        Self::construct(config, profile, policy, seed, epoch)
+    }
+    /// Testnet assembly/read capture only. Unknown interpretation may archive raw
+    /// observations but can neither expose a signature nor post financial fills.
+    pub fn new_read_only(
+        config: Config,
+        profile: Profile,
+        policy: Policy,
+        seed: Zeroizing<[u8; 32]>,
+        epoch: u64,
+    ) -> Result<Self, Error> {
+        if policy.qualification != Level::Unknown || profile.scope.network != Network::Testnet {
+            return Err(Error::Unqualified);
+        }
+        Self::construct(config, profile, policy, seed, epoch)
+    }
+    fn construct(
+        config: Config,
+        profile: Profile,
+        policy: Policy,
+        seed: Zeroizing<[u8; 32]>,
+        epoch: u64,
+    ) -> Result<Self, Error> {
         let key = SigningKey::from_bytes(&seed);
         if epoch == 0
             || policy.revision == 0
             || policy.evidence == [0; 32]
-            || policy.qualification != Level::Qualified
             || !(1..=30000).contains(&policy.expiry_ms)
             || policy.cleanup_reserve == 0
             || policy.credits <= policy.cleanup_reserve
@@ -270,6 +295,9 @@ impl Gateway {
     ) -> Result<(&Profile, u64), Error> {
         self.binding(j)?;
         Ok((&self.profile, self.policy.revision))
+    }
+    pub(crate) fn financial_observations(&self) -> bool {
+        self.policy.qualification == Level::Qualified
     }
     pub(crate) fn attribution(
         &self,
@@ -635,7 +663,7 @@ impl Gateway {
         j: &mut impl Controller,
         d: Dispatch,
     ) -> Result<(Outbound, Completion), Error> {
-        if j.transaction(d.commit).is_some() {
+        if !self.financial_observations() || j.transaction(d.commit).is_some() {
             return Err(Error::Unqualified);
         }
         let h = self.history(j, d.at)?;

@@ -5,6 +5,20 @@ Snapshot: 2026-09-30. This is a curated map, not an archive upload. The original
 broken public links. [BASELINE](BASELINE.md) and [CONFORMANCE](CONFORMANCE.md) carry
 the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
+## Two-unit measured assembly boundary — 2026-10-20
+
+P38 promotes the existing unit Handler to explicit version-7 selection in the
+real enclave/preparation binaries, not to a qualified live deployment. Actual
+read-only gateways and fixed egress derive its application component; separate
+private unit configurations, agent roles, one encrypted replicated history and
+independent fresh-head witness remain explicit. Offline signed-request/restart/
+fencing/preparation regressions use synthetic ports and no financial seeding.
+[ADR 0042](../architecture/0042-unit-deployment.md) and the
+[operator contract](../operations/unit-deployment.md) state the exact limits.
+Carrier construction is not encrypted SDK/native acceptance (P39); no changed
+image or new native funding/return evidence is inferred (P40). TRACKER owns
+checked source, commands, counts and publication/review status.
+
 ## Native paper capability receipt — 2026-10-20
 
 P37's [BULK paper receipt](../venues/bulk-paper-20261020.md) retains original
