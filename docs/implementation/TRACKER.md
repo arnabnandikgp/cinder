@@ -46,7 +46,7 @@
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; eight hosted jobs green at `ed0e98e`, user review ongoing |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), ready above #83; hosted CI/review pending |
 | [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), ready above #84; offline acceptance passed, review/CI pending |
-| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | Preparing exact read-only release above #86; no AWS resources created |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87), above #86; approved read-only qualification in progress |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -59,10 +59,31 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 ### P40 read-only qualification preparation — 2026-10-20
 
 Current branch `tee/p40-unit-qualification`, above ready #86 in stack #85.
+Ready [#87](https://github.com/arnabnandikgp/cinder/pull/87) is published at
+`37394a4d4f4e0ac0a40563af775ce625a9f75443`, tree
+`0731654e0757201692147575bcb4249431858223`. No PR was merged.
 The user refreshed AWS login and installed the exact fresh P40 setup policies;
 both policy documents have been read back and compared successfully. Non-root
-identity is `cinder_new`. No resource has been created or native/RPC call sent.
-Current AMI/type/price/network checks and exact source/image build remain ahead.
+identity is `cinder_new`. Current Amazon ARM64 AMI, c6g.large Nitro support,
+eight-vCPU quota, fixed network, fresh names and $0.068/hour price pass. Four-hour
+compute is $0.272; conservative all-in estimate remains below $2/$5 cap.
+
+Exact-source default-feature ARM64 package built offline in the source-only,
+network-disabled Apple container. A fresh application rebuild is ELF-identical;
+ordinary-host NSM refusal passes. Tool image index `33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`;
+enclave ELF `dc362506603b9c9abda056268c3e2b425910db0f70b64fdab9304a6a4935a8ba`.
+Stopped-container export produced inconsistent ELF hashes and was rejected. The
+original in-container files and direct live-container copy both match all 13
+checksums; only that verified bundle is packaged. A post-build recovery hold in
+the temporary harness performed no rebuild or artifact modification. Original
+export evidence is preserved separately; the task container is removed. No
+shipping source check was relaxed and no bad export was uploaded.
+
+The fresh run's two runtime roles, seven scoped test keys, two ciphertext stores
+and witness are created under the owned P40 ledger. The one-host launch is next;
+native/RPC activity and financial exposure are still zero. All actual source,
+artifacts, scripts and resource/request receipts remain in ignored
+`work/experiments/p40-units/`; the public code does not depend on that directory.
 
 Trusted local seven-role conversion, final preparation and bootstrap pass with
 disposable secrets; all wrapped roles fit KMS. Missing role/zero secret nonce/key
@@ -72,6 +93,15 @@ authorities. Its private outputs never belong on the parent. Schedule, source /
 image gates and evidence limitations are in operations/unit-qualification.md.
 P39 additionally passes all 18 optimized unit Runtime/deployment tests. The
 approved read-only scope cannot qualify the live assembled financial criterion.
+
+Pre-boot correction: a focused regression demonstrates eight extra storage
+checks in eight exhausted read-only ticks (17 vs 9). The worker now checks its
+trusted clock/lease and returns idle without touching cloud history when both
+read allocations are exhausted and both dispatch allocations are zero. Private
+SDK freshness checks are unchanged. All 19 unit Runtime/deployment tests pass;
+strict default/all-feature lint/build passes. The initial EIF was not booted and
+no PCR key release was granted; it is retained as unused candidate 1 on the one
+owned host. Rebuild/requalify the corrected exact source before first boot.
 
 ### P39/P40 continuation — 2026-10-20
 

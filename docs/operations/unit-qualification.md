@@ -29,6 +29,12 @@ need only four. An unfunded/unregistered native account may return not-found;
 record the actual response disposition, not a fabricated balance or successful
 financial reconciliation. Do not retry an uncertain request as the original.
 
+An exhausted read-only supervisor checks its trusted boot clock/lease without
+rechecking cloud history on every idle tick. SDK reads still independently verify
+the witness before private release. The pre-boot regression first demonstrates
+eight unnecessary storage checks, then verifies zero idle storage I/O and sticky
+expiry. This optimization supplies no financial or private-read authority.
+
 Verify `cinder_new` is non-root, exact P40 setup policies and fresh names, EC2
 launch/cleanup authority, current Amazon ARM64 AMI/Nitro support, quota/network
 and price before provisioning. Two new runtime roles must have the fresh scoped

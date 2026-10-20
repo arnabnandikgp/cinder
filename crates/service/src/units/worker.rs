@@ -156,8 +156,17 @@ impl<P: pr::Transport + pacifica::Transport, T: br::Transport + bulk::Transport>
         &mut self,
         app: &Runtime<B, Q, A>,
     ) -> Result<Step, Error> {
+        app.now()?;
+        // No remaining native capability: do not poll cloud history merely to
+        // rediscover idleness. This is not private-read authority; each SDK read
+        // still verifies its independent witness, and the boot lease stays live.
+        if !self.policy.trading()
+            && self.reads[0] >= self.policy.pacifica_reads
+            && self.reads[1] >= self.policy.bulk_reads
+        {
+            return Ok(Step::Idle);
+        }
         let work = {
-            app.now()?;
             let mut writer = match app.journal.try_lock() {
                 Ok(w) => w,
                 Err(std::sync::TryLockError::WouldBlock) => return Ok(Step::Busy),

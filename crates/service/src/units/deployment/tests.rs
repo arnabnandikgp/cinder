@@ -351,6 +351,7 @@ fn loaded(m: &Manifest, keys: BTreeMap<Role, Zeroizing<Vec<u8>>>) -> Loaded {
 struct Shared {
     frames: Mutex<Vec<Frame>>,
     epoch: AtomicU64,
+    checks: AtomicU64,
 }
 struct Memory(Arc<Shared>);
 impl Backend for Memory {
@@ -358,6 +359,7 @@ impl Backend for Memory {
         Ok(self.0.frames.lock().unwrap().clone())
     }
     fn check_current(&mut self, h: Head) -> Result<(), cinder_journal::Error> {
+        self.0.checks.fetch_add(1, Ordering::SeqCst);
         if self.0.frames.lock().unwrap().last().map(|f| f.head) == Some(h) {
             Ok(())
         } else {
@@ -448,6 +450,41 @@ fn shared() -> Arc<Shared> {
         epoch: AtomicU64::new(1),
         ..Shared::default()
     })
+}
+#[test]
+fn exhausted_read_only_supervisor_has_no_idle_storage_io_but_still_expires() {
+    let (mut m, keys) = worker_input(false);
+    let worker = m.units.as_mut().unwrap().worker.as_mut().unwrap();
+    worker.pacifica_reads = 0;
+    worker.bulk_reads = 0;
+    m.gates.native_reads = false;
+    crate::application::prepare(&mut m, &keys).unwrap();
+    let shared = shared();
+    let clock = Arc::new(Time(AtomicU64::new(100)));
+    let app = attach(
+        &m,
+        keys,
+        shared.clone(),
+        clock.clone(),
+        Arc::new(AtomicBool::new(false)),
+        true,
+    )
+    .unwrap();
+    let before = shared.checks.load(Ordering::SeqCst);
+    for _ in 0..8 {
+        app.tick().unwrap();
+    }
+    assert_eq!(
+        shared.checks.load(Ordering::SeqCst),
+        before,
+        "exhausted worker must not recheck cloud storage while idle"
+    );
+    clock
+        .0
+        .store(100 + m.gates.maximum_boot_ms, Ordering::SeqCst);
+    assert!(app.tick().is_err());
+    clock.0.store(100, Ordering::SeqCst);
+    assert!(app.tick().is_err(), "idle fence stays sticky");
 }
 fn session() -> Session {
     Session::established(test_support::config().domain, [8; 32], 120000)
