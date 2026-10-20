@@ -45,7 +45,7 @@
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; eight hosted jobs green at `ed0e98e`, user review ongoing |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), ready above #83; hosted CI/review pending |
-| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | Local worker/SDK integration on `tee/p39-unit-workers`, above #84 |
+| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), ready above #84; offline acceptance passed, review/CI pending |
 | [P40 — Changed-image experimental parity](PLAN.md#p40) | open | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -58,7 +58,11 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ### P39/P40 continuation — 2026-10-20
 
-Current branch `tee/p39-unit-workers`, above #84 in stack #85. P39 joins bounded
+Published [#86](https://github.com/arnabnandikgp/cinder/pull/86) on
+`tee/p39-unit-workers`, above #84 in stack #85, at source
+`81a346e2de3d87d7930d31c8eb9616b4153d988b`. This receipt successor changes no
+executable/test source. No PR was merged; exact-head hosted CI/review is pending.
+P39 joins bounded
 workers to the measured assembly and qualifies the encrypted SDK locally. P40
 will follow in its own stacked PR; no merge or frontend work is authorized here.
 New code/tests are not qualified by prior green heads. Final local checks pass:
@@ -7185,7 +7189,8 @@ Initial local checks caught fixture read-cost underallocation and a read-complet
 signature mismatch; corrected without weakening adapter costs/uncertainty. Native
 unknown reads correctly contain new risk; tests do not substitute them for credit.
 Next: publish above #84; prepare exact P40 changed-image/read-only qualification.
-PR: none.
+PR: [#86](https://github.com/arnabnandikgp/cinder/pull/86), ready above #84;
+publication source `81a346e2de3d87d7930d31c8eb9616b4153d988b`; CI/review pending.
 Merge: none.
 
 ## P40 — Changed-image experimental parity
