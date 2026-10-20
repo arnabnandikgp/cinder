@@ -1287,9 +1287,9 @@ Pacifica/BULK experimental capability comparison. This finishes the current
 second-venue workstream, not production/customer-funds readiness.
 Evidence: measured source/image receipts, P36–P39 tests and cleanup.
 
-- [ ] Exact changed image/roles, attestation, private SDK, durable restart and independent fencing pass on Nitro under current scoped approval.
+- [x] Exact changed image/roles, attestation, private SDK, durable restart and independent fencing pass on Nitro under current scoped approval. [October 20 receipt](../operations/unit-hardware-20261020.md) records the exact read/admin-only artifact and evidence limits.
 - [ ] Supported paper lifecycle runs through the assembled service, not only a direct venue runner; unobserved cases remain named gaps.
-- [ ] Capability matrix and cleanup receipt separate unsupported funding/return rails; review this boundary before integrating a third venue.
+- [x] Capability matrix and cleanup receipt separate unsupported funding/return rails; review this boundary before integrating a third venue. [Comparison](../venues/experimental-parity.md) and [cleanup](../operations/unit-hardware-20261020.md#retention-and-closure) retain the open assembled-financial dependency.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates

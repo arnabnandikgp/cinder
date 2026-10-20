@@ -7,6 +7,17 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Two-unit measured assembly boundary — 2026-10-20
 
+P39's version-8 workers and actual confidential UnitClient acceptance pass
+offline. P40's [changed-image Nitro receipt](../operations/unit-hardware-20261020.md)
+then qualifies exact-source default-feature Node/Chrome HTTP/WebSocket access,
+seven separate attested roles, original-receipt restart and independent witness
+fencing. The [capability comparison](../venues/experimental-parity.md) keeps
+direct native paper tests, synthetic financial acceptance and read/admin-only
+hardware evidence separate. The live assembled financial lifecycle remains open;
+neither testnet account-not-found nor an initialized zero book is native credit.
+Exact source/measurements, setup failures, archive and cleanup belong in the
+receipt/TRACKER, not a generic launch-readiness assertion.
+
 P38 promotes the existing unit Handler to explicit version-7 selection in the
 real enclave/preparation binaries, not to a qualified live deployment. Actual
 read-only gateways and fixed egress derive its application component; separate

@@ -4,7 +4,7 @@ use cinder_kernel::{identity::*, ledger::Location};
 use cinder_pacifica::{execution as p, profile as pp};
 use cinder_service::{
     Error,
-    boot::{Manifest, Role},
+    boot::{Gates, Manifest, Role},
     units::{deployment as d, worker},
 };
 use serde::Deserialize;
@@ -30,6 +30,13 @@ impl Drop for Input {
         self.bulk_trading.zeroize();
         self.privacy_nonce.zeroize();
     }
+}
+fn read_only(mut inherited: Gates, native_reads: bool) -> Gates {
+    inherited.trading = false;
+    inherited.funding = false;
+    inherited.native_reads = native_reads;
+    inherited.maximum_boot_ms = 2_400_000;
+    inherited
 }
 fn run() -> Result<(), Error> {
     if std::env::args().len() != 1 {
@@ -125,9 +132,7 @@ fn run() -> Result<(), Error> {
     };
     manifest.version = 8;
     manifest.application = [1; 32];
-    manifest.gates.trading = false;
-    manifest.gates.funding = false;
-    manifest.gates.native_reads = input.native_reads;
+    manifest.gates = read_only(manifest.gates, input.native_reads);
     manifest.chain = None;
     manifest.native_capture = None;
     manifest.demo_deposit = None;
@@ -199,5 +204,25 @@ fn main() {
     if run().is_err() {
         eprintln!("unit qualification preparation refused");
         std::process::exit(1);
+    }
+}
+
+#[test]
+fn qualification_caps_do_not_inherit_legacy_authority_or_lease() {
+    for maximum_boot_ms in [10_000, 2_400_000, 3_600_000] {
+        for native_reads in [false, true] {
+            let gates = read_only(
+                Gates {
+                    trading: true,
+                    funding: true,
+                    native_reads: !native_reads,
+                    maximum_boot_ms,
+                },
+                native_reads,
+            );
+            assert_eq!(gates.maximum_boot_ms, 2_400_000);
+            assert!(!gates.trading && !gates.funding);
+            assert_eq!(gates.native_reads, native_reads);
+        }
     }
 }

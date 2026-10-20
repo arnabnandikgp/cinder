@@ -46,7 +46,7 @@
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; eight hosted jobs green at `ed0e98e`, user review ongoing |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), ready above #83; hosted CI/review pending |
 | [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), ready above #84; offline acceptance passed, review/CI pending |
-| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87), above #86; approved read-only qualification in progress |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87), above #86; read/admin hardware passed, assembled financial criterion remains open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -56,7 +56,63 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P40 read-only qualification preparation — 2026-10-20
+### P40 read/admin hardware completion — 2026-10-20
+
+Current branch `tee/p40-unit-qualification`, ready #87 above #86 in stack #85;
+no PR merged. Exact application source `91a01ffaa7530297bdde7ac445a44cb5f6163264`
+passes all eight hosted offline jobs. Strict local default/all-feature checks,
+19 debug/release unit tests, 95 contracts and Node/Chrome joined acceptance pass.
+The final documentation successor must not inherit old-head hosted green status.
+
+The approved one-host read/admin run passes real AWS-root Node and Chrome
+HTTP/WebSocket UnitClient access to both units, scoped READ grant/cross-unit
+negatives, shared revocation, same-image/capsule/history restart and original
+receipt lookup at epoch 3. Exact-head independent witness CAS advances 1 → 2
+without losing sequence/hash; both units refuse and the enclave exits. The
+[hardware receipt](../operations/unit-hardware-20261020.md) records source,
+ELF/manifest/EIF/PCRs, four boots and setup failures. No financial action or RPC.
+
+Parent execute-mode and copied bucket-name errors were corrected in ignored
+operator tooling, with no IAM-boundary relaxation or application-code change.
+The two mistaken buckets were verified empty and removed; all keys, identities,
+generation, stream and the empty witness were preserved. Correct public routes
+and a finite witness-credential renewal required a new inspected/repinned EIF.
+Boots 3/4 pass. A restart-readiness race was retried only as a fresh read/lookup,
+never by resending a mutation. The collector now validates exact retained-pack
+paths, not a legacy frame-only pattern.
+
+Ignored tools/public artifacts/original intents/results/resource ledger remain
+in `work/experiments/p40-units/`. Both replicas' 28 objects (234,426 bytes) and 14
+accepted frames authenticate offline; fenced snapshot is epoch 2, sequence 13.
+Two account queries per venue were sent. BULK retained two HTTP 404 error replies;
+Pacifica retained two read reservations but no usable account observation or
+exact failed-reply status. Neither is native zero/credit; no normalized financial
+input event was posted. Independent cleanup verification confirms host/volumes,
+all buckets/witness/roles/SSH/security group absent and all seven KMS keys pending
+seven-day deletion. User setup policies remain; local relay/tunnel stopped.
+Host launch 17:37:26 UTC, termination confirmed by 18:15:05 UTC, four boots within
+all approved caps. Retained encrypted test evidence is not deleted.
+
+P40 review: the converter could inherit a longer legacy boot lease. The actual
+run is explicitly verified at 2,400,000ms; a one-hour offline input reproduces the
+helper defect. The converter now pins 40 minutes, with permanent short/exact/
+long-lease and both read-flag regression coverage. Its targeted test, strict
+Clippy, optimized build and full trusted offline preparation pass. This local
+helper-only change does not modify the measured application/image. The stale
+owning-phase policy verification claim is also corrected. Predecessor #83/#84
+review findings remain separate follow-up; they are not declared resolved by
+P40's hardware result.
+
+The [capability matrix](../venues/experimental-parity.md) distinguishes common
+implemented surfaces from venue-specific evidence. P40's assembled paper
+financial lifecycle remains open: fresh shipping books have no qualified credit,
+native margin/capital/risk cut or complete financial frontier, and this AWS
+approval excluded orders/funds. Do not seed fixture money or relabel P37 direct
+paper calls as assembled SDK trades. Next: complete cleanup/publication, then
+review that explicit financial dependency and stack reviews before merge or a
+third venue. Do not reopen Pacifica missing-credit investigation implicitly.
+
+### P40 preparation — superseded by completion above
 
 Current branch `tee/p40-unit-qualification`, above ready #86 in stack #85.
 Ready [#87](https://github.com/arnabnandikgp/cinder/pull/87) is published at
@@ -7242,20 +7298,22 @@ Merge: none.
 
 ## P40 — Changed-image experimental parity
 
-Work: current hardware/read-only approval is recorded in the current handoff;
-exact changed-image preparation and scoped policies are in progress above #86.
-Trusted local read-only converter adds seven-role preparation/bootstrap without
-shipping money authority; finite schedule is in operations/unit-qualification.md.
-Verification: local seven-role conversion/preparation passes, all wrapped bodies
-fit KMS (largest 2,420 bytes in the short local witness fixture); missing role,
-zero nonce/key refuse. Real STS sizes remain a pre-release check. P39 optimized
-unit Runtime/deployment checks also pass (18). User reports policy installation;
-non-root identity is verified, exact documents/image and launch checks pending.
-Unexpected: unsupported native funding/return rails remain outside parity claims.
-The approved hardware scope excludes orders and cannot close the live assembled
-financial criterion by importing fixture readiness.
-Next: verify exact policies, export/build exact source and qualify on one host.
-PR: none.
+Work: exact read/admin-only version-8 seven-role deployment is qualified on the
+approved one-host Nitro run; capability comparison and full artifact receipt
+are tracked. Common implementation parity is not native financial readiness.
+Verification: actual Node/Chrome HTTP/WebSocket scope/revoke, same-history
+restart/original receipt and independent fence pass at source `91a01ff`;
+19 local unit tests in debug/release, 95 contracts and all eight hosted jobs pass.
+Wrapped real STS roles fit KMS. Four boots, two native account queries per venue,
+zero financial actions/RPC; retained ciphertext and AEAD audit are recorded above.
+Unexpected: parent execute bits and copied bucket names caused the first two
+startup failures; corrected setup preserves identity/history and the unchanged
+IAM boundary. Ordinary Pacifica failed replies do not retain exact status;
+account queries remain unqualified, not zero. Unsupported funds/returns and the
+assembled financial criterion stay open.
+Next: publish the verified cleanup/evidence successor, then review the explicit
+assembled-financial dependency and stack reviews before merge or a third venue.
+PR: https://github.com/arnabnandikgp/cinder/pull/87
 Merge: none.
 
 ## P24 — Release safety case

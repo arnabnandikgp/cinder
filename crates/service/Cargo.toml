@@ -10,6 +10,10 @@ default = []
 # No fixture attester, root, storage key or policy in the default build.
 local-fixture = []
 
+[[example]]
+name = "qualification-units"
+test = true
+
 [dependencies]
 cinder-web-channel = { path = "../web-channel", version = "=0.1.0" }
 cinder-kernel.workspace = true
