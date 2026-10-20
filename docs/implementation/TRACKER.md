@@ -45,7 +45,7 @@
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; eight hosted jobs green at `ed0e98e`, user review ongoing |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), ready above #83; hosted CI/review pending |
-| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | open | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | — |
+| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | Local worker/SDK integration on `tee/p39-unit-workers`, above #84 |
 | [P40 — Changed-image experimental parity](PLAN.md#p40) | open | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | — |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
@@ -55,6 +55,41 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### P39/P40 continuation — 2026-10-20
+
+Current branch `tee/p39-unit-workers`, above #84 in stack #85. P39 joins bounded
+workers to the measured assembly and qualifies the encrypted SDK locally. P40
+will follow in its own stacked PR; no merge or frontend work is authorized here.
+New code/tests are not qualified by prior green heads. Final local checks pass:
+815 workspace tests / 10 existing intentional ignores; strict default/all-feature
+all-target lint/build; 95 contracts; 15 relay and 42 SDK/process tests; actual
+Node 24.21.0 and Chrome 155 each pass the two new encrypted unit-worker groups.
+The final carrier test commits a signed grant during 700ms native I/O (not merely
+an immutable read), checks native partial/duplicate attribution, and preserves
+history-wide dispatch ceilings across process restart. Synthetic ports/capital,
+local attestation root and same-host witness are explicit, not hardware evidence.
+Logs: `/private/tmp/cinder-p39-{debug,final-lint,contracts,client,final-browser}.log`.
+
+Version 8 adds explicit bounded worker allocation, per-unit native qualification,
+scope-bound joined-risk admission and a mandatory three-location source inventory.
+It cannot import fixture capital/readiness or load money-moving keys. Version 7
+retains its omitted-field encoding/inactive behavior. Native work releases the
+writer for I/O, preserves original-unit completions and never resends unknown
+escaped requests. New-read failure/cooldown remains contained; bounded first
+pages are not complete financial frontiers. One refused intent rotates rather
+than indefinitely blocking later candidates.
+
+The user approved one fresh Nitro host in us-east-1 with `cinder_new`, up to
+$5 / four hours / eight enclave boots, with cleanup. Scope: attestation/key
+release, encrypted SDK access to both units, durable restart/fencing and bounded
+testnet account reads. No orders, funds movement, Solana RPC or existing/customer
+wallets. The renewed non-root identity was verified as `cinder_new`; fresh P40
+cloud policies are prepared in ignored `work/experiments/p40-units/permissions/`
+for administrator installation. No AWS resources have been created. Prepare
+exact source/image and verify scoped policies before launch. This
+approval does not qualify capital/risk facts or the assembled paper-trading
+criterion; unsupported funds rails and Pacifica's deferred credit remain gaps.
 
 ### P38 deployment assembly — 2026-10-20
 
@@ -7137,16 +7172,26 @@ Merge: none.
 
 ## P39 — Joined deployed-unit workers/SDK
 
-Work: not started.
-Verification: not run; acceptance in PLAN P39.
-Unexpected: none yet.
-Next: finish P38, then bounded worker/SDK integration using existing controllers.
+Work: explicit v8 measured worker assembly, per-unit qualification/admission,
+bounded scheduling/reads/nonce floor and no-resend completion; advisory sealed
+preflight; actual encrypted HTTP/WebSocket UnitClient acceptance in Node/Chrome;
+operator/architecture and acceptance documentation. No new financial model.
+Verification: all three offline PLAN criteria pass. Full workspace 815/10 expected
+ignores, strict lint/all-target build, 95 contracts, relay 15/SDK 42 and two joined
+groups each in Node/Chrome pass; current handoff records exact scope/logs.
+Unexpected: a fresh empty unit has neither qualified capital/risk nor native credit;
+network wiring must not manufacture those facts to demonstrate paper trading.
+Initial local checks caught fixture read-cost underallocation and a read-completion
+signature mismatch; corrected without weakening adapter costs/uncertainty. Native
+unknown reads correctly contain new risk; tests do not substitute them for credit.
+Next: publish above #84; prepare exact P40 changed-image/read-only qualification.
 PR: none.
 Merge: none.
 
 ## P40 — Changed-image experimental parity
 
-Work: not started.
+Work: current hardware/read-only approval is recorded in the current handoff;
+exact changed-image preparation and scoped policies follow P39.
 Verification: not run; acceptance in PLAN P40.
 Unexpected: unsupported native funding/return rails remain outside parity claims.
 Next: finish P39, prepare exact changed-image proposal and capability matrix.

@@ -21,12 +21,14 @@ fn run() -> Result<(), cinder_service::Error> {
     let recovery_web = args.len() == 4 && args[3] == "--recovery-web";
     let acceptance_web = args.len() == 4 && args[3] == "--acceptance-web";
     let runtime_web = args.len() == 4 && args[3] == "--runtime-web";
+    let unit_web = args.len() == 4 && args[3] == "--unit-web";
     let onboarding_web = args.len() == 4 && args[3] == "--onboarding-web";
     if args.len() != 3
         && !web
         && !recovery_web
         && !acceptance_web
         && !runtime_web
+        && !unit_web
         && !onboarding_web
     {
         return Err(Error);
@@ -38,6 +40,14 @@ fn run() -> Result<(), cinder_service::Error> {
     let wallet = decode_hex(&args[2])?.try_into().map_err(|_| Error)?;
     let mut key = zeroize::Zeroizing::new([0; 32]);
     std::io::stdin().read_exact(&mut *key)?;
+    if unit_web {
+        return cinder_service::fixture::units::network::run(
+            listen,
+            Path::new(&args[1]),
+            key,
+            wallet,
+        );
+    }
     if runtime_web {
         return cinder_service::runtime::qualification::run(
             listen,

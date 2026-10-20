@@ -30,7 +30,7 @@ pub fn construct(
 ) -> Result<Loaded, Error> {
     manifest.validate()?;
     let bytes = keys.remove(&Role::Configuration).ok_or(Error)?;
-    if manifest.version == 7 {
+    if manifest.version >= 7 {
         let config: deployment::Configuration =
             serde_cbor::from_slice(&bytes).map_err(|_| Error)?;
         Ok(Loaded::Units(Box::new(
@@ -54,7 +54,7 @@ pub fn prepare(
         return Err(Error);
     }
     crate::boot::validate_keys(keys)?;
-    if manifest.version == 7 {
+    if manifest.version >= 7 {
         let p: deployment::Pacifica =
             serde_cbor::from_slice(keys.get(&Role::PacificaConfiguration).ok_or(Error)?)
                 .map_err(|_| Error)?;

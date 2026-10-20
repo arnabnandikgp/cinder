@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -50,6 +50,10 @@ pub struct Policy {
     pub bulk_root: Vec<u8>,
     /// Independently approved anchor digest.
     pub bulk_root_hash: [u8; 32],
+    /// Version 8 only: finite, independently allocated native work. Absence
+    /// preserves the version-7 encoding and inactive behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker: Option<super::worker::Policy>,
 }
 impl Policy {
     /// Pure closed contract validation; no network I/O or activation.
@@ -61,6 +65,9 @@ impl Policy {
         UnitId::new(self.bulk).map_err(|_| Error)?;
         Target::new(3, self.bulk_port)?;
         Trust::from_der(&self.bulk_root, self.bulk_root_hash)?;
+        if let Some(worker) = &self.worker {
+            worker.validate()?;
+        }
         Ok(())
     }
 }
@@ -144,6 +151,9 @@ pub struct Pacifica {
     pub execution: pacifica::Policy,
     /// Native agent epoch, independent of writer/storage generation.
     pub trading_epoch: u64,
+    /// Explicit version-8 fill interpretation; never inferred from a gate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fills: Option<pp::Level>,
 }
 /// A BULK grid maps to one exact kernel market, never inferred from responses.
 #[derive(Serialize, Deserialize)]
@@ -182,27 +192,34 @@ pub struct Bulk {
     pub cleanup_reserve: u32,
     /// Native agent epoch.
     pub trading_epoch: u64,
+    /// Explicit version-8 native interpretation, independent of scheduler caps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qualification: Option<bulk::Level>,
 }
-/// No risk-increasing financial decision can be admitted by this assembly.
-pub struct ClosedAdmission;
-impl cinder_api::Admission for ClosedAdmission {
+/// Scope-qualified financial admission. Empty in version 7/read-only releases;
+/// enabled units still require the actual journal's joined risk/capital facts.
+pub struct Admission(Vec<cinder_kernel::ledger::Config>);
+impl cinder_api::Admission for Admission {
     fn order_holds(
         &self,
-        _: &cinder_journal::model::State,
-        _: &cinder_journal::orders::Intent,
+        state: &cinder_journal::model::State,
+        intent: &cinder_journal::orders::Intent,
     ) -> Result<Vec<cinder_journal::model::Reservation>, cinder_api::Error> {
-        Err(cinder_api::Error::Unavailable)
+        if !self.0.iter().any(|c| c == state.configuration()) {
+            return Err(cinder_api::Error::Unavailable);
+        }
+        state
+            .order_reservations(intent)
+            .map_err(|_| cinder_api::Error::Unavailable)
     }
 }
-type Api = Service<ClosedAdmission>;
-type App<B> = super::Runtime<B, RecordCipher, ClosedAdmission>;
+type Api = Service<Admission>;
+type App<B> = super::Runtime<B, RecordCipher, Admission>;
 /// Actual loaded controllers/egress, retained privately, not exposed for callers
 /// to bypass the inactive deployment gates.
 struct Native {
-    _pacifica: pacifica::Gateway,
-    _bulk: bulk::Gateway,
-    _pacifica_egress: Egress,
-    _bulk_egress: BulkEgress,
+    pacifica: pacifica::Gateway,
+    bulk: bulk::Gateway,
 }
 /// Validated assembly before opening storage. No fixture constructors or ports.
 pub struct Loaded {
@@ -283,7 +300,7 @@ impl Configuration {
         mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
     ) -> Result<Loaded, Error> {
         manifest.validate()?;
-        if manifest.version != 7 {
+        if !matches!(manifest.version, 7 | 8) {
             return Err(Error);
         }
         crate::boot::validate_keys(&keys)?;
@@ -316,10 +333,6 @@ impl Configuration {
         {
             return Err(Error);
         }
-        let api = Service::new(
-            Authorizer::new(self.auth_ms, self.grant_ms).map_err(|_| Error)?,
-            ClosedAdmission,
-        );
         let pd = config
             .units()
             .iter()
@@ -330,7 +343,35 @@ impl Configuration {
             .iter()
             .find(|u| u.id.bytes() == policy.bulk)
             .ok_or(Error)?;
-        let pg = pacifica::Gateway::new_read_only(
+        let worker = policy.worker.as_ref();
+        if manifest.version == 7 && (p.fills.is_some() || b.qualification.is_some()) {
+            return Err(Error);
+        }
+        if manifest.version == 8 {
+            if p.fills.is_none() || b.qualification.is_none() {
+                return Err(Error);
+            }
+            // A missing Broker source would initialize the old no-native-funding
+            // contract as ready. Worker releases must declare all three physical
+            // locations, with the native adapter bound only to Venue.
+            for (d, source) in [(pd, p.source), (bd, b.source)] {
+                use cinder_kernel::ledger::Location;
+                if d.ledger.sources.len() != 3
+                    || ![Location::Vault, Location::Broker, Location::Venue]
+                        .iter()
+                        .all(|l| d.ledger.sources.iter().filter(|s| s.location == *l).count() == 1)
+                    || d.ledger.sources.get(source).ok_or(Error)?.location != Location::Venue
+                {
+                    return Err(Error);
+                }
+            }
+        }
+        let pacifica_qualified = p.execution.execution == pp::Level::Qualified;
+        let pg = (if pacifica_qualified {
+            pacifica::Gateway::new
+        } else {
+            pacifica::Gateway::new_read_only
+        })(
             pp::Profile {
                 config: pd.ledger.clone(),
                 source: pd.ledger.sources.get(p.source).ok_or(Error)?.scope,
@@ -339,7 +380,7 @@ impl Configuration {
                 revision: p.revision,
                 evidence: p.evidence,
                 precision: p.precision,
-                fills: pp::Level::Unknown,
+                fills: p.fills.unwrap_or(pp::Level::Unknown),
                 markets: p.markets,
                 quote_places: p.quote_places,
                 perp_tag: p.perp_tag,
@@ -366,7 +407,11 @@ impl Configuration {
                 ))
             })
             .collect::<Result<Vec<_>, Error>>()?;
-        let bg = bulk::Gateway::new_read_only(
+        let bg = (if b.qualification == Some(bulk::Level::Qualified) {
+            bulk::Gateway::new
+        } else {
+            bulk::Gateway::new_read_only
+        })(
             bd.ledger.clone(),
             bf::Profile::new(
                 cinder_bulk::Scope::new(
@@ -385,7 +430,7 @@ impl Configuration {
                 unit: bd.id,
                 revision: b.revision,
                 evidence: b.evidence,
-                qualification: bulk::Level::Unknown,
+                qualification: b.qualification.unwrap_or(bulk::Level::Unknown),
                 expiry_ms: b.expiry_ms,
                 credits: b.credits,
                 cleanup_reserve: b.cleanup_reserve,
@@ -394,6 +439,29 @@ impl Configuration {
             b.trading_epoch,
         )
         .map_err(|_| Error)?;
+        let mut admitted = vec![];
+        if let Some(worker) = worker {
+            if worker.pacifica_dispatches != 0 {
+                if p.fills != Some(pp::Level::Qualified) {
+                    return Err(Error);
+                }
+                // The gateway constructor also requires Qualified execution.
+                if !pacifica_qualified {
+                    return Err(Error);
+                }
+                admitted.push(pd.ledger.clone());
+            }
+            if worker.bulk_dispatches != 0 {
+                if b.qualification != Some(bulk::Level::Qualified) {
+                    return Err(Error);
+                }
+                admitted.push(bd.ledger.clone());
+            }
+        }
+        let api = Service::new(
+            Authorizer::new(self.auth_ms, self.grant_ms).map_err(|_| Error)?,
+            Admission(admitted),
+        );
         // Distinct secret bytes are necessary but not sufficient: neither agent
         // may equal either pooled owner/funds wallet or a managed user's owner.
         for key in [pg.agent_key(), bg.agent_key()] {
@@ -412,7 +480,11 @@ impl Configuration {
         let (pe, be) = egress(manifest, Arc::new(ClosedClock))?;
         let application = sha256(
             &[
-                b"CINDER-UNIT-LOADED-ASSEMBLY-1\0".as_slice(),
+                if manifest.version == 7 {
+                    b"CINDER-UNIT-LOADED-ASSEMBLY-1\0".as_slice()
+                } else {
+                    b"CINDER-UNIT-LOADED-ASSEMBLY-2\0".as_slice()
+                },
                 &sha256(&serde_cbor::to_vec(&self).map_err(|_| Error)?),
                 &sha256(&pbytes),
                 &sha256(&bbytes),
@@ -422,6 +494,11 @@ impl Configuration {
                 &pe.commitment(),
                 &be.commitment(),
                 &serde_cbor::to_vec(manifest.history.as_ref().ok_or(Error)?).map_err(|_| Error)?,
+                &if manifest.version == 8 {
+                    serde_cbor::to_vec(&policy.worker).map_err(|_| Error)?
+                } else {
+                    vec![]
+                },
             ]
             .concat(),
         );
@@ -436,10 +513,8 @@ impl Configuration {
             owners: self.owners,
             api,
             native: Native {
-                _pacifica: pg,
-                _bulk: bg,
-                _pacifica_egress: pe,
-                _bulk_egress: be,
+                pacifica: pg,
+                bulk: bg,
             },
             storage,
             witness,
@@ -467,7 +542,7 @@ fn egress(manifest: &Manifest, clock: Arc<dyn Clock>) -> Result<(Egress, BulkEgr
 /// method exposes signing/funding or bypasses the measured inactive gates.
 pub struct Instance<B: Backend> {
     handler: Arc<App<B>>,
-    _native: Native,
+    worker: Mutex<Option<super::worker::Worker<Egress, BulkEgress>>>,
     stop: Arc<AtomicBool>,
 }
 impl<B: Backend + Send + 'static> Instance<B> {
@@ -475,9 +550,23 @@ impl<B: Backend + Send + 'static> Instance<B> {
     pub fn handler(&self) -> Arc<dyn Handler> {
         self.handler.clone()
     }
-    /// Finite inactive supervisor; no remote poll, signature or financial action.
+    /// One finite measured native step; private TLS I/O never owns the writer.
     pub fn tick(&self) -> Result<(), Error> {
         if self.stop.load(Ordering::SeqCst) || self.handler.now().is_err() {
+            self.fence();
+            return Err(Error);
+        }
+        let mut worker = match self.worker.try_lock() {
+            Ok(w) => w,
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(()),
+            Err(_) => {
+                self.fence();
+                return Err(Error);
+            }
+        };
+        if let Some(worker) = worker.as_mut()
+            && worker.tick(&self.handler).is_err()
+        {
             self.fence();
             return Err(Error);
         }
@@ -583,11 +672,28 @@ impl Loaded {
             epoch: manifest.epoch,
             api,
         };
+        let ports = egress(manifest, private_clock.clone())?;
         let handler =
             super::Runtime::open(journal, self.api, binding, witness, private_clock, deadline)?;
+        let worker = if let Some(policy) = manifest.units.as_ref().ok_or(Error)?.worker.clone() {
+            let routes = manifest.units.as_ref().ok_or(Error)?;
+            let worker = super::worker::Worker::new(
+                policy,
+                UnitId::new(routes.pacifica).map_err(|_| Error)?,
+                UnitId::new(routes.bulk).map_err(|_| Error)?,
+                self.native.pacifica,
+                self.native.bulk,
+                ports.0,
+                ports.1,
+            )?;
+            worker.initialize(&handler)?;
+            Some(worker)
+        } else {
+            None
+        };
         Ok(Instance {
             handler: Arc::new(handler),
-            _native: self.native,
+            worker: Mutex::new(worker),
             stop,
         })
     }

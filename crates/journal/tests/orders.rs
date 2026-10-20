@@ -7,6 +7,25 @@ use cinder_kernel::{
 };
 use support::*;
 
+#[test]
+fn sealed_control_preview_is_nonmutating_and_never_delivers_exposure() {
+    use cinder_journal::controller::Controller;
+    let temp = Temp::new();
+    let mut s = setup(&temp);
+    place(&mut s, 2, 2, false);
+    let head = s.head();
+    let tx = transaction(head, 3, vec![], vec![Control::Expose(attempt(2))]);
+    let before = s.state().unwrap().attempts().to_vec();
+    let preview = s.preview(&tx).unwrap();
+    assert!(preview.controls.is_none());
+    assert_eq!(s.head(), head);
+    assert_eq!(s.state().unwrap().attempts(), before);
+    assert!(!s.state().unwrap().attempts()[0].possibly_exposed);
+    assert_eq!(s.commit(tx.clone()).unwrap().exposures.len(), 1);
+    assert!(matches!(s.preview(&tx), Err(Error::Stale)));
+    assert!(s.commit(tx).unwrap().exposures.is_empty());
+}
+
 fn intent(n: u8, lots: i64) -> Intent {
     Intent {
         time_in_force: TimeInForce::GoodTilCancelled,

@@ -36,5 +36,6 @@ if (standard) {
   command(process.execPath, ['check-browser.mjs']);
   command(process.execPath, ['check-http.mjs']);
   command(process.execPath, ['check-runtime.mjs']);
+  command(process.execPath, ['check-runtime.mjs', '--units']);
 }
 if (packed) command(process.execPath, ['check-runtime.mjs', '--packed-only']);

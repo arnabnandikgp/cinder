@@ -11,14 +11,16 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { runtimeFixture } from './runtime-fixture.mjs';
 import { runRuntime,runPackedGrowth } from '../../clients/private/tests/runtime-suite.ts';
+import { runUnits } from '../../clients/private/tests/unit-web-suite.ts';
 import { stopChild } from './stop-child.mjs';
 
 let frozenRoot;
 async function main() {
 const dir=fileURLToPath(new URL('.',import.meta.url)),args=process.argv.slice(2);
-if(new Set(args).size!==args.length||args.some(a=>!['--node-only','--packed-only'].includes(a)))throw Error('Usage: check-runtime.mjs [--node-only] [--packed-only]');
+if(new Set(args).size!==args.length||args.some(a=>!['--node-only','--packed-only','--units'].includes(a))||args.includes('--units')&&args.includes('--packed-only'))throw Error('Usage: check-runtime.mjs [--node-only] [--packed-only | --units]');
 const nodeOnly=args.includes('--node-only'),packed=args.includes('--packed-only');
-const suite=packed?runPackedGrowth:runRuntime,groups=packed?2:9,cells=packed?2:24;
+const units=args.includes('--units');
+const suite=units?runUnits:packed?runPackedGrowth:runRuntime,groups=units?2:packed?2:9,cells=units?1:packed?2:24;
 if(process.versions.node!==(await readFile(new URL('../../.node-version',import.meta.url),'utf8')).trim())throw Error('Use pinned Node');
 const chrome=process.env.CINDER_TEST_CHROME??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'/usr/bin/google-chrome');
 if(!nodeOnly&&!existsSync(chrome))throw Error('Actual Chrome is required');
@@ -28,7 +30,7 @@ frozenRoot=await mkdtemp(join(tmpdir(),'cinder-runtime-artifact-'));
 const frozenBinary=join(frozenRoot,'cinder-service-fixture');
 await copyFile(resolve(dir,'../..',process.env.CARGO_TARGET_DIR??'target','debug/cinder-service-fixture'),frozenBinary);
 console.log(JSON.stringify({kind:'qualification-artifact',sha256:createHash('sha256').update(await readFile(frozenBinary)).digest('hex')}));
-await build({absWorkingDir:dir,entryPoints:['../../clients/private/tests/runtime-suite.ts'],outfile:'pkg/runtime-fixture.js',bundle:true,format:'esm',platform:'browser',target:'es2022',legalComments:'eof'});
+await build({absWorkingDir:dir,entryPoints:[`../../clients/private/tests/${units?'unit-web':'runtime'}-suite.ts`],outfile:'pkg/runtime-fixture.js',bundle:true,format:'esm',platform:'browser',target:'es2022',legalComments:'eof'});
 const core=await import('./pkg/channel.js');await core.default({module_or_path:await readFile(join(dir,'pkg/channel_bg.wasm'))});
 const keys=generateKeyPairSync('ed25519'),publicKey=new Uint8Array(keys.publicKey.export({format:'der',type:'spki'}).subarray(-32));
 let node,current,nodeOptions;
@@ -50,7 +52,7 @@ const profile=await mkdtemp(join(tmpdir(),'cinder-runtime-chrome-'));
 let browserHarness,browser,currentOptions,resultResolve,timer;
 const result=new Promise(resolve=>{resultResolve=resolve;});
 const html=`<!doctype html><meta charset="utf-8"><title>Local real Runtime qualification</title><pre id="result">Running C4 synthetic-dependency matrix</pre><script type="module">
-import init,* as core from '/channel.js';import {${packed?'runPackedGrowth':'runRuntime'} as runSuite} from '/runtime-fixture.js';let result;
+import init,* as core from '/channel.js';import {${units?'runUnits':packed?'runPackedGrowth':'runRuntime'} as runSuite} from '/runtime-fixture.js';let result;
 try{await init();const keys=await crypto.subtle.generateKey('Ed25519',false,['sign','verify']);const publicKey=new Uint8Array(await crypto.subtle.exportKey('raw',keys.publicKey));
 let current;const receipts=[];async function post(path,input){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});if(!r.ok)throw Error('Browser runtime harness '+path);return r.json();}
 const h={setup:async options=>{current=await post('/test/setup',{publicKey:[...publicKey],options});},current:()=>current,

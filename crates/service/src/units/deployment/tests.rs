@@ -75,6 +75,7 @@ fn profiles() -> (Configuration, Pacifica, Bulk) {
                 read_cost: 120,
             },
             trading_epoch: 1,
+            fills: None,
         },
         Bulk {
             unit: unit(40),
@@ -92,6 +93,7 @@ fn profiles() -> (Configuration, Pacifica, Bulk) {
             credits: 100,
             cleanup_reserve: 10,
             trading_epoch: 1,
+            qualification: None,
         },
     )
 }
@@ -113,6 +115,7 @@ fn input() -> (Manifest, BTreeMap<Role, Zeroizing<Vec<u8>>>) {
         bulk_port: 9010,
         bulk_root: m.venue_root.clone(),
         bulk_root_hash: m.venue_root_hash,
+        worker: None,
     });
     m.units.as_mut().unwrap().registry = Configuration::registry(&m, &p, &b).unwrap();
     let witness = Credential {
@@ -163,6 +166,180 @@ fn input() -> (Manifest, BTreeMap<Role, Zeroizing<Vec<u8>>>) {
         .unwrap()
         .commitment();
     (m, keys)
+}
+fn worker_input(trading: bool) -> (Manifest, BTreeMap<Role, Zeroizing<Vec<u8>>>) {
+    use cinder_kernel::ledger::Location;
+    let (mut m, mut keys) = input();
+    m.version = 8;
+    m.gates.native_reads = true;
+    m.gates.trading = trading;
+    m.units.as_mut().unwrap().worker = Some(super::super::worker::Policy {
+        poll_ms: 1000,
+        pacifica_reads: 1,
+        bulk_reads: 1,
+        pacifica_dispatches: u16::from(trading),
+        bulk_dispatches: u16::from(trading),
+    });
+    let add_sources = |unit: &mut Unit| {
+        let mut c = cinder_journal::wire::decode_config(&unit.ledger).unwrap();
+        for (n, location) in [(80, Location::Vault), (81, Location::Broker)] {
+            let mut source = c.sources[0];
+            source.scope.namespace = NamespaceId::new([n; 32]).unwrap();
+            source.location = location;
+            c.sources.push(source);
+        }
+        unit.ledger = cinder_journal::wire::encode_config(&c).unwrap();
+    };
+    let mut p: Pacifica = serde_cbor::from_slice(&keys[&Role::PacificaConfiguration]).unwrap();
+    add_sources(&mut p.unit);
+    p.fills = Some(if trading {
+        pp::Level::Qualified
+    } else {
+        pp::Level::Unknown
+    });
+    if trading {
+        p.execution.execution = pp::Level::Qualified;
+    }
+    let mut b: Bulk = serde_cbor::from_slice(&keys[&Role::BulkConfiguration]).unwrap();
+    add_sources(&mut b.unit);
+    b.qualification = Some(if trading {
+        bulk::Level::Qualified
+    } else {
+        bulk::Level::Unknown
+    });
+    keys.insert(
+        Role::PacificaConfiguration,
+        Zeroizing::new(serde_cbor::to_vec(&p).unwrap()),
+    );
+    keys.insert(
+        Role::BulkConfiguration,
+        Zeroizing::new(serde_cbor::to_vec(&b).unwrap()),
+    );
+    crate::application::prepare(&mut m, &keys).unwrap();
+    (m, keys)
+}
+
+#[test]
+fn measured_worker_policy_is_explicit_bounded_and_versioned() {
+    let (m, keys) = worker_input(false);
+    assert_ne!(m.digest().unwrap(), input().0.digest().unwrap());
+    for (role, body) in &keys {
+        assert!(m.wrap(*role, body).unwrap().starts_with(b"CKR8"));
+    }
+    for case in 0..11 {
+        let mut bad = m.clone();
+        let p = bad.units.as_mut().unwrap();
+        match case {
+            0 => p.worker = None,
+            1 => p.worker.as_mut().unwrap().poll_ms = 999,
+            2 => p.worker.as_mut().unwrap().poll_ms = 60001,
+            3 => p.worker.as_mut().unwrap().pacifica_reads = 33,
+            4 => p.worker.as_mut().unwrap().bulk_reads = 33,
+            5 => p.worker.as_mut().unwrap().pacifica_dispatches = 17,
+            6 => p.worker.as_mut().unwrap().bulk_dispatches = 17,
+            7 => bad.gates.native_reads = false,
+            8 => bad.gates.trading = true,
+            9 => bad.gates.funding = true,
+            _ => bad.version = 7,
+        }
+        assert!(bad.validate().is_err(), "case {case}");
+    }
+    // An omitted optional field preserves the exact version-7 private encoding.
+    let (_, p, b) = profiles();
+    for value in [
+        serde_cbor::to_vec(&p).unwrap(),
+        serde_cbor::to_vec(&b).unwrap(),
+        serde_cbor::to_vec(&input().0.units.unwrap()).unwrap(),
+    ] {
+        let serde_cbor::Value::Map(fields) = serde_cbor::from_slice(&value).unwrap() else {
+            panic!("map");
+        };
+        for name in ["fills", "qualification", "worker"] {
+            assert!(!fields.contains_key(&serde_cbor::Value::Text(name.into())));
+        }
+    }
+}
+
+#[test]
+fn worker_shipping_configuration_requires_explicit_qualification_and_all_locations() {
+    for trading in [false, true] {
+        let (m, keys) = worker_input(trading);
+        for case in 0..6 {
+            let mut changed = m.clone();
+            let mut k = keys.clone();
+            let mut p: Pacifica = serde_cbor::from_slice(&k[&Role::PacificaConfiguration]).unwrap();
+            let mut b: Bulk = serde_cbor::from_slice(&k[&Role::BulkConfiguration]).unwrap();
+            match case {
+                0 => p.fills = None,
+                1 => b.qualification = None,
+                2 => {
+                    let mut c = cinder_journal::wire::decode_config(&b.unit.ledger).unwrap();
+                    c.sources.pop();
+                    b.unit.ledger = cinder_journal::wire::encode_config(&c).unwrap();
+                }
+                3 => p.source = 1,
+                4 => {
+                    changed.gates.trading = true;
+                    changed
+                        .units
+                        .as_mut()
+                        .unwrap()
+                        .worker
+                        .as_mut()
+                        .unwrap()
+                        .pacifica_dispatches = 1;
+                    p.fills = Some(pp::Level::Unknown);
+                }
+                _ => {
+                    changed.gates.trading = true;
+                    changed
+                        .units
+                        .as_mut()
+                        .unwrap()
+                        .worker
+                        .as_mut()
+                        .unwrap()
+                        .bulk_dispatches = 1;
+                    b.qualification = Some(bulk::Level::Unknown);
+                }
+            }
+            k.insert(
+                Role::PacificaConfiguration,
+                Zeroizing::new(serde_cbor::to_vec(&p).unwrap()),
+            );
+            k.insert(
+                Role::BulkConfiguration,
+                Zeroizing::new(serde_cbor::to_vec(&b).unwrap()),
+            );
+            assert!(
+                crate::application::prepare(&mut changed, &k).is_err(),
+                "trading {trading}, case {case}"
+            );
+        }
+    }
+}
+
+#[test]
+fn worker_enabled_empty_startup_does_not_invent_financial_readiness() {
+    let (m, keys) = worker_input(true);
+    let app = attach(
+        &m,
+        keys,
+        shared(),
+        Arc::new(Time(AtomicU64::new(100))),
+        Arc::new(AtomicBool::new(false)),
+        true,
+    )
+    .unwrap();
+    let journal = app.handler.journal.lock().unwrap();
+    let state = journal.state().unwrap();
+    for id in [40, 50] {
+        let state = state.unit(UnitId::new([id; 32]).unwrap()).unwrap();
+        assert!(!state.native_funding_ready());
+        assert!(state.orders().is_empty());
+        assert!(state.attempts().is_empty());
+        assert!(state.holds().is_empty());
+    }
 }
 fn loaded(m: &Manifest, keys: BTreeMap<Role, Zeroizing<Vec<u8>>>) -> Loaded {
     match crate::application::construct(m, keys).unwrap() {

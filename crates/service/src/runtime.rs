@@ -205,7 +205,7 @@ impl Configuration {
         mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
     ) -> Result<Loaded, Error> {
         manifest.validate()?;
-        if manifest.version == 7 {
+        if manifest.version >= 7 {
             return Err(Error);
         }
         if self.escrow.is_some()

@@ -30,7 +30,7 @@ export async function runtimeFixture(publicKey,origin,options,binaryOverride) {
   let child,proxy,relay,info,logs='',stderr='',lines,closed,controlTail=Promise.resolve(),waiting,finished,expectNotification=false,notified;
   async function start() {
     stderr='';finished=undefined;
-    const args=[...(process.platform==='darwin'?['-l']:['-v']),binary,'127.0.0.1:0',store,Buffer.from(publicKey).toString('hex'),'--runtime-web'];
+    const args=[...(process.platform==='darwin'?['-l']:['-v']),binary,'127.0.0.1:0',store,Buffer.from(publicKey).toString('hex'),options.units?'--unit-web':'--runtime-web'];
     child=spawn('/usr/bin/time',args,{stdio:['pipe','pipe','pipe'],detached:true});
     child.stderr.on('data',b=>{stderr+=b;logs+=b;});
     closed=new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',code=>resolve(code));});
@@ -43,7 +43,7 @@ export async function runtimeFixture(publicKey,origin,options,binaryOverride) {
     });
     child.stdin.write(storageKey);
     const size=Buffer.alloc(4);size.writeUInt32BE(config.length);child.stdin.write(size);child.stdin.write(config);
-    const [address,ca]=(await header).split(' '),port=Number(address.split(':')[1]);
+    const [address,ca,account]=(await header).split(' '),port=Number(address.split(':')[1]);
     lines.on('line',line=>{
       logs+=line+'\n';
       if(!waiting)throw Error('Unexpected runtime harness response');
@@ -70,7 +70,7 @@ export async function runtimeFixture(publicKey,origin,options,binaryOverride) {
     proxy.listen(0,'127.0.0.1');await once(proxy,'listening');
     relay=createWebRelay({target:{host:'127.0.0.1',port:proxy.address().port},origin});
     relay.server.listen(0,'127.0.0.1');await once(relay.server,'listening');
-    info={baseUrl:`http://127.0.0.1:${relay.server.address().port}`,root:[...Buffer.from(ca,'hex')]};
+    info={baseUrl:`http://127.0.0.1:${relay.server.address().port}`,root:[...Buffer.from(ca,'hex')],...(account?{account:[...Buffer.from(account,'hex')]}:{})};
   }
   function privateControl(command) {
     const work=controlTail.then(async()=>{
@@ -82,7 +82,7 @@ export async function runtimeFixture(publicKey,origin,options,binaryOverride) {
           waiting=line=>{try{resolve(JSON.parse(line));}catch{reject(Error('Malformed runtime control'));}};
           child.stdin.write(JSON.stringify(command)+'\n');
         });
-        if(result.error)throw Error(result.error);return result;
+        if(result.error)throw Error(`${result.error} (${command.op})`);return result;
       }finally{clearTimeout(timer);}
     });
     controlTail=work.catch(()=>{});return work;

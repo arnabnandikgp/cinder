@@ -85,6 +85,29 @@ fence the boot; a later healthy response cannot revive it.
 
 ## Qualification boundary
 
+### Version 8: explicit bounded workers
+
+Version 8 selects the same private schema with mandatory `units.worker`
+(`poll_ms`, `pacifica_reads`, `bulk_reads`, `pacifica_dispatches`,
+`bulk_dispatches`). Read limits are per boot (0–32); dispatch limits are
+history-wide (0–16, including cancels); interval is 1,000–60,000 ms. Set public
+native-read/trading gates to exactly match nonzero allocations. Funding remains
+false. For a read-only release both dispatch limits are zero.
+
+Supply explicit Pacifica `fills` and BULK `qualification` in their private
+capsules. Unknown read-only interpretation is not signing authority. Any nonzero
+dispatch allocation requires the actual corresponding Qualified controller.
+Declare all three distinct Vault/Broker/Venue sources, selecting Venue for the
+native source. Empty managed accounts start not-ready with no collateral/risk
+facts; this constructor cannot import fixture money or grant native credit.
+
+The same seven keys remain separate; no broker/funds key is loaded. The actual
+leased clock gates native TLS, including stop and boot expiry. One bounded
+supervisor releases the writer before network I/O and rejoins original-unit
+completions. Shared history preserves exposure/nonce/credit and global customer
+epochs. See [ADR 0043](../architecture/0043-unit-workers.md) for polling limits,
+uncertainty, no-resend semantics and offline acceptance.
+
 The existing package CI compiles the default-feature entrypoint, checks its
 ordinary-host refusal and reproducible Linux ELF. Host-side Rust tests cover
 actual loaded objects, signed unit requests, restart, preparation and fences

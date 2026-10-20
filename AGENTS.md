@@ -31,6 +31,11 @@ it exposes no public custody discovery or BULK funds controller. Separate agent
 and unit-configuration capsules fit bounded KMS plaintexts. Joined native workers
 and changed-image qualification remain P39/P40 gates; never deploy fixture
 keys/readiness/balances or claim a BULK rail.
+P39's explicit version 8 joins bounded unit workers and real confidential
+UnitClient acceptance. It requires per-unit qualification, three-location source
+inventory and finite read/history-wide dispatch allocations. Fresh books remain
+not-ready; worker wiring supplies no capital, credit or financial frontier.
+[ADR 0043](docs/architecture/0043-unit-workers.md) owns these controls and limits.
 
 ## Product context
 

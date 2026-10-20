@@ -5,6 +5,8 @@ pub mod custody;
 /// Measured new-history deployment; independent of the local acceptance fixture.
 pub mod deployment;
 pub mod native;
+/// Bounded shared native supervisor; ports run outside the financial writer.
+pub mod worker;
 use crate::{
     Error,
     transport::{Clock, Handler, Prepared, PreparedReply, Session},

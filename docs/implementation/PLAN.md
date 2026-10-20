@@ -1268,9 +1268,14 @@ acceptance against the deployable composition, with qualified paper policy and
 explicit capital/risk setup. Reuse P36/P37, not a second accounting model.
 Evidence: ADR 0040, UNIT-ACCEPTANCE and native paper receipts.
 
-- [ ] Workers bind durable intent, escaped execution, observations and reconciliation to the original unit; network I/O never holds the financial writer.
-- [ ] Actual confidential carriers and Node/browser SDK cover both units, restart/revoke/fencing and cross-unit negatives with offline regressions.
-- [ ] Unqualified funding, uncertain credit, incomplete forced-event coverage and unavailable fee tiers cannot authorize trading or payouts.
+- [x] Workers bind durable intent, escaped execution, observations and reconciliation to the original unit; network I/O never holds the financial writer.
+- [x] Actual confidential carriers and Node/browser SDK cover both units, restart/revoke/fencing and cross-unit negatives with offline regressions.
+- [x] Unqualified funding, uncertain credit, incomplete forced-event coverage and unavailable fee tiers cannot authorize trading or payouts.
+
+Implemented in [ADR 0043](../architecture/0043-unit-workers.md). Offline carrier
+acceptance uses the real Runtime/worker with explicit fixture capital/native
+ports; shipping v8 assembly separately refuses fresh financial readiness. This
+does not satisfy P40's live assembled-paper criterion or qualify any funds rail.
 
 <a id="p40"></a>
 ## P40 — Changed-image experimental parity qualification

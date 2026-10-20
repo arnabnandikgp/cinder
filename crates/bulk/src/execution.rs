@@ -19,7 +19,7 @@ use zeroize::Zeroizing;
 const MAGIC: &[u8] = b"CINDER-BULK-EXECUTION-1\0";
 const WINDOW: u64 = 60_000;
 /// Independently governed qualification; construction does not establish it.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Level {
     /// Unsupported/unverified; cannot construct an active signer.
@@ -298,6 +298,49 @@ impl Gateway {
     }
     pub(crate) fn financial_observations(&self) -> bool {
         self.policy.qualification == Level::Qualified
+    }
+    /// Fresh durable capacity preflight only; no reservation/refund or signing.
+    pub fn read_available(
+        &self,
+        j: &mut impl Controller,
+        at: u64,
+        cleanup: bool,
+    ) -> Result<bool, Error> {
+        let h = self.history(j, at)?;
+        let limit = if cleanup {
+            self.policy.credits
+        } else {
+            self.policy.credits - self.policy.cleanup_reserve
+        };
+        Ok(at >= h.blocked && h.used < limit)
+    }
+    /// Durable nonce floor for an explicit trusted scheduler. Never resets on
+    /// restart/rotation; this does not allocate a nonce or expose a signature.
+    pub fn last_nonce(&self, j: &mut impl Controller, at: u64) -> Result<u64, Error> {
+        Ok(self.history(j, at)?.nonce)
+    }
+    /// Validate the exact planned action and exposure without accepting it.
+    /// A later dispatch still performs every check and the durable commit.
+    pub fn dispatch_available(&self, j: &mut impl Controller, d: Dispatch) -> Result<bool, Error> {
+        if !self.financial_observations() {
+            return Err(Error::Unqualified);
+        }
+        let h = self.history(j, d.at)?;
+        self.active(&h)?;
+        let plan = match self.plan_at(j, &h, d, false) {
+            Ok(p) => p,
+            Err(Error::Unqualified) => return Ok(false),
+            Err(e) => return Err(e),
+        };
+        if !self.read_available(j, d.at, plan.cancel)? {
+            return Ok(false);
+        }
+        let mut tx = self.transaction(j, d.commit, d.at, Record::Expose(plan))?;
+        tx.controls.push(Control::Expose(d.attempt));
+        Ok(j.preview(&tx)
+            .map_err(|_| Error::Unavailable)?
+            .controls
+            .is_none())
     }
     pub(crate) fn attribution(
         &self,

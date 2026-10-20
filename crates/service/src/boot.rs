@@ -137,7 +137,8 @@ impl HistoryPolicy {
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     /// Closed schema: 1 (five roles), 2 (chain), 3 (packs), 4 (native capture),
-    /// 5 (demo confirmation), 6 (fixed demo allocation), 7 (inactive two-unit assembly).
+    /// 5 (demo confirmation), 6 (fixed demo allocation), 7 (inactive two-unit
+    /// assembly), 8 (explicit bounded unit workers; no funds authority).
     pub version: u32,
     /// Exact 64-byte network/deployment namespace.
     pub domain: Vec<u8>,
@@ -188,13 +189,13 @@ pub struct Manifest {
 impl Manifest {
     /// Refuse ambiguous routes, key-role reuse, missing trust or live activation.
     pub fn validate(&self) -> Result<(), Error> {
-        if !matches!(self.version,1..=7) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
+        if !matches!(self.version,1..=8) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
             || self.application==[0;32] || self.stream==[0;32] || self.generation==0 || self.epoch==0
-            || self.slots.len()!=if self.version==7 {7}else if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
+            || self.slots.len()!=if self.version>=7 {7}else if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
             || (self.first.resource==self.second.resource) || self.gates.maximum_boot_ms==0 || self.gates.maximum_boot_ms>3_600_000
             // P20 packages/test-gates only. Live reads/money movement need P23's
             // qualified chain/read ports and separately authorized manifest.
-            || self.gates.trading || (self.gates.funding != (self.version==6)) || (self.version==1 && self.gates.native_reads)
+            || (self.gates.trading && self.version!=8) || (self.gates.funding != (self.version==6)) || (self.version==1 && self.gates.native_reads)
         {
             return Err(Error);
         }
@@ -207,7 +208,7 @@ impl Manifest {
             self.witness.port,
         ];
         match (self.version, &self.chain) {
-            (1 | 7, None) => {}
+            (1 | 7 | 8, None) => {}
             (2..=6, Some(peer)) => {
                 peer.validate()?;
                 if peer.network.as_slice() != &self.domain[..32] {
@@ -219,13 +220,13 @@ impl Manifest {
         }
         match (self.version, &self.history) {
             (1 | 2, None) => {}
-            (3..=7, Some(policy)) => {
+            (3..=8, Some(policy)) => {
                 policy.limits()?;
             }
             _ => return Err(Error),
         }
         match (self.version, &self.native_capture) {
-            (1..=3 | 5..=7, None) => {}
+            (1..=3 | 5..=8, None) => {}
             (4, Some(policy)) => {
                 policy.validate()?;
                 let history = self.history.as_ref().ok_or(Error)?;
@@ -248,7 +249,7 @@ impl Manifest {
             _ => return Err(Error),
         }
         match (self.version, &self.demo_deposit) {
-            (1..=4 | 7, None) => {}
+            (1..=4 | 7 | 8, None) => {}
             (5 | 6, Some(policy)) => {
                 policy.validate().map_err(|_| Error)?;
                 // Worst-case decimal-byte JSON encoding plus metadata/frame.
@@ -268,7 +269,17 @@ impl Manifest {
             (7, Some(policy)) => {
                 policy.validate()?;
                 // Assembly only: no network worker or money authority yet.
-                if self.gates.native_reads {
+                if self.gates.native_reads || policy.worker.is_some() {
+                    return Err(Error);
+                }
+                ports.push(policy.bulk_port);
+            }
+            (8, Some(policy)) => {
+                policy.validate()?;
+                let worker = policy.worker.as_ref().ok_or(Error)?;
+                if self.gates.trading != worker.trading()
+                    || self.gates.native_reads != worker.reads()
+                {
                     return Err(Error);
                 }
                 ports.push(policy.bulk_port);
@@ -295,7 +306,7 @@ impl Manifest {
                 ports.push(s.endpoint.port);
             }
         }
-        let required = if self.version == 7 {
+        let required = if self.version >= 7 {
             vec![
                 Role::Configuration,
                 Role::Storage,
@@ -355,7 +366,8 @@ impl Manifest {
                     4 => b"CINDER-RUNTIME-MANIFEST-4\0".as_slice(),
                     5 => b"CINDER-RUNTIME-MANIFEST-5\0".as_slice(),
                     6 => b"CINDER-RUNTIME-MANIFEST-6\0".as_slice(),
-                    _ => b"CINDER-RUNTIME-MANIFEST-7\0".as_slice(),
+                    7 => b"CINDER-RUNTIME-MANIFEST-7\0".as_slice(),
+                    _ => b"CINDER-RUNTIME-MANIFEST-8\0".as_slice(),
                 },
                 &serde_cbor::to_vec(self).map_err(|_| Error)?,
             ]
@@ -383,7 +395,8 @@ impl Manifest {
                 4 => b"CKR4".as_slice(),
                 5 => b"CKR5".as_slice(),
                 6 => b"CKR6".as_slice(),
-                _ => b"CKR7".as_slice(),
+                7 => b"CKR7".as_slice(),
+                _ => b"CKR8".as_slice(),
             },
             &[role.code()],
             &self.generation.to_be_bytes(),

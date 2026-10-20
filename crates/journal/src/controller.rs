@@ -25,6 +25,14 @@ pub trait Controller: Source {
     /// Commit against the exact common head. Unknown outcomes never deliver an
     /// exposure; exact duplicate commits return no second local delivery.
     fn commit(&mut self, transaction: Transaction) -> Result<Committed, Error>;
+    /// Fresh advisory control preview under the same sealed state. It neither
+    /// accepts history nor returns an exposure; commit must revalidate normally.
+    fn preview(&mut self, transaction: &Transaction) -> Result<Receipt, Error> {
+        if transaction.expected != self.head() {
+            return Err(Error::Stale);
+        }
+        Ok(self.verified_state()?.advance(transaction)?.1)
+    }
     /// Settled projection only, never root activation or native-key fencing.
     fn recovery_cut(
         &mut self,
