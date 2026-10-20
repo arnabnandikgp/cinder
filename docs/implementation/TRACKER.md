@@ -62,7 +62,9 @@ Current branch `tee/p40-unit-qualification`, ready #87 above #86 in stack #85;
 no PR merged. Exact application source `91a01ffaa7530297bdde7ac445a44cb5f6163264`
 passes all eight hosted offline jobs. Strict local default/all-feature checks,
 19 debug/release unit tests, 95 contracts and Node/Chrome joined acceptance pass.
-The final documentation successor must not inherit old-head hosted green status.
+Code/evidence successor `64bdb2f0b55850f366ca3adb47a3bc8dfcda281b` is published
+through native stack #85. Its helper-only correction and documentation pass the
+focused local gates; successor hosted CI is separate, not inherited from `91a01ff`.
 
 The approved one-host read/admin run passes real AWS-root Node and Chrome
 HTTP/WebSocket UnitClient access to both units, scoped READ grant/cross-unit
@@ -108,8 +110,8 @@ implemented surfaces from venue-specific evidence. P40's assembled paper
 financial lifecycle remains open: fresh shipping books have no qualified credit,
 native margin/capital/risk cut or complete financial frontier, and this AWS
 approval excluded orders/funds. Do not seed fixture money or relabel P37 direct
-paper calls as assembled SDK trades. Next: complete cleanup/publication, then
-review that explicit financial dependency and stack reviews before merge or a
+paper calls as assembled SDK trades. Next: review that explicit financial
+dependency and predecessor stack reviews before merge or a
 third venue. Do not reopen Pacifica missing-credit investigation implicitly.
 
 ### P40 preparation — superseded by completion above
@@ -7311,8 +7313,8 @@ startup failures; corrected setup preserves identity/history and the unchanged
 IAM boundary. Ordinary Pacifica failed replies do not retain exact status;
 account queries remain unqualified, not zero. Unsupported funds/returns and the
 assembled financial criterion stay open.
-Next: publish the verified cleanup/evidence successor, then review the explicit
-assembled-financial dependency and stack reviews before merge or a third venue.
+Next: review the explicit assembled-financial dependency and predecessor stack
+reviews before merge or a third venue; cleanup/evidence is published as `64bdb2f`.
 PR: https://github.com/arnabnandikgp/cinder/pull/87
 Merge: none.
 
