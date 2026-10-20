@@ -1221,6 +1221,26 @@ Evidence: W acceptance matrix, P22/P23 harnesses, native capability receipts.
 - [x] Clean-checkout CI exercises all new offline tests without ignored research, wallets or external requests. Final P36 head `3237023` passes all eight hosted offline jobs; reviewed P33–P36 merged as native stack #80 at `3486b9f`, tree-identical to that tip. Exact receipts are in TRACKER.
 - [ ] Approved native/changed-image hardware runs have exact source and cleanup receipts; blocked/deferred capabilities are named and never counted as qualified.
 
+<a id="p37"></a>
+## P37 — Bounded BULK native qualification
+
+Depends on: P36.
+
+This dependency is P36's merged offline implementation; this phase supplies its
+remaining native evidence, not a financial redesign or new launch-readiness bar.
+Deliver: reusable scoped preflight and native paper evidence using the existing
+adapter, plus a precise supported funding/return boundary. No automatic live permission.
+User direction 2026-10-20: target Pacifica's current experimental integration
+level; native paper trading first, targeted funding/return investigation alongside.
+Evidence: [current scope](../venues/bulk-native-qualification.md), historical M0
+results, existing BULK wire/execution tests and [run proposal](UNIT-QUALIFICATION-PROPOSAL.md).
+
+- [x] Reusable fixed-origin unsigned preflight retains original bounded responses, rejects changed approval/source/deadline and tests failures offline without wallets, external requests or retries.
+- [x] Refresh primary client/keychain revisions and inspect ordinary signing/funding compatibility; identify exact test-rail/credit/settlement questions without importing dependencies or choosing a new custody contract.
+- [ ] Observe actual current metadata under explicit approval; examples/source schemas alone cannot choose native market grids or notional minima.
+- [ ] Under separately bounded current paper scope, test fresh-account agents/revocation, original order/cancel/fill/fee linkage and reserved cleanup using Cinder's existing wire/adapter contracts. Paper funds are not a Solana deposit or financial activation.
+- [ ] Record exact native outcomes, remaining semantics and disabled rails; promote only sanitized regressions needed by observed behavior. Keep CI offline and frontend/AWS/production work out of this slice.
+
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates
 

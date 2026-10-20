@@ -43,16 +43,65 @@
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | Local preparation; live approval pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-17 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### Four-PR stack merged; native qualification remains separate — 2026-10-17 (Asia/Kolkata)
+### P37 native qualification preparation — 2026-10-20 (Asia/Kolkata)
+
+User accepts Pacifica's current bounded experimental integration level as the
+BULK target, not launch readiness. Work branch `tee/p37-bulk-native-qualification`
+inherits local merge-receipt commit `2b4c51d`; merged runtime remains `3486b9f`.
+New preflight tools make only two fixed paper-origin unsigned metadata GETs under
+source-bound, time-limited explicit approval. Original response bytes and request
+identity persist before interpretation; failures stop without fallback or retry.
+No key, signature, faucet, account, financial transaction, RPC or AWS port exists.
+Six new offline test cases pass, including scope/approval/deadline, raw wide
+number preservation, retention failure/replay, CLI source-change refusal and
+upstream/body/schema refusal. All 89 contract tests and all 60 existing BULK
+library/codec/execution/financial tests pass. Logs:
+`/private/tmp/cinder-p37-contracts.log`, `/private/tmp/cinder-p37-bulk-offline.log`.
+No Rust/Cargo/runtime source changed, so the earlier full runtime matrix is not
+presented as a new run or needlessly repeated. `git diff --check` is clean.
+
+Primary-source refresh: client HEAD `5012611` (October 18) adds admin/risk DTO/CLI
+changes; inspected raw-signing diff leaves existing limit/cancel branches alone.
+Keychain HEAD remains `ec7212c`. Solana builder docs/files are unchanged in that
+client comparison. The [current scope](../venues/bulk-native-qualification.md)
+records exact pins, public references and three test-bridge/credit/return questions.
+No dependency or native upstream code was installed/executed. Documentation is
+not a native observation; no capability or funding policy is promoted.
+
+Unexpected planning correction: a resting probe plus IOC opening plus IOC close
+needs three counted order attempts; the earlier two-attempt proposal cannot
+promise all three. Confirm actual minimums and reserve cleanup before signing;
+do not silently raise either count or paper notional. The current async question
+requests 12 public reads, one fresh account/two agents, two attempts totaling $10
+paper notional, 12 signed requests/24 account reads/30 minutes; approval is pending,
+and its limits cannot authorize an uncounted closing order or another scenario.
+
+Next: complete offline/current-source checks and obtain the scoped native-run
+answer; offline checks are now complete. A no-network preparation created
+`work/venues/bulk/run-20261020.TG1ntr/preflight`, manifest commitment
+`ca4d5e7cfcc33b0253e92c4e5579065257b8fce6dfb9d8da3c3a7c400434d0f3`,
+with execution approval explicitly pending. Run metadata preflight first after
+the current scoped answer. If usable, finalize the paper scenario
+within approved limits before any exposure. No live venue API, financial, RPC,
+frontend or AWS call has occurred in this preparation. P36 live qualification,
+unsupported BULK rails, Pacifica missing credit and P24 remain explicitly open.
+
+## Historical handoffs
+
+The following session receipts preserve evidence for their exact sources. Their
+next actions and pending statuses are superseded by the current handoff above.
+
+### Historical: Four-PR stack merged; native qualification remains separate — 2026-10-17 (Asia/Kolkata)
 
 User explicitly authorized merge after CI passed. GitHub native stack #80 merged
 #78/#79/#81/#82 atomically into `product/tee-v1` at
@@ -101,11 +150,6 @@ Documentation verification: all 83 contract tests, implementation-plan/inventory
 and workspace-boundary checks pass; `git diff --check` is clean. Log:
 `/private/tmp/cinder-p36-merge-receipt-contracts.log`. No runtime change/retest or
 claim of a new hardware result is introduced by this receipt.
-
-## Historical handoffs
-
-The following session receipts preserve evidence for their exact sources. Their
-next actions and pending statuses are superseded by the current handoff above.
 
 ### Historical: Five review findings corrected and verified — 2026-10-17 (Asia/Kolkata)
 
@@ -6878,6 +6922,20 @@ and changed-image Nitro qualification. PLAN's final criterion remains open;
 merging the implementation is not a live funding/trade/recovery qualification.
 PR: https://github.com/arnabnandikgp/cinder/pull/82.
 Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b; native qualification incomplete.
+
+## P37 — Bounded BULK native qualification
+
+Work: source-bound unsigned metadata preflight and offline failure tests;
+fresh official SDK/keychain comparison and targeted funding/return questions.
+Verification: six new offline cases, all 89 contracts and all 60 existing BULK
+adapter tests pass; no Rust/runtime change. Source-bound manifest preparation
+made zero network requests. Actual native execution has not started.
+Unexpected: opening and cleanup orders must each fit the explicit attempt and
+notional allowance; correct the proposed scenario before any exposure.
+Next: scoped approval, current metadata, then bounded native lifecycle evidence.
+PR: none yet; awaiting the scoped run answer before collecting native evidence.
+Merge receipts from #78/#79/#81/#82 accompany this branch.
+Merge: none.
 
 ## P24 — Release safety case
 
