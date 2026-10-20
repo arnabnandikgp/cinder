@@ -806,6 +806,49 @@ fn actual_fill_fee_post_once_to_original_owner_even_after_key_revoke_and_unknown
 }
 
 #[test]
+fn explicit_null_native_identity_retains_raw_without_posting_or_changing_other_units() {
+    let t = support::Temp::new();
+    let (mut j, _) = fixture(&t);
+    let g = gateway(1);
+    g.initialize(
+        &mut j.select(uid(40)).unwrap(),
+        CommitId::new([7; 32]).unwrap(),
+        10,
+    )
+    .unwrap();
+    let before = j.state().unwrap().unit(uid(40)).unwrap().clone();
+    let other = j.state().unwrap().unit(uid(50)).unwrap().clone();
+    // Deliberately invalid mutation of the observed shape, not a live response.
+    let mut value: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "fixtures/paper-20261020-missing-trade-id.json"
+    ))
+    .unwrap();
+    value["data"][0]["tradeId"] = serde_json::Value::Null;
+    let body = serde_json::to_vec(&value).unwrap();
+    let id = CommitId::new([8; 32]).unwrap();
+    observation::ingest(
+        &g,
+        &mut j.select(uid(40)).unwrap(),
+        Message {
+            kind: Kind::Trades,
+            body: PrivateBytes::new(body.to_vec()).unwrap(),
+            received_at: 10,
+        },
+        id,
+        10,
+    )
+    .unwrap();
+    let after = j.state().unwrap().unit(uid(40)).unwrap();
+    assert_eq!(after.ledger(), before.ledger());
+    assert!(after.unresolved_raw() > before.unresolved_raw());
+    assert_eq!(j.state().unwrap().unit(uid(50)).unwrap(), &other);
+    let selected = j.select(uid(40)).unwrap();
+    let tx = selected.transaction(id).unwrap();
+    assert!(tx.evidence.iter().any(|e| e.as_bytes().ends_with(&body)));
+    assert!(tx.inputs.iter().all(|input| input.event.is_none()));
+}
+
+#[test]
 fn unsupported_qualification_wrong_conversion_and_master_key_never_activate() {
     let c = config().units()[0].ledger.clone();
     let mut p = policy();

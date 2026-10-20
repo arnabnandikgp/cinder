@@ -33,3 +33,21 @@ grids, quotes and IDs are test configuration, not current venue precision or a
 live account. No schema decoder's default zero or synthesized ID is promoted.
 Displayed averages/rates deliberately exercise more precision than resting ticks;
 tests do not turn them into exact cost basis or qualified funding allocation.
+
+`paper-20261020-missing-trade-id.json` is a **sanitized observed paper shape**,
+not a synthetic successful fill. Its source is the approved October 20 fresh
+paper run's original response 13, SHA-256
+`8d0a8f9e9ffc7c8c0c4d426e9530019fe766767b9d1be92a773dd2b19a644c7d`.
+Maker/taker/order addresses and the counterparty hint are replaced with fixed
+test identities; native numeric fields, absent `tradeId` and unknown coverage
+are retained. The original bytes remain private ignored evidence. The official
+SDK's `HistoryFillWire`/`HistoryFill::deserialize` explicitly uses the required
+native `slot`/`sequence` pair when `tradeId` is absent, but rejects explicit null.
+Source: `crates/api-rust/src/msgs/history.rs`, revision
+`5012611bd0fd36e12523cd15bac763f3a600b1e9`, verified 2026-10-20, original file
+SHA-256 `6387851fde317239633a86cdda827219f8cfd28d4d0816ac1a0c760197bd9b55`.
+This rule also exists in Cinder's retained source pin. Cinder preserves its
+stricter explicit-ID/pair equality, required fields, bounds and scoped dedup keys.
+Tests compare both spellings without rewriting the retained response, retain
+invalid/null observations without posting, and reject missing/invalid native
+fields. No timestamp, order ID or invented sequence substitutes for native identity.

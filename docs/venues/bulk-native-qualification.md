@@ -83,9 +83,11 @@ zero-fee trading, fee-tier savings or mainnet policy. Original numeric bytes
 remain authoritative; no floating-point financial values were posted.
 
 No wallets, signatures, account setup, faucet, orders, transfers, Solana RPC or
-AWS were used. Earlier 502 responses remain historical; this success establishes
-only these two observations. Next: approve the corrected paper-account lifecycle
-and its counted cleanup allowance in [proposal A](../implementation/UNIT-QUALIFICATION-PROPOSAL.md#a-native-paper-account-capability-before-hardware).
+AWS were used in this metadata stage. Earlier 502 responses remain historical;
+these results establish only two public observations. The user subsequently
+approved the paper lifecycle: [October 20 receipt](bulk-paper-20261020.md) records
+actual agents/order/cancel/open-close, full paper cleanup, the source-backed
+absent-ID compatibility correction and fee-tier 404. None establishes a funding rail.
 
 ## Funding/return investigation: facts versus remaining questions
 

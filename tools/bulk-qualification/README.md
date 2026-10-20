@@ -30,3 +30,48 @@ cannot promise a resting-order probe **and** an opening IOC **and** a closing IO
 Fresh signing identities, original native messages/nonces and known cleanup
 must be retained before any exposure. Old scratch SDK scripts and faucet funds
 do not authorize a live run or qualify Solana funding/returns.
+
+## Disposable paper lifecycle
+
+`paper.mjs` is the separate native test driver. It is **not** an enclave service,
+shipping signer, master-key fallback or a Cinder financial journal. Setup uses
+only three freshly generated private keys (one owner, two agents) under a new
+0700 directory. It never loads configured wallets, existing credentials or an
+RPC/AWS client. Disposable setup keys are intentionally local; they are not
+evidence that production custody/private keys may leave the enclave.
+
+Build the offline codec bridge with
+`cargo build -p cinder-bulk --example paper-codec --locked --offline`. It calls
+the actual `wire::Action` and `fills::rest` implementations, has no network or
+key input, and supports only BTC-USD ALO/IOC/cancel and fill interpretation.
+The driver uses Node's standard Ed25519 implementation and the documented
+faucet/agent binary layouts; no upstream package/native addon is installed.
+
+With current user authority, initialize using
+`node tools/bulk-qualification/paper.mjs --init /absolute/new/private-directory 'approval reference'`.
+Then execute individually named steps using `--step DIRECTORY JSON_SPEC`.
+Supported categories are `public` (info/book), `account` (fixed own-account
+families), and `signed` (faucet, fixed agent add/remove, agent-only limit, or
+cancel bound to a retained original order). No transfers or arbitrary action/URL
+exist. The source/binary seal must still match. Limits are 14 signed requests,
+24 account reads, 12 public reads, five order attempts and $20 cumulative order
+notional including cleanup, in 30 minutes. These are ceilings, not targets.
+Read-only offline tests inject responses and never run the CLI against a venue.
+
+Each new action persists its identity, nonce, immutable unsigned body and consumed
+capacity before signing. Private signed wires persist before transmission;
+bounded raw responses persist before interpretation. A named action cannot be
+resent; source changes, duplicate IDs and a second faucet attempt are refused.
+Stepwise inspection allows explicit reconciliation/cleanup after a known refusal;
+it is not automatic retry or unknown-execution replacement authority. Operators
+must reserve closing capacity, inspect semantic statuses (HTTP 200 can contain
+`unauthorized signer`), and verify positions/orders/agents after cleanup. A
+non-200 diagnostic query must not skip independent cleanup of known exposure.
+
+The [October 20 receipt](../../docs/venues/bulk-native-qualification.md) records
+actual opening/closing and cancellation, but also a missing `tradeId` and fee-tier
+404. The codec now accepts the SDK-defined absent-ID/native-pair representation;
+it never rewrites the original response or replaces an explicit invalid ID.
+Do not treat an ACK as a fill or promote this wire test into Gateway qualification.
+Private artifacts remain ignored; only
+sanitized regression inputs belong in the repository.

@@ -43,7 +43,7 @@
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
-| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | Local preparation + two successful metadata GETs; signed paper scope pending |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | Local paper lifecycle + source-backed codec correction complete; review/merge pending |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -53,7 +53,82 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P37 metadata observed; signed paper scope pending — 2026-10-20 (Asia/Kolkata)
+### P37 paper lifecycle complete; compatibility corrected — 2026-10-20
+
+The user approved proposal A and explicitly permits routine no-real-funds
+continuation without repeated permission questions. That covers this bounded
+disposable paper workstream, not AWS spend, mainnet/customer assets or an
+unrelated expansion. Branch `tee/p37-bulk-native-qualification` inherits merge
+receipt `2b4c51d`, metadata tools `b8cac32` and receipt `3e99f97`; merged runtime
+remains `3486b9f`. No frontend or AWS work occurred.
+
+Reusable `tools/bulk-qualification/paper.mjs` and the offline `paper-codec` example
+exercise actual Cinder order/cancel/fill codecs with fresh local disposable keys,
+standard Ed25519 signatures and fixed paper origin/domain. Identity/action/nonce
+and consumed budgets persist before signing, signed wires before transmission,
+raw replies before interpretation. Keys/wires/raw records stay private/ignored;
+CI injects offline responses. No new dependency or master trading fallback.
+
+The [native receipt](../venues/bulk-paper-20261020.md) records the completed
+12:56:26.817–13:04:07.219 UTC run: one faucet account/two agents; 12 signed,
+14 account and 3 public requests; four attempts/$6.40 cumulative order notional,
+all below approved caps. Actual ALO opening/closing fills, original-ID matching,
+known-order cancellation, IOC zero-fill cancellation and both revocation/rejected
+signer probes passed. Final state: zero positions/orders/agents, 999.6 paper USD,
+reported -0.4 PnL, zero fees/funding. No unknown transport, resend or transfer.
+
+Private artifacts: `work/venues/bulk/paper-20261020.QnlKbJ`; source/binary
+commitment `883a3a4cda2a967bd7b228dce1a0ab2fd99d5ac8e034c6984204176ce341d5c6`.
+All 29 original response hashes/lengths were independently rechecked; the receipt
+names manifest/result/fill/history/cleanup commitments. The first decode failed
+because actual rows omit `tradeId`. Exact official `HistoryFill::deserialize`
+source at `5012611` (also present in the retained pin) explicitly defines absence
+as the required native slot/sequence pair, not null. Source SHA-256:
+`6387851fde317239633a86cdda827219f8cfd28d4d0816ac1a0c760197bd9b55`.
+
+An observed-shape red regression preceded the narrow source-backed fix. Explicit
+IDs must still match the required pair; null/invalid/missing native fields fail.
+Both spellings retain identical scope-bound dedup keys, conflict checks, ownership
+and exact grids. Invalid records remain archived without posting. Rebuilt codec
+decoded the unchanged actual rows **offline**, matched original orders/net zero
+quantity/-0.4 USD; no additional venue call or fabricated native field. The raw
+run's original schema-gap result is not overwritten; a distinct post-fix receipt
+retains the new source/binary and original-response commitment.
+
+Verification: targeted BULK **63** tests (1/27/12/23), six new Node safeguards,
+strict BULK all-target Clippy and example build pass. One broader locked/offline
+all-feature workspace run passes **803 tests**, with 10 existing intentional
+ignores and zero failures; no second/default/no-default full matrix was needed.
+Final 95 contracts, plan/link/workspace guards, Rust formatting and diff checks
+also pass. Contract log: `/private/tmp/cinder-p37-paper-contracts.log`.
+Logs: `/private/tmp/cinder-p37-paper-bulk-tests.log`,
+`/private/tmp/cinder-p37-paper-compat-red.log`,
+`/private/tmp/cinder-p37-paper-clippy.log`,
+`/private/tmp/cinder-p37-paper-build.log`,
+`/private/tmp/cinder-p37-paper-workspace.log`.
+The initial strict lint caught an unnecessary test clone, corrected without a
+lint exemption. No SBF, hardware, hosted CI or release qualification is inferred.
+
+Unexpected: sampled book depth was empty but later fills occurred; the original
+resting order filled before cancellation, so reserved closing capacity was used.
+IOC explicitly returned no fill; a separate ALO closed the confirmed quantity.
+Fee-tier query returned empty HTTP 404, not zero fees or a successful empty quote.
+No partial/IOC fill or nonzero fee calibration, financial completeness, native
+funding/ADL, shipping Gateway activation or supported BULK bridge is claimed.
+P36 changed-image qualification, Pacifica missing credit and P24 remain open.
+
+Next: review/publish this bounded evidence/tooling slice, then prepare the
+non-fixture multi-unit configuration for separately qualified changed-image Nitro.
+P37 remains `in progress` pending review/merge; no PR or hosted result is claimed.
+Unrelated untracked `qualification-v2.rs`, `docs/user-journey.md` and `stays/`
+remain untouched. Source/test and receipt commits are local.
+
+## Historical handoffs
+
+The following session receipts preserve evidence for their exact sources. Their
+next actions and pending statuses are superseded by the current handoff above.
+
+### Historical: P37 metadata observed; signed paper scope pending — 2026-10-20
 
 User accepts Pacifica's current bounded experimental integration level as the
 BULK target, not launch readiness. Work branch `tee/p37-bulk-native-qualification`
@@ -110,11 +185,6 @@ keys, account setup, faucet or signing. Do not reuse the expired metadata
 approval. P36 live qualification, unsupported BULK rails, Pacifica missing credit
 and P24 remain explicitly open. Current branch is local; no PR/hosted CI/merge
 is claimed for P37 or its merge-receipt ancestor.
-
-## Historical handoffs
-
-The following session receipts preserve evidence for their exact sources. Their
-next actions and pending statuses are superseded by the current handoff above.
 
 ### Historical: Four-PR stack merged; native qualification remains separate — 2026-10-17 (Asia/Kolkata)
 
@@ -6942,16 +7012,19 @@ Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b; native qualification incomplete
 
 Work: source-bound unsigned metadata preflight and offline failure tests;
 fresh official SDK/keychain comparison and targeted funding/return questions.
-Verification: six new offline cases, all 89 contracts and all 60 existing BULK
-adapter tests pass; no Rust/runtime change. Separately approved two-GET native
-metadata run on source `b8cac32` completed with two HTTP 200s; original evidence
-and exact BTC grid/minimum are recorded in the current handoff/venue receipt.
-No signed native execution, account setup or financial activity has started.
-Unexpected: opening and cleanup orders must each fit the explicit attempt and
-notional allowance; correct the proposed scenario before any exposure.
-Next: separate approval of revised counted paper lifecycle/cleanup scope, then
-bounded native agent/order/cancel/fill evidence. Metadata permission is exhausted.
-PR: none yet; branch remains local, no hosted P37 result or merge claimed.
+Added reusable disposable paper runner/actual codec bridge, completed native
+agents/order/cancel/open-close/cleanup and corrected SDK-defined absent-ID
+compatibility with sanitized observed fixtures and negative/conflict regressions.
+Verification: native paper receipt and exact commits/commands live in the current
+handoff. 63 BULK tests, 95 offline contracts, strict BULK lint/build and one
+all-feature workspace run (803 passed, 10 intentional ignores) pass. Actual
+unchanged native fills re-decode offline after the source-backed correction.
+Unexpected: empty sampled depth did not preclude fills; use known reserved cleanup,
+not speculative retry. Fee-tier 404 is unavailable; unknown coverage stays unknown.
+No bridge, funding/risk/forced-event completeness or production readiness claimed.
+Next: review/publish the bounded slice, then non-fixture multi-unit configuration
+and separately qualified Nitro image; unsupported BULK financial rails stay off.
+PR: none yet; branch local, no hosted P37 result or merge claimed.
 Merge receipts from #78/#79/#81/#82 accompany this branch.
 Merge: none.
 

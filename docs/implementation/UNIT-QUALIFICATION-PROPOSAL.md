@@ -10,11 +10,14 @@ Current metadata prerequisite is complete: the separately approved two-GET run
 at source `b8cac32` returned HTTP 200 for exchange info and fee state on October
 20. The [receipt](../venues/bulk-native-qualification.md#observed-metadata-receipt--2026-10-20)
 records BTC-USD's $1 native minimum and exact price/size grid. Earlier 502s are
-historical. This approval covered no account or signed activity. The following
-revised paper scope is **proposed, not approved**, and replaces the earlier
-two-order/$10 suggestion, which could not cover resting, opening and closing.
+historical. That metadata approval covered no account or signed activity. The user
+then separately approved the corrected paper scope and routine no-real-funds
+continuation. The [completed October 20 receipt](../venues/bulk-paper-20261020.md)
+records execution, cleanup and limits. Routine paper-only steps within this
+workstream no longer need repeated permission; AWS spend, real funds and other
+gates remain separate. Old run IDs/expired limits cannot be reused.
 
-Suggested bound, subject to separate explicit approval:
+Approved paper-run bounds (executed; no automatic cap reset):
 
 - One fresh disposable paper account; official faucet funds only; at most two
   fresh agent registrations and their revocations. No existing wallets, internal
@@ -40,7 +43,7 @@ Suggested bound, subject to separate explicit approval:
   possible, revoke agents and record remaining uncertainty. Inability to clean
   up is reported, not declared success. No BULK funding bridge is tested here.
 
-This would establish only native paper capabilities, not qualification of the
+This establishes only observed native paper capabilities, not qualification of the
 assembled Cinder gateway, custody, margin isolation,
 fee aggregation, complete ADL/funding coverage or mainnet parity. Scope or native
 minimum changes require discussion, not an automatic increase.

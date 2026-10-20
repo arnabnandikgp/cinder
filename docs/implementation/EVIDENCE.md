@@ -5,6 +5,25 @@ Snapshot: 2026-09-30. This is a curated map, not an archive upload. The original
 broken public links. [BASELINE](BASELINE.md) and [CONFORMANCE](CONFORMANCE.md) carry
 the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
+## Native paper capability receipt — 2026-10-20
+
+P37's [BULK paper receipt](../venues/bulk-paper-20261020.md) retains original
+source/manifest/response commitments, actual raw-signing/agents/order/cancel/
+open-close evidence and final flat/revoked cleanup. Usage: one fresh account,
+two agents, 12 signed/14 account/3 public requests, four attempts/$6.40 cumulative
+paper notional. No transfer, RPC, AWS or existing/customer funds. Metadata and
+paper approvals were distinct; user now permits routine no-real-funds steps
+within the paper workstream without repeated questions.
+
+Actual REST fills omit `tradeId`; the pinned official SDK explicitly supports
+required native slot/sequence fallback for absence, not null. The exact source
+was refreshed; the observed red regression, narrow codec fix, malformed/conflict
+regressions and unchanged-raw offline re-decoding are recorded in the receipt.
+Explicit mismatches still reject, scoped keys are unchanged, and coverage is not
+promoted. Fee-tier 404 remains unavailable. This is native paper-interface
+evidence, not activation of a shipping Gateway, bridge, complete financial
+frontier or changed Nitro image. TRACKER owns exact local verification/merge status.
+
 ## Two-unit implementation merge — 2026-10-17
 
 P33–P36 (#78/#79/#81/#82) merged into `product/tee-v1` through native stack #80
