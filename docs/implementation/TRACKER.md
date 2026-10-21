@@ -56,6 +56,30 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### Fresh paper run preflight — 2026-10-21
+
+User completed the fresh IAM/login prerequisites in response to the bounded-run
+request; the [proposal](P40-PAPER-RUN-PROPOSAL.md) retains $5/four-hour/eight-boot
+and native request/notional limits. Actual identity is IAM `cinder_new`, and both
+new version-1 policy documents match the local templates exactly. Operator only
+is attached; boundary is separate. Existing broad EC2/S3 user policies are not
+newly granted or evidence of least-privilege operator access; all tooling must
+still restrict itself to the fresh recorded names. Runtime roles remain bounded.
+Read-only preflight: 18 calls, unused named resources, Amazon ARM64 AMI,
+`c6g.large` Nitro support, quota 8 and current compute $0.068/hour. No host/cloud
+resource, native action/query, faucet or Solana RPC has started.
+
+PR #88's exact `e1b7c05` head passed all eight hosted jobs. Its Codex P2 finding
+about accepted/unexposed openings was checked against the real journal exposure
+gate. New regression accepts two openings, exposes/fills only one, admits the
+two-lot cleanup budget, then verifies the final-slot worker signs/sends nothing
+and preserves one native lot. Existing private reduce-only validation prevents
+the alleged reversal; no production logic changed. All 26 optimized unit tests
+and strict all-target/all-feature service Clippy pass. Log:
+`/private/tmp/cinder-p40-paper-review.log`. The regression/documentation successor
+needs its own hosted checks; source/image freezing and run preparation are next.
+Fresh ignored preflight receipt: `work/experiments/p40-paper/run-1/preflight-public.json`.
+
 ### Approved paper bootstrap — 2026-10-21
 
 User approved local implementation of [the closed-account paper boundary](P40-PAPER-GATE.md).

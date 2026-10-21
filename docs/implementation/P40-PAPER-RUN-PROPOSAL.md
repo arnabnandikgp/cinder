@@ -1,9 +1,10 @@
 # P40 fresh assembled-paper / Nitro run proposal
 
-Status: **not approved for live execution**. The user approved implementation of
-the [paper-only accounting assumption](P40-PAPER-GATE.md), not a new AWS session.
-Finish offline review/checks and pin the final committed source before requesting
-this run. No resource, wallet, faucet or native request is created by this document.
+Status: **bounded run authorized for continuation, 2026-10-21**. In response to
+the scoped run/setup request, the user completed the two fresh IAM policies and
+refreshed `cinder_new` login. Preserve all limits below; this is not standing
+permission for later sessions. Pin the reviewed committed source before launch.
+This document alone creates no resource, wallet, faucet or native request.
 
 ## Combined scope
 

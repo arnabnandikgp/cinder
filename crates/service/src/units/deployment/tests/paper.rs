@@ -312,6 +312,137 @@ impl bulk::Transport for NativePort {
     }
 }
 #[test]
+fn accepted_but_unexposed_opening_cannot_authorize_an_oversized_native_cleanup() {
+    let (app, g) = start();
+    let session = session();
+    let unit = UnitId::new([40; 32]).unwrap();
+    for id in [140, 141] {
+        app.handle(
+            &session,
+            request(40, id, 1, &session, order(1, 3, false), 100),
+            100,
+        )
+        .unwrap();
+    }
+    let (opening, c) = {
+        let j = app.journal.lock().unwrap();
+        let state = j.state().unwrap().unit(unit).unwrap();
+        assert_eq!(state.orders().len(), 2);
+        (
+            state.orders()[0].intent.request,
+            j.configuration()
+                .units()
+                .iter()
+                .find(|d| d.id == unit)
+                .unwrap()
+                .clone(),
+        )
+    };
+    let attempt = app
+        .prepare_order(
+            unit,
+            opening,
+            AttemptId::new([142; 32]).unwrap(),
+            CommitId::new([143; 32]).unwrap(),
+        )
+        .unwrap();
+    let nonce = 1_000_000;
+    let (_, completion) = app
+        .prepare_bulk(unit, &g, attempt, CommitId::new([144; 32]).unwrap(), nonce)
+        .unwrap();
+    app.complete_bulk(unit, &g, completion, bulk::Reply::Unknown)
+        .unwrap();
+    let native = cinder_bulk::precision::Market::new("BTC-USD", "1", "1", 0).unwrap();
+    let scope = cinder_bulk::Scope::new(
+        c.ledger.sources[0].scope,
+        cinder_bulk::Network::Testnet,
+        c.native_account,
+    )
+    .unwrap();
+    let action = cinder_bulk::wire::Action::limit(
+        &native,
+        true,
+        "3",
+        "1",
+        cinder_bulk::wire::TimeInForce::Ioc,
+    )
+    .unwrap();
+    let oid = action.order_id(&scope, nonce).unwrap();
+    let body = json!({"data":[{"maker":cinder_pacifica::funding::chain::address(c.native_account),"taker":cinder_pacifica::funding::chain::address([1;32]),
+        "orderIdMaker":cinder_pacifica::funding::chain::address(oid),"orderIdTaker":cinder_pacifica::funding::chain::address([2;32]),
+        "isBuy":true,"symbol":"BTC-USD","amount":"1","price":"3","makerFee":"0","takerFee":"0","fee":"0","reasonCode":0,"iso":false,
+        "slot":100,"timestamp":100,"sequence":1}],"page":{"hasMore":false,"nextCursor":null,"coverage":"unknown","asOfSlot":100,"startSlot":0,"endSlot":100}});
+    app.observe_bulk(
+        unit,
+        &g,
+        Message {
+            kind: Kind::Trades,
+            body: PrivateBytes::new(serde_json::to_vec(&body).unwrap()).unwrap(),
+            received_at: 100,
+        },
+        CommitId::new([145; 32]).unwrap(),
+    )
+    .unwrap();
+    // Both accepted opening quantities fit the paper's finite cumulative budget,
+    // but only one ever escaped or filled. Budget admission is not authority to
+    // sign a close for the unexposed quantity.
+    app.handle(
+        &session,
+        request(40, 146, 1, &session, order(-2, 3, true), 100),
+        100,
+    )
+    .unwrap();
+    assert_eq!(
+        app.journal
+            .lock()
+            .unwrap()
+            .state()
+            .unwrap()
+            .unit(unit)
+            .unwrap()
+            .orders()
+            .len(),
+        3,
+        "the oversized cleanup reaches the existing exposure gate"
+    );
+    let (m, keys) = input();
+    let l = loaded(&m, keys);
+    let native_wire = Arc::new(Mutex::new(None));
+    let mut worker = crate::units::worker::Worker::new(
+        crate::units::worker::Policy {
+            poll_ms: 1000,
+            pacifica_reads: 0,
+            bulk_reads: 0,
+            pacifica_dispatches: 0,
+            bulk_dispatches: 2,
+        },
+        UnitId::new([50; 32]).unwrap(),
+        unit,
+        l.native.pacifica,
+        l.native.bulk,
+        NoPacifica,
+        NativePort(native_wire.clone()),
+    )
+    .unwrap()
+    .reserve_paper_cleanup();
+    // The final-slot worker cannot expose the other opening, and the existing
+    // private reduce-only gate rejects a two-lot close of one actual lot.
+    assert_eq!(worker.tick(&app).unwrap(), crate::units::worker::Step::Idle);
+    assert!(native_wire.lock().unwrap().is_none());
+    let j = app.journal.lock().unwrap();
+    let state = j.state().unwrap().unit(unit).unwrap();
+    assert_eq!(state.ledger().venue().positions()[0].quantity().lots(), 1);
+    assert_eq!(
+        state
+            .attempts()
+            .iter()
+            .filter(|a| a.possibly_exposed)
+            .count(),
+        1
+    );
+    assert!(state.orders()[1].attempt.is_none());
+}
+#[test]
 fn signed_handler_native_exposure_fill_attribution_and_duplicate_share_the_paper_ledger() {
     let (app, g) = start();
     let session = session();
