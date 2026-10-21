@@ -7,6 +7,13 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Two-unit measured assembly boundary — 2026-10-20
 
+October 21 review correction: same-unit recipient preflight and finite enrollment
+expiry/stop handling are fixed, with red/green/resume regressions. This changes
+application code. The dated hardware receipt below is retained for its exact
+image only; corrected-image requalification remains open. The pending
+[assembled-paper policy](P40-PAPER-GATE.md) is a user decision, not a qualified
+funding rail, live financial result or permission to import fixture readiness.
+
 P39's version-8 workers and actual confidential UnitClient acceptance pass
 offline. P40's [changed-image Nitro receipt](../operations/unit-hardware-20261020.md)
 then qualifies exact-source default-feature Node/Chrome HTTP/WebSocket access,

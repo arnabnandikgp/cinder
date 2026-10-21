@@ -1,6 +1,6 @@
 # Pacifica / BULK experimental capability comparison
 
-Evidence cut: 2026-10-20. This compares implementation and observed evidence,
+Evidence cut: 2026-10-21. This compares implementation and observed evidence,
 not launch readiness. A native paper runner, synthetic joined acceptance and a
 measured deployment establish different properties; none substitutes for the
 others. [Acceptance](../implementation/UNIT-ACCEPTANCE.md),
@@ -15,7 +15,7 @@ others. [Acceptance](../implementation/UNIT-ACCEPTANCE.md),
 | Ordinary fills/fees and replay | Scoped normalization/attribution tests; historical discrepancy retained | Observed slot/sequence identity fallback, raw re-decoding and adverse regressions | No complete causal frontier or universal execution/funding/ADL qualification |
 | Native account/history reads | Bounded retained observation controller | Bounded account/trades controller | Pagination, not-found and an ACK cannot invent financial facts |
 | Two-unit measured assembly | Version 8, separate private configuration and agent role | Same image, distinct account/agent/source/unit | Fresh managed accounts are empty; no seeded balances, reserve capital or readiness |
-| Changed-image Nitro | Production Node/Chrome private access, original-receipt restart and independent fencing pass | Same actual read/admin checks pass on the same image | [Exact hardware receipt](../operations/unit-hardware-20261020.md); native fresh-account queries were unavailable/404, not credit |
+| Changed-image Nitro | Node/Chrome private access, original-receipt restart and independent fencing pass on October 20's exact image | Same actual read/admin checks pass on that image | [Historical hardware receipt](../operations/unit-hardware-20261020.md); October 21 startup fixes need a fresh image/run; native fresh-account queries were unavailable/404, not credit |
 | Escrow/sweep/return/payout/recovery | Program, SDK and journal integration tested offline | Common unit composition tested; no qualified native rail | Unswept escrow refund is distinct from withdrawal of collateral held at a venue |
 | Live funding/credit/returns | Missing-credit investigation remains explicitly deferred | Supported funding/return interface remains unqualified | Neither is a launch-qualified round trip; do not substitute a mock credit |
 | Venue-backed recovery | Offline orchestration and shared payment protections | Same common machinery with native dependency unresolved | Operator-assisted reconciliation and actual backing are prerequisites, not heartbeat-only exit |

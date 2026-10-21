@@ -43,20 +43,54 @@
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
-| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), ready; eight hosted jobs green at `ed0e98e`, user review ongoing |
-| [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), ready above #83; hosted CI/review pending |
-| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), ready above #84; offline acceptance passed, review/CI pending |
-| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87), above #86; read/admin hardware passed, assembled financial criterion remains open |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), three review fixes verified; new-head hosted checks separate |
+| [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), two startup review fixes verified; new-head hosted checks separate |
+| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), restacked; combined offline acceptance passed |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87), historical read/admin image passed; corrected image and assembled financial criterion remain open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-20 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-21 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### P40 read/admin hardware completion — 2026-10-20
+### Stack review correction and assembled-paper decision — 2026-10-21
+
+User requested completion of the remaining work. All five unresolved predecessor
+findings are relevant and fixed in their owning PRs: #83 `dd37bc7` enforces Node/
+TLS and explicit cumulative cleanup capacity; #84 `67bcf36` rejects same-unit
+recipient aliases before preparation and checks trusted expiry/stop throughout
+enrollment. Both startup failures were reproduced first. Accepted prefixes survive
+authorized restart without epoch/money reset. One expected P39 clock-overlap
+conflict was resolved by keeping the early finite lease and the native worker.
+The four-branch stack stays unmerged; publication/review resolution and fresh
+hosted results must be distinguished from old green heads.
+
+Combined local code passes all-feature workspace **819 passed / 10 existing
+intentional ignored**, strict default/all-feature workspace lint/build, 97
+contracts and actual Node 24.21.0 / Chrome 155 two-unit confidential scenarios
+(two joined groups each). All 21 combined unit tests also pass optimized; no new AWS, native
+account/action, faucet, Solana RPC, wallet or financial run has occurred.
+
+The remaining assembled paper lifecycle needs explicit initialization evidence:
+the shipping managed books are empty, have no funding/credit readiness or joined
+risk/capital cut, and intentionally cannot admit orders. Do not repurpose the
+feature-gated fixture's seeded money/readiness as native evidence. The proposed
+[paper-only gate](P40-PAPER-GATE.md) allocates actual fresh faucet cash once
+between a disposable test customer and house, under explicit bounded closed-
+account test assumptions. Production funding/completeness/recovery contracts
+stay unchanged. User review is requested before implementing that exception.
+
+The startup correction changes measured application code; October 20's exact
+`91a01ff` hardware receipt remains historical, not qualification of the corrected
+image. Finish the paper slice offline first if approved, then propose **one**
+fresh bounded image/run covering both changes; old AWS/paper run ledgers and
+budgets must not be reused. Next: user paper-policy decision and fresh hosted
+checks/reviews; no automatic merge, third venue or deferred-credit investigation.
+
+### P40 read/admin hardware completion — 2026-10-20, historical exact source
 
 Current branch `tee/p40-unit-qualification`, ready #87 above #86 in stack #85;
 no PR merged. Exact application source `91a01ffaa7530297bdde7ac445a44cb5f6163264`

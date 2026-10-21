@@ -1,6 +1,9 @@
 # Two-unit Nitro qualification — 2026-10-20
 
 Read/admin-only changed-image qualification, not live financial activation.
+Historical exact-source receipt: October 21 recipient/initialization-lease fixes
+change the application. This receipt does not qualify their new image; a fresh
+bounded run is required after the final source is ready.
 [Scope and reproduction](unit-qualification.md),
 [capability comparison](../venues/experimental-parity.md).
 
