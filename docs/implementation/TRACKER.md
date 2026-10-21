@@ -46,7 +46,7 @@
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), three review fixes verified; new-head hosted checks separate |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), two startup review fixes verified; new-head hosted checks separate |
 | [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), restacked; combined offline acceptance passed |
-| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) + paper-bootstrap continuation; local profile passes, fresh combined image/native run still open |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) → [#88](https://github.com/arnabnandikgp/cinder/pull/88); local paper profile passes, fresh combined image/native run still open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-21 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -61,6 +61,12 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 User approved local implementation of [the closed-account paper boundary](P40-PAPER-GATE.md).
 Branch `tee/p40-paper-bootstrap`, based on #87 `6a661a7`, implements a separately
 measured version-9 profile, not a fixture deployment or production funding rail.
+Ready [#88](https://github.com/arnabnandikgp/cinder/pull/88) is published above #87
+in native stack #85. Checked implementation commit:
+`2f565223f4310a211ef1671f65414eb9fb38ca9c`; this publication receipt/run-source
+annotation is a documentation-only successor. New-head CI/review is pending,
+not inherited from its predecessor. Open predecessors remain #83 `dd37bc7`,
+#84 `67bcf36`, #86 `bb7bb1d` and #87 `6a661a7`; no layer has been merged.
 [ADR 0044](../architecture/0044-paper-bootstrap.md) owns the precise assumption,
 scope, once-only source-bound allocation, fixed deadline and history quarantine.
 Versions 7/8 retain omitted-field encodings and cannot reopen paper backing.
@@ -102,7 +108,7 @@ four-hour / eight-boot and paper request/notional/deadline caps. It still needs
 separate live approval, frozen-source preparation, exact permissions and image
 qualification. Fresh policy templates and administrator steps are prepared only
 in ignored `work/experiments/p40-paper/permissions/`; no AWS policy was created
-or attached. Next: publish/review this continuation, then obtain that approval;
+or attached. Next: review #88 and obtain that separate fresh-run approval;
 do not reopen Pacifica credit work or integrate a third venue implicitly.
 
 ### Stack review correction and assembled-paper decision — 2026-10-21, historical
@@ -7400,10 +7406,11 @@ assembled financial criterion stay open.
 Next: review the explicit assembled-financial dependency and predecessor stack
 reviews before merge or a third venue; cleanup/evidence is published as `64bdb2f`.
 Continuation: version-9 paper bootstrap and its final local gates are implemented
-on `tee/p40-paper-bootstrap`; see current handoff/ADR 0044. The fresh combined
+at `2f56522`, published as ready #88 above #87 on `tee/p40-paper-bootstrap`;
+new-head CI/review remains separate. See current handoff/ADR 0044. The fresh combined
 native/Nitro proposal still requires approval/execution and cannot inherit the
 historical measurements or claim a qualified funding/recovery rail.
-PR: https://github.com/arnabnandikgp/cinder/pull/87
+PR: [#87](https://github.com/arnabnandikgp/cinder/pull/87) → [#88](https://github.com/arnabnandikgp/cinder/pull/88)
 Merge: none.
 
 ## P24 — Release safety case

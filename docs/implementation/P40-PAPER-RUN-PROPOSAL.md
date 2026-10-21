@@ -29,6 +29,11 @@ before use. These local files have not created or attached any AWS policy.
 
 ## Frozen inputs before key release
 
+Local implementation receipt: `2f565223f4310a211ef1671f65414eb9fb38ca9c`.
+This identifies the checked code, not a qualified image or final live-run source.
+After review, freeze the exact deployment commit and retain any documentation-only
+successors separately; requalify application changes rather than reusing an old ELF.
+
 - Exact reviewed code commit, locked dependencies, pinned Node/Rust, clean
   source-only default-feature ARM64 package and reproducible enclave ELF.
 - Fresh run namespace/resource ledger, seven distinct KMS roles, two ciphertext
