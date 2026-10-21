@@ -1,7 +1,9 @@
 # ADR 0044 — Quarantined fresh-account paper bootstrap
 
 Status: user-approved test boundary; implemented for offline qualification.
-Native execution and changed-image Nitro evidence require a separate run.
+The [October 21 hardware attempt](../operations/unit-paper-hardware-20261021.md)
+failed on fresh zero-slot histories before allocation. The corrected source
+still needs a separately scoped measured run; the failure is not activation.
 Owns [P40's paper gate](../implementation/P40-PAPER-GATE.md), builds on
 [0042](0042-unit-deployment.md) and [0043](0043-unit-workers.md).
 No change to customer custody, RF1/RF2, production credit or recovery backing.
@@ -48,6 +50,19 @@ margin, explicit zero position use/notional/realized PnL/unrealized PnL/fees/fun
 no positions/resting orders and empty bounded histories. Any reported child,
 lock, on-fill plan, unmapped/isolated position or history row refuses. Unexpected
 or malformed facts are retained, never turned into a zero account.
+
+Fresh native empty histories can report `asOfSlot = startSlot = endSlot = 0`
+with unknown coverage. That is not a positive financial frontier. Only the exact
+private policy's two original funding/risk bootstrap queries, before any money,
+risk installation, order or attempt exists, may retain a successfully parsed
+literal empty page as evidence without creating a financial input. Partial
+coverage, continuation, nonzero start/retention floor, rows, malformed data and
+failed/unknown replies do not acquire that treatment. The final initializer
+independently validates all four original responses and rejects any retained
+raw input. It never resolves a raw input by substituting a positive slot.
+Ordinary polling/ingestion, including empty histories in an already active
+paper book, still uses the existing unresolved containment. No ordinary raw
+resolution contract, source cut or production completeness bar changes.
 
 For actual observed paper cash `F` and explicitly configured customer allocation
 `C <= 20 USD`, one atomic transaction records:

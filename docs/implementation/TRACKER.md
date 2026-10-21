@@ -56,6 +56,38 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
+### Fresh paper hardware attempt and zero-slot correction — 2026-10-21
+
+The authorized one-host run is closed. [Exact-image failure receipt](../operations/unit-paper-hardware-20261021.md):
+frozen `79f238a` passed all eight CI jobs, rebuilt ARM64 identically, released all
+seven roles on actual non-debug Nitro, and retained four authenticated HTTP 200
+bootstrap responses. Fresh empty histories report all slots zero/coverage unknown.
+The paper initializer's positive end-slot requirement refused them, before the
+20/980 allocation and listener. No trade occurred; no Node/Chrome/restart success
+is inferred. Both replicas/11 accepted frames authenticate, no economic events.
+Fresh native revoke ACK retained, final cash 1,000/positions and orders zero.
+Cleanup independently verified: terminated instance, no EBS/buckets/witness/
+roles/network resources; seven keys pending deletion. Original tools, private
+responses and encrypted archive remain ignored in `work/experiments/p40-paper/`.
+
+The exact zero-slot fixture first reproduced `Unqualified` locally. The correction
+uses evidence-only retention for the private policy's two literal empty original
+funding/risk bootstrap responses before financial initialization. It removes the
+invented-positive-cut/raw-resolution detour, not ordinary containment or the raw
+resolver's checks. Bad/partial/continuing/nonempty pages remain blocked; ordinary
+empty funding/risk ingestion still creates unresolved inputs. All 74 BULK tests
+and 26 optimized unit-runtime tests pass; joined paper tests now use actual
+zero-slot empty-page shapes. Checked implementation:
+`a7b1263c6fd265b2cb4e5b37b0fefb0045dbc6b8`. Full optimized all-feature workspace:
+834 passed, 10 specifically allowed ignored tests, zero failures. Strict
+workspace/all-target/all-feature Clippy, formatting, whitespace and 97 repository
+contract tests pass. Logs: `/private/tmp/cinder-p40-zero-history-rust.log` and
+`/private/tmp/cinder-p40-zero-history-clippy.log`. The documentation successor
+changes no tested code. Hosted checks/review on its new head remain separate.
+No corrected image is qualified. Next: review this focused fix and prepare a
+fresh bounded measured SDK lifecycle run. Do not reuse the closed
+run ledger/identities/policy lifetime, merge the stack or sanitize the repository.
+
 ### Fresh paper run preflight — 2026-10-21
 
 User completed the fresh IAM/login prerequisites in response to the bounded-run

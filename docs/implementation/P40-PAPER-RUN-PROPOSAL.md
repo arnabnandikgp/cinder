@@ -1,6 +1,12 @@
 # P40 fresh assembled-paper / Nitro run proposal
 
-Status: **bounded run authorized for continuation, 2026-10-21**. In response to
+Status: **executed and safely closed, 2026-10-21; failed before allocation**.
+The [exact-image receipt](../operations/unit-paper-hardware-20261021.md) records
+the zero-slot history mismatch, no orders, unchanged cash and verified cleanup.
+This invocation's one-host authority is consumed; a corrected image needs a
+newly scoped run, not automatic reuse of identities, capsules or this ledger.
+
+Original authority: bounded run authorized for continuation, 2026-10-21. In response to
 the scoped run/setup request, the user completed the two fresh IAM policies and
 refreshed `cinder_new` login. Preserve all limits below; this is not standing
 permission for later sessions. Pin the reviewed committed source before launch.

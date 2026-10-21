@@ -13,8 +13,14 @@ The actual previously retained fullAccount schema omits optional inventories and
 fill pages report unknown coverage; ordinary decoders keep those unknowns. Only
 the approved fresh-account boundary supplies initial test completeness, with no
 native source cut or terminal proof. Offline signed-handler/native-adapter tests
-use synthetic replies. Current commands/counts and publication belong in TRACKER;
-the [fresh run proposal](P40-PAPER-RUN-PROPOSAL.md) remains unexecuted/unapproved.
+use synthetic replies. Current commands/counts and publication belong in TRACKER.
+The authorized [October 21 run](../operations/unit-paper-hardware-20261021.md)
+released seven roles and retained four HTTP 200 originals, but failed before
+allocation/listener startup: fresh histories had zero slots, not the positive
+cut assumed by the implementation. All owned resources were cleaned up and the
+fresh agent revoked, with unchanged native cash and no orders. The local repair
+retains literal empty bootstrap histories without inventing a financial cut;
+ordinary containment remains unchanged. Corrected-image requalification is open.
 
 October 21 review correction: same-unit recipient preflight and finite enrollment
 expiry/stop handling are fixed, with red/green/resume regressions. This changes
