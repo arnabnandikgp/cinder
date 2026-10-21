@@ -7119,6 +7119,15 @@ and final optimized guard regressions, 95 contracts, strict lint/build and
 Unexpected: KMS plaintext limits require separate unit configuration capsules;
 managed empty owner inventory avoids inventing a BULK custody/discovery policy;
 secret random body blinding prevents a public owner-list hash oracle.
+Review follow-up 2026-10-21: both #84 findings reproduced as red tests, then
+fixed. Same-unit recipient aliases reject during trusted preparation, while
+cross-unit reuse still works. A finite trusted clock/stop guard now covers
+journal load and each enrollment commit; expiry/stop preserves only the prior
+accepted prefix. Fresh authorized restart resumes it without reset. Nine
+deployment tests pass in debug/release, including load/inter-enrollment expiry,
+shutdown and prefix recovery. This changes measured application code: the
+October 20 P40 receipt remains exact-source historical evidence, not automatic
+qualification of the corrected image. No AWS/venue/RPC action was performed.
 Next: review/CI for #84, then P39 joined workers/encrypted SDK;
 P40 separately qualifies the changed image. Native funds remain off.
 PR: https://github.com/arnabnandikgp/cinder/pull/84; ready above #83 in native stack #85.

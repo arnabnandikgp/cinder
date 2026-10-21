@@ -49,6 +49,13 @@ fixture controller to advertise a BULK deposit route. A restart verifies the
 same owners/recipients, resumes incomplete enrollment and preserves epochs,
 grants, operations and balances. It never reseeds collateral or risk readiness.
 
+Trusted preparation rejects duplicate wallets and duplicate token recipients
+within either unit before journal I/O; cross-unit address reuse is not a
+same-unit collision. The finite boot clock/stop guard starts before journal
+create/replay and is checked after freshness reads and immediately before each
+enrollment commit. Expiry/stop leaves only the already accepted prefix; a later
+authorized boot validates/resumes that prefix without reset or renewed grants.
+
 This bounded assembly lets encrypted service and key/storage qualification
 proceed without pretending an unsupported funding rail exists. P39 must add
 explicit measured native-worker/paper policy before activation; P40 must qualify

@@ -276,6 +276,169 @@ fn session() -> Session {
     Session::established(test_support::config().domain, [8; 32], 120000)
 }
 
+fn two_owners(m: &mut Manifest, keys: &mut BTreeMap<Role, Zeroizing<Vec<u8>>>) {
+    let mut c: Configuration = serde_cbor::from_slice(&keys[&Role::Configuration]).unwrap();
+    c.owners.push(Owner {
+        wallet: public(10),
+        pacifica_tokens: [73; 32],
+        bulk_tokens: [74; 32],
+    });
+    keys.insert(
+        Role::Configuration,
+        Zeroizing::new(serde_cbor::to_vec(&c).unwrap()),
+    );
+    crate::application::prepare(m, keys).unwrap();
+}
+
+#[test]
+fn startup_recipient_aliases_are_rejected_before_preparation_or_enrollment() {
+    let (mut m, mut keys) = input();
+    two_owners(&mut m, &mut keys);
+    for unit in [0, 1] {
+        let mut k = keys.clone();
+        let mut c: Configuration = serde_cbor::from_slice(&k[&Role::Configuration]).unwrap();
+        if unit == 0 {
+            c.owners[1].pacifica_tokens = c.owners[0].pacifica_tokens;
+        } else {
+            c.owners[1].bulk_tokens = c.owners[0].bulk_tokens;
+        }
+        k.insert(
+            Role::Configuration,
+            Zeroizing::new(serde_cbor::to_vec(&c).unwrap()),
+        );
+        assert!(crate::application::prepare(&mut m.clone(), &k).is_err());
+        assert!(crate::application::construct(&m, k).is_err());
+    }
+    // The same address in different units is not a same-unit alias.
+    let mut c: Configuration = serde_cbor::from_slice(&keys[&Role::Configuration]).unwrap();
+    c.owners[1].pacifica_tokens = c.owners[0].bulk_tokens;
+    c.owners[1].bulk_tokens = c.owners[0].pacifica_tokens;
+    keys.insert(
+        Role::Configuration,
+        Zeroizing::new(serde_cbor::to_vec(&c).unwrap()),
+    );
+    crate::application::prepare(&mut m, &keys).unwrap();
+    let app = attach(
+        &m,
+        keys,
+        shared(),
+        Arc::new(Time(AtomicU64::new(100))),
+        Arc::new(AtomicBool::new(false)),
+        true,
+    )
+    .unwrap();
+    assert_eq!(
+        app.handler
+            .journal
+            .lock()
+            .unwrap()
+            .state()
+            .unwrap()
+            .customers()
+            .len(),
+        2
+    );
+}
+
+struct Interrupted {
+    memory: Memory,
+    time: Arc<Time>,
+    stop: Arc<AtomicBool>,
+    deadline: u64,
+    case: u8,
+}
+impl Interrupted {
+    fn interrupt(&self) {
+        if self.case.is_multiple_of(2) {
+            self.time.0.store(self.deadline, Ordering::SeqCst);
+        } else {
+            self.stop.store(true, Ordering::SeqCst);
+        }
+    }
+}
+impl Backend for Interrupted {
+    fn load(&mut self) -> Result<Vec<Frame>, cinder_journal::Error> {
+        let frames = self.memory.load()?;
+        if self.case < 2 {
+            self.interrupt();
+        }
+        Ok(frames)
+    }
+    fn check_current(&mut self, head: Head) -> Result<(), cinder_journal::Error> {
+        self.memory.check_current(head)
+    }
+    fn append(
+        &mut self,
+        expected: Option<Head>,
+        frame: &Frame,
+    ) -> Result<(), cinder_journal::Error> {
+        self.memory.append(expected, frame)?;
+        if self.case >= 2 && frame.head.sequence == 1 {
+            self.interrupt();
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn startup_lease_and_stop_are_rechecked_after_load_and_between_enrollments() {
+    let (mut m, mut keys) = input();
+    two_owners(&mut m, &mut keys);
+    for case in 0..4 {
+        let shared = shared();
+        let time = Arc::new(Time(AtomicU64::new(100)));
+        let stop = Arc::new(AtomicBool::new(false));
+        let backend = Interrupted {
+            memory: Memory(shared.clone()),
+            time: time.clone(),
+            stop: stop.clone(),
+            deadline: 100 + m.gates.maximum_boot_ms,
+            case,
+        };
+        assert!(
+            loaded(&m, keys.clone())
+                .attach(
+                    &m,
+                    backend,
+                    true,
+                    Arc::new(Fresh(shared.clone())),
+                    time.clone(),
+                    stop,
+                )
+                .is_err()
+        );
+        assert_eq!(
+            shared.frames.lock().unwrap().len(),
+            if case < 2 { 1 } else { 2 },
+            "no expired/stopped enrollment; case {case}"
+        );
+        // A new authorized boot resumes the accepted prefix, never resets it.
+        time.0
+            .store(100 + m.gates.maximum_boot_ms, Ordering::SeqCst);
+        let app = attach(
+            &m,
+            keys.clone(),
+            shared.clone(),
+            time,
+            Arc::new(AtomicBool::new(false)),
+            false,
+        )
+        .unwrap();
+        assert_eq!(shared.frames.lock().unwrap().len(), 3);
+        assert_eq!(
+            app.handler
+                .journal
+                .lock()
+                .unwrap()
+                .state()
+                .unwrap()
+                .customers()
+                .len(),
+            2
+        );
+    }
+}
+
 #[test]
 fn measured_contract_has_exact_roles_ports_and_no_activation_or_legacy_fallback() {
     let (m, keys) = input();

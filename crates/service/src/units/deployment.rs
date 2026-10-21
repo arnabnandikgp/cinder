@@ -226,13 +226,19 @@ impl Clock for ClosedClock {
 struct BootClock {
     clock: Arc<dyn Clock>,
     stop: Arc<AtomicBool>,
+    deadline: u64,
 }
 impl Clock for BootClock {
     fn now(&self) -> Result<u64, Error> {
         if self.stop.load(Ordering::SeqCst) {
             return Err(Error);
         }
-        self.clock.now()
+        let now = self.clock.now()?;
+        if now >= self.deadline {
+            self.stop.store(true, Ordering::SeqCst);
+            return Err(Error);
+        }
+        Ok(now)
     }
 }
 
@@ -301,7 +307,11 @@ impl Configuration {
                 o.wallet == [0; 32]
                     || o.pacifica_tokens == [0; 32]
                     || o.bulk_tokens == [0; 32]
-                    || self.owners[..i].iter().any(|old| old.wallet == o.wallet)
+                    || self.owners[..i].iter().any(|old| {
+                        old.wallet == o.wallet
+                            || old.pacifica_tokens == o.pacifica_tokens
+                            || old.bulk_tokens == o.bulk_tokens
+                    })
             })
         {
             return Err(Error);
@@ -539,6 +549,14 @@ impl Loaded {
         if stop.load(Ordering::SeqCst) {
             return Err(Error);
         }
+        let deadline = now
+            .checked_add(manifest.gates.maximum_boot_ms)
+            .ok_or(Error)?;
+        let private_clock: Arc<dyn Clock> = Arc::new(BootClock {
+            clock,
+            stop: stop.clone(),
+            deadline,
+        });
         let cipher = RecordCipher::new(self.storage, manifest.generation, manifest.stream)
             .map_err(|_| Error)?;
         let mut journal = if fresh {
@@ -551,7 +569,7 @@ impl Loaded {
             &mut journal,
             &self.owners,
             manifest.units.as_ref().ok_or(Error)?,
-            now,
+            private_clock.as_ref(),
         )?;
         let api = self
             .api
@@ -565,19 +583,8 @@ impl Loaded {
             epoch: manifest.epoch,
             api,
         };
-        let private_clock: Arc<dyn Clock> = Arc::new(BootClock {
-            clock,
-            stop: stop.clone(),
-        });
-        let handler = super::Runtime::open(
-            journal,
-            self.api,
-            binding,
-            witness,
-            private_clock,
-            now.checked_add(manifest.gates.maximum_boot_ms)
-                .ok_or(Error)?,
-        )?;
+        let handler =
+            super::Runtime::open(journal, self.api, binding, witness, private_clock, deadline)?;
         Ok(Instance {
             handler: Arc::new(handler),
             _native: self.native,
@@ -589,9 +596,10 @@ fn initialize_owners<B: Backend>(
     j: &mut units::Journal<B, RecordCipher>,
     owners: &[Owner],
     p: &Policy,
-    now: u64,
+    clock: &dyn Clock,
 ) -> Result<(), Error> {
     let state = j.verified_state().map_err(|_| Error)?;
+    let now = clock.now()?;
     if state.logical_time() > now
         || state
             .customers()
@@ -601,6 +609,7 @@ fn initialize_owners<B: Backend>(
         return Err(Error);
     }
     for owner in owners {
+        clock.now()?;
         let recipients: Vec<_> = j
             .configuration()
             .units()
@@ -638,6 +647,7 @@ fn initialize_owners<B: Backend>(
         }
         let mut id = [0; 32];
         openssl::rand::rand_bytes(&mut id)?;
+        let now = clock.now()?;
         let tx = units::Transaction {
             id: CommitId::new(id).map_err(|_| Error)?,
             expected: j.head(),
@@ -649,6 +659,7 @@ fn initialize_owners<B: Backend>(
         };
         j.commit(tx).map_err(|_| Error)?;
     }
+    clock.now()?;
     Ok(())
 }
 
