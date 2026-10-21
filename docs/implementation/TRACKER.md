@@ -46,7 +46,7 @@
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), three review fixes verified; new-head hosted checks separate |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), two startup review fixes verified; new-head hosted checks separate |
 | [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), restacked; combined offline acceptance passed |
-| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) → [#88](https://github.com/arnabnandikgp/cinder/pull/88); local paper profile passes, fresh combined image/native run still open |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) → [#88](https://github.com/arnabnandikgp/cinder/pull/88); corrected Nitro SDK open/fill passes; Cinder close/cash bridge and full admin acceptance remain open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-21 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -55,6 +55,65 @@ criteria, recorded tests/review and actual merge; a green/unmerged PR is not clo
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
+
+### Corrected Nitro paper run closed; active-account gap reproduced — 2026-10-21
+
+This is the current next-agent entry; older dated entries below are historical.
+Frozen `e72484f9521e86cd8bb38bc013f8e31d0f6d4e71` passed all eight hosted
+jobs and CodeRabbit review before the separately approved fresh run. No code
+changed mid-run. [Exact-image receipt](../operations/unit-paper-hardware-20261021.md)
+records source/ELF/manifest/EIF/PCRs and the partial acceptance matrix.
+
+Actual Nitro released seven roles, initialized the native-backed 20/980 split
+once, and accepted an encrypted UnitClient opening. The native 0.00003 BTC fill
+was attributed as 3,000 lots to the original customer/unit. Same-image restart
+preserved existing cash and position. Cinder's close and subsequent bounded SDK
+cleanup refused `unavailable`, lookup not-found, with no native close dispatch.
+Restoring a lost local SSH tunnel repaired access, not financial readiness.
+
+Trusted offline decoding of unchanged authenticated originals reproduces the
+blocker: three initial account responses decode, six active reports return
+`Invalid` because several native margin/valuation fields exceed eight-decimal
+quote precision; four later responses also report inexact nonzero funding.
+Ordinary account containment and the paper zero-funding guard remain intact.
+No balance import, rounding, reset, invented cut or financial bypass was added.
+Actual fill attribution is a pass; full financial lifecycle is **not**.
+
+Independent witness epoch 1→2 preserved sequence 48/hash and actual SDK access
+to both units refused. Both ciphertext replicas/all 49 frames authenticate;
+98 objects / 1,511,032 bytes retained locally before cleanup. Ten financial
+input records are not ten fills or proof of complete reconciliation.
+The original native agent was revoked before the original window ended.
+A subsequent explicit five-minute teardown-only approval permitted same-agent
+re-registration, one exact opposite paper IOC close, then revocation. All three
+requests returned HTTP 200, final native account is flat/no orders/revoked,
+cumulative order notional 4.095 USD, seven total native signatures. This local
+teardown is not a shipping fallback or passing Cinder close/cash bridge.
+
+Run-2 cleanup independently verified at 12:31:10 UTC: instance terminated,
+no test EBS/buckets/witness/runtime roles/network resources; seven run-2 KMS keys
+pending deletion, existing policies preserved. Two enclave boots, no new host,
+mainnet/customer assets, transfers, RPC or Pacifica activity. Local relay/tunnel
+listeners stopped. Full private originals, archive, exact-byte diagnostics and
+separate extension/cleanup ledgers are ignored in
+`work/experiments/p40-paper2/run-2/`; reusable bounded tools are its sibling
+`tools/`. Do not rerun this consumed invocation or modify its original identities.
+
+**Next:** reproduce the observed precision and funding cases in tracked offline
+tests; distinguish reported valuation precision from exact settlement amounts
+and establish the required funding reconciliation/paper policy before another
+live run. Do not merely increase decimals, erase unresolved events, infer
+settlement from cash deltas, weaken admission or renew the expired manifest.
+Remaining original acceptance: Cinder close/final cash bridge, complete current-
+image Node/Chrome grant/revoke and receipt/restart suite, then any freshly scoped
+hardware requalification. No new AWS host is authorized. No merge, third-venue
+work or repository sanitation until this qualification handoff is resolved.
+
+The run/cleanup documentation successor changes no runtime, dependencies or
+financial policy. `node scripts/check.mjs --group=contracts`: 97 passed, no
+skips/failures, implementation links and workspace boundaries passed;
+`git diff --check` passed. New-head hosted CI/review is separate from the eight
+green jobs that qualified the frozen `e72484f` runtime before launch.
 
 ### Fresh paper hardware attempt and zero-slot correction — 2026-10-21
 

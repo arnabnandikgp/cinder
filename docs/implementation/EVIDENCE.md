@@ -14,13 +14,23 @@ fill pages report unknown coverage; ordinary decoders keep those unknowns. Only
 the approved fresh-account boundary supplies initial test completeness, with no
 native source cut or terminal proof. Offline signed-handler/native-adapter tests
 use synthetic replies. Current commands/counts and publication belong in TRACKER.
-The authorized [October 21 run](../operations/unit-paper-hardware-20261021.md)
+The first authorized [October 21 run](../operations/unit-paper-hardware-20261021.md)
 released seven roles and retained four HTTP 200 originals, but failed before
 allocation/listener startup: fresh histories had zero slots, not the positive
 cut assumed by the implementation. All owned resources were cleaned up and the
 fresh agent revoked, with unchanged native cash and no orders. The local repair
 retains literal empty bootstrap histories without inventing a financial cut;
-ordinary containment remains unchanged. Corrected-image requalification is open.
+ordinary containment remains unchanged. The separately approved corrected run
+on `e72484f` passed actual Nitro bootstrap, SDK opening and original-customer
+fill attribution. Its Cinder close refused active-account decimals/funding;
+unchanged authenticated-body offline decoding reproduces six `Invalid` account
+responses. Both replicas/all 49 frames authenticate, restart preserved existing
+cash/position, and an independent epoch fence refused both units. Separate
+user-approved local paper teardown finished flat/revoked; it is not a passing
+shipping close or cash bridge. All run-2 resources were independently cleaned
+up, seven keys scheduled for deletion. Full SDK close/cash reconciliation and
+the planned Node/Chrome/admin acceptance remain open; exact artifacts, counts,
+policy limits and next action are in the dated receipt and TRACKER.
 
 October 21 review correction: same-unit recipient preflight and finite enrollment
 expiry/stop handling are fixed, with red/green/resume regressions. This changes

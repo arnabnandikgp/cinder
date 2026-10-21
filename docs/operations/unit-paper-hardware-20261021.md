@@ -1,11 +1,13 @@
-# Fresh paper / Nitro attempt — 2026-10-21
+# Fresh paper / Nitro attempts — 2026-10-21
 
-**Failed before allocation and listener startup; safely closed.** This is an
-exact-source failure receipt, not an SDK trade, successful financial lifecycle
-or qualification of the subsequent local correction. [Run scope](../implementation/P40-PAPER-RUN-PROPOSAL.md),
+**Both runs safely closed; assembled financial lifecycle still incomplete.**
+Run 1 failed before allocation. The separately approved corrected run passed
+actual SDK opening/fill attribution, but Cinder refused its close. The last
+section records that partial result and separately authorized test teardown;
+neither run qualifies a full financial lifecycle. [Run scope](../implementation/P40-PAPER-RUN-PROPOSAL.md),
 [paper contract](../architecture/0044-paper-bootstrap.md).
 
-## Frozen artifact and setup
+## Run 1 — frozen artifact and setup
 
 - Source: `79f238a4534a5fd1b0c5f4d292b48301b2272f76`; all eight hosted jobs passed.
 - Rust 1.97.1; default-feature, source-only, network-disabled ARM64 build,
@@ -98,4 +100,119 @@ use the observed zero-slot startup shape, not synthetic slot 100.
 Local gates: 74 BULK tests, 26 optimized unit-runtime tests, full optimized
 all-feature workspace 834 passed / 10 allowed ignored / zero failed, strict
 all-target/all-feature workspace Clippy, formatting, whitespace and 97 repository
-contract tests. No source from this correction has been deployed by this receipt.
+contract tests. Those local checks alone are not hardware qualification; the
+separately approved corrected-image run is recorded below.
+
+## Run 2 — corrected bootstrap, actual SDK open/fill, close refused
+
+Frozen source: `e72484f9521e86cd8bb38bc013f8e31d0f6d4e71`. All eight
+hosted jobs passed before launch. CodeRabbit reviewed that exact successor with
+no actionable findings. This is separate authority/evidence from run 1: fresh
+owner, agent, customer, capsules, storage keys, cloud resource instances and
+history. Exact existing policy templates were reverified; only previously deleted
+resource **names**, not identities or history, were reused with `CinderRun=2`.
+
+- Source-only, network-disabled default-feature ARM64 build, rebuilt
+  ELF-identically using the same pinned tool image as run 1.
+- ELF: `a1907e2787b5a915e0c60c93be4391fcf7515fbaa5c88d3c5e25a61e529fecbe`.
+- Public manifest SHA-256:
+  `4d8963a5fc065ac25b3440b3a8d8d1d4ee39a509d99c100d41b2cb09537a46fb`.
+- EIF: `c059126ee37053badea2d44f58aad1e0e0cbdba793cebc097ad46dad8b846ed9`.
+- PCR0: `f9c111769ee8fe2992060a53f5d54002ead7c4f17e568a05b154f3441b6741a7800ef7e05c3e177c2a1a2c2571618b69`.
+- PCR1: `3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03`.
+- PCR2: `4d28f74da4a1593a5e605ebbdef1f3ab0a0fb192510f77690ceeb3e3cc13f0315c208589abee226e81d16bdda53e3607`.
+
+One `c6g.large`, `i-0464d76017e14eadd`, two non-debug boots of that exact image.
+Independent EIF inspection, exact PCR/context/tag policy readback and actual
+parent plaintext-KMS/witness refusals passed. All seven roles were released.
+The corrected zero-slot bootstrap succeeded: observed 1,000 paper USD was split
+once into customer 20 / house 980, not inflated to 1,020. Pacifica stayed empty,
+with zero native connections or financial activity.
+
+| Criterion | Observed result |
+| --- | --- |
+| Confidential SDK/private access and initialization | Passed on actual Nitro; customer/house split matches the same native backing |
+| SDK order → enclave/native agent → actual fill | Passed: one 0.00003 BTC buy at 94,500, attributed as 3,000 lots to the original customer/unit |
+| Cinder opposite-side close | Refused with `unavailable`; lookup returned not-found. No native close was dispatched through Cinder |
+| Same-image protected restart | Existing customer cash and filled position survived without reallocation; this is partial restart evidence, not completion of the entire planned receipt/admin suite |
+| Independent exact-head witness fence | Epoch 1→2 preserved sequence 48/hash; actual SDK access to both units refused |
+| Encrypted persistence | 98 objects / 1,511,032 bytes, identical replicas, all 49 frames authenticated offline |
+| Full Node/Chrome grant/revoke and final cash bridge | Not completed in this run; no pass inferred from older images or local fixtures |
+
+### Exact active-account incompatibility
+
+The retained original account bodies were decrypted only on the trusted local
+operator machine, then passed **unchanged** to the frozen implementation's
+`financial::account::decode_account` using the actual prepared profile.
+Three empty/pre-trade account responses decode; six subsequent active-account
+responses return `Invalid`. Reported `availableMargin`, `executionImpact`,
+`transferableBalance`, `marginUsed`, `bufferedMargin` and `notional` contain
+nonzero fractions finer than the configured eight-decimal quote scale. Four
+later responses also contain inexact, nonzero cumulative funding.
+
+`observation::Kind::Account` therefore retains unresolved input rather than
+treating these reports as qualified account evidence. Separately, the active
+paper policy requires zero funding; even a representable nonzero funding report
+would remain contained. Increasing a network timeout, restarting or restoring
+access does not repair either financial dependency. A lost local SSH tunnel
+also caused two earlier cleanup connection failures **before any new intent**;
+once restored, the actual SDK close still refused financially. Do not confuse
+that transport failure with the reproduced decoder/containment result.
+
+No amount was rounded away, native balance delta booked as a settlement,
+unresolved input erased, funding cut invented, or admission guard bypassed.
+The earlier joined fixture used exact integer account metrics and did not cover
+these actual active-account reports. Next work must separate reported valuation
+precision from exact settlement amounts and establish funding reconciliation;
+it must preserve the original raw bytes and explicit policy boundaries.
+
+### Separate paper teardown, not a passing Cinder close
+
+The enclave was fenced and stopped first. The original agent was revoked before
+the 30-minute financial window expired. The user subsequently approved a separate
+five-minute **teardown-only** extension: re-register the same disposable agent,
+one opposite IOC close of the confirmed 0.00003 BTC long, then revoke it again.
+The local tool retained each original identity/wire before exposure, rechecked
+the exact position immediately before closing, and never resent a request.
+Only the agent signed the close; the owner signed agent management, not trading.
+
+All three additional signed requests returned HTTP 200. The close filled exactly
+0.00003 BTC at 42,000; final native state is flat with no resting orders, and
+revocation is acknowledged. Total native limit notional is 4.095 paper USD
+(2.835 opening + 1.260 close), below the original 20 USD cap. Final reported
+native cash is 998.424968; realized PnL -1.575, fees zero, cumulative funding
+-0.000031115. These are original native reports, **not** a reconciled final
+Cinder ledger or a successful shipping fallback. No final Cinder cash bridge
+was claimed or manufactured after fencing.
+
+Totals: seven signed native requests, including the one enclave opening and
+three separately approved teardown signatures; seven operator account reads;
+three public reads; 20 enclave native account/history responses. Actual native
+TLS connection count 21 includes the opening. Parent metadata counts are S3
+293/194, witness 1,321, KMS 14 and Pacifica zero. The offline archive has ten
+financial input records; that count is not ten independent fills or proof of
+terminal reconciliation.
+
+### Verified closure and reproducible next action
+
+Host launched 11:42:39 UTC; termination was verified by 12:27:07 UTC. At
+12:31:10 UTC independent teardown checks confirmed instance termination and no
+remaining test EBS, buckets, witness table, runtime roles, security group or SSH
+key. All seven **run-2** KMS keys are PendingDeletion with seven-day scheduling;
+preexisting administrator policies and run-1 pending-deletion keys were not
+altered. Local opaque relay/tunnel listeners are stopped. Ciphertext evidence
+and private diagnostic originals were preserved before deleting cloud copies.
+No mainnet/customer assets, transfer, Solana RPC or Pacifica action occurred.
+AWS billing is delayed; this is resource/usage evidence, not a final invoice.
+
+Ignored `work/experiments/p40-paper2/run-2/` retains the frozen artifacts,
+original native/SDK requests, ciphertext, exact-byte diagnostic receipts,
+separate teardown extension and cleanup ledger. Its sibling `tools/` retains
+preparation, archive/audit/diagnosis and bounded teardown scripts for review;
+the consumed invocation must not be replayed. No code was changed mid-run.
+
+**P40 remains in progress.** First resolve the active-account observation and
+funding cases locally, then review the bounded financial policy and remaining
+SDK close/cash-bridge/admin/restart acceptance. A new measured run needs its own
+authority; neither existing one-host approval permits another host. No stack
+merge, third-venue work or repository sanitation was performed.

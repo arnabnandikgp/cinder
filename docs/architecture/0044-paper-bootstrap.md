@@ -1,9 +1,10 @@
 # ADR 0044 — Quarantined fresh-account paper bootstrap
 
-Status: user-approved test boundary; implemented for offline qualification.
-The [October 21 hardware attempt](../operations/unit-paper-hardware-20261021.md)
-failed on fresh zero-slot histories before allocation. The corrected source
-still needs a separately scoped measured run; the failure is not activation.
+Status: user-approved test boundary; implemented and partially exercised on Nitro.
+The [October 21 hardware attempts](../operations/unit-paper-hardware-20261021.md)
+first refused zero-slot histories, then passed corrected bootstrap and actual SDK
+opening/fill attribution. Cinder's close refused active-account precision/funding
+evidence. Separate local test teardown is not a passing financial lifecycle or activation.
 Owns [P40's paper gate](../implementation/P40-PAPER-GATE.md), builds on
 [0042](0042-unit-deployment.md) and [0043](0043-unit-workers.md).
 No change to customer custody, RF1/RF2, production credit or recovery backing.

@@ -1,10 +1,19 @@
 # P40 fresh assembled-paper / Nitro run proposal
 
-Status: **executed and safely closed, 2026-10-21; failed before allocation**.
-The [exact-image receipt](../operations/unit-paper-hardware-20261021.md) records
-the zero-slot history mismatch, no orders, unchanged cash and verified cleanup.
-This invocation's one-host authority is consumed; a corrected image needs a
-newly scoped run, not automatic reuse of identities, capsules or this ledger.
+Status: **two separately approved invocations executed and safely closed,
+2026-10-21; financial lifecycle still incomplete**.
+The [exact-image receipt](../operations/unit-paper-hardware-20261021.md) preserves
+run 1's zero-slot failure and run 2's actual SDK open/fill, refused Cinder close,
+separately authorized local paper teardown and verified cleanup. Both one-host
+authorities are consumed; another image/run requires a newly scoped proposal,
+not automatic reuse of identities, capsules, expiry or either resource ledger.
+
+Run 2 froze `e72484f9521e86cd8bb38bc013f8e31d0f6d4e71` after all eight CI
+jobs and review. The original 30-minute activity window was not renewed. After
+fencing/stopping and original revocation, the user separately approved a
+five-minute teardown-only register/exact-close/revoke extension, three additional
+signatures, still below eight total signatures and 20 USD cumulative notional.
+It completed flat/revoked and is not part of shipping SDK close acceptance.
 
 Original authority: bounded run authorized for continuation, 2026-10-21. In response to
 the scoped run/setup request, the user completed the two fresh IAM policies and
