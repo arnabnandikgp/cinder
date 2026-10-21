@@ -18,7 +18,7 @@ use cinder_kernel::{
 };
 use sha2::{Digest, Sha256};
 
-const MAGIC: &[u8] = b"CINDER-BULK-OBSERVATION-1\0";
+pub(crate) const MAGIC: &[u8] = b"CINDER-BULK-OBSERVATION-1\0";
 /// Exact native family selected by the private scheduler, not by response fields.
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -169,7 +169,13 @@ pub(crate) fn ingest_with(
             }
             Kind::Account => {
                 unresolved = !financial::account::decode_account(profile, message.body.as_bytes())
-                    .is_ok_and(|s| s.held.is_empty());
+                    .is_ok_and(|s| {
+                        s.held.is_empty()
+                            && (!crate::paper::active(j)
+                                || s.local
+                                    .get(financial::account::Metric::Funding)
+                                    .is_some_and(|v| v.atoms() == 0))
+                    });
             }
             Kind::Funding => {
                 // A native net payment does not determine private gross funding or

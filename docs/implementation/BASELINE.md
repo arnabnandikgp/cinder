@@ -53,6 +53,14 @@ changed-image live authority.
 
 ## Product and custody contract
 
+2026-10-21 bounded paper addendum: [ADR 0044](../architecture/0044-paper-bootstrap.md)
+allows only a separate version-9 fresh exclusive BULK paper account to allocate
+actual faucet backing once between a disposable customer and house. Its explicit
+closed-account assumption is not a native global frontier, customer deposit or
+production/recovery proof. Paper histories cannot reopen in ordinary releases.
+All product/financial requirements below remain unchanged; live/AWS authority is
+separate from approval to implement this test boundary.
+
 | ID | Binding direction | Boundary / unresolved qualification |
 | --- | --- | --- |
 | B01 | Private, programmatic broker over existing perp liquidity; Pacifica first, Nitro runtime | BULK paused; no Phoenix/PER inheritance, website, token, staking or multi-venue launch in this sequence |

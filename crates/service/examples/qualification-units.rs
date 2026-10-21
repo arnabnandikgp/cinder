@@ -182,6 +182,7 @@ fn run() -> Result<(), Error> {
     .collect();
     manifest.validate()?;
     let configuration = d::Configuration {
+        paper: None,
         privacy_nonce: input.privacy_nonce,
         owners: vec![d::Owner {
             wallet: owner.wallet,

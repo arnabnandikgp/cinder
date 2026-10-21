@@ -289,6 +289,11 @@ impl Gateway {
     pub fn agent_key(&self) -> [u8; 32] {
         self.key.verifying_key().to_bytes()
     }
+    // Immutable binding only; paper initialization cannot mutate a loaded
+    // gateway's profile/policy without rebuilding its release commitment.
+    pub(crate) fn paper_binding(&self) -> (&Config, &Profile, &Policy) {
+        (&self.config, &self.profile, &self.policy)
+    }
     pub(crate) fn observation_binding(
         &self,
         j: &impl Controller,

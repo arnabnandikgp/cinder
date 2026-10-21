@@ -36,6 +36,10 @@ UnitClient acceptance. It requires per-unit qualification, three-location source
 inventory and finite read/history-wide dispatch allocations. Fresh books remain
 not-ready; worker wiring supplies no capital, credit or financial frontier.
 [ADR 0043](docs/architecture/0043-unit-workers.md) owns these controls and limits.
+Version 9 separately implements the approved, assumption-backed fresh paper
+experiment ([ADR 0044](docs/architecture/0044-paper-bootstrap.md)). Its one-time
+faucet allocation is not a funding rail; paper histories cannot be reopened by
+ordinary releases. Live financial/Nitro approval and evidence remain separate.
 
 ## Product context
 

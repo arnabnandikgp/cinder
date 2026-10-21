@@ -71,6 +71,7 @@ pub struct Worker<P, T> {
     next_poll: u64,
     prefer_read: bool,
     dispatch_cursor: [usize; 2],
+    paper_cleanup: bool,
 }
 fn id() -> Result<CommitId, Error> {
     let mut bytes = [0; 32];
@@ -113,7 +114,14 @@ impl<P: pr::Transport + pacifica::Transport, T: br::Transport + bulk::Transport>
             next_poll: 0,
             prefer_read: false,
             dispatch_cursor: [0; 2],
+            paper_cleanup: false,
         })
+    }
+    /// Version-9 only: preserve the last native dispatch slot for an attributed
+    /// reduce-only IOC, not an opening or a cancellation that refunds nothing.
+    pub(super) fn reserve_paper_cleanup(mut self) -> Self {
+        self.paper_cleanup = true;
+        self
     }
     /// Install only local key/credit epochs, never native registration or funds.
     pub fn initialize<B: Backend, Q: Protection, A: cinder_api::Admission>(
@@ -332,6 +340,7 @@ impl<P: pr::Transport + pacifica::Transport, T: br::Transport + bulk::Transport>
         if count >= usize::from(ceiling) {
             return Ok(None);
         }
+        let cleanup_only = self.paper_cleanup && index == 1 && count + 1 == usize::from(ceiling);
         // Stable bounded round-robin over eligible attempts AND unprepared
         // intents. One blocked original cannot starve another accepted order.
         // Escaped, stale and expired originals never enter this queue.
@@ -367,6 +376,21 @@ impl<P: pr::Transport + pacifica::Transport, T: br::Transport + bulk::Transport>
                 })
                 .map(|o| (2, None, o.intent.request)),
         );
+        if cleanup_only {
+            candidates.retain(|(_, attempt, request)| {
+                attempt.is_none_or(|a| {
+                    state
+                        .attempts()
+                        .iter()
+                        .any(|old| old.key == a && old.kind == AttemptKind::Order)
+                }) && state.orders().iter().any(|o| {
+                    o.intent.request == *request
+                        && o.intent.reduce_only
+                        && o.intent.time_in_force
+                            == cinder_journal::orders::TimeInForce::ImmediateOrCancel
+                })
+            });
+        }
         candidates.sort_by_key(|c| c.0);
         if candidates.is_empty() {
             return Ok(None);

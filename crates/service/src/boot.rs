@@ -189,13 +189,13 @@ pub struct Manifest {
 impl Manifest {
     /// Refuse ambiguous routes, key-role reuse, missing trust or live activation.
     pub fn validate(&self) -> Result<(), Error> {
-        if !matches!(self.version,1..=8) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
+        if !matches!(self.version,1..=9) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
             || self.application==[0;32] || self.stream==[0;32] || self.generation==0 || self.epoch==0
             || self.slots.len()!=if self.version>=7 {7}else if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
             || (self.first.resource==self.second.resource) || self.gates.maximum_boot_ms==0 || self.gates.maximum_boot_ms>3_600_000
             // P20 packages/test-gates only. Live reads/money movement need P23's
             // qualified chain/read ports and separately authorized manifest.
-            || (self.gates.trading && self.version!=8) || (self.gates.funding != (self.version==6)) || (self.version==1 && self.gates.native_reads)
+            || (self.gates.trading && !matches!(self.version,8|9)) || (self.gates.funding != (self.version==6)) || (self.version==1 && self.gates.native_reads)
         {
             return Err(Error);
         }
@@ -208,7 +208,7 @@ impl Manifest {
             self.witness.port,
         ];
         match (self.version, &self.chain) {
-            (1 | 7 | 8, None) => {}
+            (1 | 7..=9, None) => {}
             (2..=6, Some(peer)) => {
                 peer.validate()?;
                 if peer.network.as_slice() != &self.domain[..32] {
@@ -220,13 +220,13 @@ impl Manifest {
         }
         match (self.version, &self.history) {
             (1 | 2, None) => {}
-            (3..=8, Some(policy)) => {
+            (3..=9, Some(policy)) => {
                 policy.limits()?;
             }
             _ => return Err(Error),
         }
         match (self.version, &self.native_capture) {
-            (1..=3 | 5..=8, None) => {}
+            (1..=3 | 5..=9, None) => {}
             (4, Some(policy)) => {
                 policy.validate()?;
                 let history = self.history.as_ref().ok_or(Error)?;
@@ -249,7 +249,7 @@ impl Manifest {
             _ => return Err(Error),
         }
         match (self.version, &self.demo_deposit) {
-            (1..=4 | 7 | 8, None) => {}
+            (1..=4 | 7..=9, None) => {}
             (5 | 6, Some(policy)) => {
                 policy.validate().map_err(|_| Error)?;
                 // Worst-case decimal-byte JSON encoding plus metadata/frame.
@@ -274,11 +274,15 @@ impl Manifest {
                 }
                 ports.push(policy.bulk_port);
             }
-            (8, Some(policy)) => {
+            (8 | 9, Some(policy)) => {
                 policy.validate()?;
                 let worker = policy.worker.as_ref().ok_or(Error)?;
                 if self.gates.trading != worker.trading()
                     || self.gates.native_reads != worker.reads()
+                    || self.version == 9
+                        && (!self.gates.trading
+                            || worker.bulk_dispatches > 5
+                            || worker.pacifica_dispatches != 0)
                 {
                     return Err(Error);
                 }
@@ -367,7 +371,8 @@ impl Manifest {
                     5 => b"CINDER-RUNTIME-MANIFEST-5\0".as_slice(),
                     6 => b"CINDER-RUNTIME-MANIFEST-6\0".as_slice(),
                     7 => b"CINDER-RUNTIME-MANIFEST-7\0".as_slice(),
-                    _ => b"CINDER-RUNTIME-MANIFEST-8\0".as_slice(),
+                    8 => b"CINDER-RUNTIME-MANIFEST-8\0".as_slice(),
+                    _ => b"CINDER-RUNTIME-MANIFEST-9\0".as_slice(),
                 },
                 &serde_cbor::to_vec(self).map_err(|_| Error)?,
             ]
@@ -396,7 +401,8 @@ impl Manifest {
                 5 => b"CKR5".as_slice(),
                 6 => b"CKR6".as_slice(),
                 7 => b"CKR7".as_slice(),
-                _ => b"CKR8".as_slice(),
+                8 => b"CKR8".as_slice(),
+                _ => b"CKR9".as_slice(),
             },
             &[role.code()],
             &self.generation.to_be_bytes(),

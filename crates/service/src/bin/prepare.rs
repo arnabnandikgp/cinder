@@ -35,7 +35,7 @@ struct Prepare {
 #[serde(untagged)]
 enum Configuration {
     Legacy(Box<cinder_service::runtime::Configuration>),
-    Units(cinder_service::units::deployment::Configuration),
+    Units(Box<cinder_service::units::deployment::Configuration>),
 }
 fn write(root: &Path, name: &str, bytes: &[u8]) -> Result<(), Error> {
     #[cfg(unix)]

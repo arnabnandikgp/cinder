@@ -46,7 +46,7 @@
 | [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), three review fixes verified; new-head hosted checks separate |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), two startup review fixes verified; new-head hosted checks separate |
 | [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), restacked; combined offline acceptance passed |
-| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87), historical read/admin image passed; corrected image and assembled financial criterion remain open |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) + paper-bootstrap continuation; local profile passes, fresh combined image/native run still open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 Updated 2026-10-21 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
@@ -56,7 +56,56 @@ Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### Stack review correction and assembled-paper decision — 2026-10-21
+### Approved paper bootstrap — 2026-10-21
+
+User approved local implementation of [the closed-account paper boundary](P40-PAPER-GATE.md).
+Branch `tee/p40-paper-bootstrap`, based on #87 `6a661a7`, implements a separately
+measured version-9 profile, not a fixture deployment or production funding rail.
+[ADR 0044](../architecture/0044-paper-bootstrap.md) owns the precise assumption,
+scope, once-only source-bound allocation, fixed deadline and history quarantine.
+Versions 7/8 retain omitted-field encodings and cannot reopen paper backing.
+
+Four original authenticated native-family reads precede initialization. Exact
+observed cash is split customer/house once under one journal CAS; unknown commits
+reopen without query/credit replay. Native unknown page coverage and missing
+optional inventories stay unknown in the codecs. Only the explicitly approved
+fresh exclusive setup assumption qualifies this initial paper cut; `source_cut`
+remains None and no ordinary terminal/funding/recovery proof is invented.
+The exact sole agent, quote/profile/unit, raw hashes, freshness and test backing
+are checked. Later unexpected funding becomes unresolved and restricts risk.
+
+Signed Handler → joined admission → original attempt → worker/native signature →
+fill/duplicate → opposite-side close passes offline with synthetic native ports.
+Pacifica remains empty/read-only. Cleanup reserves cumulative opening quantity
+and upper-price notional, native credits and the final dispatch slot; cancellation
+cannot consume/refund that reservation. Flat does not release unknown holds.
+An initially oversized synthetic close was correctly refused by existing margin
+and retained holds; the test was made smaller instead of weakening the engine.
+Trusted preparation boxes the larger configuration enum transparently after
+strict Clippy identified its increased size; serialized bytes stay unchanged.
+
+Verification: full all-feature workspace **830 passed / 10 existing intentional
+ignored**; final optimized **8 paper + 25 unit tests passed**, including the added
+paper-expiry/purpose-prefix delta; strict default/all-feature workspace lint/build
+and **97 contracts** pass. Actual Node **24.21.0** and Chrome **156.0.8078.47**
+each pass two common confidential-unit groups; frozen fixture ELF SHA-256
+`7dc7ff8c12c568d48d83b9df1b40600a32b129dcab5d3f42d632fa61ad61db8e`.
+That carrier regression is distinct from the paper bootstrap's synthetic native
+responses. Logs: `/private/tmp/cinder-p40-paper-{workspace,release,lint,contracts,sdk}.log`.
+Predecessor #87's exact `6a661a7` head has all eight hosted offline jobs green;
+new-head hosted results/reviews must not inherit those results.
+
+No AWS request/resource, native account/action/query, faucet, wallet, Solana RPC,
+fund movement or live financial run occurred in this continuation. No merge.
+The [fresh combined run proposal](P40-PAPER-RUN-PROPOSAL.md) has explicit $5 /
+four-hour / eight-boot and paper request/notional/deadline caps. It still needs
+separate live approval, frozen-source preparation, exact permissions and image
+qualification. Fresh policy templates and administrator steps are prepared only
+in ignored `work/experiments/p40-paper/permissions/`; no AWS policy was created
+or attached. Next: publish/review this continuation, then obtain that approval;
+do not reopen Pacifica credit work or integrate a third venue implicitly.
+
+### Stack review correction and assembled-paper decision — 2026-10-21, historical
 
 User requested completion of the remaining work. All five unresolved predecessor
 findings are relevant and fixed in their owning PRs: #83 `dd37bc7` enforces Node/
@@ -81,7 +130,8 @@ feature-gated fixture's seeded money/readiness as native evidence. The proposed
 [paper-only gate](P40-PAPER-GATE.md) allocates actual fresh faucet cash once
 between a disposable test customer and house, under explicit bounded closed-
 account test assumptions. Production funding/completeness/recovery contracts
-stay unchanged. User review is requested before implementing that exception.
+stay unchanged. User review was requested at this cut and subsequently approved;
+the implementation/remaining live gate is recorded above.
 
 The startup correction changes measured application code; October 20's exact
 `91a01ff` hardware receipt remains historical, not qualification of the corrected
@@ -7349,6 +7399,10 @@ account queries remain unqualified, not zero. Unsupported funds/returns and the
 assembled financial criterion stay open.
 Next: review the explicit assembled-financial dependency and predecessor stack
 reviews before merge or a third venue; cleanup/evidence is published as `64bdb2f`.
+Continuation: version-9 paper bootstrap and its final local gates are implemented
+on `tee/p40-paper-bootstrap`; see current handoff/ADR 0044. The fresh combined
+native/Nitro proposal still requires approval/execution and cannot inherit the
+historical measurements or claim a qualified funding/recovery rail.
 PR: https://github.com/arnabnandikgp/cinder/pull/87
 Merge: none.
 

@@ -95,6 +95,10 @@ pub struct Configuration {
     pub auth_ms: u64,
     /// Strategy grant lifetime ceiling, milliseconds.
     pub grant_ms: u64,
+    /// Explicit version-9 closed fresh-account paper experiment. Omission keeps
+    /// versions 7/8 byte-compatible and financially uninitialized.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paper: Option<cinder_bulk::paper::Policy>,
 }
 /// Existing unit descriptor, using the canonical ledger codec unchanged.
 #[derive(Serialize, Deserialize)]
@@ -198,7 +202,10 @@ pub struct Bulk {
 }
 /// Scope-qualified financial admission. Empty in version 7/read-only releases;
 /// enabled units still require the actual journal's joined risk/capital facts.
-pub struct Admission(Vec<cinder_kernel::ledger::Config>);
+pub struct Admission(
+    Vec<cinder_kernel::ledger::Config>,
+    Option<cinder_bulk::paper::Policy>,
+);
 impl cinder_api::Admission for Admission {
     fn order_holds(
         &self,
@@ -207,6 +214,11 @@ impl cinder_api::Admission for Admission {
     ) -> Result<Vec<cinder_journal::model::Reservation>, cinder_api::Error> {
         if !self.0.iter().any(|c| c == state.configuration()) {
             return Err(cinder_api::Error::Unavailable);
+        }
+        if let Some(paper) = &self.1 {
+            paper
+                .order(state, intent)
+                .map_err(|_| cinder_api::Error::Unavailable)?;
         }
         state
             .order_reservations(intent)
@@ -231,6 +243,7 @@ pub struct Loaded {
     storage: Zeroizing<[u8; 32]>,
     witness: Credential,
     application: [u8; 32],
+    paper: Option<cinder_bulk::paper::Policy>,
 }
 // Egress construction is pure. Its clock is replaced at open with the actual
 // leased trusted clock; this sentinel can never authorize pre-open network I/O.
@@ -300,7 +313,7 @@ impl Configuration {
         mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
     ) -> Result<Loaded, Error> {
         manifest.validate()?;
-        if !matches!(manifest.version, 7 | 8) {
+        if !matches!(manifest.version, 7..=9) || (manifest.version == 9) != self.paper.is_some() {
             return Err(Error);
         }
         crate::boot::validate_keys(&keys)?;
@@ -347,7 +360,7 @@ impl Configuration {
         if manifest.version == 7 && (p.fills.is_some() || b.qualification.is_some()) {
             return Err(Error);
         }
-        if manifest.version == 8 {
+        if manifest.version >= 8 {
             if p.fills.is_none() || b.qualification.is_none() {
                 return Err(Error);
             }
@@ -439,6 +452,23 @@ impl Configuration {
             b.trading_epoch,
         )
         .map_err(|_| Error)?;
+        if let Some(paper) = &self.paper {
+            paper.validate(&bg, bd).map_err(|_| Error)?;
+            let worker = worker.ok_or(Error)?;
+            if self.owners.len() != 1
+                || self.owners[0].wallet != paper.customer
+                || paper.unit != policy.bulk
+                || worker.pacifica_dispatches != 0
+                || !(2..=5).contains(&worker.bulk_dispatches)
+                || worker.bulk_reads < 2
+                || pacifica_qualified
+                || p.fills != Some(pp::Level::Unknown)
+                || b.credits - b.cleanup_reserve
+                    < 4 + u32::from(worker.bulk_reads) * 8 + u32::from(worker.bulk_dispatches)
+            {
+                return Err(Error);
+            }
+        }
         let mut admitted = vec![];
         if let Some(worker) = worker {
             if worker.pacifica_dispatches != 0 {
@@ -460,7 +490,7 @@ impl Configuration {
         }
         let api = Service::new(
             Authorizer::new(self.auth_ms, self.grant_ms).map_err(|_| Error)?,
-            Admission(admitted),
+            Admission(admitted, self.paper.clone()),
         );
         // Distinct secret bytes are necessary but not sufficient: neither agent
         // may equal either pooled owner/funds wallet or a managed user's owner.
@@ -482,8 +512,10 @@ impl Configuration {
             &[
                 if manifest.version == 7 {
                     b"CINDER-UNIT-LOADED-ASSEMBLY-1\0".as_slice()
-                } else {
+                } else if manifest.version == 8 {
                     b"CINDER-UNIT-LOADED-ASSEMBLY-2\0".as_slice()
+                } else {
+                    b"CINDER-UNIT-LOADED-ASSEMBLY-3-PAPER\0".as_slice()
                 },
                 &sha256(&serde_cbor::to_vec(&self).map_err(|_| Error)?),
                 &sha256(&pbytes),
@@ -494,7 +526,7 @@ impl Configuration {
                 &pe.commitment(),
                 &be.commitment(),
                 &serde_cbor::to_vec(manifest.history.as_ref().ok_or(Error)?).map_err(|_| Error)?,
-                &if manifest.version == 8 {
+                &if manifest.version >= 8 {
                     serde_cbor::to_vec(&policy.worker).map_err(|_| Error)?
                 } else {
                     vec![]
@@ -519,6 +551,7 @@ impl Configuration {
             storage,
             witness,
             application,
+            paper: self.paper,
         })
     }
 }
@@ -638,9 +671,15 @@ impl Loaded {
         if stop.load(Ordering::SeqCst) {
             return Err(Error);
         }
-        let deadline = now
+        let mut deadline = now
             .checked_add(manifest.gates.maximum_boot_ms)
             .ok_or(Error)?;
+        if let Some(paper) = &self.paper {
+            if now < paper.observed_at || now >= paper.expires_at {
+                return Err(Error);
+            }
+            deadline = deadline.min(paper.expires_at);
+        }
         let private_clock: Arc<dyn Clock> = Arc::new(BootClock {
             clock,
             stop: stop.clone(),
@@ -654,6 +693,7 @@ impl Loaded {
             units::Journal::open(backend, cipher, self.config)
         }
         .map_err(|_| Error)?;
+        validate_paper_history(&mut journal, self.paper.as_ref())?;
         initialize_owners(
             &mut journal,
             &self.owners,
@@ -672,7 +712,39 @@ impl Loaded {
             epoch: manifest.epoch,
             api,
         };
-        let ports = egress(manifest, private_clock.clone())?;
+        let mut ports = egress(manifest, private_clock.clone())?;
+        if let Some(paper) = &self.paper {
+            let unit = UnitId::new(paper.unit).map_err(|_| Error)?;
+            let mut selected = journal.select(unit).map_err(|_| Error)?;
+            self.native
+                .bulk
+                .initialize(
+                    &mut selected,
+                    CommitId::new(sha256(
+                        &[
+                            b"CINDER-PAPER-AGENT-1\0".as_slice(),
+                            &paper.commitment().map_err(|_| Error)?,
+                        ]
+                        .concat(),
+                    ))
+                    .map_err(|_| Error)?,
+                    private_clock.now()?,
+                )
+                .map_err(|_| Error)?;
+            cinder_bulk::paper::initialize(
+                paper,
+                &self.native.bulk,
+                &mut selected,
+                &mut ports.1,
+                || {
+                    private_clock
+                        .now()
+                        .map_err(|_| cinder_bulk::Error::Unavailable)
+                },
+            )
+            .map_err(|_| Error)?;
+            private_clock.now()?;
+        }
         let handler =
             super::Runtime::open(journal, self.api, binding, witness, private_clock, deadline)?;
         let worker = if let Some(policy) = manifest.units.as_ref().ok_or(Error)?.worker.clone() {
@@ -686,6 +758,11 @@ impl Loaded {
                 ports.0,
                 ports.1,
             )?;
+            let worker = if self.paper.is_some() {
+                worker.reserve_paper_cleanup()
+            } else {
+                worker
+            };
             worker.initialize(&handler)?;
             Some(worker)
         } else {
@@ -697,6 +774,21 @@ impl Loaded {
             stop,
         })
     }
+}
+fn validate_paper_history<B: Backend>(
+    j: &mut units::Journal<B, RecordCipher>,
+    paper: Option<&cinder_bulk::paper::Policy>,
+) -> Result<(), Error> {
+    let ids: Vec<_> = j.configuration().units().iter().map(|d| d.id).collect();
+    j.verified_state().map_err(|_| Error)?;
+    for id in ids {
+        cinder_bulk::paper::history(
+            paper.filter(|p| p.unit == id.bytes()),
+            &j.select(id).map_err(|_| Error)?,
+        )
+        .map_err(|_| Error)?;
+    }
+    Ok(())
 }
 fn initialize_owners<B: Backend>(
     j: &mut units::Journal<B, RecordCipher>,

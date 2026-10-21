@@ -1,6 +1,6 @@
 # P40 assembled paper-trading gate
 
-Status: proposed boundary for user review, 2026-10-21. Not a live approval or a
+Status: user-approved local implementation boundary, 2026-10-21. Not a live approval or a
 change to customer funding, collateral ownership, recovery or production policy.
 [Plan](PLAN.md#p40), [existing evidence](../venues/experimental-parity.md).
 
@@ -68,8 +68,8 @@ where the original evidence and finite allowance permit.
 
 ## Sequence and finite gates
 
-1. Approve or reject the paper-only initialization/evidence contract above.
-   This is the missing product/test decision, not permission to move real funds.
+1. **Approved:** the paper-only initialization/evidence contract above.
+   This is a product/test decision, not permission to move real funds or launch AWS.
 2. Implement it with deterministic offline tests for once-only allocation,
    altered/reused source evidence, missing backing, wrong unit/account/asset,
    expiry, restart, signed intent attribution and refusal of production use.
@@ -86,6 +86,15 @@ where the original evidence and finite allowance permit.
    combine the reviewed startup fixes and paper slice into one image/run where
    feasible, instead of paying for repeated intermediate images. Keep all AWS,
    financial-action and cleanup caps explicit. Never deploy local-fixture code.
+
+The implementation uses a separate **version-9** measured/private profile;
+versions 7/8 omit it and remain uninitialized. [ADR 0044](../architecture/0044-paper-bootstrap.md)
+defines its exact assumption, authoritative cash split, history quarantine,
+finite risk settings and cleanup reservation. Native `coverage: unknown` and
+missing optional snapshot inventories remain unknown in the ordinary codecs;
+only fresh exclusive control/retained setup closes that gap for this paper test.
+No native `source_cut`, terminal certificate or production funding proof is invented.
+See the [fresh run proposal](P40-PAPER-RUN-PROPOSAL.md) before any live activity.
 
 The October 21 recipient/lease review fixes change enclave code. October 20's
 [hardware receipt](../operations/unit-hardware-20261020.md) remains valid for its

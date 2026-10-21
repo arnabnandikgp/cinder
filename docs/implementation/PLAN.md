@@ -1291,10 +1291,13 @@ Evidence: measured source/image receipts, P36–P39 tests and cleanup.
 - [ ] Supported paper lifecycle runs through the assembled service, not only a direct venue runner; unobserved cases remain named gaps.
 - [x] Capability matrix and cleanup receipt separate unsupported funding/return rails; review this boundary before integrating a third venue. [Comparison](../venues/experimental-parity.md) and [cleanup](../operations/unit-hardware-20261020.md#retention-and-closure) retain the open assembled-financial dependency.
 
-The [paper-only initialization/evidence proposal](P40-PAPER-GATE.md) needs user
-review before implementation; it does not authorize a financial or AWS run or
+The [paper-only initialization/evidence boundary](P40-PAPER-GATE.md) is user-approved
+for local implementation; [ADR 0044](../architecture/0044-paper-bootstrap.md) owns
+the separate version-9 profile and quarantined history. It does not authorize a financial or AWS run or
 weaken production custody/reconciliation. Combine the approved final slice and
-startup fixes into one fresh qualification where feasible.
+startup fixes into one fresh qualification where feasible, under the separately
+gated [fresh run proposal](P40-PAPER-RUN-PROPOSAL.md), which is still awaiting live
+approval.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates

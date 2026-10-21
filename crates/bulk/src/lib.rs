@@ -5,6 +5,8 @@ pub mod execution;
 pub mod fills;
 pub mod financial;
 pub mod observation;
+/// Explicit closed fresh-account paper experiment; never a production funding rail.
+pub mod paper;
 pub mod precision;
 mod raw;
 pub mod reads;

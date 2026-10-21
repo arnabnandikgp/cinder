@@ -7,11 +7,20 @@ the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
 ## Two-unit measured assembly boundary — 2026-10-20
 
+October 21 paper continuation: user-approved [ADR 0044](../architecture/0044-paper-bootstrap.md)
+introduces an explicit version-9 assumption-backed bootstrap, not a funding rail.
+The actual previously retained fullAccount schema omits optional inventories and
+fill pages report unknown coverage; ordinary decoders keep those unknowns. Only
+the approved fresh-account boundary supplies initial test completeness, with no
+native source cut or terminal proof. Offline signed-handler/native-adapter tests
+use synthetic replies. Current commands/counts and publication belong in TRACKER;
+the [fresh run proposal](P40-PAPER-RUN-PROPOSAL.md) remains unexecuted/unapproved.
+
 October 21 review correction: same-unit recipient preflight and finite enrollment
 expiry/stop handling are fixed, with red/green/resume regressions. This changes
 application code. The dated hardware receipt below is retained for its exact
-image only; corrected-image requalification remains open. The pending
-[assembled-paper policy](P40-PAPER-GATE.md) is a user decision, not a qualified
+image only; corrected-image requalification remains open. The approved local
+[assembled-paper policy](P40-PAPER-GATE.md) is not a qualified
 funding rail, live financial result or permission to import fixture readiness.
 
 P39's version-8 workers and actual confidential UnitClient acceptance pass

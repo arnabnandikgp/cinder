@@ -85,6 +85,18 @@ fence the boot; a later healthy response cannot revive it.
 
 ## Qualification boundary
 
+### Version 9: quarantined paper experiment
+
+Only a separately approved fresh paper run uses version 9 and private
+`configuration.paper`. See [ADR 0044](../architecture/0044-paper-bootstrap.md)
+and the [run proposal](../implementation/P40-PAPER-RUN-PROPOSAL.md) for exact
+fields, test assumptions, evidence, capital and cleanup bounds. Use the same
+typed `cinder-prepare-release` validator; the read-only `qualification-units`
+converter deliberately continues to produce version 8 with `paper` omitted.
+No fixture input or existing account is a valid substitute. Protected paper
+history cannot later be opened by an ordinary release, even with a changed
+measured manifest. Fixed paper expiry caps the actual boot/native/read clock.
+
 ### Version 8: explicit bounded workers
 
 Version 8 selects the same private schema with mandatory `units.worker`

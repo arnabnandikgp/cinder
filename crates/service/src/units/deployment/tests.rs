@@ -13,6 +13,7 @@ use openssl::{
     sign::Signer,
 };
 use std::sync::{Mutex, atomic::AtomicU64};
+mod paper;
 
 fn public(n: u8) -> [u8; 32] {
     PKey::private_key_from_raw_bytes(&[n; 32], Id::ED25519)
@@ -49,6 +50,7 @@ fn profiles() -> (Configuration, Pacifica, Bulk) {
             }],
             auth_ms: 2000,
             grant_ms: 10000,
+            paper: None,
         },
         Pacifica {
             unit: unit(50),
