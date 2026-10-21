@@ -192,7 +192,8 @@ impl reads::Transport for Port {
                 "margin":{"totalMargin":"1000","availableMargin":"1000","marginUsed":"0","notional":"0","realizedPnl":"0","unrealizedPnl":"0","fees":"0","funding":"0"},
                 "positions":[],"openOrders":[]}}])
         } else {
-            json!({"data":[],"page":{"hasMore":false,"nextCursor":null,"coverage":"unknown","asOfSlot":100,"startSlot":0,"endSlot":100}})
+            // Actual fresh native history shape: no synthetic positive frontier.
+            json!({"data":[],"page":{"hasMore":false,"nextCursor":null,"coverage":"unknown","asOfSlot":0,"startSlot":0,"endSlot":0}})
         };
         self.calls += 1;
         bulk::Reply::Response {

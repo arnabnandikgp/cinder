@@ -457,6 +457,104 @@ fn unexpected_funding_is_retained_as_unresolved_not_silently_ignored() {
     assert_eq!(state.ledger().venue().cash().atoms(), 1000);
     assert!(state.risk_report().is_err());
 }
+#[test]
+fn fresh_empty_zero_slot_native_histories_initialize_without_inventing_a_frontier() {
+    let t = support::Temp::new();
+    let mut j = store(&t, Arc::new(AtomicBool::new(false)));
+    let mut port = Port::new();
+    // Exact empty-page shape returned by all three native history endpoints in
+    // the October 21 frozen-image hardware attempt. No positive cut exists.
+    for body in &mut port.bodies[1..] {
+        *body = json!({"data":[],"page":{"hasMore":false,"nextCursor":null,
+            "coverage":"unknown","asOfSlot":0,"startSlot":0,"endSlot":0}});
+    }
+    init(&policy(), &mut j, &mut port).unwrap();
+    assert_eq!(port.calls, 4);
+    let s = j.state().unwrap().unit(uid()).unwrap();
+    assert_eq!(s.ledger().venue().cash().atoms(), 1000);
+    assert_eq!(s.ledger().book(Owner::House).unwrap().cash().atoms(), 980);
+    assert!(s.raw_inputs().is_empty());
+    assert!(s.has_joined_risk());
+    use cinder_journal::controller::Controller;
+    let selected = j.select(uid()).unwrap();
+    assert!(
+        selected
+            .transactions()
+            .flat_map(|t| &t.inputs)
+            .all(|i| i.source_cut.is_none())
+    );
+    assert!(
+        selected
+            .transactions()
+            .flat_map(|t| &t.controls)
+            .all(|c| !matches!(c, Control::ResolveRaw(_)))
+    );
+    let head = j.head();
+    init(&policy(), &mut j, &mut port).unwrap();
+    assert_eq!(j.head(), head);
+    assert_eq!(port.calls, 4);
+}
+#[test]
+fn zero_slot_pages_do_not_bypass_ordinary_history_containment_or_bad_bootstrap_evidence() {
+    use cinder_bulk::observation::{self, Kind, Message};
+    let empty = json!({"data":[],"page":{"hasMore":false,"nextCursor":null,
+        "coverage":"unknown","asOfSlot":0,"startSlot":0,"endSlot":0}});
+    let t = support::Temp::new();
+    let mut j = store(&t, Arc::new(AtomicBool::new(false)));
+    init(&policy(), &mut j, &mut Port::new()).unwrap();
+    for (i, kind) in [Kind::Funding, Kind::Risk].into_iter().enumerate() {
+        observation::ingest(
+            &gateway(),
+            &mut j.select(uid()).unwrap(),
+            Message {
+                kind,
+                body: PrivateBytes::new(serde_json::to_vec(&empty).unwrap()).unwrap(),
+                received_at: 10,
+            },
+            CommitId::new([100 + i as u8; 32]).unwrap(),
+            10,
+        )
+        .unwrap();
+    }
+    let s = j.state().unwrap().unit(uid()).unwrap();
+    assert_eq!(s.unresolved_raw(), 2);
+    assert_eq!(s.ledger().venue().cash().atoms(), 1000);
+    assert!(s.risk_report().is_err());
+    for variant in 0..6 {
+        let t = support::Temp::new();
+        let mut j = store(&t, Arc::new(AtomicBool::new(false)));
+        let mut port = Port::new();
+        for body in &mut port.bodies[1..] {
+            *body = empty.clone();
+        }
+        let body = &mut port.bodies[2];
+        match variant {
+            0 => body["page"]["coverage"] = json!("partial"),
+            1 => {
+                body["page"]["hasMore"] = json!(true);
+                body["page"]["nextCursor"] = json!("more");
+            }
+            2 => body["page"]["minAvailableSlot"] = json!(1),
+            3 => body["data"] = json!([{}]),
+            4 => {
+                body.as_object_mut().unwrap().remove("page");
+            }
+            _ => {
+                body["page"]["startSlot"] = json!(1);
+                body["page"]["endSlot"] = json!(2);
+                body["page"]["asOfSlot"] = json!(2);
+            }
+        }
+        assert!(
+            init(&policy(), &mut j, &mut port).is_err(),
+            "variant {variant}"
+        );
+        assert_empty(&j);
+        let calls = port.calls;
+        assert!(init(&policy(), &mut j, &mut port).is_err());
+        assert_eq!(port.calls, calls);
+    }
+}
 fn intent(n: u8, lots: i64, maximum: u64, reduce: bool) -> cinder_journal::orders::Intent {
     let c = config().units()[0].ledger.clone();
     let m = c.markets[0].unit();

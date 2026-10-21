@@ -14,7 +14,7 @@ use cinder_journal::{
     funds,
     model::*,
     orders::{Intent, TimeInForce},
-    raw, risk,
+    risk,
 };
 use cinder_kernel::{
     amounts::*,
@@ -112,7 +112,7 @@ impl Policy {
         let body = serde_json::to_vec(self).map_err(|_| Error::Invalid)?;
         Ok(Sha256::digest([BOOTSTRAP, &body].concat()).into())
     }
-    fn id(&self, tag: u8) -> Result<CommitId, Error> {
+    pub(crate) fn id(&self, tag: u8) -> Result<CommitId, Error> {
         CommitId::new(Sha256::digest([self.commitment()?.as_slice(), &[tag]].concat()).into())
             .map_err(|_| Error::Invalid)
     }
@@ -182,7 +182,7 @@ impl Policy {
         }
         Ok(())
     }
-    fn time(&self, at: u64) -> Result<(), Error> {
+    pub(crate) fn time(&self, at: u64) -> Result<(), Error> {
         if at < self.observed_at || at >= self.expires_at {
             Err(Error::Unqualified)
         } else {
@@ -331,7 +331,6 @@ pub fn initialize(
     p.time(now()?)?;
     j.verified_state().map_err(|_| Error::Unavailable)?;
     let marker = [BOOTSTRAP, p.commitment()?.as_slice()].concat();
-    let qualification: [u8; 32] = Sha256::digest(&marker).into();
     let commit = p.id(20)?;
     if let Some(tx) = j.transaction(commit) {
         return if tx.evidence.first().is_some_and(|e| e.as_bytes() == marker)
@@ -386,7 +385,11 @@ pub fn initialize(
         let reply = transport.query(r);
         let at = now()?;
         p.time(at)?;
-        reads::complete(g, j, c, reply, at)?;
+        if matches!(kind, Kind::Funding | Kind::Risk) {
+            reads::complete_fresh_paper_history(p, g, j, c, reply, at)?;
+        } else {
+            reads::complete(g, j, c, reply, at)?;
+        }
     }
     let at = now()?;
     p.time(at)?;
@@ -443,7 +446,6 @@ pub fn initialize(
         || [&funding.cut, &risk_page.cut].iter().any(|c| {
             c.next_cursor.is_some()
                 || c.start_slot != 0
-                || c.end_slot == 0
                 || c.min_available_slot.is_some_and(|s| s > 0)
                 || c.coverage == crate::fills::Coverage::Partial
         })
@@ -515,30 +517,19 @@ pub fn initialize(
         event: Some(event),
     })
     .collect();
-    let mut controls = vec![];
-    for entry in j.state().map_err(|_| Error::Unavailable)?.raw_inputs() {
-        let through = if entry.key.transaction == p.id(5)? {
-            funding.cut.end_slot
-        } else if entry.key.transaction == p.id(7)? {
-            risk_page.cut.end_slot
-        } else {
-            return Err(Error::Unqualified);
-        };
-        if entry.resolved.is_some() || entry.key.ordinal != 0 {
-            return Err(Error::Unqualified);
-        }
-        controls.push(Control::ResolveRaw(raw::Resolution {
-            key: entry.key,
-            fingerprint: entry.fingerprint,
-            source: entry.source,
-            authority_epoch: entry.authority_epoch,
-            through,
-            observed_at: at,
-            evidence: qualification,
-            no_effect: true,
-            effects: vec![],
-        }));
+    // Literal empty bootstrap histories were retained as evidence, not turned
+    // into unresolved financial events and "resolved" with an invented cut.
+    // Any actually contained input still blocks the allocation. Ordinary raw
+    // resolution and ordinary funding/risk ingestion remain unchanged.
+    if !j
+        .state()
+        .map_err(|_| Error::Unavailable)?
+        .raw_inputs()
+        .is_empty()
+    {
+        return Err(Error::Unqualified);
     }
+    let mut controls = vec![];
     let market = config.markets[0].unit();
     let price = |ticks| PriceTicks::new(market, ticks).map_err(|_| Error::Invalid);
     controls.push(Control::Collateral(collateral::Cut {

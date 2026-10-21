@@ -111,6 +111,55 @@ pub(crate) fn ingest_with(
     normalize: bool,
     extra: Vec<PrivateBytes>,
 ) -> Result<Committed, Error> {
+    ingest_record(
+        gateway,
+        j,
+        message,
+        id,
+        at,
+        if normalize {
+            Mode::Normalize
+        } else {
+            Mode::Contain
+        },
+        extra,
+    )
+}
+enum Mode {
+    Normalize,
+    Contain,
+    RetainFreshPaperHistory,
+}
+/// Only the policy-bound, pre-allocation paper reader may select this path,
+/// after validating a literal empty funding/risk page. It archives the original
+/// body and HTTP linkage without manufacturing a raw financial event or cut.
+pub(crate) fn retain_fresh_paper_history(
+    gateway: &Gateway,
+    j: &mut impl Controller,
+    message: Message,
+    id: CommitId,
+    at: u64,
+    extra: Vec<PrivateBytes>,
+) -> Result<Committed, Error> {
+    ingest_record(
+        gateway,
+        j,
+        message,
+        id,
+        at,
+        Mode::RetainFreshPaperHistory,
+        extra,
+    )
+}
+fn ingest_record(
+    gateway: &Gateway,
+    j: &mut impl Controller,
+    message: Message,
+    id: CommitId,
+    at: u64,
+    mode: Mode,
+    extra: Vec<PrivateBytes>,
+) -> Result<Committed, Error> {
     let (profile, revision) = gateway.observation_binding(j)?;
     if message.body.as_bytes().len() > fills::MAX_BODY || message.received_at > at {
         return Err(Error::Limit);
@@ -135,7 +184,9 @@ pub(crate) fn ingest_with(
     tx.evidence.extend(extra);
     let mut fills = Vec::new();
     let unresolved;
-    if !normalize || !gateway.financial_observations() {
+    if matches!(mode, Mode::RetainFreshPaperHistory) {
+        unresolved = false;
+    } else if matches!(mode, Mode::Contain) || !gateway.financial_observations() {
         unresolved = true;
     } else {
         match message.kind {
