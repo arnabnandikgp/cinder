@@ -41,20 +41,43 @@ export function budget(rows, spec, now, start) {
   if(now<start||now-start>=CAPS.duration_ms)throw Error('paper run deadline');
   const count=k=>rows.filter(r=>r.category===k).length;
   if(!['signed','account','public'].includes(spec.category)||count(spec.category)>=CAPS[spec.category])throw Error('request cap');
+  if(spec.cleanup!==undefined&&(spec.kind!=='limit'||typeof spec.cleanup!=='boolean'))throw Error('cleanup is an explicit limit-only declaration');
+  const limits=rows.filter(r=>r.kind==='limit'),openings=limits.filter(r=>r.cleanup!==true);
+  const cleanupStarted=limits.some(r=>r.cleanup===true);
+  // Cancellations and ACKs never refund reserved cleanup capacity.
+  if(spec.category==='signed'&&openings.length&&!cleanupStarted&&spec.cleanup!==true&&count('signed')+2>CAPS.signed)throw Error('signed cleanup reserve');
   if(spec.kind==='limit') {
     const n=atoms(spec.price)*atoms(spec.size);
-    if(n<=0n||rows.filter(r=>r.kind==='limit').length>=CAPS.orders||rows.reduce((a,r)=>a+BigInt(r.notional??0),0n)+n>BigInt(CAPS.notional))throw Error('order/notional cap');
+    const used=rows.reduce((a,r)=>a+BigInt(r.notional??0),0n);
+    if(spec.category!=='signed'||atoms(spec.price)<=0n||atoms(spec.size)<=0n||limits.length>=CAPS.orders||used+n>BigInt(CAPS.notional))throw Error('order/notional cap');
+    if(spec.cleanup===true) {
+      if(!openings.length||spec.tif!=='IOC'||typeof spec.buy!=='boolean'||openings.some(r=>r.buy===spec.buy))throw Error('cleanup must oppose original openings with IOC');
+      const quantity=openings.reduce((a,r)=>a+atoms(r.size),0n),ceiling=openings.reduce((a,r)=>a>atoms(r.cleanupPrice)?a:atoms(r.cleanupPrice),0n);
+      if(atoms(spec.size)>quantity||atoms(spec.price)>ceiling)throw Error('cleanup exceeds original quantity/price reservation');
+    } else {
+      if(cleanupStarted||typeof spec.buy!=='boolean'||openings.some(r=>r.buy!==spec.buy))throw Error('opening after cleanup or mixed-side opening');
+      const price=atoms(spec.cleanupPrice);
+      if(price<atoms(spec.price))throw Error('explicit cleanup price ceiling required');
+      const quantity=openings.reduce((a,r)=>a+atoms(r.size),atoms(spec.size));
+      const ceiling=openings.reduce((a,r)=>a>atoms(r.cleanupPrice)?a:atoms(r.cleanupPrice),price);
+      if(limits.length+2>CAPS.orders||count('signed')+2>CAPS.signed||used+n+ceiling*quantity>BigInt(CAPS.notional))throw Error('order/notional cleanup reserve');
+    }
     return n.toString();
   }
   return '0';
 }
-const files = ['tools/bulk-qualification/paper.mjs','tools/bulk-qualification/metadata.mjs','tools/native-qualification/core.mjs','crates/bulk/examples/paper-codec.rs','crates/bulk/src/wire.rs','crates/bulk/src/fills.rs','crates/bulk/src/precision.rs'];
+const files = ['.node-version','tools/bulk-qualification/paper.mjs','tools/bulk-qualification/metadata.mjs','tools/native-qualification/core.mjs','crates/bulk/examples/paper-codec.rs','crates/bulk/src/wire.rs','crates/bulk/src/fills.rs','crates/bulk/src/precision.rs'];
 const root=resolve(import.meta.dirname,'../..'), binary=join(root,'target/debug/examples/paper-codec');
+export function environment(version=process.versions.node, tls=process.env.NODE_TLS_REJECT_UNAUTHORIZED) {
+  if(version!==readFileSync(join(root,'.node-version'),'utf8').trim())throw Error('Use pinned Node');
+  if(tls==='0')throw Error('TLS verification required');
+}
 const sources=()=>sha(canonical([...files.map(p=>[p,sha(readFileSync(join(root,p)))]),['binary',sha(readFileSync(binary))]]));
 function key(seed) { return createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.from(seed,'hex')]),format:'der',type:'pkcs8'}); }
 function pub(k) { return base58(Buffer.from(createPublicKey(k).export({format:'jwk'}).x,'base64url')); }
 function directory(d) {const s=lstatSync(d);if(!s.isDirectory()||s.isSymbolicLink()||s.uid!==process.getuid()||s.mode&0o077)throw Error('private directory');}
 export function initialize(d, reference, fingerprint=sources) {
+  environment();
   directory(d);if(readdirSync(d).length||typeof reference!=='string'||!reference.trim())throw Error('fresh directory/approval reference');
   const seeds=Object.fromEntries(['owner','agentA','agentB'].map(k=>[k,randomBytes(32).toString('hex')]));
   const keys=Object.fromEntries(Object.entries(seeds).map(([k,s])=>[k,pub(key(s))]));
@@ -64,6 +87,7 @@ export function initialize(d, reference, fingerprint=sources) {
 }
 export class Paper {
   constructor(d, fetcher=fetch, clock=Date.now, fingerprint=sources) {
+    environment();
     directory(d);this.d=d;this.fetch=fetcher;this.now=clock;
     this.m=JSON.parse(privateRead(join(d,'manifest.json')));
     if(this.m.schema!=='cinder-bulk-paper-v1'||this.m.origin!==ORIGIN||canonical(this.m.caps)!==canonical(CAPS)||this.m.sources!==fingerprint())throw Error('paper source/scope changed');
@@ -72,6 +96,7 @@ export class Paper {
   }
   codec(input) {return JSON.parse(execFileSync(binary,[],{input:JSON.stringify({account:this.m.keys.owner,size_step:'0.00000001',price_step:'0.01',...input}),encoding:'utf8',maxBuffer:1000000}));}
   async request(spec) {
+    environment();
     const at=this.now(), index=this.rows.length+1;
     const notional=budget(this.rows,spec,at,this.m.created_at);
     if(typeof spec.id!=='string'||!spec.id.match(/^[a-z0-9-]{1,64}$/)||this.rows.some(r=>r.id===spec.id))throw Error('unique original request id');
@@ -136,6 +161,7 @@ export class Paper {
   }
 }
 if(process.argv[1]===new URL(import.meta.url).pathname) {
+  environment();
   const [mode,d,arg]=process.argv.slice(2);
   if(mode==='--init') console.log(JSON.stringify(initialize(resolve(d),arg)));
   else if(mode==='--step') console.log(JSON.stringify(await new Paper(resolve(d)).request(JSON.parse(arg))));

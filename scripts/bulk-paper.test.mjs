@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPublicKey, verify } from 'node:crypto';
-import { base58, decode58, exact, atoms, decimal, management, budget, CAPS, initialize, Paper } from '../tools/bulk-qualification/paper.mjs';
+import { base58, decode58, exact, atoms, decimal, management, budget, CAPS, environment, initialize, Paper } from '../tools/bulk-qualification/paper.mjs';
 
 test('paper base58 and exact decimal helpers preserve keys, wide integers and atoms',()=>{
   for(const bytes of [Buffer.alloc(32),Buffer.alloc(32,1),Buffer.from([0,0,255]),Buffer.alloc(64,255)])assert.deepEqual(decode58(base58(bytes)),bytes);
@@ -23,13 +24,40 @@ test('paper management bytes encode only default faucet or fixed agent and testn
   assert.deepEqual(a.action,{agentWalletCreation:{a:agent,d:true}});
 });
 test('paper budgets count every order and cleanup notional with finite request/deadline limits',()=>{
-  const order={category:'signed',kind:'limit',price:'100000',size:'0.00002'};
+  const order={category:'signed',kind:'limit',buy:true,tif:'ALO',price:'100000',size:'0.00002',cleanupPrice:'120000'};
   assert.equal(budget([],order,1,0),'20000000000000000');
   assert.throws(()=>budget(Array.from({length:5},()=>({...order,notional:'1'})),order,1,0),/cap/);
   assert.throws(()=>budget([{category:'signed',notional:CAPS.notional}],order,1,0),/cap/);
   for(const c of ['signed','account','public'])assert.throws(()=>budget(Array.from({length:CAPS[c]},()=>({category:c})),{category:c},1,0),/cap/);
   assert.throws(()=>budget([],{category:'public'},CAPS.duration_ms,0),/deadline/);
   assert.throws(()=>budget([],{category:'public'},0,1),/deadline/);
+});
+test('paper reserves the fifth order, signed capacity and worst planned cleanup notional',()=>{
+  const opening={category:'signed',kind:'limit',buy:true,tif:'ALO',price:'100000',size:'0.00002',cleanupPrice:'120000'};
+  const rows=Array.from({length:4},()=>({...opening,notional:budget([],opening,1,0)}));
+  assert.throws(()=>budget(rows,opening,1,0),/cleanup reserve/);
+  const cleanup={...opening,buy:false,tif:'IOC',cleanup:true,size:'0.00008',price:'120000'};
+  assert.equal(budget(rows,cleanup,1,0),'96000000000000000');
+  assert.throws(()=>budget(rows,{...cleanup,size:'0.00009'},1,0),/quantity/);
+  assert.throws(()=>budget(rows,{...cleanup,price:'120001'},1,0),/reservation/);
+  assert.throws(()=>budget(rows,{...cleanup,buy:true},1,0),/oppose/);
+  assert.throws(()=>budget(rows,{...cleanup,tif:'ALO'},1,0),/IOC/);
+  assert.throws(()=>budget([],{...opening,size:'0.0001'},1,0),/cleanup reserve/);
+  const signed=[opening,...Array.from({length:12},()=>({category:'signed',kind:'agent'}))];
+  assert.throws(()=>budget(signed,{category:'signed',kind:'agent'},1,0),/signed cleanup reserve/);
+  assert.equal(budget(signed,{...cleanup,size:'0.00002'},1,0),'24000000000000000');
+  assert.throws(()=>budget([{...opening,cleanup:true}],opening,1,0),/after cleanup/);
+  assert.throws(()=>budget([opening],{...opening,buy:false},1,0),/mixed-side/);
+  assert.throws(()=>budget([],cleanup,1,0),/original openings/);
+});
+test('paper CLI refuses disabled TLS before initialization and runtime mismatches fail closed',t=>{
+  assert.throws(()=>environment('0.0.0'),/pinned Node/);
+  assert.throws(()=>environment(process.versions.node,'0'),/TLS verification/);
+  const d=mkdtempSync(join(tmpdir(),'cinder-paper-guard-'));t.after(()=>rmSync(d,{recursive:true,force:true}));
+  for(const mode of ['--init','--step']) {
+    const result=spawnSync(process.execPath,['tools/bulk-qualification/paper.mjs',mode,d,'{}'],{encoding:'utf8',env:{...process.env,NODE_TLS_REJECT_UNAUTHORIZED:'0'}});
+    assert.notEqual(result.status,0);assert.match(result.stderr,/TLS verification required/);assert.deepEqual(readdirSync(d),[]);
+  }
 });
 function fixture(t,fetcher) {
   const d=mkdtempSync(join(tmpdir(),'cinder-bulk-paper-offline-'));t.after(()=>rmSync(d,{recursive:true,force:true}));

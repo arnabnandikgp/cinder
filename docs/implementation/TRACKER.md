@@ -7033,6 +7033,17 @@ unchanged native fills re-decode offline after the source-backed correction.
 Unexpected: empty sampled depth did not preclude fills; use known reserved cleanup,
 not speculative retry. Fee-tier 404 is unavailable; unknown coverage stays unknown.
 No bridge, funding/risk/forced-event completeness or production readiness claimed.
+Review follow-up 2026-10-21: all three outstanding #83 findings are relevant.
+Runner enforces the pinned Node/TLS environment before initialization, reopen
+and each request, with the Node pin in its source seal. Opening limits declare
+a bounded cleanup price; admission reserves one signed/order slot and notional
+for all possibly filled opening quantities at the maximum declared ceiling.
+Only explicit opposite-side IOC cleanup can consume the reserve; no opening
+after cleanup, mixed-side opening, quantity/price enlargement or ACK refund.
+This is a finite test plan, not a native reduce-only or gap-execution guarantee.
+All eight paper tests pass, including child-process CLI rejection before file
+creation and cumulative quantity/notional/capacity checks. Full contracts and
+publication are checked before push. No new native/AWS/RPC action was performed.
 Next: CI/review of #83 and relevant fixes, then non-fixture multi-unit configuration
 and separately qualified Nitro image; unsupported BULK financial rails stay off.
 PR: https://github.com/arnabnandikgp/cinder/pull/83; ready against product/tee-v1.

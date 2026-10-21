@@ -58,6 +58,19 @@ exist. The source/binary seal must still match. Limits are 14 signed requests,
 notional including cleanup, in 30 minutes. These are ceilings, not targets.
 Read-only offline tests inject responses and never run the CLI against a venue.
 
+The runner enforces the pinned Node version and verified TLS before private-file
+creation or any request. Each opening limit declares `cleanupPrice`, an exact
+positive limit-price ceiling at least as large as its opening price. Admission
+reserves one order/signed-request slot and notional for the sum of **all possibly
+filled opening quantities** at the largest declared ceiling. Cancellations never
+refund that reserve. Openings must have one side; no new opening is accepted
+after cleanup starts. A close uses `cleanup: true`, opposite side, IOC, no more
+than that original quantity and no price above the reserved ceiling. Only this
+close may consume the reserved capacity. These are planned finite bounds, not a
+guarantee of execution through an unbounded price gap. The operator must still
+reconcile actual fills/positions before choosing a closing size; the label is
+not a venue-native reduce-only guarantee.
+
 Each new action persists its identity, nonce, immutable unsigned body and consumed
 capacity before signing. Private signed wires persist before transmission;
 bounded raw responses persist before interpretation. A named action cannot be
