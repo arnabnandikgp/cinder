@@ -1,8 +1,8 @@
 # ADR 0020: Nitro application assembly and qualification
 
 Date: 2026-10-02. Status: assembled; bounded disabled-native hardware matrix passed
-for the sources in the [first](../operations/nitro-hardware-2026-10-02.md) and
-[follow-up](../operations/nitro-hardware-followup-2026-10-02.md) receipts.
+for the sources in the [first](../archive/qualification/nitro-hardware-2026-10-02.md) and
+[follow-up](../archive/qualification/nitro-hardware-followup-2026-10-02.md) receipts.
 Review and merge remain pending; later offline review fixes are not new hardware receipts.
 Scope: [P20](../implementation/PLAN.md#p20). [ADR 0019](0019-attested-service.md)
 and [BASELINE](../implementation/BASELINE.md) remain the security/economic contract.
@@ -361,9 +361,9 @@ no source, research, wallet or cloud configuration was deleted.
 
 The historical pre-hardware/account-plan checkpoints below do not describe the
 current status. After the user's Paid-plan upgrade, actual non-debug Nitro
-qualification completed on 2026-10-02. The [first receipt](../operations/nitro-hardware-2026-10-02.md)
+qualification completed on 2026-10-02. The [first receipt](../archive/qualification/nitro-hardware-2026-10-02.md)
 records real AWS compatibility fixes and initial SDK/storage checks; the
-[follow-up](../operations/nitro-hardware-followup-2026-10-02.md) records the
+[follow-up](../archive/qualification/nitro-hardware-followup-2026-10-02.md) records the
 completed recipient, TLS, journal, CAS, debug and natural lease/credential-expiry
 matrix, exact measured releases, failures and cleanup. Review/merge remains
 pending; G01–G04 production policy/governance and P23 native workflow gates are

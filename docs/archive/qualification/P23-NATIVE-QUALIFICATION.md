@@ -10,7 +10,7 @@ bootstrap, native completeness and lost-ACK recovery remain unqualified.** See t
 the existing G01/G05 gates; it adds no phase or product
 promise. [Financial map](P23-FINANCIAL-GATES.md),
 [native contract](P23-NATIVE-EVIDENCE.md),
-[measured capture](../architecture/0028-measured-native-capture.md).
+[measured capture](../../architecture/0028-measured-native-capture.md).
 
 ## Purpose and order
 
@@ -49,7 +49,7 @@ than assign an arbitrary timestamp, counter or Solana slot as a native frontier.
 These are approved test ceilings, not measured costs or production limits. The
 120-second bootstrap exception was approved explicitly for this probe, not
 inherited from M1 and not adopted as the shipping deposit policy. The source-bound
-[one-shot tool](../../tools/native-qualification/README.md) still refuses live
+[one-shot tool](../../../tools/native-qualification/README.md) still refuses live
 requests without approval of its exact run seal.
 
 On 2026-10-08 the user granted standing authority for small test-only source/

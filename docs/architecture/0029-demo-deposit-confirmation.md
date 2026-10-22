@@ -55,14 +55,14 @@ TLS authenticates the source, not its economic correctness. Primary provenance:
   documents an optional deposit `tx`. Absence is not evidence of rejection.
   This implementation uses retained GETs, not an invented stream replay guarantee.
 
-The [separate 2026-10-08 read-only receipt](../implementation/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
+The [separate 2026-10-08 read-only receipt](../archive/qualification/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
 confirms actual testnet deposit/balance response shapes and established-account
 predicates through Node TLS, outside Nitro. It also observes default settings
 despite account/loan 404 for an uninitialized address. Fresh account bootstrap,
 shipping provider/precision and changed-image confirmation still need qualification.
 Unsupported shape stays pending; do not broaden a parser just to make a run pass.
 
-The subsequent [fresh staged-test receipt](../implementation/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-staged-bootstrap)
+The subsequent [fresh staged-test receipt](../archive/qualification/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-staged-bootstrap)
 observes initialization and a full native asset round trip, then a separately
 sealed successful lending-disable/readback on the empty account. The initial
 staging sequence failed on a diagnostic `account_equity` mapping error and stays
@@ -242,7 +242,7 @@ HTTP bytes after TLS. None of this manufactures a financial provider.
 The original fresh-boot regression exposed the collateral prerequisite that earlier
 fixtures seeded: the approved owner deposit and idle setup are not a complete
 native check/marked collateral cut. Allocation correctly refuses with no intent
-or signature. The [scoped flat-funding rule](../implementation/P23-FINANCIAL-GATES.md#fresh-flat-account-admission-decision--pending-user-review)
+or signature. The [scoped flat-funding rule](../archive/qualification/P23-FINANCIAL-GATES.md#fresh-flat-account-admission-decision--pending-user-review)
 was subsequently approved and implemented as the separate certificate below,
 not as fictional evidence or a change to ordinary funding admission.
 Fresh G05 scope/approval remains required for live transfers or an AWS run. No
@@ -399,7 +399,7 @@ prerequisites and GETs, not actual chain signatures or venue confirmation.
 This is not yet a working deployed deposit service. The approved policy does not relax
 withdrawal debit/payment completion, lost-ACK containment, order/funding semantics
 or final recovery-cut requirements. Those remain explicit in the
-[financial continuation map](../implementation/P23-FINANCIAL-GATES.md).
+[financial continuation map](../archive/qualification/P23-FINANCIAL-GATES.md).
 
 <a id="funding-only-capability-construction"></a>
 ## Funding-only capability construction — 2026-10-08
@@ -428,6 +428,6 @@ cases and the joined actual Runtime/encrypted-journal workflow. They cover
 capability-promotion/mainnet/unknown-precision refusal, no dispatch/I/O/exposure,
 ordinary funding/return/payout borrowing and retained unqualified readiness.
 Executed results are in TRACKER. External I/O there remains synthetic. The
-[fresh live initialization](../implementation/P23-NATIVE-SEMANTICS-RECEIPT.md#fresh-funding-initialization)
+[fresh live initialization](../archive/qualification/P23-NATIVE-SEMANTICS-RECEIPT.md#fresh-funding-initialization)
 stopped before AWS because its successful original chain deposit had no native
 credit; this correction is not a live funding pass.

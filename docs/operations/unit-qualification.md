@@ -2,8 +2,8 @@
 
 The October 20 run is complete and cleaned up; its limits are consumed, not
 standing authority. Later application changes require a separately approved
-fresh image/run and ledger. See the [receipt](unit-hardware-20261020.md) and
-[remaining paper gate](../implementation/P40-PAPER-GATE.md).
+fresh image/run and ledger. See the [receipt](../archive/qualification/unit-hardware-20261020.md) and
+[remaining paper gate](../archive/qualification/P40-PAPER-GATE.md).
 
 P40 approved scope, 2026-10-20: one fresh Nitro host in us-east-1 using
 `cinder_new`; at most **$5 / four hours / eight enclave boots**, cleanup included.

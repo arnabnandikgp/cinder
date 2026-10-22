@@ -2,7 +2,7 @@
 
 Date: 2026-10-07. **Local implementation and bounded read-only shipping-port
 hardware cells passed. No deployed migration or financial qualification.**
-The [growth diagnosis](../implementation/P23-GROWTH-DIAGNOSIS.md) established
+The [growth diagnosis](../archive/qualification/P23-GROWTH-DIAGNOSIS.md) established
 history-dependent object calls. This candidate reduces those calls without
 removing records or the later historical-copy repair boundary.
 
@@ -163,11 +163,11 @@ and runs growth; no argument runs both locally. No normal check needs `work/`.
 Results and exact artifacts belong in [TRACKER](../implementation/TRACKER.md).
 This is local synthetic evidence, not cloud latency calibration, independent
 storage/witness infrastructure, Nitro attestation or financial qualification.
-The separately approved [hardware receipt](../implementation/P23-PACKS-HARDWARE.md)
+The separately approved [hardware receipt](../archive/qualification/P23-PACKS-HARDWARE.md)
 records actual Node/Chrome cuts 2/8/32/64 on the new measured version-3 image,
 S3 old-copy repair/refusal, original-receipt replay and freshness boundaries.
 These are bounded read-only observations, not full-size live memory/capacity,
 independent infrastructure, deployed migration or indefinite scaling evidence.
-The [financial gates](../implementation/P23-FINANCIAL-GATES.md) remain open;
+The [financial gates](../archive/qualification/P23-FINANCIAL-GATES.md) remain open;
 next is authenticated native provider preparation and a separately authorized
 funding round trip. P23 is not closed by this storage qualification.

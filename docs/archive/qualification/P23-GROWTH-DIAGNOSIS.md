@@ -84,7 +84,7 @@ transport overhead can add latency; none was isolated in C5's failing request.
 
 ## Review gate: do not bypass the storage contract
 
-[ADR 0025](../architecture/0025-concurrent-private-reads.md) and
+[ADR 0025](../../architecture/0025-concurrent-private-reads.md) and
 [C1–C5](P23-REMEDIATION.md) deliberately retain full-history repair before new
 acceptance. Reusing an earlier GET to skip a later copy check changes the
 observation/repair boundary: a copy lost in between would no longer be repaired
@@ -109,7 +109,7 @@ capacity or durability guarantee.
 
 **No production storage selection, format, timeout, retention policy or financial
 gate changed in this diagnosis.** The user subsequently approved the local
-retained-history pack design/prototype. [ADR 0026](../architecture/0026-retained-history-packs.md)
+retained-history pack design/prototype. [ADR 0026](../../architecture/0026-retained-history-packs.md)
 defines its candidate format, safety/bounds, explicit archive migration and
 actual-client tests. This approval does not select shipping storage or authorize
 another AWS run. Review the prototype's results before cloud promotion.

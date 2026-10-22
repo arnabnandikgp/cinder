@@ -1,11 +1,11 @@
 # P23 financial continuation map
 
 Updated 2026-10-08. An implementation/evidence map, not a new financial contract
-or live authorization. [The runbook](../operations/live-qualification.md),
-[ADR 0024](../architecture/0024-confidential-chain-ports.md),
-[PLAN](PLAN.md#p23) and BASELINE remain authoritative.
+or live authorization. [The runbook](../../operations/live-qualification.md),
+[ADR 0024](../../architecture/0024-confidential-chain-ports.md),
+[PLAN](../../implementation/PLAN.md#p23) and BASELINE remain authoritative.
 
-2026-10-15 custody revision: [ADR 0030](../architecture/0030-venue-directed-escrow.md)
+2026-10-15 custody revision: [ADR 0030](../../architecture/0030-venue-directed-escrow.md)
 and P23A–P23C implement customer/venue/asset escrows before the changed live route
 is qualified. This map retains its dated common-vault receipts and unresolved
 residuals; it is not an escrow pass. The missing-credit investigation stays
@@ -49,7 +49,7 @@ resume a closed invocation or treat the merged code as financial qualification.
 Earlier user decision, 2026-10-08: **implement a bounded testnet demo deposit mode**
 using the original finalized transaction's exact deposit-history record and
 non-pending balance corroboration, with explicit trust in venue bookkeeping.
-[ADR 0029](../architecture/0029-demo-deposit-confirmation.md) defines that narrow
+[ADR 0029](../../architecture/0029-demo-deposit-confirmation.md) defines that narrow
 exception and its offline implementation. It supersedes the earlier wait-only
 deposit instruction, not the withdrawal, order/funding or recovery contracts.
 Demo confirmation releases only the original deposit lifecycle hold, is retained
@@ -231,9 +231,9 @@ all money-movement and complete-cut gates below remain open.
    injected witnesses or prior permission. Start with account setup and an
    original-operation funding round trip, without trading.
    The offline capture transport/archive in
-   [ADR 0027](../architecture/0027-native-transfer-capture.md) is the next bounded
+   [ADR 0027](../../architecture/0027-native-transfer-capture.md) is the next bounded
    component: it retains raw transfer evidence without settlement or readiness.
-   [Loaded-manifest/one-shot-worker wiring](../architecture/0028-measured-native-capture.md)
+   [Loaded-manifest/one-shot-worker wiring](../../architecture/0028-measured-native-capture.md)
    is subsequently implemented and tested locally. Actual native qualification
    remains open; a local worker or TLS peer is not a deployed financial provider.
 3. The narrow measured composition is now implemented offline as v6, with actual

@@ -1,7 +1,7 @@
 # Native funding semantics qualification
 
 This **local diagnostic tool**, not an enclave component or financial provider,
-implements the approved [P23 scope](../../docs/implementation/P23-NATIVE-QUALIFICATION.md).
+implements the approved [P23 scope](../../docs/archive/qualification/P23-NATIVE-QUALIFICATION.md).
 It uses the existing vault client's locked legacy codecs at an explicit boundary;
 no packages, shipping dependencies or program deployments are added. There is no
 ambient live mode, mainnet/AWS path, automatic economic retry or live restart.
@@ -28,7 +28,7 @@ in new owner-only files. Existing directories refuse rather than reset a budget.
 Stdout contains bounded field/type summaries and hashes, not raw values/signatures.
 These sequential public observations are not atomic setup or financial certificates.
 
-The [2026-10-08 receipt](../../docs/implementation/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
+The [2026-10-08 receipt](../../docs/archive/qualification/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
 records actual established/absent-account results. Sanitized shapes in
 `crates/pacifica/tests/fixtures/demo-native-shapes.json` replace signatures and
 timestamps; they are offline regression inputs, not reusable native authority.

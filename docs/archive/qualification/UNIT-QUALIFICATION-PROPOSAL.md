@@ -1,6 +1,6 @@
 # Proposed second-venue qualification — not live authority
 
-Updated: 2026-10-20. This proposal follows the [offline acceptance boundary](UNIT-ACCEPTANCE.md).
+Updated: 2026-10-20. This proposal follows the [offline acceptance boundary](../../implementation/UNIT-ACCEPTANCE.md).
 No financial/RPC/AWS action is authorized by this document or old test permissions.
 
 <a id="a-native-paper-account-capability-before-hardware"></a>
@@ -8,11 +8,11 @@ No financial/RPC/AWS action is authorized by this document or old test permissio
 
 Current metadata prerequisite is complete: the separately approved two-GET run
 at source `b8cac32` returned HTTP 200 for exchange info and fee state on October
-20. The [receipt](../venues/bulk-native-qualification.md#observed-metadata-receipt--2026-10-20)
+20. The [receipt](../../venues/bulk-native-qualification.md#observed-metadata-receipt--2026-10-20)
 records BTC-USD's $1 native minimum and exact price/size grid. Earlier 502s are
 historical. That metadata approval covered no account or signed activity. The user
 then separately approved the corrected paper scope and routine no-real-funds
-continuation. The [completed October 20 receipt](../venues/bulk-paper-20261020.md)
+continuation. The [completed October 20 receipt](bulk-paper-20261020.md)
 records execution, cleanup and limits. Routine paper-only steps within this
 workstream no longer need repeated permission; AWS spend, real funds and other
 gates remain separate. Old run IDs/expired limits cannot be reused.

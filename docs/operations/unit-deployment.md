@@ -89,7 +89,7 @@ fence the boot; a later healthy response cannot revive it.
 
 Only a separately approved fresh paper run uses version 9 and private
 `configuration.paper`. See [ADR 0044](../architecture/0044-paper-bootstrap.md)
-and the [run proposal](../implementation/P40-PAPER-RUN-PROPOSAL.md) for exact
+and the [run proposal](../archive/qualification/P40-PAPER-RUN-PROPOSAL.md) for exact
 fields, test assumptions, evidence, capital and cleanup bounds. Use the same
 typed `cinder-prepare-release` validator; the read-only `qualification-units`
 converter deliberately continues to produce version 8 with `paper` omitted.
@@ -129,7 +129,7 @@ carrier/native composition is P39, not claimed from constructor acceptance.
 None is a new AWS measurement or live trade/funding receipt.
 
 Use the existing [Nitro runbook](nitro-qualification.md),
-[native proposal](../implementation/UNIT-QUALIFICATION-PROPOSAL.md) and
+[native proposal](../archive/qualification/UNIT-QUALIFICATION-PROPOSAL.md) and
 [ADR 0042](../architecture/0042-unit-deployment.md) when preparing a separately
 approved changed-image run. Unsupported BULK funding/return and Pacifica's
 deferred missing-credit investigation remain named independent gaps.

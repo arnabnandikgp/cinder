@@ -5,17 +5,17 @@ The user approved all scope recommendations below on 2026-10-03, including the
 bounded read extensions and scoped agents. This is not an implemented HTTP API or
 a promise of full native venue compatibility. The approved sequence is API
 implementation, public docs, then P21 recovery integration. Exact schemas and
-browser transport security still need full qualification. [ADR 0021](../architecture/0021-confidential-web-api.md)
+browser transport security still need full qualification. [ADR 0021](../../architecture/0021-confidential-web-api.md)
 records the approved bounded Noise NK/Rust-WASM qualification; it does not approve
-shipping candidate cryptography or expose an endpoint. [PLAN](PLAN.md) and [TRACKER](TRACKER.md)
-own progress; existing financial/authority rules remain in [BASELINE](BASELINE.md).
+shipping candidate cryptography or expose an endpoint. [PLAN](../../implementation/PLAN.md) and [TRACKER](../../implementation/TRACKER.md)
+own progress; existing financial/authority rules remain in [BASELINE](../../implementation/BASELINE.md).
 
 ## What actually exists
 
-[ADR 0018](../architecture/0018-private-api.md),
-[Rust commands](../../crates/api/src/wire.rs),
-[Rust replies](../../crates/api/src/lib.rs) and the
-[TypeScript client](../../clients/private/src/index.ts) establish eight commands:
+[ADR 0018](../../architecture/0018-private-api.md),
+[Rust commands](../../../crates/api/src/wire.rs),
+[Rust replies](../../../crates/api/src/lib.rs) and the
+[TypeScript client](../../../clients/private/src/index.ts) establish eight commands:
 
 | Command | Implemented semantics / important limit |
 | --- | --- |
@@ -31,7 +31,7 @@ own progress; existing financial/authority rules remain in [BASELINE](BASELINE.m
 P19/P20 supply the attested Node transport and confidential service. P21A's HTTP
 slice adds browser/Node confidential HTTP for these eight commands, tested offline
 against the same handler/journal. The final slice adds WebSocket entry/subscriptions
-and bounded richer reads; [the exact contract](../architecture/private-read-contract.md)
+and bounded richer reads; [the exact contract](../../architecture/private-read-contract.md)
 states time/projection/completeness limits. Current deployment qualification disables native trading/funding/reads;
 implemented application semantics do not establish a live brokerage service.
 Account/owner/recipient bindings are currently governed configuration, not a

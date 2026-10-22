@@ -1,675 +1,268 @@
 # Cinder architecture
 
-Architecture baseline: 2026-10-01. This document describes the intended product
-and maps it to the implementation sequence; it is not a deployment claim.
-[BASELINE](implementation/BASELINE.md) controls approved economic/security policy;
-[PLAN](implementation/PLAN.md) controls phase scope; [TRACKER](implementation/TRACKER.md)
-records actual completion. An older research proposal does not override those files.
+Cinder maintains individual customer entitlements while executing through pooled
+perpetual-futures venue accounts. It is a broker, not an internal matching engine,
+investment pool or blanket guarantor of venue losses. There is no internal crossing.
 
-Custody direction updated 2026-10-15: [ADR 0030](architecture/0030-venue-directed-escrow.md)
-approves customer/venue/asset escrow ingress and venue-specific PDA payouts.
-P23B/P23C's local program/client and journal/Runtime integration are merged.
-P25 adds [backend-only onboarding](architecture/0031-backend-onboarding.md) over
-the same journal, not frontend integration or a new financial ledger. Approval,
-implementation, migration and live qualification
-remain separate. The flow sections below show the new target; historical ADRs
-and receipts keep their own route/source semantics.
+This describes the implemented boundaries and approved operating model. Actual
+qualification and remaining limitations belong in [status](status.md); exact
+financial policy is in the [financial contract](implementation/BASELINE.md).
+Detailed rationale is indexed under [architecture decisions](architecture/README.md).
 
-## 1. System purpose and current implementation boundary
-
-Cinder is a private, programmatic perpetual-futures broker over existing venue
-liquidity. A customer has a private Cinder account; external venues execute through
-Cinder's pooled accounts. The intended benefits are private customer-level state,
-one programmatic interface, and pooled trading economics where a venue supports
-them. Cinder is not a matching engine, central counterparty, or blanket guarantor
-of every venue loss. It does not internally cross customer orders.
-
-Pacifica is the first integration. AWS Nitro Enclaves is the confidential-runtime
-target. Additional venues are a future extension behind qualified adapters, not
-an assumption that unrelated venue accounts share collateral or identical risk.
-BULK has an opt-in two-unit implementation and joined offline acceptance; live
-funding/release qualification remains disabled. The old Phoenix/PER
-implementation is a separate workstream, not the template for this architecture.
-An explicit [version-9 fresh paper experiment](architecture/0044-paper-bootstrap.md)
-has separate assumption-backed initialization and quarantined history. It is not
-production custody/credit, a recovery proof or live financial qualification.
-
-| Component | In this PR / implementation status | Owning phase |
-| --- | --- | --- |
-| Build, typed amounts, IDs, canonical primitive encoding | Implemented and previously merged | P01–P02 |
-| Single quote-pool ledger, exact positions, ownership, cash/location bridge | Merged; pure in-memory proposals | P03 |
-| Funding, fees, source discrepancies | Merged; qualified normalized inputs, no live adapter | P04 |
-| Local atomic journal and replay | Merged; opaque storage and mandatory protection interface | P05 |
-| Encrypted replicas, current-head witness and writer fencing | Implemented against a trusted witness port; no independently deployed witness or Nitro qualification | P06 |
-| Bound order intents, partial/terminal lifecycle and shared holds | Implemented against trusted authentication/source ports; no live execution | P07 |
-| Partial funds and FIFO payouts | Implemented with marked collateral and qualified receipt ports; no native sends | P08 |
-| Joined margin, capital and liquidity admission | Implemented with conservative pending bounds and finite synthetic stress paths; not calibrated | P09 |
-| House protection and repeated claims | Implemented in the same ledger with explicit coverage/allocation ports, lifetime caps and actual recovery; live terms remain gated | P10 |
-| Liquidation and close exceptions | Funded bounded customer liquidation, private-close excess allocation and existing-house unwind; no calibrated depth or general crisis authority | P11 |
-| Native ADL and RF1/RF2 restoration | Qualified cuts, bounded exact-EDF schedule and original-basis postings implemented; no live ADL recognizer or execution service | P12 |
-| Pacifica observations | Lossless bounded codecs, durable provenance/replay and explicit capability gaps implemented; no live qualification | P13 |
-| Pacifica signing adapter | Durable native preimages, scoped Ed25519 signer, shared credit reservation and fake transport implemented; no live-qualified deployment | P14 |
-| Solana custody vault and normal authorization | Anchor 1.2 program, public receipts/shared paid counters and offline signed SBF tests implemented; deployment gated | P15 |
-| Funding round trip | Durable three-location coordinator, original-wire/attempt reconciliation and shared credit budget tested offline; source/live qualification gated | P16 |
-| Recovery claims | Same-vault immutable statements, funded activation and shared counters; sealed-journal matching, encrypted delivery and independent claims tested through local HTTP/WebSocket outages/SBF | P17/P21 |
-| Private API/SDK | Implemented against trusted confidential-channel/admission ports; encrypted journal auth/replay, no public plaintext listener | P18 |
-| Attested client channel and runnable service | TLS 1.3/pinned-root verification and actual local SDK/relay/API/journal processes; fixture attestation/time/witness only | P19 |
-| Actual Nitro runtime | Merged bounded actual hardware qualification; later changed-image/native workflows still need fresh P23 evidence | P20 |
-| Confidential web API | Merged: shared browser/Node attestation and Noise core, HTTP/WebSocket commands, signed private reads and bounded subscriptions; offline only, changed-image/native qualification remains P23 | P21A |
-| Offline joined acceptance | Merged SDK/service/controller/SBF fault suites with explicit native fixtures | P22 |
-| Live qualification | Code stack merged; full actual funding/trading/payout/recovery acceptance deferred | P23 |
-| Venue-directed escrow revision | Merged local program/client, journal and Runtime integration; deployment/live qualification remain separate | P23A–P23C |
-| Backend onboarding | Opt-in new-history wallet ownership, discovery and unsigned escrow preparation; no frontend/deployment | P25 |
-| Execution-unit journal foundation | Opt-in new-history registry, component states and shared owners/epochs under one head; no shipping API/Runtime, dispatch or recovery activation | P29 / ADR 0035 |
-| Unit-bound API contract | Opt-in v2 signed unit/digest/reply binding and current-head scope preflight; trusted accepted-grant port, not durable admission or a listener; shipping API remains v1 | P30 / ADR 0036 |
-| Durable unit API history | Original signed records and accepted grants/global revoke share the journal; financial capture is recorded-only, with immutable derived grant cuts; no financial admission or runtime activation | P31 / ADR 0037 |
-| Unit financial admission | Original v2 intents, current authority, agent quota, order/cancel/payout/leverage controls and unit-local risk/holds join atomically; no native exposure or shipping Runtime activation | P32 / [ADR 0038](architecture/0038-unit-financial-admission.md) |
-| Shared unit service/native execution | Opt-in witnessed private reads/SDK, original native exposure and observations under one head; not a shipping release manifest | P33–P34 / [ADR 0040](architecture/0040-unit-native-execution.md) |
-| Unit custody/recovery | Canonical owner discovery, exact-batch funds and global operator cutover reuse existing accounting/counters; no BULK rail | P35 / [ADR 0041](architecture/0041-unit-custody-recovery.md) |
-| Joined unit acceptance | Real SDK/service/native-signature/financial replay fixtures plus existing carrier/custody suites; native/hardware scope remains separate | P36 / [acceptance boundary](implementation/UNIT-ACCEPTANCE.md) |
-| Release review | Production policy, governance, independent assurance and customer-funds gates remain open | P24 |
-
-The P03/P04 implementation is deliberately a single configured quote pool with one
-native account, multiple linear-perp markets, private customer books, house and
-suspense. It is not a multi-venue clearing engine. It introduces no new native
-account topology or fee/insurance promise.
-
-The web surface's exact rows, authorization, paging/time/provenance limits,
-correlation, queues and resync are in [the private read/socket contract](architecture/private-read-contract.md)
-and [ADR 0021](architecture/0021-confidential-web-api.md). It changes no financial
-or custody policy. P19 TLS, HTTP and WebSocket share the same private handler/journal;
-the parent never becomes a readable financial server. Public hosting/docs and
-native/hardware workflow qualification are distinct later work.
-
-## 2. Components and trust boundaries
-
-The following is a target topology, not a collection of services already running:
+## Runtime and trust boundaries
 
 ```mermaid
 flowchart TB
-    C[Customer wallet and verified SDK] -->|attested encrypted session| H[Parent host / opaque relay]
-    H -->|ciphertext only| E
-    subgraph E[Approved confidential runtime]
-        A[Private API and authorization] --> O[Execution / funds / risk controllers]
-        O --> K[One deterministic financial kernel]
-        K --> J[Atomic journal and private projections]
-        J --> O
-        O --> V[Qualified venue adapter and signer]
-        O --> S[Solana adapter and custody controller]
-        J --> R[Recovery preparation and private claim packaging]
-    end
-    J -->|authenticated ciphertext| D[Replicated external storage]
-    J <-->|authenticated epoch and current head| W[Freshness witness]
-    V <-->|TLS authenticated inside enclave| P[Pacifica native pooled account]
-    S <-->|qualified chain observations and transactions| L[Solana custody / recovery program]
-    R -->|encrypted per-client bundles| B[Recovery distribution storage]
-    B --> C
-    C -->|public deposit / activated recovery claim| L
-    G[Governed recovery operators] -->|restore / fence / reconcile / activate| R
+  Client[Wallet and verified private SDK] -->|attested encrypted requests| Host[Parent / opaque relay]
+  Host -->|ciphertext| Enclave
+  subgraph Enclave[Approved Nitro enclave application]
+    API[Authentication and private API] --> Control[Risk / order / funds controllers]
+    Control <--> Journal[One accepted journal and derived private views]
+    Journal <--> Kernel[Deterministic financial kernel]
+    Control --> Adapters[Venue and chain adapters / scoped signers]
+  end
+  Journal -->|authenticated ciphertext| Stores[Independent storage replicas]
+  Journal <-->|current head and writer epoch| Witness[Freshness witness]
+  Adapters <-->|TLS authenticated in enclave| Venues[Pacifica / BULK native accounts]
+  Adapters <-->|qualified chain actions and receipts| Solana[Custody and recovery program]
 ```
 
-The host transports traffic and stores ciphertext. It is not trusted to decide
-customer balances, provide unsigned account truth, select claim amounts, read
-private records, or hold unrestricted plaintext signing keys. A compromised host
-can still delay, drop or reorder traffic and deny service; confidentiality is not
-availability. Timing, size and declared health metadata need explicit bounds.
+The parent is not the financial backend: it forwards bounded traffic and stores
+ciphertext. Private authentication, policy, accounting and signing remain inside
+the enclave. A compromised parent can deny service and observe bounded traffic
+metadata; encryption does not guarantee availability.
 
-The enclave contains private authorization, accounting, allocation and signing
-logic. Attestation lets a verifier bind a session to an approved release; it does
-not establish that the release is bug-free. A release allowlist obtained only from
-the same untrusted endpoint is not an independent trust anchor.
+External venues establish their own executions and balances. Cinder establishes
+the attribution of customer claims under its financial contract. Solana establishes
+custody modes, escrow consumption and payout counters. Reconciliation joins those
+authorities; none can be replaced by an unverified host response or an admin balance.
 
-External venues are authoritative for their actual executions and native balances.
-Cinder is authoritative for customer entitlements and their allocation under the
-approved contract. Solana is authoritative for its vault/mode/claim-consumption
-state. Reconciliation connects these domains; none substitutes for the others.
+## Components and ownership
 
-### Code ownership
+| Component | Responsibility |
+| --- | --- |
+| `crates/kernel` | Dependency-free `no_std` amounts, positions, ledger, funding, risk, claims, liquidation and ADL allocation |
+| `crates/journal` | Atomic accepted history, immutable identities, holds, replay, encrypted records, replicated packs, freshness and unit composition |
+| `crates/api` | Owner/agent authorization, durable command semantics and owner-scoped private views |
+| `crates/pacifica`, `crates/bulk` | Venue-specific bytes, signatures, bounded transport, observations and qualified normalization |
+| `crates/service` | Runnable enclave assembly, attestation/key loading, confidential ingress/egress, controllers and finite workers |
+| `crates/web-channel` | Shared Rust/WASM Noise and attestation-context core |
+| `crates/ports`, `crates/test-support` | Typed external boundaries and explicitly separate deterministic fixtures |
+| `clients/private`, `services/web-relay` | Private browser/Node SDK and opaque HTTP/WebSocket carrier |
+| `programs/cinder-vault`, `clients/vault` | Anchor custody/recovery executable, generated ABI and unsigned client builders |
 
-The off-chain workspace has eight Rust crates:
+These are nine Rust packages, not nine independently deployed services. The
+Anchor workspace is isolated from the off-chain workspace. Node runs client/relay
+tooling, not the financial engine. There is no separate signup or balance database.
 
-- `cinder-kernel`: dependency-free, `no_std`, checked integer types and pure state
-  transitions. No clock, database, signer, network or venue SDK imports.
-- `cinder-ports`: typed external-effect interfaces. Interfaces are not production
-  implementations or evidence that a venue supports an action.
-- `cinder-test-support`: deterministic clocks, stores and venue doubles for fault
-  tests. It must not become a production store or enter the kernel dependency graph.
-- `cinder-journal`: versioned transactions, joined holds/attempts, exact replay and
-  opaque SQLite storage. Its pinned storage/hash dependencies stay outside the
-  kernel; [ADR 0005](architecture/0005-durable-journal.md) specifies the contract.
-- `cinder-pacifica`: native observation/signing codecs and durable adapter authority;
-  native execution remains separately qualified.
-- `cinder-api`: customer signatures, scoped Cinder grants and private projections
-  over the same journal. It cannot sign native pooled-account commands. Its
-  exact-integer SDK lives in `clients/private`; transport qualification remains P19.
-- `cinder-service`: assembled confidential runtime, bounded network/storage/key
-  ports and financial scheduling; it is not a plaintext host backend.
-- `cinder-web-channel`: shared pinned Noise/attestation context for native and
-  browser/WASM private channels; the opaque relay remains outside the enclave.
+## Accounts and execution units
 
-The isolated `programs/` Anchor workspace owns public Solana custody, not private
-financial accounting. Its generated typed client is `clients/vault/`; neither
-adds Anchor dependencies to the kernel or the off-chain workspace.
+A wallet authorizes a Cinder account, which is not a per-user native venue account.
+Backend onboarding supports an explicit new-history path for ownership, discovery
+and unsigned escrow preparation. Selected measured-unit deployments also support
+a private managed-owner inventory; that is not public custody onboarding.
 
-New packages are introduced when an owning phase implements a real boundary,
-with an architecture decision. Language/runtime pins are in
-[ADR 0001](architecture/0001-workspace.md). P05 selects local SQLite explicitly;
-transport cryptography and production witness providers are
-not selected implicitly by this diagram. A controller may request a transition; it cannot maintain an
-independently authoritative balance table.
+An execution unit binds its native account, markets, quote asset/precision,
+custody route, source identities, key policy and financial state. Pacifica and
+BULK units share one accepted deployment history, owner inventory and revocation
+epoch, but keep financial books, reservations, capital and exposure attribution
+unit-local. The registry rejects aliases that would count the same backing twice.
+There is no automatic cross-venue margin or interchangeable native collateral.
 
-### Runnable application assembly and evidence levels
+The explicit unit API/`UnitClient` is version 2. Legacy API/`PrivateClient` remain
+version 1; they are not fallback routes or an implicit history migration.
+See ADRs [0034](architecture/0034-execution-unit-boundary.md),
+[0035](architecture/0035-unit-journal-foundation.md) and
+[0036](architecture/0036-unit-api-contract.md).
 
-The Rust crates are packages, not seven independently deployed services. The approved
-2026-10-01 implementation clarification assigns **P19** a minimal executable parent
-relay and confidential service, with actual local SDK/process tests over P18 and
-the protected journal. [ADR 0019](architecture/0019-attested-service.md) selects
-enclave-terminated TLS 1.3 and bounded synchronous listeners, without an HTTP
-framework. Its Node channel verifies attestation against the exact carrying socket.
-The local slice has separate relay, service-fixture and public-data verifier
-entrypoints; default builds cannot enable fixture trust implicitly. Only encrypted private frames
-and bounded declared metadata may cross the parent boundary.
+## Client authentication and private transport
 
-**P20** composes the private API, financial/journal controllers and venue/funding
-adapters into the measured enclave application, wires gated network/storage/key
-ports and qualifies actual Nitro execution. Local process or image-building tests
-cannot establish hardware attestation, key release or independent fresh storage.
-Real AWS use remains separately authorized. Private policy and signing must not
-move to the parent as a shortcut to make the service runnable.
+The SDK checks the AWS attestation chain, approved non-debug measurement,
+freshness, deployment context and enclave session-key binding before releasing
+private requests. Browser/Node clients use the shared Noise core over HTTP or
+WebSocket; the legacy Node profile also has enclave-terminated TLS.
+Outer HTTPS/WSS is a carrier, not the private trust boundary.
 
-**P21** joins recovery to that application's accepted history. **P22** exercises
-complete SDK/service-driven funding/trading/payout/recovery workflows with controlled
-external ports and per-step accounting assertions. **P23** carries the same workflow
-contract onto approved real Nitro/chain/venue infrastructure and obtains new receipts.
-Unit/component integration, local SBF execution, process tests, full offline workflow
-acceptance and live qualification are distinct evidence levels, not interchangeable
-claims of readiness. Ordinary CI stays offline.
+Customer signatures authorize Cinder operations. An owner can grant a Cinder
+agent bounded capabilities; this is separate from a native venue agent that
+signs pooled-account actions inside the enclave. Native keys are never delegated
+to customers. Revocation and current authority are checked before replay/query
+or response publication; accepted historical requests do not bypass current scope.
 
-Initial end-to-end tests use the SDK/CLI and explicitly configured test accounts.
-Self-service private onboarding, browser-agent key UX and the terminal are separate
-product-integration follow-ups, not automatically provided by backend qualification.
-See [PLAN's application assembly ladder](implementation/PLAN.md#application-assembly-and-the-integration-test-ladder).
+Both transports reach the same handler, permissions and journal. Reads and bounded
+subscriptions expose accepted, owner-attributed projections, not a separate
+eventually consistent balance service. Disconnects require operation lookup and
+resynchronization, not automatic financial retries. Exact request, paging and
+delivery semantics are in the [SDK](../clients/private/README.md),
+[web contract](architecture/0021-confidential-web-api.md) and
+[private read contract](architecture/private-read-contract.md).
 
-## 3. Accounts, assets and authority
+## Order lifecycle
 
-| Identity / state | What it owns or controls | What it does not imply |
-| --- | --- | --- |
-| Private Cinder account | Its attributed cash, positions, funding, fees, claims and holds | A separate native position/account, LP shares, or exclusive ownership of a particular pooled token |
-| Native pooled account | Actual external orders, net positions, collateral and venue authority | Knowledge of every private customer's position, margin or liquidation state |
-| House book | Protocol capital, explicit house exposures, income and obligations | A residual bucket for unexplained differences or customer assets |
-| Suspense | Named observations awaiting attribution/resolution | Spendable profit or permission to erase a missing customer's claim |
-| Solana vault | Program-enforced custody of tokens currently on Solana | PDA authority over an ordinary signed HTTP venue account |
-| Customer/venue/asset ingress escrow (approved next design) | Pending owner-attributed batches and exclusive full sweep/refund | Native account per user, spendable margin before credit, or independent withdrawal after handoff |
-| Venue-specific PDA payout vault (approved next use) | Qualified returned payout/recovery backing and shared payment counters | An auto-swept deposit destination or automatic access to funds still at a venue |
-| Broker wallet tokens | Separate intermediate custody on the allowlisted route | Vault payout liquidity, venue margin, a second customer deposit, or automatic recovery access |
-| Transit receivable | One evidenced transfer leg between locations | Another deposit, immediately spendable tokens, or guaranteed recovery |
+1. The owner or permitted agent signs a unit-bound intent with original request
+   identity, deadline, market, quantity and execution limits.
+2. The handler authenticates it and evaluates the joined customer/native margin,
+   pending outcomes, concentration, capital and location-liquidity constraints.
+3. One accepted journal decision records the intent, quota and holds. Before a
+   signature can escape, a native attempt binds exact bytes, nonce and authority.
+4. A bounded worker performs native I/O outside the financial writer, using only
+   qualified unit/account routes and permitted signing roles.
+5. Original authenticated observations are retained. Actual fills update the
+   native and attributed private books once; partial fills and reversals retain
+   exact remaining basis and explicit fees.
+6. Completion requires the applicable qualified evidence. An ACK is not a fill;
+   cancellation is not complete fill history; timeout/not-found is not proof of
+   rejection. Unknown effects retain their commitments through replay.
 
-Keep customer wallet/agent authorization, native trading authority, fund/recovery
-authority, transport keys, storage keys and release/upgrade governance distinct.
-A customer's Cinder agent is not a native agent for the omnibus account. Grants
-must bind deployment, owner, methods, market/amount constraints, expiry and epoch.
-Revocation prevents new unauthorized work; it does not undo an already exposed
-native request.
+Native netting is not internal customer matching. Private reduce-only semantics
+must check the customer's position independently of the pooled account; a label
+does not prove lower total pool risk. Known adverse events remain ingestible when
+new admission is frozen. See ADRs [0007](architecture/0007-order-lifecycle.md),
+[0009](architecture/0009-joined-risk.md) and
+[0040](architecture/0040-unit-native-execution.md).
 
-Logical role separation does not narrow a venue's real credential capabilities.
-If a native credential can move funds, calling it a trading signer does not make
-it trading-only. The supported intermediate key-controlled funding account remains
-an explicit custody boundary. No Solana program, encrypted snapshot, or threshold
-signature is claimed to manufacture an unsupported native authorization interface.
+## Financial accounting
 
-P15 selects one cohesive Solana custody program; P17 will add recovery using its
-same token authority and preserved paid counters. [ADR 0015](architecture/0015-solana-vault.md)
-records the role/epoch fence, immutable receipts and bootstrap upgrade-authority
-check. Its public counters are not current private entitlements. HyperLink's
-contract count is not a requirement for Cinder.
+The authoritative state separates customer, house and suspense ownership; signed
+cash, quantity, remaining basis, unsettled funding, physical assets, transit,
+claims, commitments and source evidence have distinct meanings.
 
-[ADR 0016](architecture/0016-funding-coordinator.md) joins this vault to native
-funding through the existing journal. Prepared physical allocations inform a
-forecast, not trading credit. Exact original wire/attempt identity persists before
-egress; HTTP acknowledgements cannot become settlement. Live source completeness,
-RPC trust and production key governance remain explicit qualification gates.
-
-## 4. The financial state and its reconciliation
-
-The complete target state includes private and native books, physical locations,
-transfers, unsettled funding, reservations, claims/protection, operation/attempt
-identities, source cutoffs, policy revisions, writer epochs and recovery counters.
-They form one event-driven financial state. P03 implements its position,
-cash/location, attribution and in-memory provenance foundation. P04 adds unsettled
-funding, native/broker costs, frozen funding inventory and evidence containment.
-
-Customer and house cash can be negative: they are signed ledger quantities, not
-token-account balances. A native signed cash balance also excludes its unrealized
-position PnL. Reported native total equity is a reconciliation observation, never
-an additional asset beside the components that already produce it.
-
-For customer `i`, market `m`, and a common qualified mark `p_m`, write `c` for
-settled cash, `q` for signed lots, `b` for signed remaining basis and `a` for
-recognized unsettled funding. Prices in these equations include the explicitly
-configured conversion to quote atoms per lot:
+For a common qualified mark, ignoring explicit conversion multipliers here:
 
 ```text
-e_i = c_i + Σ_m(q_im p_m - b_im) + a_i
-h   = c_H + Σ_m(q_Hm p_m - b_Hm) + a_H
-s   = c_S + Σ_m(q_Sm p_m - b_Sm) + a_S
-N   = vault + broker + transit - unpaired_settlement
-    + native_cash + Σ_m(q_Vm p_m - b_Vm) + a_V
-q_Vm = Σ_i q_im + q_Hm + q_Sm
-N = Σ_i e_i + h + s
+customer equity = cash + quantity × mark − remaining basis + unsettled funding
+native quantity = sum(customer quantities) + house quantity + suspense quantity
+reconciled net assets = sum(customer equities) + house equity + suspense equity
 ```
 
-This implemented form represents unattributed obligations in suspense, not also as a
-second subtraction from assets. Later third-party liabilities must have a named
-representation and be subtracted exactly once. No generic balancing adjustment
-is allowed to hide a broken bridge.
-`unpaired_settlement` offsets an independently observed arrival whose matching
-debit has not yet arrived; it is not a second customer claim or spendable capital.
+Opening a perp is not a spot notional debit. Fill value, basis splits, realized
+PnL and fees use checked integer units and declared conversion/rounding rules.
+Negative customer equity is not automatically a collectible asset backing another
+customer's positive claim. Net-flat native exposure does not establish adequate
+gross customer backing, margin or liquidity.
 
-P03 checks exposure and a price-independent cash-minus-basis identity; P04 extends
-the intercept to include recognized funding after every distinct accepted event.
-Consequently the equity bridge holds at any common
-exactly representable mark. This is a hand-derived identity with implementation
-tests, not proof of authentic venue evidence or correctly supplied ownership.
+Funding recognition and settlement are separate: an accrued amount becomes cash
+once, not a second earning. Allocation uses the qualified position/boundary cut,
+not whichever positions happen to exist when a delayed response arrives. Native
+cumulative funding, equity and display prices are observations—not setters for
+cash or basis. Unsupported precision or causality stays retained and contained.
 
-Claims cannot be netted against imaginary collectible customer debt:
+Customer assets are not house insurance capital. Coverage recognition,
+reservation, absorption, payout and later recovery are distinct transitions;
+the same loss or resource cannot be charged/counted twice. Genuinely free
+collateral can be withdrawn with open positions only when outcome-aware risk and
+liquidity checks pass. Solvent FIFO is not an insolvency loss-allocation policy.
+
+RF1 preserves original entry economics only for actually restored ADL quantity;
+house owns qualified replacement differences/costs. RF2 allocates removed lots
+proportionally at a fixed cut with explicit whole-lot bounds and deterministic
+restoration quotas. Neither promises uninterrupted healthy-user exposure.
+The [financial contract](implementation/BASELINE.md) preserves the full equations,
+coverage boundaries, RF1/RF2 rules and G01–G05 gates. The test
+[conformance map](implementation/CONFORMANCE.md) links requirements to code.
+
+## Deposits, venue collateral and payouts
 
 ```text
-C = Σ_i max(e_i, 0)                 positive customer claims
-D = Σ_i max(-e_i, 0)                customer deficits, zero assumed collectibility
-W = N - C - max(s, 0) = h - D + min(s, 0)
-shortfall = max(-W, 0)
+owner wallet → customer/venue/asset escrow → allowlisted Cinder funding wallet
+             → venue deposit rail → qualified native account credit
+
+venue return → allowlisted funding wallet → venue-specific PDA payout vault
+             → registered customer wallet
 ```
 
-An unresolved suspense event remains a qualification failure even when its current
-value is zero. A nonnegative `W` is not free collateral, liquid cash, a capital
-target pass, or a future-solvency guarantee. Gross customer risk, native net risk,
-capital adequacy and payment liquidity need separate checks.
+Each deposit is an exact identified batch. Until its full sweep commits, the
+owner may refund it; refund and sweep consume the same batch exclusively.
+Unsolicited raw balance changes do not create credit or another sweep allowance.
+A qualified finalized handoff recognizes the attributable deposit once, while
+funding restrictions remain until actual venue credit/readiness qualifies.
+Internal movement is not a second customer deposit.
 
-Example: Alice and Bob each deposit 100; house capital is 30. Alice buys one perp
-at 100 and Bob sells one at 100, each through actual venue executions. At mark 250,
-Alice has 250 equity, Bob has -50, and house equity is 30. Native exposure is flat
-and assets are 230, but positive customer claims are 250: the shortfall is 20.
-The correct result is a visible deficit, not a fictitious 50 receivable or an
-automatic haircut to Alice.
+The funding-wallet hop is an explicit native authorization boundary: a Solana
+PDA cannot sign a venue's ordinary HTTP requests. Its authority and supported
+deposit/return rail must be qualified, not inferred from a token transfer.
+Useful credited collateral can remain at the venue between orders; an expected
+arrival is not available margin. Unsupported/partial credit remains pending.
 
-### Exact positions, not spot-notional accounting
+Normal and recovery returns use the payout vault, never the auto-swept ingress
+escrow. Payment ends at the registered wallet and advances shared paid counters
+only on qualified completion. Legacy common-vault instructions remain explicit;
+no old-route deployment, counter or journal migration is implied by the escrow
+implementation. See [ADR 0030](architecture/0030-venue-directed-escrow.md),
+[program setup](../programs/README.md) and
+[unit custody/recovery](architecture/0041-unit-custody-recovery.md).
 
-Opening a perp does not debit its full notional from customer cash. Collateral
-and margin are separate. For an actual fill `x` at price `v`:
+## Persistence, scheduling and fencing
+
+Native requests, accepted operations and economic events have different IDs.
+Duplicate same-ID/same-content input is idempotent; conflicting content is not
+an overwrite. Postings, consumed IDs, holds and version commit atomically.
+An uncertain commit poisons the writer until protected reopen/reconciliation.
+
+Local journal backends and measured external-storage ports share the acceptance
+contract. Current measured profiles use bounded encrypted history packs over two
+S3 replicas and a separate DynamoDB witness. Authenticated ciphertext alone cannot
+detect complete rollback: restore verifies the current accepted head and writer
+epoch. Repair must preserve the declared replication/freshness policy.
+
+The writer does not hold its lock across network I/O. Preparation, external work
+and completion are bounded stages; private projections are derived from accepted
+state and rechecked before publication. Pack layouts, replay versions, quotas,
+poll/dispatch allocations and leases are explicit—not production capacity claims.
+
+Nitro has no durable private disk. KMS release policies bind measured roles,
+context and PCRs; revoking release does not revoke a key already loaded or an
+escaped venue action. Epoch fencing, native capability revocation where supported
+and original-action reconciliation address different parts of cutover.
+See ADRs [0006](architecture/0006-encrypted-durability.md),
+[0025](architecture/0025-concurrent-private-reads.md),
+[0026](architecture/0026-retained-history-packs.md) and
+[0043](architecture/0043-unit-workers.md).
+
+## Recovery
+
+Recovery is operator-assisted, followed by customer-executable claims:
 
 ```text
-Opening / increasing: q' = q+x; b' = b+xv; c' = c
-Reducing / reversing:
-  z = min(|q|, |x|); t = sign(q)
-  beta = trunc_toward_zero(b z / |q|)
-  r = t z v - beta
-  x_open = x + t z
-  q' = q+x; b' = b-beta+x_open v; c' = c+r
+freeze ordinary authority → fence writers/signers and reconcile escaped effects
+→ settle positions/funding/costs → return available assets → finalize entitlements
+→ prepare encrypted claim packages and segregated backing → operator activation
+→ customers claim once without the ordinary trading API
 ```
 
-Residue stays in remaining basis; full close consumes every basis atom. Display
-average price is derived, not authoritative. The same actual fill updates the
-native net book and the attributed private book independently: their realized cash
-and remaining basis can differ. Before fees, each book's marked equity changes
-by `x(p-v)`, preserving the bridge without forcing their basis values to match.
-
-P03 uses versioned rational lot/tick-to-quote conversion and rejects inexact
-conversion rather than guessing a venue rounding rule. See
-[ADR 0003](architecture/0003-unified-ledger.md) for implemented boundaries,
-transition algebra, test coverage and limitations.
-
-### Funding, costs and source evidence
-
-[ADR 0004](architecture/0004-funding-reconciliation.md) details the implemented
-P04 transitions. Funding uses positions frozen at a qualified boundary, not their
-values when a delayed message arrives. Known native funding waits in suspense
-until private allocation inputs qualify. Recognition adds unsettled funding;
-settlement moves that boundary's accrual to cash once. Derived rounding and
-unexplained native differences are separate; only the former may go to house.
-
-Actual signed fees/rebates follow the stored execution owner. Fee-inclusive native
-PnL normalizes once and is compared with native, not private, basis. Separate
-authorized broker fees move customer cash to house without a second venue debit.
-Named source corrections preserve history; they do not repeat fills or funding.
-
-Matching native snapshots compare components and cannot set balances. Resolving
-an old discrepancy requires named effects explaining all its known components,
-not just a later matching total. Missing/stale evidence restricts dependent views;
-aged issues and conflicts freeze that evidence gate. Qualified diagnostics still
-need current marks and do not replace P09 risk, capital or liquidity admission.
-
-## 5. Events, persistence and execution ordering
-
-There are three different identities: customer request, exposed signed attempt,
-and actual economic event. They cannot replace each other. One order can have
-several fills; REST and WebSocket can deliver the same fill repeatedly; a reversal
-can contain distinct native execution legs.
-
-The target normalized envelope binds network/deployment, native source account,
-semantic namespace, economic event/leg, operation/attempt, units/precision, source
-cut/observation time, authority, payload and policy versions. P02 defines the
-primitive keys; P03 compares exact normalized events in memory; P04 ingestion also
-retains rejected/duplicate observations and injected arrival times. P05 persists
-the full envelope and raw evidence; P13 must still qualify its native source and
-causal meaning. A matching identifier with changed payload
-is a conflict, not an update to silently overwrite.
-
-Processing order is:
-
-1. Preserve bounded raw evidence and authenticate/qualify its source.
-2. Normalize without floating-point loss; identify its causal operation and owner.
-3. Under one writer/version, compute a pure transition including all shared holds.
-4. Atomically commit postings, event consumption, holds, resulting state and version.
-5. Only then expose the corresponding durable receipt or authorized side effect.
-
-Before a signature can escape, persist its exact attempt, nonce, limits and
-authority epoch. Timeout after exposure means outcome unknown, not failed. Retain
-commitments, reconcile the original attempt, and retry only with sufficient
-evidence. ACK is not fill; cancel ACK is not complete fill history.
-
-Invalid/unattributed observations cannot be silently discarded because the pool
-is frozen. Preserve the raw fact; either post qualified economics to suspense or
-contain it until normalization is possible. Real adverse fills remain recordable
-when new orders would fail risk admission. A correction is an explicit auditable
-event, not mutation of history or a general-purpose admin balance setter.
-
-P03/P04 clone state to propose transitions and expose read-only projections. P04's
-ingestion path preserves named evidence even when an economic transition rejects;
-complete replay uses observation history, not only accepted financial events. This
-is failure atomicity inside a pure function. P05 wraps that function in a durable
-SQLite CAS transaction and replays complete observations, receipts, holds and
-attempts. Facts remain recordable when the accompanying all-or-none control
-proposal refuses. Bounded flat-cash reservations are not P09 margin approval;
-exactly one prepared attempt per hold can become possibly exposed, and a lost
-reply never regenerates its local delivery. Disk/uncertain commit errors poison
-the coordinator until explicit replay. This is not authentication or permission
-to send money. P06 adds [AEAD, replication and witnessed acceptance](architecture/0006-encrypted-durability.md).
-Its restore safety is conditional on the independently authenticated witness port;
-the P05-only protector/public chain still cannot detect complete valid rollback.
-
-## 6. Normal operating flows
-
-### Deposit and working-collateral allocation
-
-The approved next customer experience starts with an owner-signed deposit into
-their selected venue/asset escrow. That exact batch is pending ingress, not
-available trading collateral. The owner can reclaim it until the sweep commits.
-Owner refund and funds-authorized sweep share atomic batch consumption, so both
-cannot succeed. Full sweep means the recorded batch amount, not draining a changing
-token balance. Unsolicited transfers supply neither credit nor sweep authority.
-
-A qualified finalized sweep to the immutable Cinder venue funding wallet recognizes
-the attributable deposit once, retains the funding restriction and applies existing
-debt-recovery rules. Broker debit then creates transit; qualified venue credit
-establishes native cash without another customer deposit. Wrong-owner/mint/route,
-duplicate, partial or unknown evidence must not fabricate credit or new risk.
-P23B/P23C implement this [ADR 0030](architecture/0030-venue-directed-escrow.md)
-extension in offline qualification; P15/P16's existing common-vault route remains
-explicitly historical. Engine revision 24 and the explicit escrow controller/v2
-sweep contract reject incompatible histories rather than migrating them. Private
-`ingress` reads expose lifecycle without a second balance. Existing live manifests
-do not authorize the new funding mode; activation and exact-source native/Nitro
-qualification remain separate. Fenced, strongly zero-effect native allocations
-can return through the same payout vault without another deposit or customer
-payment; unknown/partially credited funding remains contained, not assumed returned.
-
-Useful collateral remains on the venue between orders. An order need not trigger
-a wasteful vault-to-venue round trip each time. Conversely an unconfirmed transfer
-does not provide available native margin merely because Cinder expects it to arrive.
-
-### Orders, fills and cancellation
-
-The customer or scoped agent authorizes a private Cinder intent. Controllers check
-user margin, pending outcomes, native margin, concentration, capital and location
-liquidity against one version. Durable reservation and acceptance precede native
-signing. The adapter submits only admitted bounded actions, with cleanup capacity
-reserved in the native API-credit budget.
-
-Qualified fills update actual executed quantity, private/native basis, realized
-PnL, fees and reservations, including partial fills and reversals. Native account
-netting does not authorize internal customer matching. Native reduce-only checks
-the pooled position; a customer close must separately respect their private position.
-A late close after forced reduction must not silently reverse the customer.
-
-Cancel requests apply only to the caller's attributed orders. A customer cannot
-invoke raw omnibus cancel-all. Partial execution, cancel acknowledgement, history
-coverage and final settlement are distinct facts. Unknown outcomes keep bounded
-exposure commitments instead of releasing collateral optimistically.
-
-### Funding, fees and reconciliation
-
-Accrual recognizes an obligation; settlement moves it into cash and must not earn
-or charge it again. Allocate qualified funding by actual private exposure at the
-specified boundary, not current positions sampled later. A net-flat native account
-does not provide enough evidence for gross private funding on its own.
-
-Normalize fee-inclusive native PnL before posting separate fees. Rebates, rounding
-and house residuals require explicit policy/provenance. An unexplained difference
-is not house revenue or a tolerated rounding plug. Entry times, partial closes,
-reversals and out-of-order feeds all belong in the qualification suite.
-
-Reconcile native positions, cash, orders, fills, fees and funding against private
-allocation and physical receipts. A flat position snapshot does not prove complete
-execution history. Missing evidence is unknown, not zero. The active Pacifica
-research cautions are preserved in [EVIDENCE](implementation/EVIDENCE.md); P13
-revalidates them against current primary documentation before enabling capabilities.
-
-### Ordinary withdrawals
-
-Customers may withdraw genuinely free collateral while positions remain open,
-provided joined risk and location-liquidity checks pass. This is not an automatic
-close-all requirement. Reserve the total debit, including declared fees, against
-the same commitments used by trading and capital operations.
-
-Use durable FIFO per pool/asset while solvent and obtain consent for partial
-payments. FIFO is not an insolvency priority rule. If venue collateral must return,
-the source debit is not yet a customer payout. Only qualified final payment
-discharges the matching entitlement and advances its durable paid counter once.
-Payout destinations are authenticated and constrained, not an arbitrary venue
-`to` field. Unknown/outgoing effects remain reserved through restart.
-
-Under ADR 0030, qualified venue returns pass through the allowlisted funding
-wallet to the venue-specific PDA payout vault, then its constrained TEE-authorized
-instruction pays the registered user wallet. No return goes to the auto-swept
-ingress escrow or bypasses shared normal/recovery counters. This is the approved
-target, not fresh native withdrawal or new-escrow implementation evidence.
-
-## 7. Risk, house protection and forced events
-
-Risk decisions evaluate customer gross exposure, native net exposure, uncertain
-pending outcomes, market concentration, capital and cash available at the needed
-location/deadline. Equal dollar values at two venues are not the same immediately
-usable resource. Customer assets are not protocol capital, and anticipated fees
-or fundraising are not current available funds.
-
-The capital target is to be derived from transition-driven stress paths, including
-correlated defaults, price gaps, depth loss, venue interruption, ADL and repeated
-shocks before replenishment. Numerical limits and calibrated confidence/horizon
-choices remain G02. A reduce-only label does not prove lower total broker risk;
-an external shock can breach thresholds even if every admitted action passed.
-
-Initial protection is house-funded quote-asset capital, not outside redeemable
-fund shares. Designation of cash as insurance does not create another asset.
-Recognition, commitment, absorption and payment are distinct transitions. Eligible
-claims, priority and exhausted-fund treatment must be explicit before live risk.
-Operational errors are not silently charged to unrelated customers.
-
-With designated reserve `R`, committed claims `P`, conservative net backing `W_cons`
-and other house encumbrances `O`, the approved diagnostic is:
-
-```text
-F_free = max(0, min(R-P, W_cons-O))
-```
-
-Still display untruncated shortages. Absorbing an existing flat customer deficit
-transfers entitlement from house to that customer and reduces the designated/
-committed reserve; it does not destroy cash a second time or make the resulting
-collection record a collectible asset. Subsequent recoveries repay remaining debt,
-then replenish the resources that actually absorbed it; excess belongs to the
-customer. Multiple episodes must not enable double recovery.
-
-Customer liquidation, native ADL and pool distress are separate event families.
-Mitigation includes conservative admission, bounded exit capacity, house support
-and justified risk cohorts. Subaccounts are useful only if actual margin isolation,
-parent authority and fee aggregation are verified; they are not assumed equivalent
-to legally/economically separated estates. No default per-customer native accounts.
-
-For native ADL, approved RF1 preserves original entry economics only on quantities
-actually restored; house owns both favorable and unfavorable replacement-price
-differences, replacement fees and the corresponding refund obligations. No funding
-is invented for exposure absent during the gap. Unrestored quantity retains actual
-ADL economics; healthy positions cannot be guaranteed never to be reduced.
-
-RF2 freezes affected same-side quantities at a qualified causal cut, apportions
-removed lots proportionally, and schedules restoration with monotone prefix quotas.
-Largest remainders and canonical identity break finite-lot ties. Composed residual
-allocation has a less-than-two-lot bound, not account-splitting immunity. Changed
-close intent voids remaining restoration for that customer, not an opportunity to
-reweight allocations opportunistically. [P12](architecture/0012-adl-restoration.md)
-uses a certified repeated-block schedule with explicit work/space limits; unsupported
-profiles are contained, not assigned an alternative allocation. House exception exposure is funded,
-hard-limited and explicitly unwound, never an unrestricted speculative strategy.
-
-## 8. Confidential runtime, persistence and client verification
-
-Private requests, responses, error paths and streams terminate cryptographically
-inside the enclave. Outer HTTPS/WSS may terminate at a relay only while the private
-payload remains encrypted to the verified enclave session. Outbound venue TLS is
-validated inside the enclave too; host-decrypted account responses are not trusted
-inputs. [ADR 0019](architecture/0019-attested-service.md) specifies the P19 transport
-and exact dependencies. P20 qualified a bounded prior image; changed-image/native
-workflow qualification remains P23, and production policy/release review remains P24.
-
-Verify attestation chain/signature, approved nondebug measurement, freshness and
-exact session-key binding before releasing private data. Bind customer authentication
-to the session/deployment. Transport counters, request IDs, native nonces, storage
-key versions and writer epochs serve different purposes. No plaintext downgrade,
-identity-bearing early data or ad hoc wallet-signature-derived encryption keys.
-A hostile website can steal plaintext before encryption, so verified client
-distribution is part of the threat model, not merely enclave measurement display.
-
-Nitro is not durable private storage. The target uses authenticated encrypted
-journal segments and snapshots outside the enclave, replicated under a declared
-failure policy, with an authenticated current head and writer epoch. Snapshots
-accelerate replay; the journal preserves the accepted tail between snapshots.
-Ordinary periodic on-chain roots alone do not prevent deleting that tail.
-
-Restoration must detect old but authentic ciphertext, missing segments and competing
-histories. A locally simulated witness does not establish independent freshness.
-Replication domains, retention, witness governance, key recovery and availability
-budgets remain explicit qualification choices. Stop new durable acceptance when
-the required durable/freshness guarantees cannot be met; already-live venue actions
-remain real and need bounded recoverable containment.
-
-Keys are released only to approved runtime policies. KMS revocation prevents future
-release, not use of already-loaded keys. Fencing requires native authority changes
-where supported, plus reconciliation of already-exposed requests; a database lease
-cannot revoke them. Restore private state only inside approved recovery code,
-never by an operator's plaintext account-export script.
-
-## 9. Recovery and verifiable claims
-
-The promise is operator-assisted recovery followed by customer-executable claims,
-not automatic operator-free exit while a venue is halted. A heartbeat failure
-raises an alarm; it does not make an old snapshot payable.
-
-```text
-normal → freeze new risk / ordinary payout authority
-       → fence old writers, signers and exposed effects
-       → privately restore and reconcile the accepted journal and native history
-       → settle positions / funding / costs under approved loss policy
-       → return available assets and finalize unpaid entitlements
-       → prepare immutable root and independently retrievable encrypted claim kits
-       → operator activates exactly that funded recovery epoch
-       → customers claim once without the ordinary trading API
-```
-
-Open positions and unresolved native withdrawals prevent pretending marked equity
-is fixed payable cash. Operators must not choose a more favorable stale snapshot
-after a loss. Venue inaccessibility preserves obligations and blocks unsupported
-payment promises; it does not turn inaccessible balances into Solana vault tokens.
-
-ADR 0030's pending unswept batches remain owner-refundable, with no corresponding
-trading/recovery credit. Final claim backing must exclude those segregated assets.
-Swept-but-uncredited ingress remains an attributed obligation with restricted or
-uncertain backing; it cannot be erased because the venue has not credited it.
-P23C tests this new ingress/payout join; existing P17/P21 receipts qualify only
-their historical route. Payment counters are never reset by the custody revision.
-
-Three records have different jobs:
-
-| Record | Storage / purpose | Payment authority |
-| --- | --- | --- |
-| Encrypted journal and full snapshots | External replicas; private restore/replay | None by themselves |
-| Routine account checkpoint | Compact on-chain commitment with private per-account evidence | Not redeemable merely because Cinder is offline |
-| Final recovery root | Immutable funded epoch plus private final claim packages | Payable only after authorized activation |
-
-Use salted, domain-bound commitments rather than public account records or guessable
-wallet/balance hashes. A customer package contains their applicable leaf, salt,
-membership path, domain/epoch/asset/recipient, amount and counter/cutoff data, not
-other customers' private statements. The approved recovery runtime prepares it,
-encrypts it to the customer's wallet-authorized encryption key, and makes it
-retrievable without the ordinary API. A root cannot reconstruct missing packages.
-P17 defines [exact encoding and the immutable payout contract](architecture/0017-recovery-claims.md).
-P21 integrates authoritative finalization, immutable registered encryption keys,
-private delivery and the independent Node claimant. Keys and locators must be backed
-up; rotation/lost-key reissue is not implemented or silently delegated to operators.
-
-Normal and recovery payout paths share claim capacity and paid-counter semantics.
-Prior settled payouts are subtracted once; exposed unknown payouts remain held.
-Activation segregates real available backing, disables competing spending and fixes
-the root, policy and epoch. Root replacement cannot reset paid claims. The program
-validates owner, recipient, mint/token program, domain/epoch, proof, consumption and
-remaining capacity atomically with transfer. Late deposits use separate suspense/
-refund accounting, not retroactive modification of the active estate.
-
-After activation, each customer can submit their own valid claim without an
-operator's per-claim signature. Public payout reveals its destination and amount,
-not the customer's full position/order history or unopened private statements.
-This is account privacy, not private transfers.
-
-### What verification establishes
-
-Keep four claims separate: approved code/channel identity, own-claim inclusion,
-complete liabilities/backing, and practical authority/availability to pay. A Merkle
-path proves membership in a root, not that every customer was included or assets
-exist. An authorized publisher could omit a liability and still provide another
-customer a valid path; declared-total capacity checks alone do not detect that.
-
-ZK can strengthen hidden arithmetic/aggregate statements only with reviewed
-witness completeness and authentic source inputs. It does not recover lost data,
-force venue withdrawals or repair insolvency. The production D14 promise and its
-independent verifier remain G04; this architecture neither mandates an unapproved
-circuit nor advertises ordinary inclusion as a complete solvency proof.
-
-## 10. Modes, operational visibility and release gates
-
-Readiness is multidimensional: accounting evidence, writer/key authority, transport,
-native connectivity, capital and location liquidity must each qualify. Boot/restore,
-read-only/reconciling, normal admission, restricted risk, payout-held, prepared
-recovery and active recovery need distinct permissions. A generic global `healthy`
-boolean or an admin `unpause` must not bypass outstanding conditions.
-
-Monitor aggregate lag/conflict/unknown-outcome counts, journal/witness health,
-authority/release epochs, reserve deficits and claim-package availability without
-logging private accounts, orders, balances or signed wires. Alerts do not authorize
-an economic rewrite. Incident runbooks must name the evidence and authority needed
-to resume or activate recovery, including late native actions after attempted fencing.
-
-Offline acceptance runs against production components with fake transport/chain/
-time, then separate SBF, Nitro and bounded live tests qualify their real boundaries.
-Adversarial tests include defaults with offsetting positions, funding/fee overlap,
-ADL gaps, insufficient protection, inaccessible cash, duplicate/conflicting events,
-unknown execution, competing withdrawals, rollback and missing claim packages.
-An insolvent test state should still reconcile correctly.
-
-Before customer funds, close G01 native semantics, G02 calibrated financial policy,
-G03 key/upgrade/recovery/witness governance, G04 assurance scope and independent
-review. Every external test/deployment separately needs G05 authority and cleanup
-limits. Completing a PR, passing CI, or reproducing a prototype is not a release
-approval. The exact phase-by-phase obligations and evidence remain in
-[PLAN](implementation/PLAN.md) and [EVIDENCE](implementation/EVIDENCE.md).
-
-This document is maintained with changes to component boundaries and approved
-flows. Detailed local design decisions live in the architecture ADRs; open policy
-must stay visibly open rather than becoming a default through illustrative prose.
+A failed heartbeat or stale checkpoint cannot authorize payment. Unknown venue
+outcomes and inaccessible collateral do not disappear or turn into payout cash.
+Unswept escrows stay segregated from recovery backing. Normal and recovery paths
+share consumption, so activation/root replacement cannot reset prior payments.
+
+The approved recovery path binds the settled journal cut, chain counters,
+recipient inventory and funded immutable root. Encrypted per-recipient claim kits
+are retrievable outside the trading API; the independent claimant checks live
+context and prepares a constrained Solana claim. Owner, domain, epoch, asset,
+recipient, proof and remaining capacity are checked by the program.
+
+Merkle inclusion proves membership, not complete liabilities, actual backing or
+unconditional exit. Public deposits/payouts reveal their ordinary chain details;
+this is private account processing, not private transfers. See ADRs
+[0017](architecture/0017-recovery-claims.md) and
+[0041](architecture/0041-unit-custody-recovery.md).
+
+## Measured profiles and qualification
+
+| Profile | Implemented boundary |
+| --- | --- |
+| Legacy explicit profiles | Original v1 service/financial history; no automatic unit migration |
+| Manifest 7 | Two-unit confidential assembly and managed empty-owner inventory; no native financial activation |
+| Manifest 8 | Bounded unit workers and private SDK; fresh books still lack qualified capital/readiness |
+| Manifest 9 | Separate short-lived fresh-account BULK paper experiment, one-time split of actual faucet backing, quarantined history and fixed cleanup/dispatch budgets |
+
+The paper profile is not a funding rail, production readiness setter or customer
+deposit. It cannot reopen in ordinary releases or renew its expired authority.
+Pacifica and BULK native guarantees must be qualified separately; a common SDK
+does not establish identical margin, fee, funding or withdrawal semantics.
+
+The current evidence boundary and next local precision/funding work are in
+[status](status.md). Offline suites use explicit fake venue/chain/time ports;
+compiled SBF, actual Nitro and bounded native observations qualify their own
+boundaries only. No production/key/customer-funds permission follows from CI,
+attestation, a paper run or a stack merge.

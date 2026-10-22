@@ -1,4 +1,4 @@
-# Implementation baseline
+# Financial and product contract
 
 Approved directions as of 2026-09-30; tracked extraction, not a new product-policy
 approval or deployment claim. [Plan](PLAN.md), [tracker](TRACKER.md),
@@ -42,7 +42,7 @@ live-run permission follows. Versions 1–5 still reject financial activation.
 The subsequent offline v6 composition permits only this private grant's two
 retained ingress acceptances and rejects trading, unrelated funds and payouts.
 The user subsequently approved a separate common-journal flat-funding rule in
-[the continuation map](P23-FINANCIAL-GATES.md#fresh-flat-account-admission-decision--pending-user-review).
+[the continuation map](../archive/qualification/P23-FINANCIAL-GATES.md#fresh-flat-account-admission-decision--pending-user-review).
 Its durable certificate permits only the two fixed cash transfers against the
 actual original receipt, with zero positions/funding/debt/other commitments and
 exact location capacity. It rechecks before preparation and exposure/signing;
@@ -63,7 +63,7 @@ separate from approval to implement this test boundary.
 
 | ID | Binding direction | Boundary / unresolved qualification |
 | --- | --- | --- |
-| B01 | Private, programmatic broker over existing perp liquidity; Pacifica first, Nitro runtime | BULK paused; no Phoenix/PER inheritance, website, token, staking or multi-venue launch in this sequence |
+| B01 | Private, programmatic broker over existing perp liquidity; Pacifica first, Nitro runtime | BULK is an opt-in experimental second venue, not a qualified multi-venue launch; no Phoenix/PER inheritance, website, token or staking in this backend contract |
 | B02 | Individual customer entitlements over pooled external execution; initial pooled account, justified risk cohorts later | Not LP shares or a separate native account per user. No internal crossing; external account netting is not internal matching. Native isolation, fee aggregation and cohort thresholds need evidence |
 | B03 | Actual attributed fills determine customer basis/PnL; selectable leverage under a market cap | No native-account-equivalence, uninterrupted exposure or best/lowest-fee guarantee; numerical caps and pricing remain gates |
 | B04 | New ingress: wallet → customer/venue/asset escrow → allowlisted venue funding wallet → venue. Return: venue → funding wallet → venue-specific PDA payout vault → registered user wallet | ADR 0030's local program/client and journal/Runtime integration are merged in P23B/P23C; P25 adds backend onboarding, not live qualification. Never refund after sweep or bypass normal/recovery counters. The key-controlled funding wallet remains a custody boundary; a PDA cannot sign ordinary native HTTP actions |

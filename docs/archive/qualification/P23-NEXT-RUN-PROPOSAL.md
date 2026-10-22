@@ -11,7 +11,7 @@ this approval does not authorize native/RPC/financial activity or another run.
 Close the remaining actual-cloud history-growth gate with the manifest-bound
 shipping pack backend. The local fix preserves full history and original IDs;
 it reduces object calls, not historical bytes or economic obligations.
-[ADR 0026](../architecture/0026-retained-history-packs.md) and TRACKER identify
+[ADR 0026](../../architecture/0026-retained-history-packs.md) and TRACKER identify
 the source, resource bounds and offline evidence. This is one focused next run,
 not a promise that read-only success closes all of P23.
 

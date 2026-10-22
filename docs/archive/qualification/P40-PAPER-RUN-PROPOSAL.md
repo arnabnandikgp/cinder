@@ -2,7 +2,7 @@
 
 Status: **two separately approved invocations executed and safely closed,
 2026-10-21; financial lifecycle still incomplete**.
-The [exact-image receipt](../operations/unit-paper-hardware-20261021.md) preserves
+The [exact-image receipt](unit-paper-hardware-20261021.md) preserves
 run 1's zero-slot failure and run 2's actual SDK open/fill, refused Cinder close,
 separately authorized local paper teardown and verified cleanup. Both one-host
 authorities are consumed; another image/run requires a newly scoped proposal,

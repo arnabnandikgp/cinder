@@ -349,4 +349,4 @@ Checked 2026-10-15 for documented shape, not live financial qualification:
   [funding coordinator](0016-funding-coordinator.md),
   [recovery](0017-recovery-claims.md),
   [demo credit limits](0029-demo-deposit-confirmation.md) and
-  [deferred live financial gates](../implementation/P23-FINANCIAL-GATES.md).
+  [deferred live financial gates](../archive/qualification/P23-FINANCIAL-GATES.md).
