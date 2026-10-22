@@ -5,6 +5,13 @@ production release. Current execution priority is in the
 [tracker](implementation/TRACKER.md); detailed contracts remain in the
 [acceptance criteria](implementation/PLAN.md).
 
+Implementation PRs #83, #84, #86, #87 and #88 merged into `product/tee-v1` at
+`fd7014bd9dd1d394c735d6da567318282fdc46c7` after eight passing checks on each
+final head and review closeout. P36's bounded acceptance/receipt scope and
+P37–P39 implementation milestones are closed. **P40 financial qualification,
+P23 live financial acceptance and P24 release review remain open.** Documentation
+consolidation is tracked separately in [PR #89](https://github.com/arnabnandikgp/cinder/pull/89).
+
 ## Implemented surface
 
 | Area | Present in the code | Qualification boundary |

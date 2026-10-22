@@ -31,9 +31,21 @@ or fresh hardware qualification. CI workflows live in `.github/workflows/`.
 - Node **24.21.0**: `.node-version` controls scripts/CI. Use an existing version
   manager or the official release binaries; do not change global tools implicitly.
 - A C compiler builds the pinned bundled SQLite dependency; no database server
-  is needed. P19 also requires OpenSSL headers/libraries (Homebrew OpenSSL on macOS;
+  is needed. The qualified fixture-verifier setup uses OpenSSL 3 headers/libraries (`openssl@3` on macOS;
   `pkg-config libssl-dev` on Ubuntu). npm only installs locked SDK check tools; no API keys, RPC endpoint, wallet, Solana CLI,
   Anchor, Docker or AWS account is needed for off-chain workspace checks.
+
+On Apple Silicon, if Homebrew selects OpenSSL 4 by default, point the check
+process at the already-installed OpenSSL 3 prefix without changing global tools:
+
+```sh
+OPENSSL_DIR=/opt/homebrew/opt/openssl@3 node scripts/check.mjs
+```
+
+Use the corresponding installed prefix on other hosts. An optional local browser
+check exposed a negative-certificate oracle difference with OpenSSL 4; rebuilding
+the fixture verifier against OpenSSL 3 passed all 14 Node and 14 Chrome channel
+groups. Do not weaken the certificate fixtures to accommodate a different library.
 
 One-time installation of toolchains/CI actions, `cargo fetch --locked` and
 `npm ci --ignore-scripts --prefix clients/private` needs

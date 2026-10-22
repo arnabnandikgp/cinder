@@ -872,7 +872,13 @@ Evidence: W acceptance matrix, P22/P23 harnesses, native capability receipts.
 - [x] Joined lifecycle/adversarial fixtures cover admission, native preparation, partial fills, financial reconciliation, custody and recovery without independent balances. The SDK trading process, selected-adapter custody/recovery and existing carrier/SBF suites are complementary evidence, not one live financial round trip.
 - [x] Concurrency/restart/revocation/cross-unit/freshness failures preserve accounting and publication; cached projections never become authority.
 - [x] Clean-checkout CI exercises all new offline tests without ignored research, wallets or external requests. Final P36 head `3237023` passes all eight hosted offline jobs; reviewed P33–P36 merged as native stack #80 at `3486b9f`, tree-identical to that tip. Exact receipts are in TRACKER.
-- [ ] Approved native/changed-image hardware runs have exact source and cleanup receipts; blocked/deferred capabilities are named and never counted as qualified.
+- [x] Approved native/changed-image hardware runs have exact source and cleanup receipts; blocked/deferred capabilities are named and never counted as qualified.
+
+Closure records the bounded evidence/receipt requirement, not successful live
+financial completion: [October 20](../archive/qualification/unit-hardware-20261020.md)
+and [October 21](../archive/qualification/unit-paper-hardware-20261021.md) retain
+exact images, partial results, explicit blocked capabilities and verified cleanup.
+The unpassed assembled close/cash bridge remains an open P40 criterion below.
 
 [Detailed scope and historical clarifications](../archive/implementation/PLAN-20261023.md#p36).
 

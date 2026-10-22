@@ -49,7 +49,7 @@ merged implementation is not production qualification.
 
 ## Local development
 
-Use Rust **1.97.1**, Node **24.21.0**, a C compiler and OpenSSL development
+Use Rust **1.97.1**, Node **24.21.0**, a C compiler and OpenSSL **3** development
 libraries. After installing those prerequisites:
 
 ```sh

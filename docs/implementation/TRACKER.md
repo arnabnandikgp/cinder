@@ -46,11 +46,11 @@ Merge does not close an unmet qualification criterion.
 | [P33 — Unit service, reads and SDK](PLAN.md#p33) | closed | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), merged `3486b9f` |
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
-| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
-| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), cumulative cleanup review fixed at `9765666`; restacked hosted checks/review required |
-| [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), two startup review fixes verified; new-head hosted checks separate |
-| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), restacked; combined offline acceptance passed |
-| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) → [#88](https://github.com/arnabnandikgp/cinder/pull/88); corrected Nitro SDK open/fill passes; Cinder close/cash bridge and full admin acceptance remain open |
+| [P36 — Joined second-venue acceptance](PLAN.md#p36) | closed | Joined offline fault tests and dated native/hardware receipts state the actual integration boundary; blocked capabilities stay explicitly unqualified. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; exact-source receipts/limits recorded; successful assembled financial completion remains P40 |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | closed | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), reviewed/green, merged `fd7014b` |
+| [P38 — Measured two-unit deployment](PLAN.md#p38) | closed | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), reviewed/green, merged `fd7014b` |
+| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | closed | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), reviewed/green, merged `fd7014b` |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) / [#88](https://github.com/arnabnandikgp/cinder/pull/88), implementation merged `fd7014b`; Cinder close/cash bridge and full current-image admin acceptance remain open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
 
@@ -61,6 +61,11 @@ reviewed P37–P40 stack, then merging the implemented work and stopping before
 the local precision/funding correction. No financial-policy change, frontend
 integration, live request or AWS run is part of this cleanup.
 
+Implementation stack #83/#84/#86/#87/#88 is merged at
+`fd7014bd9dd1d394c735d6da567318282fdc46c7`. Each exact head passed all eight
+hosted checks and had no unresolved review thread before merge. Cleanup #89
+remains the final documentation PR; after its merge, stop as requested.
+
 - Review: PR #83's cumulative paper cleanup allowance was reproduced failing,
   corrected to consume all prior cleanup quantities, and verified with nine
   paper-tool tests and 98 repository contract tests. Unknown/zero-fill attempts
@@ -70,6 +75,8 @@ integration, live request or AWS run is part of this cleanup.
   explicit phase anchors. All 46 phase IDs/dependencies and 165 acceptance
   checkboxes are preserved. The complete contract suite passes 100 tests, with
   no failures/skips; documentation links and workspace boundaries pass.
+  The subsequent merge bookkeeping completes only P36's existing dated-receipt
+  checkbox; it does not mark the failed financial lifecycle as passed.
 - Latest native result: actual Nitro bootstrap, encrypted SDK opening and fill
   attribution passed. Cinder close remains blocked by active-account decimal
   precision/funding handling. Separate authorized teardown finished flat/revoked;
@@ -86,6 +93,21 @@ Work/Verification/Unexpected/Next/PR/Merge fields and complete dated sessions.
 New work should update this current handoff and add only its owning phase's
 changed handoff here; do not append another full session transcript.
 
+## P36 — Joined second-venue acceptance and qualification
+
+Work: joined offline acceptance is merged; the approved native/hardware attempts
+now have exact-source outcome/cleanup receipts with unsupported and failed
+capabilities explicitly named. This completes the existing receipt criterion,
+not a successful assembled financial lifecycle.
+Verification: prior offline head `3237023` passed eight jobs and merged at the
+SHA below. Dated October 20/21 receipts retain real bounded observations, exact
+images and verified cleanup; P40 still records the failed close/cash bridge.
+Unexpected: native credit/return rails and active-account precision/funding stay
+unqualified. Separate direct teardown is not counted as a Cinder close.
+Next: retain these limits; successful assembled financial acceptance remains P40.
+PR: https://github.com/arnabnandikgp/cinder/pull/82
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b.
+
 ## P37 — Bounded BULK native qualification
 
 Work: the October 23 review fix at `9765666` consumes all previously admitted
@@ -93,11 +115,49 @@ standalone paper cleanup quantity before another opposite IOC can be admitted.
 Uncertain/zero-fill requests and cancellation never refund that allowance.
 Verification: the new cumulative-quantity regression failed before the fix and
 passes afterward; all nine paper-tool tests and 98 owning-branch contract tests
-pass. New hosted jobs apply to each restacked head, not the older green commits.
+pass. Final head `9765666` passed all eight hosted jobs; review threads resolved.
 Unexpected: the earlier per-request bound allowed multiple full-size closes;
 this finite test-tool correction changes no shipping financial policy or live
 receipt. Original native evidence remains in the archived phase handoff/receipt.
-Next: finish the user-requested reviewed/green stack merge, then stop before
-local precision/funding work. No new native, RPC or AWS run is authorized here.
+Next: stop after cleanup #89; local precision/funding work is not started.
 PR: https://github.com/arnabnandikgp/cinder/pull/83
-Merge: pending.
+Merge: fd7014bd9dd1d394c735d6da567318282fdc46c7.
+
+## P38 — Measured two-unit deployment assembly
+
+Work: non-fixture two-unit assembly, distinct native roles/configuration and
+bounded managed-owner startup are implemented; recipient/lease review fixes land.
+Verification: final head `ddf8fc9` passed all eight hosted jobs, with resolved
+review threads. Exact-image evidence remains in dated receipts, not this merge.
+Unexpected: capsule size and startup validation required explicit bounds; no
+fixture capital, funds controller or live activation is inferred from assembly.
+Next: maintain the measured boundaries; remaining financial qualification is P40.
+PR: https://github.com/arnabnandikgp/cinder/pull/84
+Merge: fd7014bd9dd1d394c735d6da567318282fdc46c7.
+
+## P39 — Joined deployed-unit worker and SDK acceptance
+
+Work: bounded native unit workers, encrypted UnitClient and joined offline
+acceptance share the protected journal without native I/O under its writer.
+Verification: final head `1ec27ce` passed all eight jobs. An intermittent initial
+Chrome timeout reran unchanged; no assertions/deadlines were relaxed. The same
+browser sources pass other layers and the local 14-group Node/Chrome check.
+Unexpected: fresh books and unsupported funding stay not-ready; common API
+composition is not qualified native financial backing or cross-venue margin.
+Next: stop after cleanup #89; P40 owns native precision/funding and actual close.
+PR: https://github.com/arnabnandikgp/cinder/pull/86
+Merge: fd7014bd9dd1d394c735d6da567318282fdc46c7.
+
+## P40 — Changed-image experimental parity qualification
+
+Work: reviewed measured-unit and quarantined paper code is merged, with actual
+SDK opening/fill, partial restart and independent fencing evidence recorded.
+Verification: final #87/#88 heads `19ce2d2`/`0ae5218` each passed eight hosted
+jobs with no unresolved threads. An apt-mirror 403 setup failure reran unchanged.
+Exact hardware source remains `e72484f`, not an inherited pass for later code.
+Unexpected: six active account reports fail quote-precision decoding; later
+nonzero funding remains outside paper qualification. Cinder's close did not pass.
+Next: after cleanup #89, stop. Proposed local precision/funding regressions and
+joined lifecycle correction are not started; another live run needs new scope.
+PR: https://github.com/arnabnandikgp/cinder/pull/88
+Merge: fd7014bd9dd1d394c735d6da567318282fdc46c7.
