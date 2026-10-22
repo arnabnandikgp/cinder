@@ -2,7 +2,7 @@
 
 Date: 2026-10-15. Implements the first offline slice of the approved second-venue
 direction, [P27](../implementation/PLAN.md#p27). [Candidate evidence](../venues/bulk.md)
-and [ownership direction](../implementation/SECOND-VENUE.md) remain authoritative.
+and [ownership direction](../archive/qualification/SECOND-VENUE.md) remain authoritative.
 
 ## Boundary
 

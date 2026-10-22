@@ -24,7 +24,7 @@ current market rules, not an account balance, precision qualification or risk
 readiness. No observed public metadata activates the production Gateway.
 
 The signed paper lifecycle remains a separate stage under
-[the proposal](../../docs/implementation/UNIT-QUALIFICATION-PROPOSAL.md). Reserve
+[the proposal](../../docs/archive/qualification/UNIT-QUALIFICATION-PROPOSAL.md). Reserve
 an explicit close/cleanup attempt when planning an opening trade: two attempts
 cannot promise a resting-order probe **and** an opening IOC **and** a closing IOC.
 Fresh signing identities, original native messages/nonces and known cleanup

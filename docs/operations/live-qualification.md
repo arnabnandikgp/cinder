@@ -4,10 +4,10 @@ Updated 2026-10-08. **Offline financial composition and bounded read-only hardwa
 The phase remains in progress; this document is not authorization for an AWS
 session, deployment, funding, account setup or native transaction. The separately
 approved read-only transport/storage receipt, including the passing 64-record
-growth gate, is recorded in [the hardware receipt](../implementation/P23-PACKS-HARDWARE.md).
+growth gate, is recorded in [the hardware receipt](../archive/qualification/P23-PACKS-HARDWARE.md).
 The newer funding composition is not covered by that older image's pass. Native
 credit investigation and dependent live financial runs are deferred; see
-[the current disposition](../implementation/P23-FINANCIAL-GATES.md#merge-scope-and-deferred-acceptance).
+[the current disposition](../archive/qualification/P23-FINANCIAL-GATES.md#merge-scope-and-deferred-acceptance).
 Historical M1/M2/P20 receipts are provenance, not
 current release qualification or reusable permission. See
 [PLAN](../implementation/PLAN.md#p23), [TRACKER](../implementation/TRACKER.md),
@@ -74,7 +74,7 @@ testing remains open. It grants no trading/recovery readiness
 and does not relax original withdrawal debit/payment or lost-ACK handling. A
 fresh measured run must bind the actual policy, schema, initialized account,
 source and caps; closed prior invocations remain closed. The
-[separate current GET receipt](../implementation/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
+[separate current GET receipt](../archive/qualification/P23-NATIVE-SEMANTICS-RECEIPT.md#separate-current-testnet-schema-observation)
 now verifies actual testnet response shapes outside Nitro, including default
 settings returned for an address whose account/loan remain absent. It neither
 qualifies fresh setup nor permits promotion of the already-withdrawn historical
@@ -124,8 +124,8 @@ The retained native round-trip payment also passes an offline single-recipient
 program and account privileges match. The separate instruction `withdraw_id` is
 not that batch nonce. This is a read-only verification of existing evidence, not
 a new live receipt, a native UUID lookup or qualified financial completion.
-See [the receipt](../implementation/P23-NATIVE-SEMANTICS-RECEIPT.md).
-The [subsequent contract/source audit](../implementation/P23-NATIVE-EVIDENCE.md#completion-contract-audit-2026-10-08)
+See [the receipt](../archive/qualification/P23-NATIVE-SEMANTICS-RECEIPT.md).
+The [subsequent contract/source audit](../archive/qualification/P23-NATIVE-EVIDENCE.md#completion-contract-audit-2026-10-08)
 also verifies retained deposit/batch-completion events and confirms that funds
 completion is per-operation, not a universal account/trading frontier. Native
 credit/debit terminality, supported lost-UUID lookup and recovery's separate final

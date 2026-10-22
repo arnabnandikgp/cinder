@@ -4,8 +4,8 @@
 Run 1 failed before allocation. The separately approved corrected run passed
 actual SDK opening/fill attribution, but Cinder refused its close. The last
 section records that partial result and separately authorized test teardown;
-neither run qualifies a full financial lifecycle. [Run scope](../implementation/P40-PAPER-RUN-PROPOSAL.md),
-[paper contract](../architecture/0044-paper-bootstrap.md).
+neither run qualifies a full financial lifecycle. [Run scope](P40-PAPER-RUN-PROPOSAL.md),
+[paper contract](../../architecture/0044-paper-bootstrap.md).
 
 ## Run 1 — frozen artifact and setup
 

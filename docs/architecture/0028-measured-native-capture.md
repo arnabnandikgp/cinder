@@ -80,7 +80,7 @@ purpose-separated envelopes and private file permissions. These are local checks
 not Nitro, Pacifica, an independent audit or production capacity evidence.
 
 Next: qualify the authenticated setup/credit/payment provider semantics in
-[P23-NATIVE-EVIDENCE](../implementation/P23-NATIVE-EVIDENCE.md), including current
+[P23-NATIVE-EVIDENCE](../archive/qualification/P23-NATIVE-EVIDENCE.md), including current
 fresh-account bootstrap and lost-native-ACK handling. Public schemas do not by
 themselves establish atomic setup, operation-specific final credit or no later
 withdrawal effects. Retain those as explicit gaps rather than fabricate a cut.

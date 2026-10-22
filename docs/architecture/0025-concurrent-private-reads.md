@@ -7,7 +7,7 @@ Published checkpoint: `6dff3731f365463ad24c1b5fcd2cb82f19d76c86`, PR #55.
 No new financial policy, persistence format, dependency, deployment or AWS run.
 The user then requested a broader independent architecture review. This draft
 was a candidate read slice. The user subsequently approved the broad remediation
-direction. [The staged remediation plan](../implementation/P23-REMEDIATION.md)
+direction. [The staged remediation plan](../archive/qualification/P23-REMEDIATION.md)
 defines the selected local scope and its gates. Approval does not select a new
 production storage/retention contract or waive the design conditions below.
 

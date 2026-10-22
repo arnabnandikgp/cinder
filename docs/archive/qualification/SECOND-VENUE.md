@@ -4,7 +4,7 @@ Date: 2026-10-15. User-approved direction: finish P25 reviews, reassess BULK und
 current custody, then take the smallest justified path toward a second venue.
 This is a **proposed implementation breakdown**, not approval of numerical risk
 limits, a new financial contract, live activity or production activation.
-[BULK assessment](../venues/bulk.md), [baseline](BASELINE.md), [tracker](TRACKER.md).
+[BULK assessment](../../venues/bulk.md), [baseline](../../implementation/BASELINE.md), [tracker](../../implementation/TRACKER.md).
 
 October 20 finish line: P37 observed the bounded direct paper lifecycle and
 corrected source-backed fill identity compatibility. The remaining finite
@@ -16,13 +16,13 @@ explicit separate gaps. Do not begin another venue before this boundary review.
 
 October 17 implementation update: the user-approved P33–P36 stack implements
 the shared service/SDK, unit native execution, existing funds/recovery composition
-and [joined offline acceptance](UNIT-ACCEPTANCE.md). Earlier breakdowns below are
+and [joined offline acceptance](../../implementation/UNIT-ACCEPTANCE.md). Earlier breakdowns below are
 historical planning context. The [remaining qualification](UNIT-QUALIFICATION-PROPOSAL.md)
 is not automatic live permission or an enabled BULK funding bridge.
 
 October 16 follow-up: P26/P27 are merged. P28 implements the remaining offline
-[financial observations](../architecture/0033-bulk-financial-observations.md) and
-makes the proposed [unit-state boundary](../architecture/0034-execution-unit-boundary.md)
+[financial observations](../../architecture/0033-bulk-financial-observations.md) and
+makes the proposed [unit-state boundary](../../architecture/0034-execution-unit-boundary.md)
 concrete for review. It does not implement joined runtime state or authorize a
 native run. The prior three approved public metadata GETs all returned origin
 502; current native schema/bridge qualification remains unresolved.

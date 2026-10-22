@@ -5,7 +5,7 @@ qualification or financial activation**. This supplements
 [the financial gates](P23-FINANCIAL-GATES.md); the approved ledger, custody and
 recovery contracts are unchanged.
 
-Latest deposit-only exception: [ADR 0029](../architecture/0029-demo-deposit-confirmation.md)
+Latest deposit-only exception: [ADR 0029](../../architecture/0029-demo-deposit-confirmation.md)
 implements the user-approved testnet bookkeeping assumption with explicit journal
 demo state (introduced in engine revision 22; current revision 23 also retains
 the separately approved flat-only allocation certificate). It requires an original finalized signature,
@@ -175,12 +175,12 @@ and request a policy decision; never quietly label synthetic evidence as native.
 The offline component adds a budgeted bounded native-transfer capture:
 `pacifica::capture::{prepare, Archive}` and
 `service::native_capture::Port`, with a distinct fixed-host opaque WSS relay.
-[ADR 0027](../architecture/0027-native-transfer-capture.md) records the actual
+[ADR 0027](../../architecture/0027-native-transfer-capture.md) records the actual
 TLS/upgrade/limits, pinned protocol dependency, compiled-out plaintext logging,
 independent local peer tests and exact remaining activation gates. Every retained
 input remains raw (`event=None`, no causal cut or authority epoch); capture cannot
 manufacture setup, credit or payment certificates. The loaded runtime/manifest
-has a subsequent [version-4 one-shot worker](../architecture/0028-measured-native-capture.md)
+has a subsequent [version-4 one-shot worker](../../architecture/0028-measured-native-capture.md)
 that binds actual account/origin/route/root/limits and drops the writer guard for
 network I/O. Local runtime activation is implemented; this is neither actual
 native capture nor hardware evidence. The prior closed AWS receipt does not
@@ -191,7 +191,7 @@ v6 composition permits only the private grant's two original ingress operations;
 all versions forbid trading. Its local tests do not qualify financial activation.
 Strong setup/credit/payment, complete execution/funding cuts and final native
 recovery remain named open gates. The approved demo setup/credit exception is
-described separately in [ADR 0029](../architecture/0029-demo-deposit-confirmation.md).
+described separately in [ADR 0029](../../architecture/0029-demo-deposit-confirmation.md).
 The retained-pack hardware invocation is closed, with all fixed read-only cells
 passing. It grants no financial activity. Actual provider capture and financial
 activation require a separate bounded manifest and qualified evidence.

@@ -18,8 +18,8 @@ permission for another deployment, or a claim that P23 is complete.
 These slices stay on the existing shallow P23 branch until a justified review
 boundary is needed; do not create a PR per helper or mark a slice closed solely
 because a benchmark becomes faster. Keep exact results and next actions in
-[TRACKER](TRACKER.md). The governing authority/race contract and full negative
-matrix are in [ADR 0025](../architecture/0025-concurrent-private-reads.md).
+[TRACKER](../../implementation/TRACKER.md). The governing authority/race contract and full negative
+matrix are in [ADR 0025](../../architecture/0025-concurrent-private-reads.md).
 
 ## C1: first implementation boundary
 

@@ -4,7 +4,7 @@ Assessed 2026-10-15. **Candidate for second-venue qualification, not an enabled
 adapter.** No BULK API, RPC, wallet, faucet or cloud invocation occurred in this
 assessment. Pacifica's missing-credit work remains deferred. The current custody
 model is [venue-directed escrow](../architecture/0030-venue-directed-escrow.md);
-the proposed implementation sequence is [SECOND-VENUE](../implementation/SECOND-VENUE.md).
+the proposed implementation sequence is [SECOND-VENUE](../archive/qualification/SECOND-VENUE.md).
 
 Subsequent P27 [codec foundation](../architecture/0032-bulk-codec-foundation.md)
 adds offline integer/wire/fill tests, not activation. The separately approved

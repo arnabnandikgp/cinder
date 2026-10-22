@@ -1,8 +1,29 @@
 # Developing the TEE workspace
 
-Start with [TRACKER](implementation/TRACKER.md), then the owning
-[phase](implementation/PLAN.md). [ADR 0001](architecture/0001-workspace.md) explains
-package boundaries and the deliberately small P01 scope.
+Start with [current status](status.md) and the
+[handoff](implementation/TRACKER.md). Use the relevant
+[acceptance criteria](implementation/PLAN.md) and
+[component decision](architecture/README.md) for your change; historical session
+logs are not a setup prerequisite.
+
+## Check and CI map
+
+| Command / hosted job | Coverage |
+| --- | --- |
+| `node scripts/check.mjs --group=contracts` | Documentation links/criteria/handoffs, qualification-tool regressions, test inventory and workspace/dependency boundaries |
+| `node scripts/check.mjs --group=lint` | Formatting, strict default/all-feature Clippy and workspace builds |
+| `node scripts/check.mjs --group=rust` | All-feature debug/release and shipping-default Rust regressions; unknown ignored tests fail the runner |
+| `node scripts/check.mjs --group=client` | Actual fixture service binaries, SDK TypeScript/Node and opaque relay regressions |
+| Offline browser channel qualification | Shared actual Node/Chrome confidential SDK workflows and browser verifier tests |
+| Offline retained history growth | Separate packed-history client/growth/fault acceptance |
+| `node scripts/check-vault.mjs` / Offline Anchor vault | Isolated Anchor build, generated ABI/client checks and local compiled SBF/Surfpool execution |
+| Offline ARM64 default-feature package | Source-only shipping build/image inputs without fixture features; not an AWS launch |
+
+The no-argument root runner executes its four groups. Browser, packed-history,
+Anchor and ARM64 packaging are separate jobs with their own prerequisites below.
+All eight hosted jobs are offline after dependency/tool hydration. They do not
+establish live funding, native causal completeness, production risk calibration
+or fresh hardware qualification. CI workflows live in `.github/workflows/`.
 
 ## Toolchains
 

@@ -2,7 +2,7 @@
 
 Status: user-approved local implementation boundary, 2026-10-21. Not a live approval or a
 change to customer funding, collateral ownership, recovery or production policy.
-[Plan](PLAN.md#p40), [existing evidence](../venues/experimental-parity.md).
+[Plan](../../implementation/PLAN.md#p40), [existing evidence](../../venues/experimental-parity.md).
 
 ## What remains
 
@@ -88,7 +88,7 @@ where the original evidence and finite allowance permit.
    financial-action and cleanup caps explicit. Never deploy local-fixture code.
 
 The implementation uses a separate **version-9** measured/private profile;
-versions 7/8 omit it and remain uninitialized. [ADR 0044](../architecture/0044-paper-bootstrap.md)
+versions 7/8 omit it and remain uninitialized. [ADR 0044](../../architecture/0044-paper-bootstrap.md)
 defines its exact assumption, authoritative cash split, history quarantine,
 finite risk settings and cleanup reservation. Native `coverage: unknown` and
 missing optional snapshot inventories remain unknown in the ordinary codecs;
@@ -97,7 +97,7 @@ No native `source_cut`, terminal certificate or production funding proof is inve
 See the [fresh run proposal](P40-PAPER-RUN-PROPOSAL.md) before any live activity.
 
 The October 21 recipient/lease review fixes change enclave code. October 20's
-[hardware receipt](../operations/unit-hardware-20261020.md) remains valid for its
+[hardware receipt](unit-hardware-20261020.md) remains valid for its
 recorded image only; rebase or green offline CI does not qualify a new image.
 
 ## Alternative

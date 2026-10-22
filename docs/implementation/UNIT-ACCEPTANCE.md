@@ -80,7 +80,7 @@ wallet/faucet/RPC or AWS action occurred in this implementation run.
 
 ## Next controlled qualification
 
-See [the separate proposal](UNIT-QUALIFICATION-PROPOSAL.md). The user-authorized
+See [the separate proposal](../archive/qualification/UNIT-QUALIFICATION-PROPOSAL.md). The user-authorized
 merge of #78/#79/#81/#82 followed green exact heads and resolved review threads;
 it does not approve that live proposal. Keep P36's native/hardware criterion open
 rather than call offline fixtures an integrated live deployment. Next is bounded

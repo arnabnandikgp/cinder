@@ -93,5 +93,5 @@ Next: prepare the non-fixture multi-unit role/egress/storage configuration using
 these constraints; qualify its changed Nitro image separately before key release.
 BULK supported test funding/return rails and operation-linked credit remain
 unestablished; controllers stay disabled. Pacifica missing credit stays deferred.
-See [scope/questions](bulk-native-qualification.md) and
-[qualification sequence](../implementation/UNIT-QUALIFICATION-PROPOSAL.md).
+See [scope/questions](../../venues/bulk-native-qualification.md) and
+[qualification sequence](UNIT-QUALIFICATION-PROPOSAL.md).

@@ -5,9 +5,9 @@ review/merge remains pending. The user
 explicitly upgraded the account to Paid; the earlier Free-plan launch blocker is
 resolved. A non-debug c6g.large enclave ran real five-role KMS release, attested
 private SDK operations, encrypted restart and storage/witness fault checks. See
-[dated hardware evidence](nitro-hardware-2026-10-02.md) for exact release hashes,
+[dated hardware evidence](../archive/qualification/nitro-hardware-2026-10-02.md) for exact release hashes,
 observed compatibility fixes and first-session cleanup. The
-[follow-up](nitro-hardware-followup-2026-10-02.md) records the completed negative
+[follow-up](../archive/qualification/nitro-hardware-followup-2026-10-02.md) records the completed negative
 matrix, expiry/restart fencing and final teardown. Do not conflate hardware test
 acceptance with a merged P20, production governance or a live native workflow.
 Initial authorized disposable session: maximum **$5**, IAM profile `cinder_new`,
@@ -178,7 +178,7 @@ or unknown attempts remain persisted and are never automatically retried on boot
 unit test, compiled only into a **separate qualification test executable**. It
 is absent from the shipping application and normal CI never invokes it. Its
 live run has an independently verified attested PASS in the
-[follow-up receipts](nitro-hardware-followup-2026-10-02.md). Successful
+[follow-up receipts](../archive/qualification/nitro-hardware-followup-2026-10-02.md). Successful
 compilation/skipping alone is not a KMS receipt.
 
 Build that test executable from the approved source export with:

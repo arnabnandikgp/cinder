@@ -12,10 +12,17 @@ function sections(markdown) {
   }));
 }
 
-export function validatePlan(plan, tracker) {
+export function validatePlan(plan, tracker, historicalHandoffs = '') {
   const errors = [];
   const phases = sections(plan);
-  const logs = sections(tracker);
+  const currentLogs = sections(tracker);
+  const archivedLogs = sections(historicalHandoffs);
+  // Current phase records override a preserved historical handoff, never its
+  // acceptance criteria. Duplicates within either source remain invalid.
+  for (const [name, source] of [['handoffs', currentLogs], ['archived handoffs', archivedLogs]]) {
+    if (new Set(source.map(l => l.id)).size !== source.length) errors.push(`${name}: duplicate phase`);
+  }
+  const logs = [...new Map([...archivedLogs, ...currentLogs].map(l => [l.id, l])).values()];
   const rows = [...tracker.matchAll(/^\| \[(P\d{2,}[A-Z]?)[^\n]*?\]\(PLAN\.md#(p\d{2,}[a-z]?)\) \| ([^|]+) \| ([^|]*) \|[^|\n]*\|$/gm)];
   if (!tracker.includes('| Phase | Progress | Invariant / deliverable | PR / merge |')) errors.push('tracker: missing invariant/deliverable column');
   const unique = (ids, name) => {
@@ -110,7 +117,10 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
   const documents = new Map(files.map(file => [file, readFileSync(file, 'utf8')]));
   const plan = documents.get(resolve(root, 'docs/implementation/PLAN.md'));
   const tracker = documents.get(resolve(root, 'docs/implementation/TRACKER.md'));
-  const errors = [...validatePlan(plan, tracker), ...validateLinks(documents, root)];
+  const historicalPath = resolve(root, 'docs/archive/implementation/TRACKER-20261023.md');
+  const historical = documents.get(historicalPath);
+  const errors = [...validatePlan(plan, tracker, historical), ...validateLinks(documents, root)];
+  if (!historical || !tracker.includes('../archive/implementation/TRACKER-20261023.md')) errors.push('tracker: missing explicit preserved handoff archive');
   if (errors.length) {
     for (const error of errors) process.stderr.write(`${error}\n`);
     process.exitCode = 1;

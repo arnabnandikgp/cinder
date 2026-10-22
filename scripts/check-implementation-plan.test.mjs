@@ -25,6 +25,16 @@ test('open foundation validates', () => {
   const { plan, tracker } = fixture();
   assert.deepEqual(validatePlan(plan, tracker), []);
 });
+test('current tracker can use explicit preserved phase handoffs without dropping closure checks', () => {
+  const { plan, tracker } = fixture(true);
+  const summary = tracker.slice(0, tracker.indexOf('## P00'));
+  assert.deepEqual(validatePlan(plan, summary, tracker), []);
+  assert.match(validatePlan(plan, summary, tracker.replace('a'.repeat(40), 'pending')).join('\n'), /merge SHA/);
+  assert.match(validatePlan(plan, summary, tracker.replace('## P01', '## P02')).join('\n'), /phase set differs/);
+  const override = tracker.slice(tracker.indexOf('## P01')).replace('a'.repeat(40), 'pending');
+  assert.match(validatePlan(plan, summary + override, tracker).join('\n'), /merge SHA/);
+  assert.match(validatePlan(plan, summary + override + override, tracker).join('\n'), /duplicate phase/);
+});
 test('inserted letter-suffixed phases retain dependency and handoff validation', () => {
   const { plan, tracker } = fixture();
   const insertedPlan = plan.replaceAll('P01', 'P21A').replaceAll('p01', 'p21a');
