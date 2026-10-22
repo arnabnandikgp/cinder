@@ -50,6 +50,17 @@ test('paper reserves the fifth order, signed capacity and worst planned cleanup 
   assert.throws(()=>budget([opening],{...opening,buy:false},1,0),/mixed-side/);
   assert.throws(()=>budget([],cleanup,1,0),/original openings/);
 });
+test('paper cleanup quantity is consumed cumulatively, including unknown and zero-fill attempts',()=>{
+  const opening={category:'signed',kind:'limit',buy:true,tif:'ALO',price:'100000',size:'0.00004',cleanupPrice:'120000'};
+  const cleanup={...opening,buy:false,tif:'IOC',cleanup:true,size:'0.00002',price:'120000'};
+  const first={...cleanup,notional:budget([opening],cleanup,1,0),outcome:'transport-unknown'};
+  assert.equal(budget([opening,first],cleanup,1,0),'24000000000000000');
+  assert.throws(()=>budget([opening,first],{...cleanup,size:'0.00003'},1,0),/quantity/);
+  const second={...cleanup,notional:budget([opening,first],cleanup,1,0),filled:'0'};
+  const cancel={category:'signed',kind:'cancel',original:'cleanup'};
+  assert.throws(()=>budget([opening,first,second,cancel],{...cleanup,size:'0.00000001'},1,0),/quantity/);
+  assert.throws(()=>budget([opening,{...first,size:opening.size}],cleanup,1,0),/quantity/);
+});
 test('paper CLI refuses disabled TLS before initialization and runtime mismatches fail closed',t=>{
   assert.throws(()=>environment('0.0.0'),/pinned Node/);
   assert.throws(()=>environment(process.versions.node,'0'),/TLS verification/);

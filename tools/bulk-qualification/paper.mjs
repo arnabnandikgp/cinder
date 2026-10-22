@@ -52,7 +52,9 @@ export function budget(rows, spec, now, start) {
     if(spec.category!=='signed'||atoms(spec.price)<=0n||atoms(spec.size)<=0n||limits.length>=CAPS.orders||used+n>BigInt(CAPS.notional))throw Error('order/notional cap');
     if(spec.cleanup===true) {
       if(!openings.length||spec.tif!=='IOC'||typeof spec.buy!=='boolean'||openings.some(r=>r.buy===spec.buy))throw Error('cleanup must oppose original openings with IOC');
-      const quantity=openings.reduce((a,r)=>a+atoms(r.size),0n),ceiling=openings.reduce((a,r)=>a>atoms(r.cleanupPrice)?a:atoms(r.cleanupPrice),0n);
+      // An admitted cleanup consumes quantity even if its reply/fill is unknown.
+      const consumed=limits.filter(r=>r.cleanup===true).reduce((a,r)=>a+atoms(r.size),0n);
+      const quantity=openings.reduce((a,r)=>a+atoms(r.size),0n)-consumed,ceiling=openings.reduce((a,r)=>a>atoms(r.cleanupPrice)?a:atoms(r.cleanupPrice),0n);
       if(atoms(spec.size)>quantity||atoms(spec.price)>ceiling)throw Error('cleanup exceeds original quantity/price reservation');
     } else {
       if(cleanupStarted||typeof spec.buy!=='boolean'||openings.some(r=>r.buy!==spec.buy))throw Error('opening after cleanup or mixed-side opening');
