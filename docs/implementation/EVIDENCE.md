@@ -5,6 +5,93 @@ Snapshot: 2026-09-30. This is a curated map, not an archive upload. The original
 broken public links. [BASELINE](BASELINE.md) and [CONFORMANCE](CONFORMANCE.md) carry
 the initial tracked contracts; [PLAN](PLAN.md) assigns the remaining promotion.
 
+## Two-unit measured assembly boundary — 2026-10-20
+
+October 21 paper continuation: user-approved [ADR 0044](../architecture/0044-paper-bootstrap.md)
+introduces an explicit version-9 assumption-backed bootstrap, not a funding rail.
+The actual previously retained fullAccount schema omits optional inventories and
+fill pages report unknown coverage; ordinary decoders keep those unknowns. Only
+the approved fresh-account boundary supplies initial test completeness, with no
+native source cut or terminal proof. Offline signed-handler/native-adapter tests
+use synthetic replies. Current commands/counts and publication belong in TRACKER.
+The first authorized [October 21 run](../operations/unit-paper-hardware-20261021.md)
+released seven roles and retained four HTTP 200 originals, but failed before
+allocation/listener startup: fresh histories had zero slots, not the positive
+cut assumed by the implementation. All owned resources were cleaned up and the
+fresh agent revoked, with unchanged native cash and no orders. The local repair
+retains literal empty bootstrap histories without inventing a financial cut;
+ordinary containment remains unchanged. The separately approved corrected run
+on `e72484f` passed actual Nitro bootstrap, SDK opening and original-customer
+fill attribution. Its Cinder close refused active-account decimals/funding;
+unchanged authenticated-body offline decoding reproduces six `Invalid` account
+responses. Both replicas/all 49 frames authenticate, restart preserved existing
+cash/position, and an independent epoch fence refused both units. Separate
+user-approved local paper teardown finished flat/revoked; it is not a passing
+shipping close or cash bridge. All run-2 resources were independently cleaned
+up, seven keys scheduled for deletion. Full SDK close/cash reconciliation and
+the planned Node/Chrome/admin acceptance remain open; exact artifacts, counts,
+policy limits and next action are in the dated receipt and TRACKER.
+
+October 21 review correction: same-unit recipient preflight and finite enrollment
+expiry/stop handling are fixed, with red/green/resume regressions. This changes
+application code. The dated hardware receipt below is retained for its exact
+image only; corrected-image requalification remains open. The approved local
+[assembled-paper policy](P40-PAPER-GATE.md) is not a qualified
+funding rail, live financial result or permission to import fixture readiness.
+
+P39's version-8 workers and actual confidential UnitClient acceptance pass
+offline. P40's [changed-image Nitro receipt](../operations/unit-hardware-20261020.md)
+then qualifies exact-source default-feature Node/Chrome HTTP/WebSocket access,
+seven separate attested roles, original-receipt restart and independent witness
+fencing. The [capability comparison](../venues/experimental-parity.md) keeps
+direct native paper tests, synthetic financial acceptance and read/admin-only
+hardware evidence separate. The live assembled financial lifecycle remains open;
+neither testnet account-not-found nor an initialized zero book is native credit.
+Exact source/measurements, setup failures, archive and cleanup belong in the
+receipt/TRACKER, not a generic launch-readiness assertion.
+
+P38 promotes the existing unit Handler to explicit version-7 selection in the
+real enclave/preparation binaries, not to a qualified live deployment. Actual
+read-only gateways and fixed egress derive its application component; separate
+private unit configurations, agent roles, one encrypted replicated history and
+independent fresh-head witness remain explicit. Offline signed-request/restart/
+fencing/preparation regressions use synthetic ports and no financial seeding.
+[ADR 0042](../architecture/0042-unit-deployment.md) and the
+[operator contract](../operations/unit-deployment.md) state the exact limits.
+Carrier construction is not encrypted SDK/native acceptance (P39); no changed
+image or new native funding/return evidence is inferred (P40). TRACKER owns
+checked source, commands, counts and publication/review status.
+
+## Native paper capability receipt — 2026-10-20
+
+P37's [BULK paper receipt](../venues/bulk-paper-20261020.md) retains original
+source/manifest/response commitments, actual raw-signing/agents/order/cancel/
+open-close evidence and final flat/revoked cleanup. Usage: one fresh account,
+two agents, 12 signed/14 account/3 public requests, four attempts/$6.40 cumulative
+paper notional. No transfer, RPC, AWS or existing/customer funds. Metadata and
+paper approvals were distinct; user now permits routine no-real-funds steps
+within the paper workstream without repeated questions.
+
+Actual REST fills omit `tradeId`; the pinned official SDK explicitly supports
+required native slot/sequence fallback for absence, not null. The exact source
+was refreshed; the observed red regression, narrow codec fix, malformed/conflict
+regressions and unchanged-raw offline re-decoding are recorded in the receipt.
+Explicit mismatches still reject, scoped keys are unchanged, and coverage is not
+promoted. Fee-tier 404 remains unavailable. This is native paper-interface
+evidence, not activation of a shipping Gateway, bridge, complete financial
+frontier or changed Nitro image. TRACKER owns exact local verification/merge status.
+
+## Two-unit implementation merge — 2026-10-17
+
+P33–P36 (#78/#79/#81/#82) merged into `product/tee-v1` through native stack #80
+at `3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b`. Each exact final PR head passed
+all eight hosted offline jobs with no unresolved review threads. The merged tree
+is identical to reviewed tip `3237023`; TRACKER owns the full heads, local matrix,
+review disposition and evidence limits. P33–P35 close for their approved offline
+scope; P36 keeps its native/changed-image criterion open. Merge does not qualify
+native BULK funding/returns, a consumed live two-unit manifest or a new Nitro
+image, and does not reopen Pacifica's deferred missing-credit investigation.
+
 ## Venue-directed custody revision — 2026-10-15
 
 P36 adds [joined two-unit acceptance](UNIT-ACCEPTANCE.md): actual private SDK

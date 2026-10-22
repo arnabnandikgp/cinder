@@ -47,6 +47,12 @@ pub enum Role {
     Witness,
     /// Solana funds authority for vault release/payout; distinct sixth purpose.
     Funds,
+    /// BULK's separate agent seed, never the Pacifica agent or owner key.
+    BulkTrading,
+    /// Private Pacifica unit configuration (separate bounded KMS plaintext).
+    PacificaConfiguration,
+    /// Private BULK unit configuration (separate bounded KMS plaintext).
+    BulkConfiguration,
 }
 impl Role {
     /// Stable encryption-context label, not a Rust debug representation.
@@ -58,6 +64,9 @@ impl Role {
             Self::Broker => "broker",
             Self::Witness => "witness",
             Self::Funds => "funds",
+            Self::BulkTrading => "bulk-trading",
+            Self::PacificaConfiguration => "pacifica-configuration",
+            Self::BulkConfiguration => "bulk-configuration",
         }
     }
     fn code(self) -> u8 {
@@ -68,6 +77,9 @@ impl Role {
             Self::Broker => 4,
             Self::Witness => 5,
             Self::Funds => 6,
+            Self::BulkTrading => 7,
+            Self::PacificaConfiguration => 8,
+            Self::BulkConfiguration => 9,
         }
     }
 }
@@ -125,7 +137,8 @@ impl HistoryPolicy {
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     /// Closed schema: 1 (five roles), 2 (chain), 3 (packs), 4 (native capture),
-    /// 5 (demo confirmation), 6 (one fixed demo allocation; no withdrawal/trading).
+    /// 5 (demo confirmation), 6 (fixed demo allocation), 7 (inactive two-unit
+    /// assembly), 8 (explicit bounded unit workers; no funds authority).
     pub version: u32,
     /// Exact 64-byte network/deployment namespace.
     pub domain: Vec<u8>,
@@ -169,17 +182,20 @@ pub struct Manifest {
     /// Explicit testnet-only confirmation policy, absent from versions 1–4.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub demo_deposit: Option<cinder_pacifica::funding::demo::Policy>,
+    /// Explicit new-history two-unit mode; never inferred from configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub units: Option<crate::units::deployment::Policy>,
 }
 impl Manifest {
     /// Refuse ambiguous routes, key-role reuse, missing trust or live activation.
     pub fn validate(&self) -> Result<(), Error> {
-        if !matches!(self.version,1..=6) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
+        if !matches!(self.version,1..=9) || self.domain.len()!=64 || self.domain[..32]==[0;32] || self.domain[32..]==[0;32]
             || self.application==[0;32] || self.stream==[0;32] || self.generation==0 || self.epoch==0
-            || self.slots.len()!=if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
+            || self.slots.len()!=if self.version>=7 {7}else if self.version==1 {5}else{6} || self.first.service!="s3" || self.second.service!="s3" || self.witness.service!="dynamodb"
             || (self.first.resource==self.second.resource) || self.gates.maximum_boot_ms==0 || self.gates.maximum_boot_ms>3_600_000
             // P20 packages/test-gates only. Live reads/money movement need P23's
             // qualified chain/read ports and separately authorized manifest.
-            || self.gates.trading || (self.gates.funding != (self.version==6)) || (self.version==1 && self.gates.native_reads)
+            || (self.gates.trading && !matches!(self.version,8|9)) || (self.gates.funding != (self.version==6)) || (self.version==1 && self.gates.native_reads)
         {
             return Err(Error);
         }
@@ -192,7 +208,7 @@ impl Manifest {
             self.witness.port,
         ];
         match (self.version, &self.chain) {
-            (1, None) => {}
+            (1 | 7..=9, None) => {}
             (2..=6, Some(peer)) => {
                 peer.validate()?;
                 if peer.network.as_slice() != &self.domain[..32] {
@@ -204,13 +220,13 @@ impl Manifest {
         }
         match (self.version, &self.history) {
             (1 | 2, None) => {}
-            (3..=6, Some(policy)) => {
+            (3..=9, Some(policy)) => {
                 policy.limits()?;
             }
             _ => return Err(Error),
         }
         match (self.version, &self.native_capture) {
-            (1..=3 | 5 | 6, None) => {}
+            (1..=3 | 5..=9, None) => {}
             (4, Some(policy)) => {
                 policy.validate()?;
                 let history = self.history.as_ref().ok_or(Error)?;
@@ -233,7 +249,7 @@ impl Manifest {
             _ => return Err(Error),
         }
         match (self.version, &self.demo_deposit) {
-            (1..=4, None) => {}
+            (1..=4 | 7..=9, None) => {}
             (5 | 6, Some(policy)) => {
                 policy.validate().map_err(|_| Error)?;
                 // Worst-case decimal-byte JSON encoding plus metadata/frame.
@@ -245,6 +261,32 @@ impl Manifest {
                 {
                     return Err(Error);
                 }
+            }
+            _ => return Err(Error),
+        }
+        match (self.version, &self.units) {
+            (1..=6, None) => {}
+            (7, Some(policy)) => {
+                policy.validate()?;
+                // Assembly only: no network worker or money authority yet.
+                if self.gates.native_reads || policy.worker.is_some() {
+                    return Err(Error);
+                }
+                ports.push(policy.bulk_port);
+            }
+            (8 | 9, Some(policy)) => {
+                policy.validate()?;
+                let worker = policy.worker.as_ref().ok_or(Error)?;
+                if self.gates.trading != worker.trading()
+                    || self.gates.native_reads != worker.reads()
+                    || self.version == 9
+                        && (!self.gates.trading
+                            || worker.bulk_dispatches > 5
+                            || worker.pacifica_dispatches != 0)
+                {
+                    return Err(Error);
+                }
+                ports.push(policy.bulk_port);
             }
             _ => return Err(Error),
         }
@@ -268,16 +310,30 @@ impl Manifest {
                 ports.push(s.endpoint.port);
             }
         }
-        if [
-            Role::Configuration,
-            Role::Storage,
-            Role::Trading,
-            Role::Broker,
-            Role::Witness,
-        ]
-        .iter()
-        .any(|r| !self.slots.iter().any(|s| s.role == *r))
-            || (self.version >= 2 && !self.slots.iter().any(|s| s.role == Role::Funds))
+        let required = if self.version >= 7 {
+            vec![
+                Role::Configuration,
+                Role::Storage,
+                Role::Trading,
+                Role::BulkTrading,
+                Role::Witness,
+                Role::PacificaConfiguration,
+                Role::BulkConfiguration,
+            ]
+        } else {
+            vec![
+                Role::Configuration,
+                Role::Storage,
+                Role::Trading,
+                Role::Broker,
+                Role::Witness,
+            ]
+        };
+        if required
+            .iter()
+            .any(|r| !self.slots.iter().any(|s| s.role == *r))
+            || ((2..=6).contains(&self.version)
+                && !self.slots.iter().any(|s| s.role == Role::Funds))
         {
             return Err(Error);
         }
@@ -313,7 +369,10 @@ impl Manifest {
                     3 => b"CINDER-RUNTIME-MANIFEST-3\0".as_slice(),
                     4 => b"CINDER-RUNTIME-MANIFEST-4\0".as_slice(),
                     5 => b"CINDER-RUNTIME-MANIFEST-5\0".as_slice(),
-                    _ => b"CINDER-RUNTIME-MANIFEST-6\0".as_slice(),
+                    6 => b"CINDER-RUNTIME-MANIFEST-6\0".as_slice(),
+                    7 => b"CINDER-RUNTIME-MANIFEST-7\0".as_slice(),
+                    8 => b"CINDER-RUNTIME-MANIFEST-8\0".as_slice(),
+                    _ => b"CINDER-RUNTIME-MANIFEST-9\0".as_slice(),
                 },
                 &serde_cbor::to_vec(self).map_err(|_| Error)?,
             ]
@@ -340,7 +399,10 @@ impl Manifest {
                 3 => b"CKR3".as_slice(),
                 4 => b"CKR4".as_slice(),
                 5 => b"CKR5".as_slice(),
-                _ => b"CKR6".as_slice(),
+                6 => b"CKR6".as_slice(),
+                7 => b"CKR7".as_slice(),
+                8 => b"CKR8".as_slice(),
+                _ => b"CKR9".as_slice(),
             },
             &[role.code()],
             &self.generation.to_be_bytes(),
@@ -619,7 +681,7 @@ pub(crate) fn validate_keys(keys: &BTreeMap<Role, Zeroizing<Vec<u8>>>) -> Result
         .filter(|(r, _)| {
             matches!(
                 r,
-                Role::Storage | Role::Trading | Role::Broker | Role::Funds
+                Role::Storage | Role::Trading | Role::Broker | Role::Funds | Role::BulkTrading
             )
         })
         .map(|(_, k)| k)
@@ -655,6 +717,7 @@ pub(crate) fn qualification_manifest() -> Manifest {
         root_hash: hash,
     };
     Manifest {
+        units: None,
         version: 1,
         demo_deposit: None,
         domain: [[1; 32], [2; 32]].concat(),

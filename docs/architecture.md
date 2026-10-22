@@ -30,6 +30,9 @@ an assumption that unrelated venue accounts share collateral or identical risk.
 BULK has an opt-in two-unit implementation and joined offline acceptance; live
 funding/release qualification remains disabled. The old Phoenix/PER
 implementation is a separate workstream, not the template for this architecture.
+An explicit [version-9 fresh paper experiment](architecture/0044-paper-bootstrap.md)
+has separate assumption-backed initialization and quarantined history. It is not
+production custody/credit, a recovery proof or live financial qualification.
 
 | Component | In this PR / implementation status | Owning phase |
 | --- | --- | --- |

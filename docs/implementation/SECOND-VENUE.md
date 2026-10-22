@@ -6,6 +6,14 @@ This is a **proposed implementation breakdown**, not approval of numerical risk
 limits, a new financial contract, live activity or production activation.
 [BULK assessment](../venues/bulk.md), [baseline](BASELINE.md), [tracker](TRACKER.md).
 
+October 20 finish line: P37 observed the bounded direct paper lifecycle and
+corrected source-backed fill identity compatibility. The remaining finite
+sequence is P38 measured two-unit assembly → P39 joined native workers/encrypted
+SDK acceptance → P40 changed-image Nitro/parity receipt. See PLAN for acceptance.
+Target Pacifica's current experimental level, not a newly expanded production
+bar; unsupported BULK funding/return and Pacifica's missing-credit work remain
+explicit separate gaps. Do not begin another venue before this boundary review.
+
 October 17 implementation update: the user-approved P33–P36 stack implements
 the shared service/SDK, unit native execution, existing funds/recovery composition
 and [joined offline acceptance](UNIT-ACCEPTANCE.md). Earlier breakdowns below are

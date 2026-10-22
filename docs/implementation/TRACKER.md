@@ -39,20 +39,619 @@
 | [P30 — Signed unit-bound API and SDK contract](PLAN.md#p30) | closed | Signatures, economic identity, replies and owner/agent checks bind one explicit execution unit before later financial admission. | [#74](https://github.com/arnabnandikgp/cinder/pull/74), merged `1e9cd2d` |
 | [P31 — Durable unit-scoped API history](PLAN.md#p31) | closed | Original signed operations and accepted unit-scoped grants survive replay under one head; recording does not imply financial admission. | [#76](https://github.com/arnabnandikgp/cinder/pull/76), merged `d23e33c` |
 | [P32 — Unit-scoped financial admission](PLAN.md#p32) | closed | Original requests, permissions, quota and unit-local risk/holds form one replay-safe decision without native exposure. | [#77](https://github.com/arnabnandikgp/cinder/pull/77), merged `1134f94` |
-| [P33 — Unit service, reads and SDK](PLAN.md#p33) | in progress | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), open; existing findings addressed |
-| [P34 — Unit execution and reconciliation](PLAN.md#p34) | in progress | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), open |
-| [P35 — Unit funding and recovery](PLAN.md#p35) | in progress | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), open |
-| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), open; offline verification passes |
+| [P33 — Unit service, reads and SDK](PLAN.md#p33) | closed | Explicit unit requests and private projections share current authority, one history and bounded replay cost. | [#78](https://github.com/arnabnandikgp/cinder/pull/78), merged `3486b9f` |
+| [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
+| [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
+| [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), three review fixes verified; new-head hosted checks separate |
+| [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), two startup review fixes verified; new-head hosted checks separate |
+| [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), restacked; combined offline acceptance passed |
+| [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) → [#88](https://github.com/arnabnandikgp/cinder/pull/88); corrected Nitro SDK open/fill passes; Cinder close/cash bridge and full admin acceptance remain open |
 | [P24 — Release safety case](PLAN.md#p24) | open | Reviewed evidence, calibrated policy and explicit governance support an honest release decision, not automatic deployment. | — |
 
-Updated 2026-10-17 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
+Updated 2026-10-21 (Asia/Kolkata). Only progress values: `open`, `in progress`, `closed`. A blocked
 phase stays `in progress` with the reason below. `closed` requires completed PLAN
 criteria, recorded tests/review and actual merge; a green/unmerged PR is not closed.
 Dependencies and detailed acceptance criteria live in [PLAN](PLAN.md).
 
 ## Current handoff
 
-### Five review findings corrected and verified — 2026-10-17 (Asia/Kolkata)
+### Corrected Nitro paper run closed; active-account gap reproduced — 2026-10-21
+
+This is the current next-agent entry; older dated entries below are historical.
+Frozen `e72484f9521e86cd8bb38bc013f8e31d0f6d4e71` passed all eight hosted
+jobs and CodeRabbit review before the separately approved fresh run. No code
+changed mid-run. [Exact-image receipt](../operations/unit-paper-hardware-20261021.md)
+records source/ELF/manifest/EIF/PCRs and the partial acceptance matrix.
+
+Actual Nitro released seven roles, initialized the native-backed 20/980 split
+once, and accepted an encrypted UnitClient opening. The native 0.00003 BTC fill
+was attributed as 3,000 lots to the original customer/unit. Same-image restart
+preserved existing cash and position. Cinder's close and subsequent bounded SDK
+cleanup refused `unavailable`, lookup not-found, with no native close dispatch.
+Restoring a lost local SSH tunnel repaired access, not financial readiness.
+
+Trusted offline decoding of unchanged authenticated originals reproduces the
+blocker: three initial account responses decode, six active reports return
+`Invalid` because several native margin/valuation fields exceed eight-decimal
+quote precision; four later responses also report inexact nonzero funding.
+Ordinary account containment and the paper zero-funding guard remain intact.
+No balance import, rounding, reset, invented cut or financial bypass was added.
+Actual fill attribution is a pass; full financial lifecycle is **not**.
+
+Independent witness epoch 1→2 preserved sequence 48/hash and actual SDK access
+to both units refused. Both ciphertext replicas/all 49 frames authenticate;
+98 objects / 1,511,032 bytes retained locally before cleanup. Ten financial
+input records are not ten fills or proof of complete reconciliation.
+The original native agent was revoked before the original window ended.
+A subsequent explicit five-minute teardown-only approval permitted same-agent
+re-registration, one exact opposite paper IOC close, then revocation. All three
+requests returned HTTP 200, final native account is flat/no orders/revoked,
+cumulative order notional 4.095 USD, seven total native signatures. This local
+teardown is not a shipping fallback or passing Cinder close/cash bridge.
+
+Run-2 cleanup independently verified at 12:31:10 UTC: instance terminated,
+no test EBS/buckets/witness/runtime roles/network resources; seven run-2 KMS keys
+pending deletion, existing policies preserved. Two enclave boots, no new host,
+mainnet/customer assets, transfers, RPC or Pacifica activity. Local relay/tunnel
+listeners stopped. Full private originals, archive, exact-byte diagnostics and
+separate extension/cleanup ledgers are ignored in
+`work/experiments/p40-paper2/run-2/`; reusable bounded tools are its sibling
+`tools/`. Do not rerun this consumed invocation or modify its original identities.
+
+**Next:** reproduce the observed precision and funding cases in tracked offline
+tests; distinguish reported valuation precision from exact settlement amounts
+and establish the required funding reconciliation/paper policy before another
+live run. Do not merely increase decimals, erase unresolved events, infer
+settlement from cash deltas, weaken admission or renew the expired manifest.
+Remaining original acceptance: Cinder close/final cash bridge, complete current-
+image Node/Chrome grant/revoke and receipt/restart suite, then any freshly scoped
+hardware requalification. No new AWS host is authorized. No merge, third-venue
+work or repository sanitation until this qualification handoff is resolved.
+
+The run/cleanup documentation successor changes no runtime, dependencies or
+financial policy. `node scripts/check.mjs --group=contracts`: 97 passed, no
+skips/failures, implementation links and workspace boundaries passed;
+`git diff --check` passed. New-head hosted CI/review is separate from the eight
+green jobs that qualified the frozen `e72484f` runtime before launch.
+
+### Fresh paper hardware attempt and zero-slot correction — 2026-10-21
+
+The authorized one-host run is closed. [Exact-image failure receipt](../operations/unit-paper-hardware-20261021.md):
+frozen `79f238a` passed all eight CI jobs, rebuilt ARM64 identically, released all
+seven roles on actual non-debug Nitro, and retained four authenticated HTTP 200
+bootstrap responses. Fresh empty histories report all slots zero/coverage unknown.
+The paper initializer's positive end-slot requirement refused them, before the
+20/980 allocation and listener. No trade occurred; no Node/Chrome/restart success
+is inferred. Both replicas/11 accepted frames authenticate, no economic events.
+Fresh native revoke ACK retained, final cash 1,000/positions and orders zero.
+Cleanup independently verified: terminated instance, no EBS/buckets/witness/
+roles/network resources; seven keys pending deletion. Original tools, private
+responses and encrypted archive remain ignored in `work/experiments/p40-paper/`.
+
+The exact zero-slot fixture first reproduced `Unqualified` locally. The correction
+uses evidence-only retention for the private policy's two literal empty original
+funding/risk bootstrap responses before financial initialization. It removes the
+invented-positive-cut/raw-resolution detour, not ordinary containment or the raw
+resolver's checks. Bad/partial/continuing/nonempty pages remain blocked; ordinary
+empty funding/risk ingestion still creates unresolved inputs. All 74 BULK tests
+and 26 optimized unit-runtime tests pass; joined paper tests now use actual
+zero-slot empty-page shapes. Checked implementation:
+`a7b1263c6fd265b2cb4e5b37b0fefb0045dbc6b8`. Full optimized all-feature workspace:
+834 passed, 10 specifically allowed ignored tests, zero failures. Strict
+workspace/all-target/all-feature Clippy, formatting, whitespace and 97 repository
+contract tests pass. Logs: `/private/tmp/cinder-p40-zero-history-rust.log` and
+`/private/tmp/cinder-p40-zero-history-clippy.log`. The documentation successor
+changes no tested code. Hosted checks/review on its new head remain separate.
+No corrected image is qualified. Next: review this focused fix and prepare a
+fresh bounded measured SDK lifecycle run. Do not reuse the closed
+run ledger/identities/policy lifetime, merge the stack or sanitize the repository.
+
+### Fresh paper run preflight — 2026-10-21
+
+User completed the fresh IAM/login prerequisites in response to the bounded-run
+request; the [proposal](P40-PAPER-RUN-PROPOSAL.md) retains $5/four-hour/eight-boot
+and native request/notional limits. Actual identity is IAM `cinder_new`, and both
+new version-1 policy documents match the local templates exactly. Operator only
+is attached; boundary is separate. Existing broad EC2/S3 user policies are not
+newly granted or evidence of least-privilege operator access; all tooling must
+still restrict itself to the fresh recorded names. Runtime roles remain bounded.
+Read-only preflight: 18 calls, unused named resources, Amazon ARM64 AMI,
+`c6g.large` Nitro support, quota 8 and current compute $0.068/hour. No host/cloud
+resource, native action/query, faucet or Solana RPC has started.
+
+PR #88's exact `e1b7c05` head passed all eight hosted jobs. Its Codex P2 finding
+about accepted/unexposed openings was checked against the real journal exposure
+gate. New regression accepts two openings, exposes/fills only one, admits the
+two-lot cleanup budget, then verifies the final-slot worker signs/sends nothing
+and preserves one native lot. Existing private reduce-only validation prevents
+the alleged reversal; no production logic changed. All 26 optimized unit tests
+and strict all-target/all-feature service Clippy pass. Log:
+`/private/tmp/cinder-p40-paper-review.log`. The regression/documentation successor
+needs its own hosted checks; source/image freezing and run preparation are next.
+Fresh ignored preflight receipt: `work/experiments/p40-paper/run-1/preflight-public.json`.
+
+### Approved paper bootstrap — 2026-10-21
+
+User approved local implementation of [the closed-account paper boundary](P40-PAPER-GATE.md).
+Branch `tee/p40-paper-bootstrap`, based on #87 `6a661a7`, implements a separately
+measured version-9 profile, not a fixture deployment or production funding rail.
+Ready [#88](https://github.com/arnabnandikgp/cinder/pull/88) is published above #87
+in native stack #85. Checked implementation commit:
+`2f565223f4310a211ef1671f65414eb9fb38ca9c`; this publication receipt/run-source
+annotation is a documentation-only successor. New-head CI/review is pending,
+not inherited from its predecessor. Open predecessors remain #83 `dd37bc7`,
+#84 `67bcf36`, #86 `bb7bb1d` and #87 `6a661a7`; no layer has been merged.
+[ADR 0044](../architecture/0044-paper-bootstrap.md) owns the precise assumption,
+scope, once-only source-bound allocation, fixed deadline and history quarantine.
+Versions 7/8 retain omitted-field encodings and cannot reopen paper backing.
+
+Four original authenticated native-family reads precede initialization. Exact
+observed cash is split customer/house once under one journal CAS; unknown commits
+reopen without query/credit replay. Native unknown page coverage and missing
+optional inventories stay unknown in the codecs. Only the explicitly approved
+fresh exclusive setup assumption qualifies this initial paper cut; `source_cut`
+remains None and no ordinary terminal/funding/recovery proof is invented.
+The exact sole agent, quote/profile/unit, raw hashes, freshness and test backing
+are checked. Later unexpected funding becomes unresolved and restricts risk.
+
+Signed Handler → joined admission → original attempt → worker/native signature →
+fill/duplicate → opposite-side close passes offline with synthetic native ports.
+Pacifica remains empty/read-only. Cleanup reserves cumulative opening quantity
+and upper-price notional, native credits and the final dispatch slot; cancellation
+cannot consume/refund that reservation. Flat does not release unknown holds.
+An initially oversized synthetic close was correctly refused by existing margin
+and retained holds; the test was made smaller instead of weakening the engine.
+Trusted preparation boxes the larger configuration enum transparently after
+strict Clippy identified its increased size; serialized bytes stay unchanged.
+
+Verification: full all-feature workspace **830 passed / 10 existing intentional
+ignored**; final optimized **8 paper + 25 unit tests passed**, including the added
+paper-expiry/purpose-prefix delta; strict default/all-feature workspace lint/build
+and **97 contracts** pass. Actual Node **24.21.0** and Chrome **156.0.8078.47**
+each pass two common confidential-unit groups; frozen fixture ELF SHA-256
+`7dc7ff8c12c568d48d83b9df1b40600a32b129dcab5d3f42d632fa61ad61db8e`.
+That carrier regression is distinct from the paper bootstrap's synthetic native
+responses. Logs: `/private/tmp/cinder-p40-paper-{workspace,release,lint,contracts,sdk}.log`.
+Predecessor #87's exact `6a661a7` head has all eight hosted offline jobs green;
+new-head hosted results/reviews must not inherit those results.
+
+No AWS request/resource, native account/action/query, faucet, wallet, Solana RPC,
+fund movement or live financial run occurred in this continuation. No merge.
+The [fresh combined run proposal](P40-PAPER-RUN-PROPOSAL.md) has explicit $5 /
+four-hour / eight-boot and paper request/notional/deadline caps. It still needs
+separate live approval, frozen-source preparation, exact permissions and image
+qualification. Fresh policy templates and administrator steps are prepared only
+in ignored `work/experiments/p40-paper/permissions/`; no AWS policy was created
+or attached. Next: review #88 and obtain that separate fresh-run approval;
+do not reopen Pacifica credit work or integrate a third venue implicitly.
+
+### Stack review correction and assembled-paper decision — 2026-10-21, historical
+
+User requested completion of the remaining work. All five unresolved predecessor
+findings are relevant and fixed in their owning PRs: #83 `dd37bc7` enforces Node/
+TLS and explicit cumulative cleanup capacity; #84 `67bcf36` rejects same-unit
+recipient aliases before preparation and checks trusted expiry/stop throughout
+enrollment. Both startup failures were reproduced first. Accepted prefixes survive
+authorized restart without epoch/money reset. One expected P39 clock-overlap
+conflict was resolved by keeping the early finite lease and the native worker.
+The four-branch stack stays unmerged; publication/review resolution and fresh
+hosted results must be distinguished from old green heads.
+
+Combined local code passes all-feature workspace **819 passed / 10 existing
+intentional ignored**, strict default/all-feature workspace lint/build, 97
+contracts and actual Node 24.21.0 / Chrome 155 two-unit confidential scenarios
+(two joined groups each). All 21 combined unit tests also pass optimized; no new AWS, native
+account/action, faucet, Solana RPC, wallet or financial run has occurred.
+
+The remaining assembled paper lifecycle needs explicit initialization evidence:
+the shipping managed books are empty, have no funding/credit readiness or joined
+risk/capital cut, and intentionally cannot admit orders. Do not repurpose the
+feature-gated fixture's seeded money/readiness as native evidence. The proposed
+[paper-only gate](P40-PAPER-GATE.md) allocates actual fresh faucet cash once
+between a disposable test customer and house, under explicit bounded closed-
+account test assumptions. Production funding/completeness/recovery contracts
+stay unchanged. User review was requested at this cut and subsequently approved;
+the implementation/remaining live gate is recorded above.
+
+The startup correction changes measured application code; October 20's exact
+`91a01ff` hardware receipt remains historical, not qualification of the corrected
+image. Finish the paper slice offline first if approved, then propose **one**
+fresh bounded image/run covering both changes; old AWS/paper run ledgers and
+budgets must not be reused. Next: user paper-policy decision and fresh hosted
+checks/reviews; no automatic merge, third venue or deferred-credit investigation.
+
+### P40 read/admin hardware completion — 2026-10-20, historical exact source
+
+Current branch `tee/p40-unit-qualification`, ready #87 above #86 in stack #85;
+no PR merged. Exact application source `91a01ffaa7530297bdde7ac445a44cb5f6163264`
+passes all eight hosted offline jobs. Strict local default/all-feature checks,
+19 debug/release unit tests, 95 contracts and Node/Chrome joined acceptance pass.
+Code/evidence successor `64bdb2f0b55850f366ca3adb47a3bc8dfcda281b` is published
+through native stack #85. Its helper-only correction and documentation pass the
+focused local gates; successor hosted CI is separate, not inherited from `91a01ff`.
+
+The approved one-host read/admin run passes real AWS-root Node and Chrome
+HTTP/WebSocket UnitClient access to both units, scoped READ grant/cross-unit
+negatives, shared revocation, same-image/capsule/history restart and original
+receipt lookup at epoch 3. Exact-head independent witness CAS advances 1 → 2
+without losing sequence/hash; both units refuse and the enclave exits. The
+[hardware receipt](../operations/unit-hardware-20261020.md) records source,
+ELF/manifest/EIF/PCRs, four boots and setup failures. No financial action or RPC.
+
+Parent execute-mode and copied bucket-name errors were corrected in ignored
+operator tooling, with no IAM-boundary relaxation or application-code change.
+The two mistaken buckets were verified empty and removed; all keys, identities,
+generation, stream and the empty witness were preserved. Correct public routes
+and a finite witness-credential renewal required a new inspected/repinned EIF.
+Boots 3/4 pass. A restart-readiness race was retried only as a fresh read/lookup,
+never by resending a mutation. The collector now validates exact retained-pack
+paths, not a legacy frame-only pattern.
+
+Ignored tools/public artifacts/original intents/results/resource ledger remain
+in `work/experiments/p40-units/`. Both replicas' 28 objects (234,426 bytes) and 14
+accepted frames authenticate offline; fenced snapshot is epoch 2, sequence 13.
+Two account queries per venue were sent. BULK retained two HTTP 404 error replies;
+Pacifica retained two read reservations but no usable account observation or
+exact failed-reply status. Neither is native zero/credit; no normalized financial
+input event was posted. Independent cleanup verification confirms host/volumes,
+all buckets/witness/roles/SSH/security group absent and all seven KMS keys pending
+seven-day deletion. User setup policies remain; local relay/tunnel stopped.
+Host launch 17:37:26 UTC, termination confirmed by 18:15:05 UTC, four boots within
+all approved caps. Retained encrypted test evidence is not deleted.
+
+P40 review: the converter could inherit a longer legacy boot lease. The actual
+run is explicitly verified at 2,400,000ms; a one-hour offline input reproduces the
+helper defect. The converter now pins 40 minutes, with permanent short/exact/
+long-lease and both read-flag regression coverage. Its targeted test, strict
+Clippy, optimized build and full trusted offline preparation pass. This local
+helper-only change does not modify the measured application/image. The stale
+owning-phase policy verification claim is also corrected. Predecessor #83/#84
+review findings remain separate follow-up; they are not declared resolved by
+P40's hardware result.
+
+The [capability matrix](../venues/experimental-parity.md) distinguishes common
+implemented surfaces from venue-specific evidence. P40's assembled paper
+financial lifecycle remains open: fresh shipping books have no qualified credit,
+native margin/capital/risk cut or complete financial frontier, and this AWS
+approval excluded orders/funds. Do not seed fixture money or relabel P37 direct
+paper calls as assembled SDK trades. Next: review that explicit financial
+dependency and predecessor stack reviews before merge or a
+third venue. Do not reopen Pacifica missing-credit investigation implicitly.
+
+### P40 preparation — superseded by completion above
+
+Current branch `tee/p40-unit-qualification`, above ready #86 in stack #85.
+Ready [#87](https://github.com/arnabnandikgp/cinder/pull/87) is published at
+`37394a4d4f4e0ac0a40563af775ce625a9f75443`, tree
+`0731654e0757201692147575bcb4249431858223`. No PR was merged.
+The user refreshed AWS login and installed the exact fresh P40 setup policies;
+both policy documents have been read back and compared successfully. Non-root
+identity is `cinder_new`. Current Amazon ARM64 AMI, c6g.large Nitro support,
+eight-vCPU quota, fixed network, fresh names and $0.068/hour price pass. Four-hour
+compute is $0.272; conservative all-in estimate remains below $2/$5 cap.
+
+Exact-source default-feature ARM64 package built offline in the source-only,
+network-disabled Apple container. A fresh application rebuild is ELF-identical;
+ordinary-host NSM refusal passes. Tool image index `33107aa751a9d69fb65acb26474fe3954dd30f8580b4150b4a63daf58bac434a`;
+enclave ELF `dc362506603b9c9abda056268c3e2b425910db0f70b64fdab9304a6a4935a8ba`.
+Stopped-container export produced inconsistent ELF hashes and was rejected. The
+original in-container files and direct live-container copy both match all 13
+checksums; only that verified bundle is packaged. A post-build recovery hold in
+the temporary harness performed no rebuild or artifact modification. Original
+export evidence is preserved separately; the task container is removed. No
+shipping source check was relaxed and no bad export was uploaded.
+
+The fresh run's two runtime roles, seven scoped test keys, two ciphertext stores
+and witness are created under the owned P40 ledger. The one-host launch is next;
+native/RPC activity and financial exposure are still zero. All actual source,
+artifacts, scripts and resource/request receipts remain in ignored
+`work/experiments/p40-units/`; the public code does not depend on that directory.
+
+Trusted local seven-role conversion, final preparation and bootstrap pass with
+disposable secrets; all wrapped roles fit KMS. Missing role/zero secret nonce/key
+are refused. Strict helper lint passes. The converter creates only empty managed
+books with zero dispatch caps and one read per unit/boot; it drops legacy money
+authorities. Its private outputs never belong on the parent. Schedule, source /
+image gates and evidence limitations are in operations/unit-qualification.md.
+P39 additionally passes all 18 optimized unit Runtime/deployment tests. The
+approved read-only scope cannot qualify the live assembled financial criterion.
+
+Pre-boot correction: a focused regression demonstrates eight extra storage
+checks in eight exhausted read-only ticks (17 vs 9). The worker now checks its
+trusted clock/lease and returns idle without touching cloud history when both
+read allocations are exhausted and both dispatch allocations are zero. Private
+SDK freshness checks are unchanged. All 19 unit Runtime/deployment tests pass;
+strict default/all-feature lint/build passes. The initial EIF was not booted and
+no PCR key release was granted; it is retained as unused candidate 1 on the one
+owned host. Rebuild/requalify the corrected exact source before first boot.
+
+### P39/P40 continuation — 2026-10-20
+
+Published [#86](https://github.com/arnabnandikgp/cinder/pull/86) on
+`tee/p39-unit-workers`, above #84 in stack #85, at source
+`81a346e2de3d87d7930d31c8eb9616b4153d988b`. This receipt successor changes no
+executable/test source. No PR was merged; exact-head hosted CI/review is pending.
+P39 joins bounded
+workers to the measured assembly and qualifies the encrypted SDK locally. P40
+will follow in its own stacked PR; no merge or frontend work is authorized here.
+New code/tests are not qualified by prior green heads. Final local checks pass:
+815 workspace tests / 10 existing intentional ignores; strict default/all-feature
+all-target lint/build; 95 contracts; 15 relay and 42 SDK/process tests; actual
+Node 24.21.0 and Chrome 155 each pass the two new encrypted unit-worker groups.
+The final carrier test commits a signed grant during 700ms native I/O (not merely
+an immutable read), checks native partial/duplicate attribution, and preserves
+history-wide dispatch ceilings across process restart. Synthetic ports/capital,
+local attestation root and same-host witness are explicit, not hardware evidence.
+Logs: `/private/tmp/cinder-p39-{debug,final-lint,contracts,client,final-browser}.log`.
+
+Version 8 adds explicit bounded worker allocation, per-unit native qualification,
+scope-bound joined-risk admission and a mandatory three-location source inventory.
+It cannot import fixture capital/readiness or load money-moving keys. Version 7
+retains its omitted-field encoding/inactive behavior. Native work releases the
+writer for I/O, preserves original-unit completions and never resends unknown
+escaped requests. New-read failure/cooldown remains contained; bounded first
+pages are not complete financial frontiers. One refused intent rotates rather
+than indefinitely blocking later candidates.
+
+The user approved one fresh Nitro host in us-east-1 with `cinder_new`, up to
+$5 / four hours / eight enclave boots, with cleanup. Scope: attestation/key
+release, encrypted SDK access to both units, durable restart/fencing and bounded
+testnet account reads. No orders, funds movement, Solana RPC or existing/customer
+wallets. The renewed non-root identity was verified as `cinder_new`; fresh P40
+cloud policies are prepared in ignored `work/experiments/p40-units/permissions/`
+for administrator installation. No AWS resources have been created. Prepare
+exact source/image and verify scoped policies before launch. This
+approval does not qualify capital/risk facts or the assembled paper-trading
+criterion; unsupported funds rails and Pacifica's deferred credit remain gaps.
+
+### P38 deployment assembly — 2026-10-20
+
+User approved the next stacked PR while reviewing #83 and requests a finite
+few-PR route to Pacifica's current experimental level before another venue.
+Sequence: P38 deployment assembly → P39 joined workers/SDK → P40 changed-image
+qualification/parity receipt. No frontend, financial redesign or production
+claim. Unsupported BULK funds rails and Pacifica's missing credit stay separate.
+Current branch `tee/p38-unit-deployment`, stacked above #83. No AWS/venue/RPC
+requests in this slice. Ready [#84](https://github.com/arnabnandikgp/cinder/pull/84)
+is stacked above #83 in native stack #85; neither PR was merged.
+
+Publication source: `209b43e4ca9d57c91f112f542c2d96a46b3d9b67`, tree
+`f07ff5e63d6d37feb98d777339a67add4390e74f`. This receipt-only successor
+changes no Rust/tests. Hosted CI/review for #84 is newly pending; #83's green
+checks do not qualify it. Both PR heads/parents are verified at publication.
+
+Implemented: version-7 exact seven-role inventory, per-unit private config
+capsules/agent keys, registry/native/egress/application binding, same real enclave
+entrypoint selection for TLS/Noise, shared protected cloud storage assembly and
+managed empty-owner startup/restart. No public custody bootstrap or native/funds
+worker. New BULK Unknown/testnet gateway archives only raw observations and
+refuses signature exposure/financial normalization. Actual unit view/revoke
+signatures and shared epoch survive encrypted restart. Stop/clock/independent
+epoch fences are sticky. Trusted preparation validates all wrapped plaintexts
+before filesystem output. Existing versions 1–6 retain omitted-field encoding.
+
+Local verification on pinned Rust 1.97.1 / Node 24.21.0, no containers/live I/O:
+`cargo test --workspace --all-features --locked --offline` passes **811** tests,
+with **10** existing intentional ignores; eight new tests are seven deployment
+groups and one BULK read-only group. `node scripts/check.mjs --group=contracts`
+passes **95** contracts and plan/workspace checks. `--group=lint` passes formatting,
+strict default/all-feature all-target Clippy and all-target build. Relay **15**
+and SDK/process **42** tests pass. Both changed packages pass **255** tests
+(**7** existing hardware-only ignores) in debug and optimized profiles. Final
+privacy review then added a secret configuration-body nonce against guessed
+owner inventories: all **255** changed-package debug tests and all **7** optimized
+deployment groups pass with that guard. The final BULK signing regression also
+installs the matching agent epoch before testing refusal; its optimized rerun
+passes. Final lint/build/contract checks cover this publication source. Logs under
+`/private/tmp/cinder-p38-{debug,contracts,lint,client}.log` are local receipts,
+not a clean-checkout dependency. Additional final receipts use the same prefix
+with `final-` names. The 811-test whole-workspace receipt predates only the final
+nonce guard/test strengthening; final affected-package/optimized checks cover
+those changes rather than rerunning unchanged dependency suites. Hosted status
+for this new head is not inherited. No new hardware/image claim is made.
+
+Initial local checks caught two Result-handling compile errors, a wrong fixture
+clock argument and the preparation enum's large variant; all corrected before
+the final passes. No financial gate or security check was relaxed. Predecessor
+#83 remains unchanged/open at `ed0e98e64997e677665712f547ec14d822a71d9c`; all eight
+hosted jobs are green at that head. No predecessor review/merge is claimed here.
+
+### P37 paper lifecycle complete; compatibility corrected — 2026-10-20
+
+The user approved proposal A and explicitly permits routine no-real-funds
+continuation without repeated permission questions. That covers this bounded
+disposable paper workstream, not AWS spend, mainnet/customer assets or an
+unrelated expansion. Branch `tee/p37-bulk-native-qualification` inherits merge
+receipt `2b4c51d`, metadata tools `b8cac32` and receipt `3e99f97`; merged runtime
+remains `3486b9f`. No frontend or AWS work occurred.
+
+Reusable `tools/bulk-qualification/paper.mjs` and the offline `paper-codec` example
+exercise actual Cinder order/cancel/fill codecs with fresh local disposable keys,
+standard Ed25519 signatures and fixed paper origin/domain. Identity/action/nonce
+and consumed budgets persist before signing, signed wires before transmission,
+raw replies before interpretation. Keys/wires/raw records stay private/ignored;
+CI injects offline responses. No new dependency or master trading fallback.
+
+The [native receipt](../venues/bulk-paper-20261020.md) records the completed
+12:56:26.817–13:04:07.219 UTC run: one faucet account/two agents; 12 signed,
+14 account and 3 public requests; four attempts/$6.40 cumulative order notional,
+all below approved caps. Actual ALO opening/closing fills, original-ID matching,
+known-order cancellation, IOC zero-fill cancellation and both revocation/rejected
+signer probes passed. Final state: zero positions/orders/agents, 999.6 paper USD,
+reported -0.4 PnL, zero fees/funding. No unknown transport, resend or transfer.
+
+Private artifacts: `work/venues/bulk/paper-20261020.QnlKbJ`; source/binary
+commitment `883a3a4cda2a967bd7b228dce1a0ab2fd99d5ac8e034c6984204176ce341d5c6`.
+All 29 original response hashes/lengths were independently rechecked; the receipt
+names manifest/result/fill/history/cleanup commitments. The first decode failed
+because actual rows omit `tradeId`. Exact official `HistoryFill::deserialize`
+source at `5012611` (also present in the retained pin) explicitly defines absence
+as the required native slot/sequence pair, not null. Source SHA-256:
+`6387851fde317239633a86cdda827219f8cfd28d4d0816ac1a0c760197bd9b55`.
+
+An observed-shape red regression preceded the narrow source-backed fix. Explicit
+IDs must still match the required pair; null/invalid/missing native fields fail.
+Both spellings retain identical scope-bound dedup keys, conflict checks, ownership
+and exact grids. Invalid records remain archived without posting. Rebuilt codec
+decoded the unchanged actual rows **offline**, matched original orders/net zero
+quantity/-0.4 USD; no additional venue call or fabricated native field. The raw
+run's original schema-gap result is not overwritten; a distinct post-fix receipt
+retains the new source/binary and original-response commitment.
+
+Verification: targeted BULK **63** tests (1/27/12/23), six new Node safeguards,
+strict BULK all-target Clippy and example build pass. One broader locked/offline
+all-feature workspace run passes **803 tests**, with 10 existing intentional
+ignores and zero failures; no second/default/no-default full matrix was needed.
+Final 95 contracts, plan/link/workspace guards, Rust formatting and diff checks
+also pass. Contract log: `/private/tmp/cinder-p37-paper-contracts.log`.
+Logs: `/private/tmp/cinder-p37-paper-bulk-tests.log`,
+`/private/tmp/cinder-p37-paper-compat-red.log`,
+`/private/tmp/cinder-p37-paper-clippy.log`,
+`/private/tmp/cinder-p37-paper-build.log`,
+`/private/tmp/cinder-p37-paper-workspace.log`.
+The initial strict lint caught an unnecessary test clone, corrected without a
+lint exemption. No SBF, hardware, hosted CI or release qualification is inferred.
+
+Unexpected: sampled book depth was empty but later fills occurred; the original
+resting order filled before cancellation, so reserved closing capacity was used.
+IOC explicitly returned no fill; a separate ALO closed the confirmed quantity.
+Fee-tier query returned empty HTTP 404, not zero fees or a successful empty quote.
+No partial/IOC fill or nonzero fee calibration, financial completeness, native
+funding/ADL, shipping Gateway activation or supported BULK bridge is claimed.
+P36 changed-image qualification, Pacifica missing credit and P24 remain open.
+
+Publication correction: the established phase-per-PR workflow still applies;
+completed implementation slices should not stop at a local commit unless the
+user requests that. Ready [PR #83](https://github.com/arnabnandikgp/cinder/pull/83)
+is published through the native single-layer stack, base `product/tee-v1`
+`3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b`. Its published implementation head is
+`bd7f8551c441c8a4d5037afc9d97fe3d9611fa22`; the source/tree checked above is
+unchanged. All eight hosted jobs and CodeRabbit were newly pending/in progress
+when inspected, not inherited local passes. This publication-receipt-only
+successor needs its own current-head hosted status; no new native call ran.
+
+Next: CI/review and relevant fixes for #83, then prepare the non-fixture multi-unit
+configuration for separately qualified changed-image Nitro. P37 stays
+`in progress` until acceptance/review and authorized merge. No merge was performed.
+Unrelated untracked `qualification-v2.rs`, `docs/user-journey.md` and `stays/`
+remain untouched. Source/test and earlier merge/metadata receipts are included
+in #83 rather than left on unpublished branches.
+
+## Historical handoffs
+
+The following session receipts preserve evidence for their exact sources. Their
+next actions and pending statuses are superseded by the current handoff above.
+
+### Historical: P37 metadata observed; signed paper scope pending — 2026-10-20
+
+User accepts Pacifica's current bounded experimental integration level as the
+BULK target, not launch readiness. Work branch `tee/p37-bulk-native-qualification`
+inherits local merge-receipt commit `2b4c51d`; merged runtime remains `3486b9f`.
+New preflight tools make only two fixed paper-origin unsigned metadata GETs under
+source-bound, time-limited explicit approval. Original response bytes and request
+identity persist before interpretation; failures stop without fallback or retry.
+No key, signature, faucet, account, financial transaction, RPC or AWS port exists.
+Six new offline test cases pass, including scope/approval/deadline, raw wide
+number preservation, retention failure/replay, CLI source-change refusal and
+upstream/body/schema refusal. All 89 contract tests and all 60 existing BULK
+library/codec/execution/financial tests pass. Logs:
+`/private/tmp/cinder-p37-contracts.log`, `/private/tmp/cinder-p37-bulk-offline.log`.
+No Rust/Cargo/runtime source changed, so the earlier full runtime matrix is not
+presented as a new run or needlessly repeated. `git diff --check` is clean.
+
+Primary-source refresh: client HEAD `5012611` (October 18) adds admin/risk DTO/CLI
+changes; inspected raw-signing diff leaves existing limit/cancel branches alone.
+Keychain HEAD remains `ec7212c`. Solana builder docs/files are unchanged in that
+client comparison. The [current scope](../venues/bulk-native-qualification.md)
+records exact pins, public references and three test-bridge/credit/return questions.
+No dependency or native upstream code was installed/executed. Documentation is
+not a native observation; no capability or funding policy is promoted.
+
+The user's latest approval was specifically for two unsigned GETs, not the
+earlier unanswered broader async paper-run question. Source `b8cac32` ran once
+at 12:26:51.781–12:26:52.477 UTC. Both exchangeInfo and feeState returned HTTP
+200; result `metadata-observed`. Exact original bytes/hashes are retained in
+`work/venues/bulk/run-20261020.TG1ntr/preflight`; manifest commitment
+`ca4d5e7cfcc33b0253e92c4e5579065257b8fce6dfb9d8da3c3a7c400434d0f3`,
+source commitment `1bca26fa43df1b2eeec83294498817c2ab3a3407f196444d8f6c7ac739a5b0b1`.
+Both raw hashes/lengths independently rechecked. No further native request ran.
+The [dated receipt](../venues/bulk-native-qualification.md#observed-metadata-receipt--2026-10-20)
+records 17 markets and BTC-USD's observed $1 minimum, $0.01 tick and 0.00000001
+size increment. Public fee state is not account execution-fee or zero-fee proof.
+No key/account/faucet, signature, order, transfer, RPC, frontend or AWS activity.
+
+Receipt-only follow-up: `node scripts/check.mjs --group=contracts` passes all
+89 tests plus plan/link and workspace checks; log
+`/private/tmp/cinder-p37-metadata-result-contracts.log`. The first documentation
+check caught four links needing explicit anchors; anchors were added and the
+full contract group rerun successfully, without changing the validator. Raw
+evidence is ignored/private; only four documentation files change. No runtime
+matrix, hosted CI or signed/native lifecycle success is inferred from this pass.
+
+Unexpected planning correction: resting, IOC opening and IOC closing need three
+counted order attempts. [Revised proposal A](UNIT-QUALIFICATION-PROPOSAL.md)
+reserves up to five attempts/$20 cumulative paper notional **including cleanup**,
+14 signed requests/24 account reads/12 public reads/30 minutes, one disposable
+account and at most two agents. It is not approved by the two-GET permission.
+
+Next: obtain separate approval of that corrected paper lifecycle before fresh
+keys, account setup, faucet or signing. Do not reuse the expired metadata
+approval. P36 live qualification, unsupported BULK rails, Pacifica missing credit
+and P24 remain explicitly open. Current branch is local; no PR/hosted CI/merge
+is claimed for P37 or its merge-receipt ancestor.
+
+### Historical: Four-PR stack merged; native qualification remains separate — 2026-10-17 (Asia/Kolkata)
+
+User explicitly authorized merge after CI passed. GitHub native stack #80 merged
+#78/#79/#81/#82 atomically into `product/tee-v1` at
+`3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b` (05:28:27–29 UTC).
+GitHub reports that same merge commit for all four PRs; all are MERGED.
+Fetched trunk and reviewed tip `3237023` have the identical tree
+`e3b0d7d8e71c3ad670fcfabc14110eccdd030f2e`. No source changes or rebases were
+needed for merge, so the exact reviewed source checks below remain applicable.
+
+| PR / phase | Exact green head | Original PR base |
+| --- | --- | --- |
+| #78 / P33 | `a1f40d23727efae6fba9b7e250d04933b7c01931` | `product/tee-v1` |
+| #79 / P34 | `ed836705c7e57661fc34561198f3c39a3eb3fb30` | `tee/p33-unit-service` |
+| #81 / P35 | `aa49749dc6d4ce83a99c92bf9ff9476889e740f6` | `tee/p34-unit-execution` |
+| #82 / P36 | `3237023ee9fdd903efe0710fb482cce16ee07d5e` | `tee/p35-unit-custody` |
+
+Each exact head has all eight hosted offline jobs successful. Superseded
+cancelled runs are not current failures or additional passes. No unresolved
+review threads remain; the five latest findings have fixes, regressions and
+evidence-backed replies. Local full matrix: contracts 83, strict lint/build,
+Rust 800/800/737 (existing intentional ignores 10/10/9), relay 15, SDK 42,
+TypeScript and Node/Chrome HTTP/WebSocket 26 groups each; exact provenance below.
+Trunk-push CI, if scheduled, is distinct from these verified PR-head results.
+
+P33–P35 close for their approved offline scope. P36's implementation and hosted
+offline acceptance are merged, but its native/changed-image criterion remains
+open. Multi-unit API/SDK, native execution/read/attribution, segregated custody
+composition and shared recovery cutover now have joined offline evidence, not a
+live funded two-venue deployment. Shipping v1 is unchanged; new-history unit
+revision 6 is opt-in. BULK funding/returns stay disabled, and Pacifica's missing
+credit investigation stays deferred. P23 live financial acceptance and P24
+production/release gates remain open. No frontend, RPC, venue or AWS action ran.
+
+Next: discuss/approve qualification proposal A (current BULK metadata followed
+by a bounded disposable paper-account execution/agent check). Then assemble the
+non-fixture multi-unit release configuration and separately qualify its Nitro
+image. Funding/returns/venue-backed recovery require supported rails and separate
+evidence; do not promote fixtures or old image results. No new live authority is
+implied by merge. Trunk currently has no classic branch protection or applicable
+ruleset; checks were verified manually, and governance was not changed.
+
+Merge bookkeeping is committed only on local `tee/p36-merge-receipt` for the next
+authorized PR, not directly pushed to trunk or retrofitted into merged PRs.
+Local trunk is fast-forwarded; the same three unrelated untracked paths remain.
+Documentation verification: all 83 contract tests, implementation-plan/inventory
+and workspace-boundary checks pass; `git diff --check` is clean. Log:
+`/private/tmp/cinder-p36-merge-receipt-contracts.log`. No runtime change/retest or
+claim of a new hardware result is introduced by this receipt.
+
+### Historical: Five review findings corrected and verified — 2026-10-17 (Asia/Kolkata)
 
 Approved fixes are on their owning layers: P34 `ed83670` adds shared accepted
 time and preserves one-use native completions through writer contention; P35
@@ -91,11 +690,6 @@ New-head hosted results remain separate from the old green heads. Next: inspect
 current-head CI/review; no automatic merge. All phases remain in progress until
 actual acceptance/review/merge. Native financial/RPC/AWS qualification and
 frontend integration are outside this task; Pacifica missing credit is deferred.
-
-## Historical handoffs
-
-The following session receipts preserve evidence for their exact sources. Their
-next actions and pending statuses are superseded by the current handoff above.
 
 ### Historical: P35 completion retention follow-up — 2026-10-17 (Asia/Kolkata)
 
@@ -6764,9 +7358,11 @@ jobs and all existing actionable threads are addressed. Final stack matrix
 also passes; current handoff records exact provenance and evidence limits.
 Unexpected: recorded-only receipts need an explicit v2-only lifecycle extension;
 legacy decoders must refuse it. No v1-to-v2 default-unit fallback.
-Next: verify the current review corrections and complete the open four-PR stack.
+Closure: reviewed green head `a1f40d2` merged via native stack #80; all four PLAN
+criteria satisfied. No live activation or changed-image qualification follows.
+Next: P36's separately approved native qualification, not more P33 implementation.
 PR: https://github.com/arnabnandikgp/cinder/pull/78.
-Merge: none.
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b.
 
 ## P34 — Unit execution and reconciliation
 
@@ -6776,13 +7372,15 @@ Verification: original full matrix passes. Prior review source `cc59226` has
 11/11 BULK and 21/21 Pacifica execution passes and eight hosted green jobs.
 New shared-time/completion regressions pass: reads 17/17, unit runtime 8/8,
 strict all-feature/all-target Clippy. Current handoff owns exact-source receipts;
-new-head hosted verification remains required; descendants are restacked.
+exact final head `ed83670` has all eight hosted jobs green and no unresolved
+threads. Descendants merged in the same atomic stack operation.
 Unexpected: chronology is shared even when a component's state has not changed;
 one-use responses must not be consumed by a transient writer Busy. No resend,
 funding readiness, collateral cut or qualification rule was relaxed.
-Next: finish new-head verification/review; no automatic merge.
+Closure: approved offline criteria satisfied; native capability gaps stay disabled.
+Next: P36's native qualification; no additional P34 code is pending.
 PR: https://github.com/arnabnandikgp/cinder/pull/79.
-Merge: none.
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b.
 
 ## P35 — Unit funding and recovery
 
@@ -6793,13 +7391,16 @@ Verification: prior published source `d24373e` has eight green hosted jobs.
 Policy correction `a923037` passed three selected adapter cases, loaded discovery
 tampering/missing-controller checks, 28 unit-journal cases and strict Clippy.
 The shared-time/completion follow-up has focused Pacifica reads 17/17 and unit
-runtime 8/8 passes; the complete restacked P36 matrix is running separately.
+runtime 8/8 passes; the complete restacked P36 matrix passes. Exact final head
+`aa49749` has all eight hosted jobs green with no unresolved threads.
 Unexpected: one-use post-I/O results must wait for the writer rather than be
 dropped on Busy. No financial gate was relaxed. Revision 6 starts empty histories
 and rejects 1–5; no migration or changed-image qualification is claimed.
-Next: finish exact-source stack verification/review; no automatic merge.
+Closure: approved offline criteria satisfied and merged; no native BULK funding
+controller or venue-backed live recovery is implied.
+Next: P36's supported native-rail qualification before activation.
 PR: https://github.com/arnabnandikgp/cinder/pull/81.
-Merge: none.
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b.
 
 ## P36 — Joined second-venue acceptance
 
@@ -6812,10 +7413,119 @@ the manifest, with deletion/substitution regressions (6/6 guard tests). Current
 handoff owns exact tree, logs, review and predecessor CI status.
 Unexpected: fixture timestamps/deadlines/readiness must obey real admission;
 native/changed-image qualification remains separately scoped, not fixture proof.
-Next: finish current-head hosted CI/review. Fourth layer #82 is published in
-native stack #80; see current handoff for opening head and checked source. Keep
-native/hardware criterion open until supported approved runs actually complete.
+Merged offline scope: final reviewed head `3237023` has all eight hosted jobs
+green and no unresolved threads. Corrected local matrix is 83 contracts,
+Rust 800/800/737, strict lint/build, relay 15, SDK 42/TypeScript and Node/Chrome
+26 groups each. Current handoff preserves exact source, tree and merge evidence.
+Next: separately approved native capability probes, non-fixture release assembly
+and changed-image Nitro qualification. PLAN's final criterion remains open;
+merging the implementation is not a live funding/trade/recovery qualification.
 PR: https://github.com/arnabnandikgp/cinder/pull/82.
+Merge: 3486b9f7e3f6918ab577ef4d7c8a3517c1331d9b; native qualification incomplete.
+
+## P37 — Bounded BULK native qualification
+
+Work: source-bound unsigned metadata preflight and offline failure tests;
+fresh official SDK/keychain comparison and targeted funding/return questions.
+Added reusable disposable paper runner/actual codec bridge, completed native
+agents/order/cancel/open-close/cleanup and corrected SDK-defined absent-ID
+compatibility with sanitized observed fixtures and negative/conflict regressions.
+Verification: native paper receipt and exact commits/commands live in the current
+handoff. 63 BULK tests, 95 offline contracts, strict BULK lint/build and one
+all-feature workspace run (803 passed, 10 intentional ignores) pass. Actual
+unchanged native fills re-decode offline after the source-backed correction.
+Unexpected: empty sampled depth did not preclude fills; use known reserved cleanup,
+not speculative retry. Fee-tier 404 is unavailable; unknown coverage stays unknown.
+No bridge, funding/risk/forced-event completeness or production readiness claimed.
+Review follow-up 2026-10-21: all three outstanding #83 findings are relevant.
+Runner enforces the pinned Node/TLS environment before initialization, reopen
+and each request, with the Node pin in its source seal. Opening limits declare
+a bounded cleanup price; admission reserves one signed/order slot and notional
+for all possibly filled opening quantities at the maximum declared ceiling.
+Only explicit opposite-side IOC cleanup can consume the reserve; no opening
+after cleanup, mixed-side opening, quantity/price enlargement or ACK refund.
+This is a finite test plan, not a native reduce-only or gap-execution guarantee.
+All eight paper tests pass, including child-process CLI rejection before file
+creation and cumulative quantity/notional/capacity checks. Full contracts and
+publication are checked before push. No new native/AWS/RPC action was performed.
+Next: CI/review of #83 and relevant fixes, then non-fixture multi-unit configuration
+and separately qualified Nitro image; unsupported BULK financial rails stay off.
+PR: https://github.com/arnabnandikgp/cinder/pull/83; ready against product/tee-v1.
+Publication head: bd7f8551c441c8a4d5037afc9d97fe3d9611fa22; hosted CI/review newly
+pending, not inherited from local checks. Receipt-only successor changes no code.
+Merge receipts from #78/#79/#81/#82 accompany this branch.
+Merge: none.
+
+## P38 — Measured two-unit deployment
+
+Work: explicit version-7 registry/egress/role contract and actual enclave handler
+selection; separate bounded private unit configurations and agent capsules,
+blinded private owner configuration, actual read-only gateways and shared
+protected storage, managed empty owners, typed trusted preparation and runbook.
+Verification: whole-workspace 811/10 ignored, changed packages 255/7 ignored
+and final optimized guard regressions, 95 contracts, strict lint/build and
+15 relay/42 SDK tests pass. Current handoff distinguishes exact-source runs.
+Unexpected: KMS plaintext limits require separate unit configuration capsules;
+managed empty owner inventory avoids inventing a BULK custody/discovery policy;
+secret random body blinding prevents a public owner-list hash oracle.
+Review follow-up 2026-10-21: both #84 findings reproduced as red tests, then
+fixed. Same-unit recipient aliases reject during trusted preparation, while
+cross-unit reuse still works. A finite trusted clock/stop guard now covers
+journal load and each enrollment commit; expiry/stop preserves only the prior
+accepted prefix. Fresh authorized restart resumes it without reset. Nine
+deployment tests pass in debug/release, including load/inter-enrollment expiry,
+shutdown and prefix recovery. This changes measured application code: the
+October 20 P40 receipt remains exact-source historical evidence, not automatic
+qualification of the corrected image. No AWS/venue/RPC action was performed.
+Next: review/CI for #84, then P39 joined workers/encrypted SDK;
+P40 separately qualifies the changed image. Native funds remain off.
+PR: https://github.com/arnabnandikgp/cinder/pull/84; ready above #83 in native stack #85.
+Publication source: 209b43e4ca9d57c91f112f542c2d96a46b3d9b67; current handoff
+owns final local verification and pending new-head hosted/review status.
+Merge: none.
+
+## P39 — Joined deployed-unit workers/SDK
+
+Work: explicit v8 measured worker assembly, per-unit qualification/admission,
+bounded scheduling/reads/nonce floor and no-resend completion; advisory sealed
+preflight; actual encrypted HTTP/WebSocket UnitClient acceptance in Node/Chrome;
+operator/architecture and acceptance documentation. No new financial model.
+Verification: all three offline PLAN criteria pass. Full workspace 815/10 expected
+ignores, strict lint/all-target build, 95 contracts, relay 15/SDK 42 and two joined
+groups each in Node/Chrome pass; current handoff records exact scope/logs.
+Unexpected: a fresh empty unit has neither qualified capital/risk nor native credit;
+network wiring must not manufacture those facts to demonstrate paper trading.
+Initial local checks caught fixture read-cost underallocation and a read-completion
+signature mismatch; corrected without weakening adapter costs/uncertainty. Native
+unknown reads correctly contain new risk; tests do not substitute them for credit.
+Next: publish above #84; prepare exact P40 changed-image/read-only qualification.
+PR: [#86](https://github.com/arnabnandikgp/cinder/pull/86), ready above #84;
+publication source `81a346e2de3d87d7930d31c8eb9616b4153d988b`; CI/review pending.
+Merge: none.
+
+## P40 — Changed-image experimental parity
+
+Work: exact read/admin-only version-8 seven-role deployment is qualified on the
+approved one-host Nitro run; capability comparison and full artifact receipt
+are tracked. Common implementation parity is not native financial readiness.
+Verification: actual Node/Chrome HTTP/WebSocket scope/revoke, same-history
+restart/original receipt and independent fence pass at source `91a01ff`;
+19 local unit tests in debug/release, 95 contracts and all eight hosted jobs pass.
+Wrapped real STS roles fit KMS. Four boots, two native account queries per venue,
+zero financial actions/RPC; retained ciphertext and AEAD audit are recorded above.
+Unexpected: parent execute bits and copied bucket names caused the first two
+startup failures; corrected setup preserves identity/history and the unchanged
+IAM boundary. Ordinary Pacifica failed replies do not retain exact status;
+account queries remain unqualified, not zero. Unsupported funds/returns and the
+assembled financial criterion stay open.
+Next: review the explicit assembled-financial dependency and predecessor stack
+reviews before merge or a third venue; cleanup/evidence is published as `64bdb2f`.
+Continuation: version-9 paper bootstrap and its final local gates are implemented
+at `2f56522`, published as ready #88 above #87 on `tee/p40-paper-bootstrap`;
+new-head CI/review remains separate. See current handoff/ADR 0044. The fresh combined
+native/Nitro proposal still requires approval/execution and cannot inherit the
+historical measurements or claim a qualified funding/recovery rail.
+PR: [#87](https://github.com/arnabnandikgp/cinder/pull/87) → [#88](https://github.com/arnabnandikgp/cinder/pull/88)
 Merge: none.
 
 ## P24 — Release safety case

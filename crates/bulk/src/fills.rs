@@ -108,7 +108,8 @@ impl std::fmt::Debug for Fill {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Row {
-    trade_id: String,
+    #[serde(default, deserialize_with = "supplied_trade_id")]
+    trade_id: Option<String>,
     maker: String,
     taker: String,
     order_id_maker: String,
@@ -127,6 +128,11 @@ struct Row {
     slot: u64,
     sequence: u64,
     timestamp: u64,
+}
+// Official HistoryFillWire compatibility: absence uses the required native
+// slot/sequence pair. Explicit null is malformed, not the absent-field case.
+fn supplied_trade_id<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    String::deserialize(d).map(Some)
 }
 fn scalar(raw: &RawValue) -> Result<String, Error> {
     if raw.get().starts_with('"') {
@@ -150,7 +156,13 @@ fn row_identity(scope: &Scope, r: &Row) -> Result<(TradeId, bool), Error> {
     if (maker == scope.account) == (taker == scope.account) {
         return Err(Error::Invalid);
     }
-    let id = TradeId::parse(&r.trade_id)?;
+    let id = match &r.trade_id {
+        Some(text) => TradeId::parse(text)?,
+        None => TradeId {
+            slot: r.slot,
+            sequence: r.sequence,
+        },
+    };
     if id.slot != r.slot || id.sequence != r.sequence {
         return Err(Error::Conflict);
     }

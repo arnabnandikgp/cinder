@@ -1218,8 +1218,86 @@ Evidence: W acceptance matrix, P22/P23 harnesses, native capability receipts.
 
 - [x] Joined lifecycle/adversarial fixtures cover admission, native preparation, partial fills, financial reconciliation, custody and recovery without independent balances. The SDK trading process, selected-adapter custody/recovery and existing carrier/SBF suites are complementary evidence, not one live financial round trip.
 - [x] Concurrency/restart/revocation/cross-unit/freshness failures preserve accounting and publication; cached projections never become authority.
-- [ ] Clean-checkout CI exercises all new offline tests without ignored research, wallets or external requests. The final clean tracked-source runner passes locally; hosted P36 results remain pending publication.
+- [x] Clean-checkout CI exercises all new offline tests without ignored research, wallets or external requests. Final P36 head `3237023` passes all eight hosted offline jobs; reviewed P33–P36 merged as native stack #80 at `3486b9f`, tree-identical to that tip. Exact receipts are in TRACKER.
 - [ ] Approved native/changed-image hardware runs have exact source and cleanup receipts; blocked/deferred capabilities are named and never counted as qualified.
+
+<a id="p37"></a>
+## P37 — Bounded BULK native qualification
+
+Depends on: P36.
+
+This dependency is P36's merged offline implementation; this phase supplies its
+remaining native evidence, not a financial redesign or new launch-readiness bar.
+Deliver: reusable scoped preflight and native paper evidence using the existing
+adapter, plus a precise supported funding/return boundary. No automatic live permission.
+User direction 2026-10-20: target Pacifica's current experimental integration
+level; native paper trading first, targeted funding/return investigation alongside.
+Evidence: [current scope](../venues/bulk-native-qualification.md), historical M0
+results, existing BULK wire/execution tests and [run proposal](UNIT-QUALIFICATION-PROPOSAL.md).
+
+- [x] Reusable fixed-origin unsigned preflight retains original bounded responses, rejects changed approval/source/deadline and tests failures offline without wallets, external requests or retries.
+- [x] Refresh primary client/keychain revisions and inspect ordinary signing/funding compatibility; identify exact test-rail/credit/settlement questions without importing dependencies or choosing a new custody contract.
+- [x] Observe actual current metadata under explicit approval; examples/source schemas alone cannot choose native market grids or notional minima. Two approved GETs at source `b8cac32` returned HTTP 200 on 2026-10-20; the [dated receipt](../venues/bulk-native-qualification.md#observed-metadata-receipt--2026-10-20) retains exact hashes and BTC-USD's observed $1 minimum/grid. No signed action was authorized.
+- [x] Under separately bounded current paper scope, test fresh-account agents/revocation, original order/cancel/fill/fee linkage and reserved cleanup using Cinder's existing wire/adapter contracts. The [October 20 receipt](../venues/bulk-paper-20261020.md) records two maker fills/open-close, cancel, both revocations, zero-fill IOC, full cleanup and source-backed absent-ID compatibility. Partial/IOC fills, nonzero fees and financial Gateway qualification are not claimed. Paper funds are not a Solana deposit or financial activation.
+- [x] Record exact native outcomes, remaining semantics and disabled rails; promote only sanitized regressions needed by observed behavior. Tracked fixture/tests cover the native pair identity rule, null/mismatch/conflict refusal and raw retention. Fee-tier 404 and unsupported funding/return rails remain explicit. CI stays offline; no frontend/AWS/production action.
+
+<a id="p38"></a>
+## P38 — Measured two-unit deployment assembly
+
+Depends on: P37.
+
+Deliver: explicit version-7 two-unit manifest, separate Pacifica/BULK agent and
+private configuration capsules, trusted preparation and the real enclave
+TLS/Noise entrypoint over one protected unit journal. Managed empty owners are
+not public custody onboarding. Trading, funding and polling stay disabled.
+Evidence: [ADR 0042](../architecture/0042-unit-deployment.md), ADRs 0039–0041,
+P36 acceptance and P37 native receipts.
+
+- [x] Manifest/role/registry/egress contracts reject aliases, mismatches and legacy fallback; versions 1–6 retain their encoding and behavior.
+- [x] Actual adapters, private API and replicated/fresh journal derive the application commitment; no fixture keys, balances, readiness or custody controller is deployed.
+- [x] Entrypoint supplies the unit handler to both confidential carriers; finite lease, restart, managed owner inventory and sticky fencing are tested offline.
+- [x] Trusted preparation, regression tests and operator handoff are tracked in [#84](https://github.com/arnabnandikgp/cinder/pull/84), stacked above #83; changed-image qualification remains separate. Technical acceptance is complete; review/CI/merge are not inferred from local checks.
+
+<a id="p39"></a>
+## P39 — Joined deployed-unit worker and SDK acceptance
+
+Depends on: P38.
+
+Deliver: bounded native read/execution workers and encrypted UnitClient
+acceptance against the deployable composition, with qualified paper policy and
+explicit capital/risk setup. Reuse P36/P37, not a second accounting model.
+Evidence: ADR 0040, UNIT-ACCEPTANCE and native paper receipts.
+
+- [x] Workers bind durable intent, escaped execution, observations and reconciliation to the original unit; network I/O never holds the financial writer.
+- [x] Actual confidential carriers and Node/browser SDK cover both units, restart/revoke/fencing and cross-unit negatives with offline regressions.
+- [x] Unqualified funding, uncertain credit, incomplete forced-event coverage and unavailable fee tiers cannot authorize trading or payouts.
+
+Implemented in [ADR 0043](../architecture/0043-unit-workers.md). Offline carrier
+acceptance uses the real Runtime/worker with explicit fixture capital/native
+ports; shipping v8 assembly separately refuses fresh financial readiness. This
+does not satisfy P40's live assembled-paper criterion or qualify any funds rail.
+
+<a id="p40"></a>
+## P40 — Changed-image experimental parity qualification
+
+Depends on: P39.
+
+Deliver: separately approved bounded Nitro qualification and a final
+Pacifica/BULK experimental capability comparison. This finishes the current
+second-venue workstream, not production/customer-funds readiness.
+Evidence: measured source/image receipts, P36–P39 tests and cleanup.
+
+- [ ] Exact current image/roles, attestation, private SDK, durable restart and independent fencing pass on Nitro under current scoped approval. [October 20 receipt](../operations/unit-hardware-20261020.md) passed for `91a01ff`; October 21's startup safety correction changes application code and needs fresh image qualification, not inherited PCR evidence.
+- [ ] Supported paper lifecycle runs through the assembled service, not only a direct venue runner; unobserved cases remain named gaps.
+- [x] Capability matrix and cleanup receipt separate unsupported funding/return rails; review this boundary before integrating a third venue. [Comparison](../venues/experimental-parity.md) and [cleanup](../operations/unit-hardware-20261020.md#retention-and-closure) retain the open assembled-financial dependency.
+
+The [paper-only initialization/evidence boundary](P40-PAPER-GATE.md) is user-approved
+for local implementation; [ADR 0044](../architecture/0044-paper-bootstrap.md) owns
+the separate version-9 profile and quarantined history. It does not authorize a financial or AWS run or
+weaken production custody/reconciliation. Combine the approved final slice and
+startup fixes into one fresh qualification where feasible, under the separately
+gated [fresh run proposal](P40-PAPER-RUN-PROPOSAL.md), which is still awaiting live
+approval.
 
 <a id="p24"></a>
 ## P24 — Release safety case and customer-funds gates

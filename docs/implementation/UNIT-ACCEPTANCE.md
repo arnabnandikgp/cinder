@@ -1,7 +1,7 @@
 # Two-unit acceptance and qualification boundary
 
-Date: 2026-10-17. P33–P36 are an open implementation stack, not a second live
-venue or production release. [PLAN](PLAN.md), [TRACKER](TRACKER.md),
+Date: 2026-10-17. P33–P36 are merged for their offline implementation scope at
+`3486b9f`, not a second live venue or production release. [PLAN](PLAN.md), [TRACKER](TRACKER.md),
 [native execution](../architecture/0040-unit-native-execution.md),
 [custody/recovery](../architecture/0041-unit-custody-recovery.md).
 
@@ -43,6 +43,17 @@ Use the pinned Node/Rust toolchains and prehydrated locked dependencies.
 
 ## What is not qualified
 
+P39 adds a joined **encrypted** carrier case in
+`clients/private/tests/unit-web-suite.ts`, run by
+`tools/web-channel/check-runtime.mjs --units` in Node and Chrome and included in
+the standard browser gate. It uses the actual unit Runtime and new bounded
+worker, with explicit synthetic ports/capital/credit and a local attestation
+root. It covers HTTP/WebSocket unit scope, native exposure, partial/duplicate
+fill attribution, global revoke, durable restart/dispatch limits, outside-lock
+I/O and fencing. It supersedes only the earlier separation of those offline
+carrier/worker tests, not the live/hardware limits below. P38's inactive version 7
+remains available; [ADR 0043](../architecture/0043-unit-workers.md) defines v8.
+
 1. **BULK funding and returns:** no enabled rail/controller or invented bridge.
    Order/account APIs and paper balances are not proof of attributable Solana
    deposits or final beneficiary payment. Missing capability cannot be replaced
@@ -69,7 +80,9 @@ wallet/faucet/RPC or AWS action occurred in this implementation run.
 
 ## Next controlled qualification
 
-See [the separate proposal](UNIT-QUALIFICATION-PROPOSAL.md). It is not approved
-by opening or reviewing this stack. Keep all four PRs open for review; merge only
-on user direction and current-head evidence. Keep P36's native/hardware criterion
-open rather than call offline fixtures an integrated live deployment.
+See [the separate proposal](UNIT-QUALIFICATION-PROPOSAL.md). The user-authorized
+merge of #78/#79/#81/#82 followed green exact heads and resolved review threads;
+it does not approve that live proposal. Keep P36's native/hardware criterion open
+rather than call offline fixtures an integrated live deployment. Next is bounded
+native capability qualification, then non-fixture release assembly and separately
+approved changed-image Nitro testing; unsupported funding/return rails stay disabled.

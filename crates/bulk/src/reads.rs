@@ -157,6 +157,50 @@ pub fn complete(
     reply: Reply,
     at: u64,
 ) -> Result<Committed, Error> {
+    complete_with(gateway, j, c, reply, at, false)
+}
+/// The exact policy's original funding/risk bootstrap query only. Ordinary
+/// polling, active books and callers without the private paper policy cannot
+/// acquire this assumption-backed, evidence-only treatment.
+pub(crate) fn complete_fresh_paper_history(
+    policy: &crate::paper::Policy,
+    gateway: &Gateway,
+    j: &mut impl Controller,
+    c: Completion,
+    reply: Reply,
+    at: u64,
+) -> Result<Committed, Error> {
+    policy.validate(gateway, j.descriptor().ok_or(Error::Unqualified)?)?;
+    policy.time(at)?;
+    let tag = match c.poll.kind {
+        Kind::Funding => 4,
+        Kind::Risk => 6,
+        _ => return Err(Error::Unqualified),
+    };
+    let state = j.state().map_err(|_| Error::Unavailable)?;
+    if c.poll.reservation != policy.id(tag)?
+        || c.poll.evidence != policy.id(tag + 1)?
+        || c.poll.range.is_some()
+        || c.poll.continuation.is_some()
+        || state.ledger().version() != 0
+        || state.has_joined_risk()
+        || !state.orders().is_empty()
+        || !state.attempts().is_empty()
+        || state.registrations().len() != 1
+        || state.registrations()[0].wallet != policy.customer
+    {
+        return Err(Error::Unqualified);
+    }
+    complete_with(gateway, j, c, reply, at, true)
+}
+fn complete_with(
+    gateway: &Gateway,
+    j: &mut impl Controller,
+    c: Completion,
+    reply: Reply,
+    at: u64,
+    fresh_paper_history: bool,
+) -> Result<Committed, Error> {
     let (profile, _) = gateway.observation_binding(j)?;
     j.verified_state().map_err(|_| Error::Unavailable)?;
     let original = j
@@ -214,17 +258,35 @@ pub fn complete(
         code
     };
     let extra = gateway.read_result(c.poll.reservation, hash, result_code, cooldown)?;
-    observation::ingest_with(
-        gateway,
-        j,
-        Message {
-            kind: c.poll.kind,
-            body,
-            received_at,
-        },
-        c.poll.evidence,
-        at,
-        normalize,
-        extra,
-    )
+    let empty_cut = |cut: &crate::financial::history::Cut| {
+        cut.start_slot == 0
+            && cut.next_cursor.is_none()
+            && cut.coverage != fills::Coverage::Partial
+            && cut.min_available_slot.is_none_or(|s| s == 0)
+    };
+    let retain_only = fresh_paper_history
+        && normalize
+        && match c.poll.kind {
+            Kind::Funding => crate::financial::history::funding(profile, body.as_bytes())
+                .is_ok_and(|p| p.rows.is_empty() && empty_cut(&p.cut)),
+            Kind::Risk => crate::financial::history::risk(profile, body.as_bytes())
+                .is_ok_and(|p| p.rows.is_empty() && empty_cut(&p.cut)),
+            _ => false,
+        };
+    let message = Message {
+        kind: c.poll.kind,
+        body,
+        received_at,
+    };
+    if retain_only {
+        return observation::retain_fresh_paper_history(
+            gateway,
+            j,
+            message,
+            c.poll.evidence,
+            at,
+            extra,
+        );
+    }
+    observation::ingest_with(gateway, j, message, c.poll.evidence, at, normalize, extra)
 }

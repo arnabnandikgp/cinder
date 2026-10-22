@@ -13,6 +13,8 @@ use cinder_pacifica::{execution as pacifica, funding::chain, profile as pp};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 use std::{io::BufReader, sync::Arc};
+/// Explicit local encrypted-carrier acceptance; never compiled into deployment.
+pub mod network;
 
 type UnitStore = units::Journal<Replicated<FileReplica, FileReplica, LocalWitness>, RecordCipher>;
 type App =
@@ -149,7 +151,7 @@ fn pacifica_gateway(c: &units::Configuration) -> Result<pacifica::Gateway, Error
             expiry_ms: 30000,
             credits: 1000,
             cleanup_reserve: 100,
-            read_cost: 10,
+            read_cost: 120,
         },
         Zeroizing::new([12; 32]),
         1,

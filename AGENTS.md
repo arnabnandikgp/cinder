@@ -18,15 +18,28 @@ BULK execution, bounded native reads and fill/fee ingestion (ADR 0040). Unit
 replay revision 6 requires new empty histories; no revision-1/2/3/4/5 migration is
 supplied. P35 adds opt-in canonical owner/unit discovery, sealed-controller funds
 and atomic all-unit operator recovery cutover (ADR 0041), not a qualified BULK
-funding rail. Shipping Runtime/PrivateClient stay v1; only durable native preparation
+funding rail. The legacy Runtime/PrivateClient stay v1; only durable native preparation
 and qualified adapter policy can authorize native exposure.
 Phoenix/PER, the website/demo and Mintlify docs are separate workstreams, not
 backend templates.
 P36's [joined acceptance](docs/implementation/UNIT-ACCEPTANCE.md) exercises the
 actual SDK/unit Runtime/native adapters with synthetic ports. Its private-pipe
 driver is local-fixture-only, not an encrypted endpoint or shipping release.
-Native two-unit role/egress/chain manifest and changed-image qualification remain
-separate gates; never deploy fixture keys/readiness/balances or claim a BULK rail.
+P38 adds an explicit version-7 two-unit measured assembly and private managed
+empty-owner inventory. Its native trading/funding/polling gates are disabled;
+it exposes no public custody discovery or BULK funds controller. Separate agent
+and unit-configuration capsules fit bounded KMS plaintexts. Joined native workers
+and changed-image qualification remain P39/P40 gates; never deploy fixture
+keys/readiness/balances or claim a BULK rail.
+P39's explicit version 8 joins bounded unit workers and real confidential
+UnitClient acceptance. It requires per-unit qualification, three-location source
+inventory and finite read/history-wide dispatch allocations. Fresh books remain
+not-ready; worker wiring supplies no capital, credit or financial frontier.
+[ADR 0043](docs/architecture/0043-unit-workers.md) owns these controls and limits.
+Version 9 separately implements the approved, assumption-backed fresh paper
+experiment ([ADR 0044](docs/architecture/0044-paper-bootstrap.md)). Its one-time
+faucet allocation is not a funding rail; paper histories cannot be reopened by
+ordinary releases. Live financial/Nitro approval and evidence remain separate.
 
 ## Product context
 

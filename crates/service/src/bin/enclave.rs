@@ -2,9 +2,8 @@
 fn run() -> Result<(), cinder_service::Error> {
     use cinder_service::{
         Error,
-        boot::{Bootstrap, Manifest, Role},
+        boot::{Bootstrap, Manifest},
         nsm::Nsm,
-        runtime::Configuration,
         transport::{Clock, Identity, Server, read_frame},
         vsock::{Target, VsockListener, VsockStream},
     };
@@ -43,17 +42,16 @@ fn run() -> Result<(), cinder_service::Error> {
         token: bootstrap.parent.token.clone(),
         expires: bootstrap.parent.expires,
     };
-    let mut keys = cinder_service::boot::release(&manifest, nsm.clone(), bootstrap)?;
-    let bytes = keys.remove(&Role::Configuration).ok_or(Error)?;
-    let config: Configuration = serde_cbor::from_slice(&bytes).map_err(|_| Error)?;
-    drop(bytes);
+    let keys = cinder_service::boot::release(&manifest, nsm.clone(), bootstrap)?;
     let stop = Arc::new(AtomicBool::new(false));
-    let runtime = Arc::new(config.construct_for(&manifest, keys)?.open(
-        &manifest,
-        parent,
-        nsm.clone(),
-        stop.clone(),
-    )?);
+    let runtime = Arc::new(
+        cinder_service::application::construct(&manifest, keys)?.open(
+            &manifest,
+            parent,
+            nsm.clone(),
+            stop.clone(),
+        )?,
+    );
     runtime.tick()?;
     enum Ingress {
         Tls(Server),
@@ -65,7 +63,7 @@ fn run() -> Result<(), cinder_service::Error> {
             nsm.clone(),
             nsm.clone(),
             nsm.clone(),
-            runtime.clone(),
+            runtime.handler(),
         )?)
     } else {
         Ingress::Tls(Server::new(
@@ -73,7 +71,7 @@ fn run() -> Result<(), cinder_service::Error> {
             nsm.policy(),
             nsm.clone(),
             nsm.clone(),
-            runtime.clone(),
+            runtime.handler(),
         )?)
     };
     let listener = VsockListener::bind(manifest.ingress, 3)?;

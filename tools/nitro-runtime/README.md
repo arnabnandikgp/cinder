@@ -1,5 +1,10 @@
 # Pre-hardware release package
 
+The explicit two-unit assembly uses manifest version 7 and the same enclave
+binary/rootfs. See [unit deployment](../../docs/operations/unit-deployment.md)
+for its seven separate roles, private preparation and inactive capability scope.
+Versions 1–6 continue to select the legacy runtime; no auto-migration is supplied.
+
 This is a **qualification build**, not a live brokerage deployment. The measured
 version-1 manifest rejects all native activation; version 2 permits bounded
 read-only qualification; version 3 additionally binds bounded retained S3 packs.

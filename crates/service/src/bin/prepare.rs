@@ -4,7 +4,6 @@ use cinder_service::{
     Error,
     boot::{Manifest, Role},
     cloud::Credential,
-    runtime::Configuration,
 };
 use serde::Deserialize;
 use std::{
@@ -20,10 +19,23 @@ struct Prepare {
     configuration: Configuration,
     storage: Vec<u8>,
     trading: Vec<u8>,
-    broker: Vec<u8>,
+    #[serde(default)]
+    broker: Option<Vec<u8>>,
     witness: Credential,
     #[serde(default)]
     funds: Option<Vec<u8>>,
+    #[serde(default)]
+    bulk_trading: Option<Vec<u8>>,
+    #[serde(default)]
+    pacifica_configuration: Option<cinder_service::units::deployment::Pacifica>,
+    #[serde(default)]
+    bulk_configuration: Option<cinder_service::units::deployment::Bulk>,
+}
+#[derive(Deserialize, serde::Serialize)]
+#[serde(untagged)]
+enum Configuration {
+    Legacy(Box<cinder_service::runtime::Configuration>),
+    Units(Box<cinder_service::units::deployment::Configuration>),
 }
 fn write(root: &Path, name: &str, bytes: &[u8]) -> Result<(), Error> {
     #[cfg(unix)]
@@ -61,7 +73,6 @@ fn run() -> Result<(), Error> {
         (Role::Configuration, configuration),
         (Role::Storage, Zeroizing::new(input.storage)),
         (Role::Trading, Zeroizing::new(input.trading)),
-        (Role::Broker, Zeroizing::new(input.broker)),
         (
             Role::Witness,
             Zeroizing::new(serde_cbor::to_vec(&input.witness).map_err(|_| Error)?),
@@ -70,46 +81,25 @@ fn run() -> Result<(), Error> {
     if let Some(funds) = input.funds {
         keys.insert(Role::Funds, Zeroizing::new(funds));
     }
-    // Explicitly reject aliased/all-zero seed material in trusted preparation too.
-    let secret_roles: Vec<_> = keys
-        .keys()
-        .copied()
-        .filter(|r| {
-            matches!(
-                r,
-                Role::Storage | Role::Trading | Role::Broker | Role::Funds
-            )
-        })
-        .collect();
-    for role in &secret_roles {
-        let key = keys.get(role).ok_or(Error)?;
-        if key.len() != 32 || key.as_slice() == [0; 32] {
-            return Err(Error);
-        }
+    if let Some(broker) = input.broker {
+        keys.insert(Role::Broker, Zeroizing::new(broker));
     }
-    for (i, role) in secret_roles.iter().enumerate() {
-        for other in &secret_roles[..i] {
-            if keys[role].as_slice() == keys[other].as_slice() {
-                return Err(Error);
-            }
-        }
+    if let Some(bulk) = input.bulk_trading {
+        keys.insert(Role::BulkTrading, Zeroizing::new(bulk));
     }
-    let c: Configuration = serde_cbor::from_slice(&keys.remove(&Role::Configuration).ok_or(Error)?)
-        .map_err(|_| Error)?;
-    manifest.application = c
-        .construct_for(
-            &manifest,
-            keys.iter().map(|(r, k)| (*r, k.clone())).collect(),
-        )?
-        .commitment();
-    keys.insert(
-        Role::Configuration,
-        Zeroizing::new(serde_cbor::to_vec(&input.configuration).map_err(|_| Error)?),
-    );
-    for slot in &mut manifest.slots {
-        slot.plaintext_hash = openssl::sha::sha256(keys.get(&slot.role).ok_or(Error)?);
+    if let Some(p) = input.pacifica_configuration {
+        keys.insert(
+            Role::PacificaConfiguration,
+            Zeroizing::new(serde_cbor::to_vec(&p).map_err(|_| Error)?),
+        );
     }
-    manifest.validate()?;
+    if let Some(b) = input.bulk_configuration {
+        keys.insert(
+            Role::BulkConfiguration,
+            Zeroizing::new(serde_cbor::to_vec(&b).map_err(|_| Error)?),
+        );
+    }
+    cinder_service::application::prepare(&mut manifest, &keys)?;
     let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
     builder.mode(0o700);

@@ -869,6 +869,40 @@ impl Gateway {
     ) -> Result<(Outbound, DispatchCompletion), Error> {
         self.prepare_dispatch_scoped(journal, dispatch, false)
     }
+    /// Advisory exact-plan/capacity/exposure check, never a signing capability.
+    /// Actual dispatch repeats all checks and commits before signature creation.
+    pub fn dispatch_available<J: Controller>(
+        &self,
+        journal: &mut J,
+        dispatch: Dispatch,
+    ) -> Result<bool, Error> {
+        let history = self.history(journal, dispatch.at)?;
+        let (plan, cost, cleanup) = match self.plan(journal.state()?, dispatch, false) {
+            Ok(p) => p,
+            Err(Error::Qualification) => return Ok(false),
+            Err(e) => return Err(e),
+        };
+        if !cleanup && !observation::replay(journal, &self.profile)?.gaps.is_empty() {
+            return Ok(false);
+        }
+        match self.credit(&history, dispatch.at, cost, cleanup) {
+            Ok(()) => {}
+            Err(Error::Limit) => return Ok(false),
+            Err(e) => return Err(e),
+        }
+        let mut tx = self.transaction(
+            journal,
+            dispatch.commit,
+            dispatch.at,
+            Record::Spend {
+                cost,
+                cleanup,
+                plan: Some(plan),
+            },
+        )?;
+        tx.controls.push(Control::Expose(dispatch.attempt));
+        Ok(journal.preview(&tx)?.controls.is_none())
+    }
     fn prepare_dispatch_scoped<J: Controller>(
         &self,
         journal: &mut J,

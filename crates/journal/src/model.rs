@@ -311,6 +311,11 @@ impl fmt::Debug for State {
     }
 }
 impl State {
+    /// Immutable financial scope, used to bind trusted admission to the selected
+    /// unit. This is not a setter, observed balance or independent authority.
+    pub fn configuration(&self) -> &Config {
+        &self.config
+    }
     pub(crate) fn new(config: Config) -> Result<Self, Error> {
         if config
             .markets

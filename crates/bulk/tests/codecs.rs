@@ -279,7 +279,7 @@ fn fill_scope_separates_network_account_venue_deployment_and_namespace() {
     );
 }
 #[test]
-fn missing_null_noncanonical_or_conflicting_execution_ids_are_not_invented() {
+fn missing_native_identity_null_noncanonical_or_conflicting_ids_are_rejected() {
     for id in [
         "1",
         "1:",
@@ -292,7 +292,12 @@ fn missing_null_noncanonical_or_conflicting_execution_ids_are_not_invented() {
         assert!(TradeId::parse(id).is_err());
     }
     for r in [
-        row().replace("\"tradeId\":\"9007199254740993:18446744073709551615\",", ""),
+        row()
+            .replace("\"tradeId\":\"9007199254740993:18446744073709551615\",", "")
+            .replace("\"sequence\":18446744073709551615,", ""),
+        row()
+            .replace("\"tradeId\":\"9007199254740993:18446744073709551615\",", "")
+            .replace("\"slot\":9007199254740993,", ""),
         row().replace(
             "\"tradeId\":\"9007199254740993:18446744073709551615\"",
             "\"tradeId\":null",
@@ -301,6 +306,74 @@ fn missing_null_noncanonical_or_conflicting_execution_ids_are_not_invented() {
     ] {
         assert!(fills::rest(&scope(Network::Testnet), &[market()], page(&r).as_bytes()).is_err());
     }
+}
+#[test]
+fn observed_paper_fill_uses_official_slot_sequence_identity_without_rewriting() {
+    let body = include_bytes!("fixtures/paper-20261020-missing-trade-id.json");
+    let market = Market::new("BTC-USD", "0.00000001", "0.01", 8).unwrap();
+    let original = fills::rest(
+        &scope(Network::Testnet),
+        std::slice::from_ref(&market),
+        body,
+    )
+    .unwrap();
+    // The SDK defines the absent-field identity as the required native pair.
+    // A response with the explicit redundant spelling denotes the SAME event.
+    let mut amended: serde_json::Value = serde_json::from_slice(body).unwrap();
+    amended["data"][0]["tradeId"] = "10710440:0".into();
+    let page = fills::rest(
+        &scope(Network::Testnet),
+        std::slice::from_ref(&market),
+        &serde_json::to_vec(&amended).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(page.fills.len(), 1);
+    assert_eq!(page.fills[0].quantity, 2000);
+    assert_eq!(page.fills[0].price, 10_000_000);
+    assert_eq!(page.fills[0].fee, 0);
+    assert_eq!(page.coverage, Coverage::Unknown);
+    assert_eq!(original.fills, page.fills);
+    // Missing/null/negative/overflow native fields and explicit null/mismatch
+    // must never receive a guessed replacement from timestamp/order data.
+    for (field, value) in [
+        ("tradeId", serde_json::Value::Null),
+        ("tradeId", "10710440:1".into()),
+        ("sequence", (-1).into()),
+        ("sequence", "18446744073709551616".into()),
+        ("slot", serde_json::Value::Null),
+    ] {
+        let mut bad: serde_json::Value = serde_json::from_slice(body).unwrap();
+        bad["data"][0][field] = value;
+        assert!(
+            fills::rest(
+                &scope(Network::Testnet),
+                std::slice::from_ref(&market),
+                &serde_json::to_vec(&bad).unwrap()
+            )
+            .is_err()
+        );
+    }
+}
+#[test]
+fn explicit_and_native_pair_id_spellings_deduplicate_and_conflicting_pairs_do_not() {
+    let legacy = row().replace("\"tradeId\":\"9007199254740993:18446744073709551615\",", "");
+    let mixed = page(&format!("{},{}", row(), legacy));
+    assert_eq!(
+        fills::rest(&scope(Network::Testnet), &[market()], mixed.as_bytes())
+            .unwrap()
+            .fills
+            .len(),
+        1
+    );
+    let conflict = page(&format!(
+        "{},{}",
+        row(),
+        legacy.replace("\"price\":100.1", "\"price\":100.2")
+    ));
+    assert!(matches!(
+        fills::rest(&scope(Network::Testnet), &[market()], conflict.as_bytes()),
+        Err(Error::Conflict)
+    ));
 }
 #[test]
 fn duplicate_executions_collapse_but_conflicting_economics_are_reported() {
