@@ -12,7 +12,30 @@ function sections(markdown) {
   }));
 }
 
-export function validatePlan(plan, tracker, historicalHandoffs = '') {
+function rows(markdown) {
+  return [...markdown.matchAll(/^\| \[(P\d{2,}[A-Z]?)[^\n]*?\]\(PLAN\.md#(p\d{2,}[a-z]?)\) \| ([^|]+) \| ([^|]*) \|([^|\n]*)\|$/gm)];
+}
+
+function phaseContract(phase) {
+  // Links can move during consolidation; their human-readable requirement text
+  // and all scope/dependency/acceptance statements must still be accounted for.
+  const normalized = s => s.replace(/\[([^\]\n]+)\]\([^)]+\)/g, '$1').replace(/\s+/g, ' ').trim();
+  const field = label => {
+    const start = phase.body.indexOf(label + ':');
+    if (start < 0) return '';
+    const end = phase.body.indexOf('\n\n', start);
+    let value = phase.body.slice(start, end < 0 ? undefined : end);
+    if (label === 'Deliver') value = value.split('Evidence:')[0];
+    return normalized(value);
+  };
+  return JSON.stringify({
+    dependencies: phase.body.match(/^Depends on: (.+)\.$/m)?.[1],
+    deliver: field('Deliver'), evidence: field('Evidence'),
+    criteria: [...phase.body.matchAll(/^- \[[ x]\] .+/gm)].map(m => normalized(m[0])),
+  });
+}
+
+export function validatePlan(plan, tracker, historicalHandoffs = '', historicalPlan = '') {
   const errors = [];
   const phases = sections(plan);
   const currentLogs = sections(tracker);
@@ -23,7 +46,9 @@ export function validatePlan(plan, tracker, historicalHandoffs = '') {
     if (new Set(source.map(l => l.id)).size !== source.length) errors.push(`${name}: duplicate phase`);
   }
   const logs = [...new Map([...archivedLogs, ...currentLogs].map(l => [l.id, l])).values()];
-  const rows = [...tracker.matchAll(/^\| \[(P\d{2,}[A-Z]?)[^\n]*?\]\(PLAN\.md#(p\d{2,}[a-z]?)\) \| ([^|]+) \| ([^|]*) \|[^|\n]*\|$/gm)];
+  const currentRows = rows(tracker);
+  const archivedRows = new Map(rows(historicalHandoffs.replaceAll('PLAN-20261023.md#', 'PLAN.md#')).map(r => [r[1], r]));
+  const archivedPhases = new Map(sections(historicalPlan).map(p => [p.id, p]));
   if (!tracker.includes('| Phase | Progress | Invariant / deliverable | PR / merge |')) errors.push('tracker: missing invariant/deliverable column');
   const unique = (ids, name) => {
     if (!ids.length) errors.push(`${name}: no phases found`);
@@ -31,18 +56,26 @@ export function validatePlan(plan, tracker, historicalHandoffs = '') {
     return new Set(ids);
   };
   const ids = unique(phases.map(p => p.id), 'plan');
-  for (const [name, values] of [['tracker table', rows.map(r => r[1])], ['handoffs', logs.map(l => l.id)]]) {
+  for (const [name, values] of [['tracker table', currentRows.map(r => r[1])], ['handoffs', logs.map(l => l.id)]]) {
     const actual = unique(values, name);
     if (actual.size !== ids.size || [...ids].some(id => !actual.has(id))) errors.push(`${name}: phase set differs from plan`);
   }
-  const status = new Map(rows.map(r => [r[1], r[3].trim()]));
-  for (const row of rows) {
+  const status = new Map(currentRows.map(r => [r[1], r[3].trim()]));
+  for (const row of currentRows) {
     if (row[2] !== row[1].toLowerCase()) errors.push(`${row[1]}: wrong plan anchor`);
     if (!['open', 'in progress', 'closed'].includes(row[3].trim())) errors.push(`${row[1]}: invalid progress`);
     if (!row[4].trim() || /^(?:—|-|TBD)$/i.test(row[4].trim())) errors.push(`${row[1]}: missing invariant/deliverable`);
   }
   const dependencies = new Map();
   for (const phase of phases) {
+    if (historicalHandoffs && !currentLogs.some(log => log.id === phase.id)) {
+      const previous = archivedPhases.get(phase.id);
+      const row = currentRows.find(r => r[1] === phase.id), oldRow = archivedRows.get(phase.id);
+      const sameRow = row && oldRow && [3, 4, 5].every(i => row[i].trim() === oldRow[i].trim());
+      if (!previous || phaseContract(phase) !== phaseContract(previous) || !sameRow) {
+        errors.push(`${phase.id}: changed scope, acceptance or progress/work reference requires a current handoff`);
+      }
+    }
     const field = phase.body.match(/^Depends on: (.+)\.$/m)?.[1];
     const deps = field === 'none' ? [] : (field ?? '').split(', ');
     if (!field || (field !== 'none' && !/^P\d{2,}[A-Z]?(, P\d{2,}[A-Z]?)*$/.test(field))) errors.push(`${phase.id}: malformed dependencies`);
@@ -119,7 +152,8 @@ if (process.argv[1] && resolve(process.argv[1]) === script) {
   const tracker = documents.get(resolve(root, 'docs/implementation/TRACKER.md'));
   const historicalPath = resolve(root, 'docs/archive/implementation/TRACKER-20261023.md');
   const historical = documents.get(historicalPath);
-  const errors = [...validatePlan(plan, tracker, historical), ...validateLinks(documents, root)];
+  const historicalPlan = documents.get(resolve(root, 'docs/archive/implementation/PLAN-20261023.md'));
+  const errors = [...validatePlan(plan, tracker, historical, historicalPlan), ...validateLinks(documents, root)];
   if (!historical || !tracker.includes('../archive/implementation/TRACKER-20261023.md')) errors.push('tracker: missing explicit preserved handoff archive');
   if (errors.length) {
     for (const error of errors) process.stderr.write(`${error}\n`);

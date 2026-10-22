@@ -47,7 +47,7 @@ Merge does not close an unmet qualification criterion.
 | [P34 — Unit execution and reconciliation](PLAN.md#p34) | closed | Unit-owned durable preparation precedes native exposure; qualified observations reconcile only their original component. | [#79](https://github.com/arnabnandikgp/cinder/pull/79), merged `3486b9f` |
 | [P35 — Unit funding and recovery](PLAN.md#p35) | closed | Unit custody routes, movements, payouts and recovery share ownership and counters without invented venue credit. | [#81](https://github.com/arnabnandikgp/cinder/pull/81), merged `3486b9f` |
 | [P36 — Joined second-venue acceptance](PLAN.md#p36) | in progress | Joined offline fault tests and separately qualified native evidence establish the actual integration boundary. | [#82](https://github.com/arnabnandikgp/cinder/pull/82), merged `3486b9f`; offline complete, native/hardware qualification open |
-| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), three review fixes verified; new-head hosted checks separate |
+| [P37 — Bounded BULK native qualification](PLAN.md#p37) | in progress | Current paper trading and test-rail evidence support only the capabilities actually observed, without production activation. | [#83](https://github.com/arnabnandikgp/cinder/pull/83), cumulative cleanup review fixed at `9765666`; restacked hosted checks/review required |
 | [P38 — Measured two-unit deployment](PLAN.md#p38) | in progress | Real enclave entrypoint loads separate native roles and one protected unit journal, without fixture authority or legacy fallback. | [#84](https://github.com/arnabnandikgp/cinder/pull/84), two startup review fixes verified; new-head hosted checks separate |
 | [P39 — Joined deployed-unit workers/SDK](PLAN.md#p39) | in progress | Qualified native work and confidential SDK preserve exact unit ownership, history and failure semantics. | [#86](https://github.com/arnabnandikgp/cinder/pull/86), restacked; combined offline acceptance passed |
 | [P40 — Changed-image experimental parity](PLAN.md#p40) | in progress | Measured Nitro and supported paper evidence establish the final bounded Pacifica/BULK comparison. | [#87](https://github.com/arnabnandikgp/cinder/pull/87) → [#88](https://github.com/arnabnandikgp/cinder/pull/88); corrected Nitro SDK open/fill passes; Cinder close/cash bridge and full admin acceptance remain open |
@@ -68,7 +68,7 @@ integration, live request or AWS run is part of this cleanup.
 - Cleanup verification: 22 relocated/snapshotted documents were compared with
   pre-cleanup `0ae5218`; content differs only by relative-link rebasing and
   explicit phase anchors. All 46 phase IDs/dependencies and 165 acceptance
-  checkboxes are preserved. The complete contract suite passes 99 tests, with
+  checkboxes are preserved. The complete contract suite passes 100 tests, with
   no failures/skips; documentation links and workspace boundaries pass.
 - Latest native result: actual Nitro bootstrap, encrypted SDK opening and fill
   attribution passed. Cinder close remains blocked by active-account decimal
@@ -85,3 +85,19 @@ integration, live request or AWS run is part of this cleanup.
 Work/Verification/Unexpected/Next/PR/Merge fields and complete dated sessions.
 New work should update this current handoff and add only its owning phase's
 changed handoff here; do not append another full session transcript.
+
+## P37 — Bounded BULK native qualification
+
+Work: the October 23 review fix at `9765666` consumes all previously admitted
+standalone paper cleanup quantity before another opposite IOC can be admitted.
+Uncertain/zero-fill requests and cancellation never refund that allowance.
+Verification: the new cumulative-quantity regression failed before the fix and
+passes afterward; all nine paper-tool tests and 98 owning-branch contract tests
+pass. New hosted jobs apply to each restacked head, not the older green commits.
+Unexpected: the earlier per-request bound allowed multiple full-size closes;
+this finite test-tool correction changes no shipping financial policy or live
+receipt. Original native evidence remains in the archived phase handoff/receipt.
+Next: finish the user-requested reviewed/green stack merge, then stop before
+local precision/funding work. No new native, RPC or AWS run is authorized here.
+PR: https://github.com/arnabnandikgp/cinder/pull/83
+Merge: pending.

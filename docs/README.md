@@ -49,8 +49,10 @@ maintained separately in the Mintlify repository.
 
 Keep linked paths and explicit anchors valid when moving a document. The offline
 contract suite checks links, phase criteria, archived handoff completeness and
-test discovery. A current phase handoff may override its archived predecessor;
-missing evidence or a merge SHA cannot be supplied by the archive by assumption.
+test discovery. Archive fallback applies only to unchanged phases: modified
+scope, criteria, status or progress/work references require a current phase
+handoff. Current records override archived predecessors; missing evidence or a
+merge SHA cannot be supplied by the archive by assumption.
 
 Original ignored `work/`, local docs drafts and unrelated files are preserved.
 Only sanitized material needed for a reproducible checkout belongs here. Historical

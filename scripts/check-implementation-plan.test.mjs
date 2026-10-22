@@ -28,12 +28,27 @@ test('open foundation validates', () => {
 test('current tracker can use explicit preserved phase handoffs without dropping closure checks', () => {
   const { plan, tracker } = fixture(true);
   const summary = tracker.slice(0, tracker.indexOf('## P00'));
-  assert.deepEqual(validatePlan(plan, summary, tracker), []);
-  assert.match(validatePlan(plan, summary, tracker.replace('a'.repeat(40), 'pending')).join('\n'), /merge SHA/);
-  assert.match(validatePlan(plan, summary, tracker.replace('## P01', '## P02')).join('\n'), /phase set differs/);
+  assert.deepEqual(validatePlan(plan, summary, tracker, plan), []);
+  assert.match(validatePlan(plan, summary, tracker.replace('a'.repeat(40), 'pending'), plan).join('\n'), /merge SHA/);
+  assert.match(validatePlan(plan, summary, tracker.replace('## P01', '## P02'), plan).join('\n'), /phase set differs/);
   const override = tracker.slice(tracker.indexOf('## P01')).replace('a'.repeat(40), 'pending');
-  assert.match(validatePlan(plan, summary + override, tracker).join('\n'), /merge SHA/);
-  assert.match(validatePlan(plan, summary + override + override, tracker).join('\n'), /duplicate phase/);
+  assert.match(validatePlan(plan, summary + override, tracker, plan).join('\n'), /merge SHA/);
+  assert.match(validatePlan(plan, summary + override + override, tracker, plan).join('\n'), /duplicate phase/);
+});
+test('archive fallback is limited to unchanged phases, including still-in-progress work', () => {
+  const { plan, tracker } = fixture();
+  const active = tracker.slice(0, tracker.indexOf('## P00')).replaceAll('| open |', '| in progress |');
+  const archive = tracker.replaceAll('| open |', '| in progress |');
+  assert.deepEqual(validatePlan(plan, active, archive, plan), []);
+  for (const next of [plan.replace('criterion 1', 'new criterion'), plan.replace('[ ]', '[x]'), plan.replace('Deliver: something.', 'Deliver: revised scope.')]) {
+    assert.match(validatePlan(next, active, archive, plan).join('\n'), /requires a current handoff/);
+  }
+  for (const next of [active.replace('| in progress |', '| open |'), active.replace('| — |', '| PR #89 work step |')]) {
+    assert.match(validatePlan(plan, next, archive, plan).join('\n'), /requires a current handoff/);
+  }
+  const record = tracker.slice(tracker.indexOf('## P00'), tracker.indexOf('## P01'));
+  assert.deepEqual(validatePlan(plan.replace('criterion 1', 'new criterion'), active + record, archive, plan), []);
+  assert.match(validatePlan(plan, active, archive).join('\n'), /requires a current handoff/);
 });
 test('inserted letter-suffixed phases retain dependency and handoff validation', () => {
   const { plan, tracker } = fixture();

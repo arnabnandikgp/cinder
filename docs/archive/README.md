@@ -20,6 +20,8 @@ Current [criteria](../implementation/PLAN.md) preserve all 46 phase IDs,
 dependencies and acceptance checkboxes. The compact
 [tracker](../implementation/TRACKER.md) references archived handoffs explicitly;
 current phase records override their historical predecessors when work resumes.
+Changed scope, criteria, status or work references require such a current record;
+an unchanged `in progress` label cannot conceal new criteria or progress metadata.
 
 ## Exact-source receipts
 
