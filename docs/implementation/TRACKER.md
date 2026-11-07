@@ -56,20 +56,22 @@ Merge does not close an unmet qualification criterion.
 
 ## Current handoff
 
-Updated 2026-10-23. The user approved documentation consolidation above the
-reviewed P37–P40 stack, then merging the implemented work and stopping before
-the local precision/funding correction. No financial-policy change, frontend
-integration, live request or AWS run is part of this cleanup.
+Updated 2026-11-07. Current scope is repository bookkeeping only. The implemented
+stack and documentation consolidation are merged; the proposed local
+precision/funding correction has not started. No financial-policy change,
+frontend integration, live request or AWS run is part of this maintenance.
 
 Implementation stack #83/#84/#86/#87/#88 is merged at
 `fd7014bd9dd1d394c735d6da567318282fdc46c7`. Each exact head passed all eight
-hosted checks and had no unresolved review thread before merge. Cleanup #89
-remains the final documentation PR; after its merge, stop as requested.
+hosted checks and had no unresolved review thread before merge. Documentation
+consolidation [#89](https://github.com/arnabnandikgp/cinder/pull/89) merged at
+`58c9da1c7e2f690460c8195927cd256c5fe9cda7`; all eight checks also passed on
+that merged tree. No implementation PR remains open from that stack.
 
 - Review: PR #83's cumulative paper cleanup allowance was reproduced failing,
   corrected to consume all prior cleanup quantities, and verified with nine
   paper-tool tests and 98 repository contract tests. Unknown/zero-fill attempts
-  and cancellation do not refund that allowance. The dependent stack is restacked.
+  and cancellation do not refund that allowance. The dependent stack is merged.
 - Cleanup verification: 22 relocated/snapshotted documents were compared with
   pre-cleanup `0ae5218`; content differs only by relative-link rebasing and
   explicit phase anchors. All 46 phase IDs/dependencies and 165 acceptance
@@ -81,9 +83,28 @@ remains the final documentation PR; after its merge, stop as requested.
   attribution passed. Cinder close remains blocked by active-account decimal
   precision/funding handling. Separate authorized teardown finished flat/revoked;
   AWS resources are removed and original private evidence preserved.
-- Next after this user-requested cleanup/merge: stop. The subsequent proposed
-  work is local sanitized regressions, reported-metric precision treatment and
-  funding reconciliation, then joined lifecycle verification. It is not started.
+- Bookkeeping: [#90](https://github.com/arnabnandikgp/cinder/pull/90) records the completed
+  consolidation merge, corrects the CI check count and archives the original
+  P01 reproduction recipe without changing runtime code or phase criteria.
+- Review closeout: CodeRabbit's sole minor finding removed the transient
+  pending-merge sentence from this handoff. The original ARM64 CI failure was
+  tool setup: the live Debian mirror no longer offered the pinned OpenSSL build.
+  The tool-only recipe now uses signed 2026-10-22 Debian snapshots, retaining
+  the existing package versions and authenticating archive metadata/packages.
+  Its cache key includes the source file; two offline regressions guard that
+  boundary. No product dependency, financial policy or hardware receipt changed.
+- Maintenance verification: pinned Node 24.21.0 contract suite passes all 102
+  tests without skips/failures; phase/link and workspace guards pass. No new
+  runtime, hardware, financial or venue result is claimed.
+- Local hygiene: 21 obsolete TEE stack registrations and 34 ancestry-merged branches
+  have a recovery bundle/metadata receipt under ignored `work/maintenance/20261107/`.
+  All 27 non-ancestor branches, the pre-merge recovery branch, legacy-worktree metadata,
+  research and the three pre-existing untracked items are preserved. The dated
+  walkthrough and qualification helper are local historical references, not
+  maintained product instructions or shipping configuration.
+- Next: stop after bookkeeping. The subsequent proposed work is local sanitized
+  regressions, reported-metric precision treatment and funding reconciliation,
+  then joined lifecycle verification. It is not started or authorized here.
 - Deferred: Pacifica missing-credit/live financial qualification, current-image
   full SDK close/cash bridge/admin acceptance, production financial/security
   gates. No new live-run authority follows from a merge.
@@ -119,7 +140,7 @@ pass. Final head `9765666` passed all eight hosted jobs; review threads resolved
 Unexpected: the earlier per-request bound allowed multiple full-size closes;
 this finite test-tool correction changes no shipping financial policy or live
 receipt. Original native evidence remains in the archived phase handoff/receipt.
-Next: stop after cleanup #89; local precision/funding work is not started.
+Next: cleanup #89 is merged; local precision/funding work is not started.
 PR: https://github.com/arnabnandikgp/cinder/pull/83
 Merge: fd7014bd9dd1d394c735d6da567318282fdc46c7.
 
@@ -144,7 +165,7 @@ Chrome timeout reran unchanged; no assertions/deadlines were relaxed. The same
 browser sources pass other layers and the local 14-group Node/Chrome check.
 Unexpected: fresh books and unsupported funding stay not-ready; common API
 composition is not qualified native financial backing or cross-venue margin.
-Next: stop after cleanup #89; P40 owns native precision/funding and actual close.
+Next: cleanup #89 is merged; P40 still owns native precision/funding and actual close.
 PR: https://github.com/arnabnandikgp/cinder/pull/86
 Merge: fd7014bd9dd1d394c735d6da567318282fdc46c7.
 
@@ -157,7 +178,7 @@ jobs with no unresolved threads. An apt-mirror 403 setup failure reran unchanged
 Exact hardware source remains `e72484f`, not an inherited pass for later code.
 Unexpected: six active account reports fail quote-precision decoding; later
 nonzero funding remains outside paper qualification. Cinder's close did not pass.
-Next: after cleanup #89, stop. Proposed local precision/funding regressions and
+Next: cleanup #89 is merged. Proposed local precision/funding regressions and
 joined lifecycle correction are not started; another live run needs new scope.
 PR: https://github.com/arnabnandikgp/cinder/pull/88
 Merge: fd7014bd9dd1d394c735d6da567318282fdc46c7.

@@ -23,6 +23,12 @@ current phase records override their historical predecessors when work resumes.
 Changed scope, criteria, status or work references require such a current record;
 an unchanged `in progress` label cannot conceal new criteria or progress metadata.
 
+## Historical development recipes
+
+- [P01 Linux reproduction](development/p01-linux-reproduction.md): the original
+  tool-only image digest, compiler hashes and offline command. It predates
+  registry dependencies and is not the current bootstrap procedure.
+
 ## Exact-source receipts
 
 | Receipt | Scope |
