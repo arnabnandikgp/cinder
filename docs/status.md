@@ -1,6 +1,7 @@
 # Implementation status and qualification limits
 
-Evidence reviewed through 2026-10-23. This describes this backend tree, not a
+Repository bookkeeping reviewed 2026-11-07; financial and hardware evidence
+remains unchanged through 2026-10-23. This describes this backend tree, not a
 production release. Current execution priority is in the
 [tracker](implementation/TRACKER.md); detailed contracts remain in the
 [acceptance criteria](implementation/PLAN.md).
@@ -10,7 +11,9 @@ Implementation PRs #83, #84, #86, #87 and #88 merged into `product/tee-v1` at
 final head and review closeout. P36's bounded acceptance/receipt scope and
 P37–P39 implementation milestones are closed. **P40 financial qualification,
 P23 live financial acceptance and P24 release review remain open.** Documentation
-consolidation is tracked separately in [PR #89](https://github.com/arnabnandikgp/cinder/pull/89).
+consolidation [PR #89](https://github.com/arnabnandikgp/cinder/pull/89) merged at
+`58c9da1c7e2f690460c8195927cd256c5fe9cda7`; all eight offline checks passed on
+that merged tree. The subsequent bookkeeping pass does not change qualification.
 
 ## Implemented surface
 
@@ -45,8 +48,9 @@ consumed; the receipt authorizes no new live activity.
 
 ## Remaining work
 
-The user requested review/merge of the implemented stack and documentation
-consolidation first, then a stop before this sequence:
+The implemented stack and documentation consolidation are merged. The current
+scope is repository bookkeeping only; the following sequence remains proposed,
+not started:
 
 1. Promote sanitized active-account response fixtures that reproduce the exact
    precision/funding failures.
