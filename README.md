@@ -7,6 +7,11 @@ This repository contains Cinder's Rust backend, private TypeScript SDK and Ancho
 custody/recovery program. The trading terminal, marketing website and public
 Mintlify documentation are maintained separately.
 
+`main` is the active TEE product branch. The pre-TEE Phoenix/PER implementation
+and its full history are preserved on
+[`archive/phoenix-per-poc-20261107`](https://github.com/arnabnandikgp/cinder/tree/archive/phoenix-per-poc-20261107).
+`product/tee-v1` remains the pre-promotion product snapshot; new work targets `main`.
+
 ## How it works
 
 Customers authorize Cinder orders rather than giving clients control over a pooled

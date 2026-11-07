@@ -6,6 +6,15 @@ production release. Current execution priority is in the
 [tracker](implementation/TRACKER.md); detailed contracts remain in the
 [acceptance criteria](implementation/PLAN.md).
 
+## Repository branches
+
+`main` is the canonical TEE product trunk. The pre-TEE Phoenix/PER `main` at
+`8f9c5140976f95081470ffd8370509a467e4836e` is preserved, with its history, on
+`archive/phoenix-per-poc-20261107`. The old `product/tee-v1` branch remains a
+pre-promotion snapshot at `7266fd6d86d81586b70ca532a93103e6e51ac02b`.
+This promotion changes the development entrypoint, not financial qualification
+or release approval. Historical branch/source references below remain original.
+
 Implementation PRs #83, #84, #86, #87 and #88 merged into `product/tee-v1` at
 `fd7014bd9dd1d394c735d6da567318282fdc46c7` after eight passing checks on each
 final head and review closeout. P36's bounded acceptance/receipt scope and
@@ -13,7 +22,10 @@ P37–P39 implementation milestones are closed. **P40 financial qualification,
 P23 live financial acceptance and P24 release review remain open.** Documentation
 consolidation [PR #89](https://github.com/arnabnandikgp/cinder/pull/89) merged at
 `58c9da1c7e2f690460c8195927cd256c5fe9cda7`; all eight offline checks passed on
-that merged tree. The subsequent bookkeeping pass does not change qualification.
+that merged tree. Bookkeeping [PR #90](https://github.com/arnabnandikgp/cinder/pull/90)
+merged at `7266fd6d86d81586b70ca532a93103e6e51ac02b`, after its minor review
+correction, reproducible CI source repair and all eight passing checks. Neither
+bookkeeping nor trunk promotion changes qualification.
 
 ## Implemented surface
 
@@ -49,7 +61,7 @@ consumed; the receipt authorizes no new live activity.
 ## Remaining work
 
 The implemented stack and documentation consolidation are merged. The current
-scope is repository bookkeeping only; the following sequence remains proposed,
+scope is repository trunk promotion only; the following sequence remains proposed,
 not started:
 
 1. Promote sanitized active-account response fixtures that reproduce the exact

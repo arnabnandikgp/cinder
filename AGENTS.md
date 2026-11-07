@@ -1,7 +1,9 @@
 # Cinder contributor guide
 
-Work in `cinder-tee` on the `product/tee-v1` workstream, not legacy Phoenix/PER
-`main`. Cinder is a private perp broker: individual customer entitlements over
+The canonical TEE product trunk is `main`; use the active `cinder-tee` worktree.
+The original `cinder` worktree preserves Phoenix/PER on
+`archive/phoenix-per-poc-20261107`, not the current product. Cinder is a private
+perp broker: individual customer entitlements over
 pooled venue execution, Pacifica and opt-in BULK adapters, AWS Nitro runtime.
 Website, terminal and Mintlify repositories are separate workstreams.
 
@@ -20,7 +22,7 @@ Website, terminal and Mintlify repositories are separate workstreams.
 4. Keep implementation, local tests, exact-image hardware/native evidence and
    production readiness separate. A merge does not close unmet qualification.
 5. Merge only with current user authorization and passing relevant checks/review.
-   Native stacks target `product/tee-v1`; inspect `gh stack view` before pushing
+   Native stacks target `main`; inspect `gh stack view` before pushing
    or merging. No automatic subagents or unrelated repository-governance changes.
 
 ## Code ownership and debugging

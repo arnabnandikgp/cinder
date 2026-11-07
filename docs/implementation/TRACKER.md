@@ -56,10 +56,11 @@ Merge does not close an unmet qualification criterion.
 
 ## Current handoff
 
-Updated 2026-11-07. Current scope is repository bookkeeping only. The implemented
+Updated 2026-11-07. Current scope is promoting the TEE product to `main` while
+preserving pre-TEE `main` on its archive branch. The implemented
 stack and documentation consolidation are merged; the proposed local
 precision/funding correction has not started. No financial-policy change,
-frontend integration, live request or AWS run is part of this maintenance.
+frontend integration, live request or AWS run is part of this migration.
 
 Implementation stack #83/#84/#86/#87/#88 is merged at
 `fd7014bd9dd1d394c735d6da567318282fdc46c7`. Each exact head passed all eight
@@ -86,6 +87,7 @@ that merged tree. No implementation PR remains open from that stack.
 - Bookkeeping: [#90](https://github.com/arnabnandikgp/cinder/pull/90) records the completed
   consolidation merge, corrects the CI check count and archives the original
   P01 reproduction recipe without changing runtime code or phase criteria.
+  It merged at `7266fd6d86d81586b70ca532a93103e6e51ac02b` after all eight checks passed.
 - Review closeout: CodeRabbit's sole minor finding removed the transient
   pending-merge sentence from this handoff. The original ARM64 CI failure was
   tool setup: the live Debian mirror no longer offered the pinned OpenSSL build.
@@ -102,7 +104,18 @@ that merged tree. No implementation PR remains open from that stack.
   research and the three pre-existing untracked items are preserved. The dated
   walkthrough and qualification helper are local historical references, not
   maintained product instructions or shipping configuration.
-- Next: stop after bookkeeping. The subsequent proposed work is local sanitized
+- Trunk convention: new work and stacks target `main`. Old Phoenix/PER `main`
+  is preserved at `8f9c5140976f95081470ffd8370509a467e4836e` on
+  `archive/phoenix-per-poc-20261107`; `product/tee-v1` retains the pre-promotion
+  product snapshot `7266fd6`. The original `cinder` worktree stays on the archive,
+  while `cinder-tee` remains the active product workspace. All four CI workflow
+  filters follow `main` and retain `tee/**` PR-stack coverage. No history is reset
+  or force-pushed, and existing untracked files/research are preserved.
+- Promotion verification: all 103 pinned local contract tests and the phase/link
+  and workspace guards pass. The new regression covers `main` push/PR triggers
+  and stacked PRs in all four maintained workflows. Application crates, clients,
+  programs, lockfiles and financial acceptance criteria are unchanged from `7266fd6`.
+- Next: stop after trunk promotion. The subsequent proposed work is local sanitized
   regressions, reported-metric precision treatment and funding reconciliation,
   then joined lifecycle verification. It is not started or authorized here.
 - Deferred: Pacifica missing-credit/live financial qualification, current-image

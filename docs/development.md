@@ -175,6 +175,12 @@ claimed by the local slice.
 
 ## Routine PR verification
 
+New PRs/stacks target `main`, the canonical TEE trunk; all four maintained
+workflows run for PRs into `main` or a `tee/**` stack branch, and for pushes to
+`main`. The retained `product/tee-v1` snapshot and Phoenix/PER archive are not
+active development trunks. Dated phase/receipt references retain their original
+branch names and source hashes rather than being rewritten as migration evidence.
+
 Run the pinned checks on macOS before opening a routine PR; hosted Linux CI
 provides the normal Linux verification. Do not duplicate every PR run in a local
 container. After a CI failure, inspect the failed job and logs, make a justified

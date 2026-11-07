@@ -2,9 +2,9 @@ name: Implementation foundation
 
 on:
   pull_request:
-    branches: [product/tee-v1, "tee/**"]
+    branches: [main, "tee/**"]
   push:
-    branches: [product/tee-v1]
+    branches: [main]
 
 permissions:
   contents: read

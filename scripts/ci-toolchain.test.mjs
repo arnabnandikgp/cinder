@@ -30,3 +30,14 @@ test('ARM64 intermediate cache includes the dated repository input and keeps pac
   for (const path of ['tools/nitro-linux/Containerfile', 'tools/nitro-linux/debian.sources', 'tools/nitro-linux/cargo-config.toml', 'tools/nitro-runtime/package-check.sh']) assert(key.includes("'" + path + "'"));
   assert.match(workflow, /docker run --rm --network none --platform linux\/arm64/);
 });
+
+test('all maintained workflows follow main and retain stacked PR coverage after TEE promotion', () => {
+  for (const name of ['implementation-foundation', 'nitro-package', 'vault', 'workspace']) {
+    const workflow = read('.github/workflows/' + name + '.yml');
+    const events = workflow.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1];
+    assert(events, name + ': missing event filters');
+    assert.match(events, /^  pull_request:\n    branches: \[main, ["']tee\/\*\*["']\]$/m, name);
+    assert.match(events, /^  push:\n    branches: \[main\]$/m, name);
+    assert.doesNotMatch(events, /product\/tee-v1|archive\//, name);
+  }
+});
