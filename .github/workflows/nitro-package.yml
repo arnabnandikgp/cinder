@@ -31,7 +31,7 @@ jobs:
       - name: Cache locked dependencies and isolated ARM64 intermediates
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          key: arm64-package-${{ hashFiles('tools/nitro-linux/Containerfile', 'tools/nitro-linux/cargo-config.toml', 'tools/nitro-runtime/package-check.sh') }}
+          key: arm64-package-${{ hashFiles('tools/nitro-linux/Containerfile', 'tools/nitro-linux/debian.sources', 'tools/nitro-linux/cargo-config.toml', 'tools/nitro-runtime/package-check.sh') }}
           cache-bin: false
           cache-workspace-crates: false
           workspaces: . -> target/arm64-package

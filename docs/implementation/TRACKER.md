@@ -83,11 +83,17 @@ that merged tree. No implementation PR remains open from that stack.
   attribution passed. Cinder close remains blocked by active-account decimal
   precision/funding handling. Separate authorized teardown finished flat/revoked;
   AWS resources are removed and original private evidence preserved.
-- Bookkeeping: branch `tee/repo-bookkeeping-20261107` records the completed
+- Bookkeeping: [#90](https://github.com/arnabnandikgp/cinder/pull/90) records the completed
   consolidation merge, corrects the CI check count and archives the original
   P01 reproduction recipe without changing runtime code or phase criteria.
-  Review and merge of this bookkeeping change remain outstanding.
-- Maintenance verification: pinned Node 24.21.0 contract suite passes all 100
+- Review closeout: CodeRabbit's sole minor finding removed the transient
+  pending-merge sentence from this handoff. The original ARM64 CI failure was
+  tool setup: the live Debian mirror no longer offered the pinned OpenSSL build.
+  The tool-only recipe now uses signed 2026-10-22 Debian snapshots, retaining
+  the existing package versions and authenticating archive metadata/packages.
+  Its cache key includes the source file; two offline regressions guard that
+  boundary. No product dependency, financial policy or hardware receipt changed.
+- Maintenance verification: pinned Node 24.21.0 contract suite passes all 102
   tests without skips/failures; phase/link and workspace guards pass. No new
   runtime, hardware, financial or venue result is claimed.
 - Local hygiene: 21 obsolete TEE stack registrations and 34 ancestry-merged branches

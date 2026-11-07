@@ -251,6 +251,12 @@ The ARM64 package check uses the pinned public-toolchain image and an exact
 committed source export with read-only vendor/source mounts and no network.
 It does not run AWS, generate an EIF, deploy anything or qualify Nitro hardware.
 Setup downloads toolchains and locked public dependencies before offline checks.
+The ARM64 tool-only image keeps its existing OpenSSL/pkg-config version pins
+available through Debian's dated 2026-10-22 snapshots, not rotating live mirrors.
+APT still verifies Debian signatures and package hashes with the archive keyring.
+Only snapshot metadata expiry is disabled for these deliberately historical
+sources; this does not disable authentication or supply a production image.
+The source file participates in the isolated Cargo cache key alongside the recipe.
 
 ### CI caching
 
