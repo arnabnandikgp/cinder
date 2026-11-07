@@ -175,6 +175,11 @@ claimed by the local slice.
 
 ## Routine PR verification
 
+Run commands from the product repository root. A normal `cinder` checkout is
+sufficient; the former separate `cinder-tee` worktree is no longer required.
+Extra worktrees are optional. Git branch changes do not transport ignored
+research or local files: preserve those separately before removing any checkout.
+
 New PRs/stacks target `main`, the canonical TEE trunk; all four maintained
 workflows run for PRs into `main` or a `tee/**` stack branch, and for pushes to
 `main`. The retained `product/tee-v1` snapshot and Phoenix/PER archive are not

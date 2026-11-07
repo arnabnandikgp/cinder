@@ -56,8 +56,8 @@ Merge does not close an unmet qualification criterion.
 
 ## Current handoff
 
-Updated 2026-11-07. Current scope is promoting the TEE product to `main` while
-preserving pre-TEE `main` on its archive branch. The implemented
+Updated 2026-11-07. Current scope is consolidating the active product into the
+normal `cinder` checkout after the completed `main` promotion. The implemented
 stack and documentation consolidation are merged; the proposed local
 precision/funding correction has not started. No financial-policy change,
 frontend integration, live request or AWS run is part of this migration.
@@ -107,15 +107,26 @@ that merged tree. No implementation PR remains open from that stack.
 - Trunk convention: new work and stacks target `main`. Old Phoenix/PER `main`
   is preserved at `8f9c5140976f95081470ffd8370509a467e4836e` on
   `archive/phoenix-per-poc-20261107`; `product/tee-v1` retains the pre-promotion
-  product snapshot `7266fd6`. The original `cinder` worktree stays on the archive,
-  while `cinder-tee` remains the active product workspace. All four CI workflow
+  product snapshot `7266fd6`. Promotion [#91](https://github.com/arnabnandikgp/cinder/pull/91)
+  merged at `5037a403c45960efb62aa70edd9fc67ab9401138`, with eight passing checks;
+  GitHub's default branch is `main`. All four CI workflow
   filters follow `main` and retain `tee/**` PR-stack coverage. No history is reset
   or force-pushed, and existing untracked files/research are preserved.
 - Promotion verification: all 103 pinned local contract tests and the phase/link
   and workspace guards pass. The new regression covers `main` push/PR triggers
   and stacked PRs in all four maintained workflows. Application crates, clients,
   programs, lockfiles and financial acceptance criteria are unchanged from `7266fd6`.
-- Next: stop after trunk promotion. The subsequent proposed work is local sanitized
+- Workspace consolidation: the normal `cinder` checkout now holds the TEE product
+  and research. All 56,489 original local regular files, their permissions and
+  327 symlink targets were verified before removing the redundant `cinder-tee`
+  Git worktree without force. TEE local files retain their relative paths; old
+  Phoenix-local artifacts are preserved in ignored
+  `work/local-archive/phoenix-worktree-20261107/`. The private manifest/recovery
+  records live in `work/maintenance/worktree-consolidation-20261107/`.
+  The local `.agents` skills remain available; obsolete Phoenix stack metadata
+  was backed up and retired. No project files, credentials or research were
+  discarded, and no application or financial contract changed.
+- Next: stop after workspace consolidation. The subsequent proposed work is local sanitized
   regressions, reported-metric precision treatment and funding reconciliation,
   then joined lifecycle verification. It is not started or authorized here.
 - Deferred: Pacifica missing-credit/live financial qualification, current-image
