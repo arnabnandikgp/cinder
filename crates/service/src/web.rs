@@ -1,0 +1,905 @@
+//! Attested Noise ingress. It accepts no financial identifiers before key
+//! confirmation and invokes the SAME Handler/Session/PrivateBytes API as TLS.
+use crate::{
+    Error,
+    attestation::{MAX_QUOTE, MAX_SESSION, Policy},
+    transport::{
+        Clock, Handler, Lifetime, Listener, MAX_CONNECTIONS, PreparedReply, Session, Socket,
+        read_frame, write_frame,
+    },
+};
+use cinder_journal::model::PrivateBytes;
+use cinder_kernel::identity::{DeploymentId, Domain, NetworkId};
+use cinder_web_channel::{Endpoint, Entropy, profile, records};
+use std::{
+    io::{Cursor, Read},
+    net::{Shutdown, TcpListener},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
+    thread,
+    time::{Duration, Instant},
+};
+use zeroize::Zeroizing;
+
+/// Authenticated application prefix; public outer sequence is only routing.
+pub const UPDATE: &[u8] = b"CINDER-PRIVATE-UPDATE-1\0";
+
+/// Public connection fields: nonce, boot, opaque handle, responder X25519 key.
+pub const FIELDS: usize = 128;
+/// Public quote envelope bound: fields, expiry, bounded signed quote.
+pub const MAX_ENVELOPE: usize = FIELDS + 8 + MAX_QUOTE;
+type PollOutput = Result<Option<PreparedReply>, Error>;
+struct Polling {
+    send: std::sync::mpsc::SyncSender<PrivateBytes>,
+    receive: std::sync::mpsc::Receiver<PollOutput>,
+}
+struct Inbox {
+    wire: std::sync::mpsc::Receiver<Zeroizing<Vec<u8>>>,
+    wake: std::sync::mpsc::Receiver<()>,
+    notify: std::sync::mpsc::SyncSender<()>,
+}
+/// Purpose-separated web quote provider; no parent approval/trust callback.
+pub trait Attester: Send + Sync {
+    /// Quote exact canonical context. Qualified implementations locally validate
+    /// NSM signature/measurements/time; clients independently verify it too.
+    fn web_quote(
+        &self,
+        policy: &Policy,
+        fields: &[u8; FIELDS],
+        expires: u64,
+        now: u64,
+    ) -> Result<Vec<u8>, Error>;
+}
+/// Enclave-owned bounded web ingress. Policy and boot identity never come from
+/// relay requests. There is no second authorization, replay or financial store.
+pub struct Server {
+    policy: Policy,
+    boot: [u8; 32],
+    entropy: Arc<dyn Entropy>,
+    attester: Arc<dyn Attester>,
+    clock: Arc<dyn Clock>,
+    handler: Arc<dyn Handler>,
+}
+impl Server {
+    /// Construct with qualified in-enclave entropy/attestation/time providers.
+    pub fn new(
+        policy: Policy,
+        entropy: Arc<dyn Entropy>,
+        attester: Arc<dyn Attester>,
+        clock: Arc<dyn Clock>,
+        handler: Arc<dyn Handler>,
+    ) -> Result<Self, Error> {
+        Policy::decode(&policy.encode())?;
+        let mut boot = [0; 32];
+        entropy.fill(&mut boot).map_err(|_| Error)?;
+        if boot == [0; 32] {
+            return Err(Error);
+        }
+        Ok(Self {
+            policy,
+            boot,
+            entropy,
+            attester,
+            clock,
+            handler,
+        })
+    }
+    /// Offline TCP ingress; exposed public bodies remain encrypted end to end.
+    pub fn run(self, listener: TcpListener, stop: Arc<AtomicBool>) -> Result<(), Error> {
+        self.run_listener(listener, stop)
+    }
+    /// Identical framing over AF_VSOCK; fixed-target parent relay stays opaque.
+    pub fn run_vsock(
+        self,
+        listener: crate::vsock::VsockListener,
+        stop: Arc<AtomicBool>,
+    ) -> Result<(), Error> {
+        self.run_listener(listener, stop)
+    }
+    fn run_listener<L: Listener>(self, listener: L, stop: Arc<AtomicBool>) -> Result<(), Error> {
+        listener.nonblocking()?;
+        let server = Arc::new(self);
+        let active = Arc::new(AtomicUsize::new(0));
+        let mut workers: Vec<(L::Stream, thread::JoinHandle<()>)> = Vec::new();
+        let mut failed = false;
+        while !stop.load(Ordering::SeqCst) {
+            workers.retain(|(_, h)| !h.is_finished());
+            match listener.accept() {
+                Ok(socket) => {
+                    if active.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
+                        let _ = socket.shutdown(Shutdown::Both);
+                        continue;
+                    }
+                    if socket.prepare().is_err() {
+                        continue;
+                    }
+                    let Ok(shutdown) = socket.try_clone() else {
+                        continue;
+                    };
+                    let server = server.clone();
+                    let active = active.clone();
+                    active.fetch_add(1, Ordering::SeqCst);
+                    let worker = thread::spawn(move || {
+                        let _ = server.connection(socket);
+                        active.fetch_sub(1, Ordering::SeqCst);
+                    });
+                    workers.push((shutdown, worker));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10))
+                }
+                Err(_) => {
+                    failed = true;
+                    stop.store(true, Ordering::SeqCst);
+                    break;
+                }
+            }
+        }
+        for (socket, worker) in workers {
+            let _ = socket.shutdown(Shutdown::Both);
+            let _ = worker.join();
+        }
+        if failed { Err(Error) } else { Ok(()) }
+    }
+    fn connection(&self, mut socket: impl Socket) -> Result<(), Error> {
+        let lifetime = Lifetime::new(socket.try_clone()?);
+        let nonce = read_frame(&mut socket, 32)?;
+        if nonce.len() != 32 || nonce.iter().all(|b| *b == 0) {
+            return Err(Error);
+        }
+        let now = self.clock.now()?;
+        if now == 0 {
+            return Err(Error);
+        }
+        let expires = now.checked_add(MAX_SESSION).ok_or(Error)?;
+        let mut fields = [0; FIELDS];
+        fields[..32].copy_from_slice(&nonce);
+        fields[32..64].copy_from_slice(&self.boot);
+        self.entropy.fill(&mut fields[64..96]).map_err(|_| Error)?;
+        let mut envelope = Vec::new();
+        let mut prologue = [0; 32];
+        let mut endpoint = Endpoint::server_with_entropy(self.entropy.clone(), |key| {
+            fields[96..].copy_from_slice(key);
+            let context = profile::context(&self.policy.encode(), &fields, expires)?;
+            let quote = self
+                .attester
+                .web_quote(&self.policy, &fields, expires, now)
+                .map_err(|_| cinder_web_channel::Error)?;
+            prologue = profile::prologue(&context, &quote)?;
+            envelope.extend_from_slice(&fields);
+            envelope.extend_from_slice(&expires.to_be_bytes());
+            envelope.extend_from_slice(&quote);
+            Ok(prologue)
+        })
+        .map_err(|_| Error)?;
+        write_frame(&mut socket, &envelope, MAX_ENVELOPE)?;
+        for _ in 0..2 {
+            let request = read_frame(&mut socket, cinder_web_channel::MAX_PAYLOAD + 16)?;
+            let reply = endpoint.advance(&request).map_err(|_| Error)?;
+            write_frame(&mut socket, &reply, cinder_web_channel::MAX_PAYLOAD + 16)?;
+        }
+        if !endpoint.ready() || self.clock.now()? >= expires {
+            return Err(Error);
+        }
+        let session = Session::established(
+            Domain {
+                network: NetworkId::new(self.policy.domain[..32].try_into().map_err(|_| Error)?)
+                    .map_err(|_| Error)?,
+                deployment: DeploymentId::new(
+                    self.policy.domain[32..].try_into().map_err(|_| Error)?,
+                )
+                .map_err(|_| Error)?,
+            },
+            profile::binding(&prologue, &endpoint.binding().map_err(|_| Error)?),
+            expires,
+        );
+        lifetime.ready();
+        // One bounded reader, one cipher/handler writer. The idle first byte
+        // does not turn a partial frame into a 120-second delivery budget.
+        let mut reader = socket.try_clone()?;
+        let shutdown = socket.try_clone()?;
+        let (send, receive) = std::sync::mpsc::sync_channel(1);
+        let (notify, wake) = std::sync::mpsc::sync_channel(1);
+        let ready = notify.clone();
+        thread::scope(|scope| {
+            let worker = scope.spawn(move || {
+                let result = (|| -> Result<(), Error> {
+                    loop {
+                        reader.idle()?;
+                        let mut first = [0];
+                        reader.read_exact(&mut first)?;
+                        reader.prepare()?;
+                        let delivery = Lifetime::new(reader.try_clone()?);
+                        let wire = read_frame(
+                            &mut Cursor::new(first).chain(&mut reader),
+                            records::MAX_REQUEST + 22,
+                        )?;
+                        drop(delivery);
+                        send.try_send(wire).map_err(|_| Error)?;
+                        // Coalesced notification only, never a data/authority
+                        // queue. A full wake slot already guarantees a wakeup.
+                        let _ = ready.try_send(());
+                    }
+                })();
+                if result.is_err() {
+                    let _ = shutdown.shutdown(Shutdown::Both);
+                    let _ = ready.try_send(());
+                }
+            });
+            let result = self.application(
+                &mut socket,
+                &mut endpoint,
+                &session,
+                expires,
+                Inbox {
+                    wire: receive,
+                    wake,
+                    notify,
+                },
+            );
+            let _ = socket.shutdown(Shutdown::Both);
+            let _ = worker.join();
+            result
+        })
+    }
+    fn application(
+        &self,
+        socket: &mut impl Socket,
+        endpoint: &mut Endpoint,
+        session: &Session,
+        expires: u64,
+        inbox: Inbox,
+    ) -> Result<(), Error> {
+        // One joinable preparation worker and one outstanding poll per live
+        // connection. It owns neither a socket nor the Noise cipher. Both queues
+        // hold at most one item; Runtime tickets also enforce the global cap.
+        let (send, jobs) = std::sync::mpsc::sync_channel::<PrivateBytes>(1);
+        let (complete, replies) = std::sync::mpsc::sync_channel::<PollOutput>(1);
+        let ready = inbox.notify.clone();
+        thread::scope(|scope| {
+            let worker = scope.spawn(move || {
+                while let Ok(request) = jobs.recv() {
+                    let result = self.clock.now().and_then(|now| {
+                        if now >= expires {
+                            return Err(Error);
+                        }
+                        self.handler.prepare_poll(session, request, now)
+                    });
+                    let failed = result.is_err();
+                    if complete.try_send(result).is_err() {
+                        break;
+                    }
+                    let _ = ready.try_send(());
+                    if failed {
+                        break;
+                    }
+                }
+            });
+            let result = self.application_loop(
+                socket,
+                endpoint,
+                session,
+                expires,
+                inbox,
+                Polling {
+                    send,
+                    receive: replies,
+                },
+            );
+            // application_loop drops its job sender and result receiver first.
+            // An in-flight bounded I/O job is joined, not detached on close.
+            if worker.join().is_err() {
+                return Err(Error);
+            }
+            result
+        })
+    }
+    fn application_loop(
+        &self,
+        socket: &mut impl Socket,
+        endpoint: &mut Endpoint,
+        session: &Session,
+        expires: u64,
+        inbox: Inbox,
+        polling: Polling,
+    ) -> Result<(), Error> {
+        let mut sequence = 1;
+        let mut socket_mode = false;
+        let mut watch: Option<(u32, PrivateBytes, Option<[u8; 32]>, u64)> = None;
+        let mut next_poll = Instant::now();
+        let mut pending = false;
+        loop {
+            if self.clock.now()? >= expires {
+                return Err(Error);
+            }
+            // Prefer already-arrived ingress over starting a periodic read.
+            // Each iteration still drains completion/schedules after at most one
+            // command: continuous traffic cannot starve checks or updates.
+            let wait = if watch.is_some() && !pending {
+                next_poll
+                    .saturating_duration_since(Instant::now())
+                    .min(Duration::from_millis(250))
+            } else {
+                Duration::from_millis(250)
+            };
+            match inbox.wake.recv_timeout(wait) {
+                Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err(Error),
+            }
+            let wire = match inbox.wire.try_recv() {
+                Ok(wire) => Some(wire),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => return Err(Error),
+                Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            };
+            if let Some(wire) = wire {
+                if sequence >= cinder_web_channel::MAX_RECORDS {
+                    return Err(Error);
+                }
+                let clear = endpoint.open(&wire).map_err(|_| Error)?;
+                let (delivery, request) =
+                    records::read_delivery(sequence, &clear).map_err(|_| Error)?;
+                if socket_mode && delivery == 1 {
+                    return Err(Error);
+                }
+                socket_mode |= delivery != 1;
+                let now = self.clock.now()?;
+                if now >= expires {
+                    return Err(Error);
+                }
+                let request = PrivateBytes::new(request.to_vec()).map_err(|_| Error)?;
+                if delivery == 3 {
+                    // Never dispatch a mutation disguised as a subscription.
+                    let valid = if request.as_bytes().starts_with(b"CINDER-API\0\x00\x02") {
+                        cinder_api::units::Request::decode(request.as_bytes()).is_ok_and(|r|
+                        matches!(r.body.command,cinder_api::wire::Command::Read(q) if q.cursor == [0;40]))
+                    } else {
+                        cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r|
+                    matches!(r.command,cinder_api::wire::Command::Read(q) if q.cursor == [0;40]))
+                    };
+                    if !valid || watch.is_some() {
+                        return Err(Error);
+                    }
+                }
+                let prepared = self.handler.prepare_handle(session, request.clone(), now)?;
+                if self.clock.now()? >= expires {
+                    return Err(Error);
+                }
+                let reply = self
+                    .handler
+                    .release_reply(session, prepared)?
+                    .ok_or(Error)?;
+                self.deliver(
+                    socket,
+                    endpoint,
+                    sequence,
+                    &reply,
+                    socket_mode,
+                    (delivery == 3).then_some(1),
+                )?;
+                if delivery == 3 {
+                    let revision = revision_of(reply.as_bytes());
+                    if revision.is_none() {
+                        return Err(Error);
+                    }
+                    watch = Some((sequence, request, revision, 1));
+                    next_poll = Instant::now() + Duration::from_millis(500);
+                }
+                sequence += 1;
+                if sequence == cinder_web_channel::MAX_RECORDS && watch.is_none() {
+                    return Ok(());
+                }
+            }
+            if pending {
+                match polling.receive.try_recv() {
+                    Ok(result) => {
+                        pending = false;
+                        // Cadence starts after preparation AND delivery, even
+                        // when a generation/capacity race emits nothing.
+                        if self.clock.now()? >= expires {
+                            return Err(Error);
+                        }
+                        if let Some(prepared) = result? {
+                            // Final authorization, signed time and publication
+                            // gate happen here, never in the preparation queue.
+                            if let Some(reply) = self.handler.release_reply(session, prepared)? {
+                                let (correlation, _, revision, ordinal) =
+                                    watch.as_mut().ok_or(Error)?;
+                                let fresh = revision_of(reply.as_bytes());
+                                if fresh.is_none() || fresh != *revision {
+                                    *ordinal = ordinal.checked_add(1).ok_or(Error)?;
+                                    self.deliver(
+                                        socket,
+                                        endpoint,
+                                        *correlation,
+                                        &reply,
+                                        true,
+                                        Some(*ordinal),
+                                    )?;
+                                    *revision = fresh;
+                                    if fresh.is_none() {
+                                        return Err(Error);
+                                    }
+                                }
+                            }
+                        }
+                        next_poll = Instant::now() + Duration::from_millis(500);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => return Err(Error),
+                }
+            }
+            if !pending
+                && Instant::now() >= next_poll
+                && let Some((_, request, _, _)) = &watch
+            {
+                polling.send.try_send(request.clone()).map_err(|_| Error)?;
+                pending = true;
+            }
+        }
+    }
+    fn deliver(
+        &self,
+        socket: &mut impl Socket,
+        endpoint: &mut Endpoint,
+        sequence: u32,
+        reply: &PrivateBytes,
+        websocket: bool,
+        update: Option<u64>,
+    ) -> Result<(), Error> {
+        let clear = if let Some(ordinal) = update {
+            Zeroizing::new([UPDATE, &ordinal.to_be_bytes(), reply.as_bytes()].concat())
+        } else {
+            Zeroizing::new(reply.as_bytes().to_vec())
+        };
+        let batch = records::response(endpoint, sequence, &clear).map_err(|_| Error)?;
+        let _delivery = Lifetime::new(socket.try_clone()?);
+        if websocket {
+            write_frame(
+                socket,
+                &[&sequence.to_be_bytes()[..], &batch].concat(),
+                records::MAX_BATCH + 4,
+            )
+        } else {
+            write_frame(socket, &batch, records::MAX_BATCH)
+        }
+    }
+}
+fn revision_of(bytes: &[u8]) -> Option<[u8; 32]> {
+    let unit_prefix = b"CINDER-API-REPLY\0\x00\x02";
+    let bytes = if bytes.starts_with(unit_prefix) {
+        let unit = bytes.get(unit_prefix.len()..unit_prefix.len() + 32)?;
+        if unit == [0; 32] {
+            return None;
+        }
+        bytes.get(unit_prefix.len() + 32..)?
+    } else {
+        bytes
+    };
+    let prefix = b"CINDER-API-REPLY\0\x00\x01";
+    if !bytes.starts_with(prefix) || bytes.get(prefix.len()..prefix.len() + 2)? != [3, 1] {
+        return None;
+    }
+    bytes
+        .get(prefix.len() + 3..prefix.len() + 35)?
+        .try_into()
+        .ok()
+}
+#[cfg(all(test, feature = "local-fixture"))]
+mod tests {
+    use super::*;
+    use crate::fixture::{FixtureAttester, FixtureClock, policy};
+    use cinder_api::ConfidentialChannel;
+    use std::{
+        net::TcpStream,
+        sync::{Mutex, atomic::AtomicU64},
+    };
+    struct Time(AtomicU64);
+    impl Clock for Time {
+        fn now(&self) -> Result<u64, Error> {
+            let n = self.0.load(Ordering::SeqCst);
+            if n == 0 { Err(Error) } else { Ok(n) }
+        }
+    }
+    #[derive(Default)]
+    struct Application(Mutex<Vec<[u8; 32]>>);
+    impl Handler for Application {
+        fn handle(
+            &self,
+            channel: &Session,
+            request: PrivateBytes,
+            _now: u64,
+        ) -> Result<PrivateBytes, Error> {
+            self.0.lock().unwrap().push(channel.binding());
+            Ok(request)
+        }
+    }
+    fn client(port: u16) -> (TcpStream, Endpoint, u64, [u8; 32]) {
+        let mut socket = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        socket.prepare().unwrap();
+        write_frame(&mut socket, &[9; 32], 32).unwrap();
+        let envelope = read_frame(&mut socket, MAX_ENVELOPE).unwrap();
+        let expires = u64::from_be_bytes(envelope[128..136].try_into().unwrap());
+        let context = profile::context(&policy().encode(), &envelope[..128], expires).unwrap();
+        let prologue = profile::prologue(&context, &envelope[136..]).unwrap();
+        let mut endpoint = Endpoint::client(&envelope[96..128], &prologue).unwrap();
+        write_frame(&mut socket, &endpoint.start().unwrap(), 16400).unwrap();
+        let second = read_frame(&mut socket, 16400).unwrap();
+        write_frame(&mut socket, &endpoint.advance(&second).unwrap(), 16400).unwrap();
+        let ack = read_frame(&mut socket, 16400).unwrap();
+        assert!(endpoint.advance(&ack).unwrap().is_empty());
+        let binding = profile::binding(&prologue, &endpoint.binding().unwrap());
+        (socket, endpoint, expires, binding)
+    }
+    type Fixture = (
+        u16,
+        Arc<Time>,
+        Arc<Application>,
+        Arc<AtomicBool>,
+        thread::JoinHandle<Result<(), Error>>,
+    );
+    fn start() -> Fixture {
+        let clock = Arc::new(Time(AtomicU64::new(FixtureClock.now().unwrap())));
+        let application = Arc::new(Application::default());
+        let server = Server::new(
+            policy(),
+            Arc::new(FixtureClock),
+            Arc::new(FixtureAttester::new().unwrap()),
+            clock.clone(),
+            application.clone(),
+        )
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = stop.clone();
+        (
+            port,
+            clock,
+            application,
+            stop,
+            thread::spawn(move || server.run(listener, flag)),
+        )
+    }
+    fn send(socket: &mut TcpStream, endpoint: &mut Endpoint, sequence: u32) {
+        let clear = records::request(sequence, b"PRIVATE-APPLICATION").unwrap();
+        write_frame(socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+    }
+    #[test]
+    fn slow_poll_never_owns_cipher_or_blocks_same_socket_command_and_close_joins_it() {
+        struct Stalled {
+            entered: std::sync::mpsc::SyncSender<()>,
+            release: Mutex<std::sync::mpsc::Receiver<()>>,
+            active: AtomicUsize,
+            calls: AtomicUsize,
+        }
+        impl Stalled {
+            fn page(revision: u8, now: u64) -> Result<PrivateBytes, Error> {
+                cinder_api::Response::Read(cinder_api::reads::Page {
+                    kind: 2,
+                    revision: [revision; 32],
+                    next: [0; 40],
+                    evaluated_at: now,
+                    rows: Vec::new(),
+                })
+                .encode()
+                .map_err(|_| Error)
+            }
+        }
+        impl Handler for Stalled {
+            fn handle(
+                &self,
+                _: &Session,
+                _: PrivateBytes,
+                now: u64,
+            ) -> Result<PrivateBytes, Error> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Self::page(1, now)
+            }
+            fn poll(
+                &self,
+                _: &Session,
+                _: PrivateBytes,
+                now: u64,
+            ) -> Result<Option<PrivateBytes>, Error> {
+                assert_eq!(self.active.fetch_add(1, Ordering::SeqCst), 0);
+                self.entered.try_send(()).unwrap();
+                // A finite synthetic transport barrier. With the old loop,
+                // command two could not be delivered before this was released.
+                let received = self
+                    .release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(2));
+                self.active.fetch_sub(1, Ordering::SeqCst);
+                received.map_err(|_| Error)?;
+                Self::page(2, now).map(Some)
+            }
+        }
+        for close_during_io in [false, true] {
+            let (entered, observed) = std::sync::mpsc::sync_channel(1);
+            let (release, resume) = std::sync::mpsc::sync_channel(1);
+            let app = Arc::new(Stalled {
+                entered,
+                release: Mutex::new(resume),
+                active: AtomicUsize::new(0),
+                calls: AtomicUsize::new(0),
+            });
+            let server = Server::new(
+                policy(),
+                Arc::new(FixtureClock),
+                Arc::new(FixtureAttester::new().unwrap()),
+                Arc::new(FixtureClock),
+                app.clone(),
+            )
+            .unwrap();
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let stop = Arc::new(AtomicBool::new(false));
+            let flag = stop.clone();
+            let worker = thread::spawn(move || server.run(listener, flag));
+            let (mut socket, mut endpoint, expires, binding) = client(port);
+            let request = cinder_api::wire::Request {
+                domain: policy_domain(),
+                account: cinder_kernel::identity::AccountId::new([3; 32]).unwrap(),
+                id: cinder_kernel::identity::RequestId::new([4; 32]).unwrap(),
+                policy: cinder_kernel::identity::PolicyVersion::new(1).unwrap(),
+                epoch: 1,
+                signer: [5; 32],
+                session: binding,
+                expires_at: expires,
+                command: cinder_api::wire::Command::Read(cinder_api::reads::Query {
+                    kind: 2,
+                    cursor: [0; 40],
+                    limit: 1,
+                }),
+                signature: [7; 64],
+            };
+            let clear =
+                records::socket_request(1, request.encode().unwrap().as_bytes(), true).unwrap();
+            write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+            let first = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+            assert_eq!(&first[..4], &1u32.to_be_bytes());
+            let initial = records::read_response(&mut endpoint, 1, &first[4..]).unwrap();
+            assert!(initial.starts_with(UPDATE));
+            observed.recv_timeout(Duration::from_secs(2)).unwrap();
+            assert_eq!(app.active.load(Ordering::SeqCst), 1);
+            if close_during_io {
+                stop.store(true, Ordering::SeqCst);
+                socket.shutdown(Shutdown::Both).unwrap();
+            } else {
+                let clear = records::socket_request(2, b"COMMAND-WHILE-POLLING", false).unwrap();
+                let started = Instant::now();
+                write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+                let batch = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+                assert_eq!(&batch[..4], &2u32.to_be_bytes());
+                let reply = records::read_response(&mut endpoint, 2, &batch[4..]).unwrap();
+                assert_eq!(revision_of(&reply), Some([1; 32]));
+                assert!(started.elapsed() < Duration::from_secs(1));
+                assert_eq!(app.active.load(Ordering::SeqCst), 1);
+            }
+            release.send(()).unwrap();
+            if !close_during_io {
+                let batch = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+                assert_eq!(&batch[..4], &1u32.to_be_bytes());
+                let clear = records::read_response(&mut endpoint, 1, &batch[4..]).unwrap();
+                assert_eq!(&clear[UPDATE.len()..UPDATE.len() + 8], &2u64.to_be_bytes());
+                assert_eq!(revision_of(&clear[UPDATE.len() + 8..]), Some([2; 32]));
+                stop.store(true, Ordering::SeqCst);
+            }
+            worker.join().unwrap().unwrap();
+            assert_eq!(app.active.load(Ordering::SeqCst), 0);
+            assert_eq!(
+                app.calls.load(Ordering::SeqCst),
+                if close_during_io { 1 } else { 2 }
+            );
+        }
+    }
+    fn policy_domain() -> Domain {
+        Domain {
+            network: NetworkId::new([1; 32]).unwrap(),
+            deployment: DeploymentId::new([2; 32]).unwrap(),
+        }
+    }
+    #[test]
+    fn subscription_skips_busy_polls_delivers_next_revision_and_closes_on_failure() {
+        struct Busy {
+            calls: AtomicUsize,
+            failed: AtomicBool,
+            finished: Mutex<Option<Instant>>,
+        }
+        impl Busy {
+            fn page(revision: u8, now: u64) -> Result<PrivateBytes, Error> {
+                cinder_api::Response::Read(cinder_api::reads::Page {
+                    kind: 2,
+                    revision: [revision; 32],
+                    next: [0; 40],
+                    evaluated_at: now,
+                    rows: Vec::new(),
+                })
+                .encode()
+                .map_err(|_| Error)
+            }
+        }
+        impl Handler for Busy {
+            fn handle(
+                &self,
+                _: &Session,
+                _: PrivateBytes,
+                now: u64,
+            ) -> Result<PrivateBytes, Error> {
+                Self::page(1, now)
+            }
+            fn poll(
+                &self,
+                _: &Session,
+                _: PrivateBytes,
+                now: u64,
+            ) -> Result<Option<PrivateBytes>, Error> {
+                if self.failed.load(Ordering::SeqCst) {
+                    return Err(Error);
+                }
+                if let Some(previous) = *self.finished.lock().unwrap() {
+                    assert!(previous.elapsed() >= Duration::from_millis(500));
+                }
+                // Real cloud checks can take longer than the poll interval.
+                // The next interval must start after I/O, not before it.
+                thread::sleep(Duration::from_millis(600));
+                let result = if self.calls.fetch_add(1, Ordering::SeqCst) < 3 {
+                    Ok(None)
+                } else {
+                    Self::page(2, now).map(Some)
+                };
+                *self.finished.lock().unwrap() = Some(Instant::now());
+                result
+            }
+        }
+        let application = Arc::new(Busy {
+            calls: AtomicUsize::new(0),
+            failed: AtomicBool::new(false),
+            finished: Mutex::new(None),
+        });
+        let clock = Arc::new(Time(AtomicU64::new(FixtureClock.now().unwrap())));
+        let server = Server::new(
+            policy(),
+            Arc::new(FixtureClock),
+            Arc::new(FixtureAttester::new().unwrap()),
+            clock,
+            application.clone(),
+        )
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = stop.clone();
+        let worker = thread::spawn(move || server.run(listener, flag));
+        let (mut socket, mut endpoint, expires, binding) = client(port);
+        use cinder_kernel::identity::{AccountId, PolicyVersion, RequestId};
+        let mut request = cinder_api::wire::Request {
+            domain: Domain {
+                network: NetworkId::new([1; 32]).unwrap(),
+                deployment: DeploymentId::new([2; 32]).unwrap(),
+            },
+            account: AccountId::new([3; 32]).unwrap(),
+            id: RequestId::new([4; 32]).unwrap(),
+            policy: PolicyVersion::new(1).unwrap(),
+            epoch: 1,
+            signer: [5; 32],
+            session: binding,
+            expires_at: expires,
+            command: cinder_api::wire::Command::Read(cinder_api::reads::Query {
+                kind: 2,
+                cursor: [0; 40],
+                limit: 1,
+            }),
+            signature: [7; 64],
+        };
+        let clear = records::socket_request(1, request.encode().unwrap().as_bytes(), true).unwrap();
+        write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+        for ordinal in [1u64, 2] {
+            let batch = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+            assert_eq!(&batch[..4], &1u32.to_be_bytes());
+            let clear = records::read_response(&mut endpoint, 1, &batch[4..]).unwrap();
+            assert!(clear.as_slice().starts_with(UPDATE));
+            assert_eq!(
+                &clear[UPDATE.len()..UPDATE.len() + 8],
+                &ordinal.to_be_bytes()
+            );
+            assert_eq!(
+                revision_of(&clear[UPDATE.len() + 8..]),
+                Some([ordinal as u8; 32])
+            );
+        }
+        assert!(application.calls.load(Ordering::SeqCst) >= 4);
+        application.failed.store(true, Ordering::SeqCst);
+        assert!(read_frame(&mut socket, records::MAX_BATCH + 4).is_err());
+        // Default polling rejects mutations before invoking even a fixture handler.
+        let handler = Application::default();
+        request.command = cinder_api::wire::Command::Revoke;
+        assert!(
+            handler
+                .poll(
+                    &Session::established(request.domain, binding, expires),
+                    request.encode().unwrap(),
+                    FixtureClock.now().unwrap()
+                )
+                .is_err()
+        );
+        assert!(handler.0.lock().unwrap().is_empty());
+        stop.store(true, Ordering::SeqCst);
+        worker.join().unwrap().unwrap();
+    }
+    #[test]
+    fn confirmed_binding_reaches_same_session_and_expiry_blocks_handler() {
+        let (port, clock, application, stop, worker) = start();
+        let (mut socket, mut endpoint, expires, binding) = client(port);
+        send(&mut socket, &mut endpoint, 1);
+        let batch = read_frame(&mut socket, records::MAX_BATCH).unwrap();
+        assert_eq!(
+            records::read_response(&mut endpoint, 1, &batch)
+                .unwrap()
+                .as_slice(),
+            b"PRIVATE-APPLICATION"
+        );
+        assert_eq!(*application.0.lock().unwrap(), vec![binding]);
+        clock.0.store(expires, Ordering::SeqCst);
+        send(&mut socket, &mut endpoint, 2);
+        assert!(read_frame(&mut socket, records::MAX_BATCH).is_err());
+        assert_eq!(application.0.lock().unwrap().len(), 1);
+        stop.store(true, Ordering::SeqCst);
+        assert!(worker.join().unwrap().is_ok());
+    }
+    #[test]
+    fn fence_closes_live_sessions_without_an_application_call() {
+        let (port, _clock, application, stop, worker) = start();
+        let (mut socket, _endpoint, _expires, _binding) = client(port);
+        stop.store(true, Ordering::SeqCst);
+        assert!(worker.join().unwrap().is_ok());
+        assert!(read_frame(&mut socket, records::MAX_BATCH).is_err());
+        assert!(application.0.lock().unwrap().is_empty());
+    }
+    #[test]
+    fn signed_clock_failure_closes_session_instead_of_cached_time() {
+        let (port, clock, application, stop, worker) = start();
+        let (mut socket, mut endpoint, _expires, _binding) = client(port);
+        clock.0.store(0, Ordering::SeqCst);
+        send(&mut socket, &mut endpoint, 1);
+        assert!(read_frame(&mut socket, records::MAX_BATCH).is_err());
+        assert!(application.0.lock().unwrap().is_empty());
+        stop.store(true, Ordering::SeqCst);
+        assert!(worker.join().unwrap().is_ok());
+    }
+    #[test]
+    fn subscription_delivery_cannot_disguise_a_command_or_invoke_handler() {
+        let (port, _clock, application, stop, worker) = start();
+        let (mut socket, mut endpoint, _expires, _binding) = client(port);
+        let clear = records::socket_request(1, b"PRIVATE-APPLICATION", true).unwrap();
+        write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+        assert!(read_frame(&mut socket, records::MAX_BATCH + 4).is_err());
+        assert!(application.0.lock().unwrap().is_empty());
+        stop.store(true, Ordering::SeqCst);
+        assert!(worker.join().unwrap().is_ok());
+    }
+    #[test]
+    fn socket_correlation_is_authenticated_and_http_cannot_mix_after_upgrade() {
+        let (port, _clock, application, stop, worker) = start();
+        let (mut socket, mut endpoint, _expires, binding) = client(port);
+        let clear = records::socket_request(1, b"PRIVATE-APPLICATION", false).unwrap();
+        write_frame(&mut socket, &endpoint.seal(&clear).unwrap(), 1046).unwrap();
+        let batch = read_frame(&mut socket, records::MAX_BATCH + 4).unwrap();
+        assert_eq!(&batch[..4], &1u32.to_be_bytes());
+        assert_eq!(
+            records::read_response(&mut endpoint, 1, &batch[4..])
+                .unwrap()
+                .as_slice(),
+            b"PRIVATE-APPLICATION"
+        );
+        assert_eq!(*application.0.lock().unwrap(), vec![binding]);
+        send(&mut socket, &mut endpoint, 2);
+        assert!(read_frame(&mut socket, records::MAX_BATCH + 4).is_err());
+        assert_eq!(application.0.lock().unwrap().len(), 1);
+        stop.store(true, Ordering::SeqCst);
+        assert!(worker.join().unwrap().is_ok());
+    }
+}

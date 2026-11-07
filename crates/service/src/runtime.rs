@@ -1,0 +1,1837 @@
+//! One private financial service, one authoritative journal. No seeded balance,
+//! fixture dispatch, HTTP parent backend, hidden wallet loading or replay resend.
+use crate::{
+    Error,
+    boot::{Gates, HistoryPolicy, Manifest, Role},
+    chain_funding,
+    cloud::{Client, Credential, DynamoWitness, S3Packs, S3Replica},
+    egress::{Egress, Trust},
+    release::ApplicationContract,
+    transport::{Clock, Handler, Prepared, PreparedReply, Session},
+    vsock::Target,
+};
+use cinder_api::{Admission, Contract, OwnerBinding, Service};
+use cinder_journal::{
+    Backend, Journal, Protection,
+    encrypted::RecordCipher,
+    model::*,
+    orders,
+    packed::Packed,
+    read::{Binding as ReadBinding, Failure as ReadFailure, Reader, Witness as ReadWitness},
+    replicated::{Replicated, Stream, Witness},
+};
+use cinder_kernel::{identity::*, ledger::Config};
+use cinder_pacifica::{
+    execution::{Gateway, Policy},
+    funding::{Controller, Route},
+    profile::{Level, Mapping, Profile},
+};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+use zeroize::Zeroizing;
+
+const REQUEST_WAIT: std::time::Duration = std::time::Duration::from_millis(250);
+// Budget from BEFORE the final signed clock sample through authorization and
+// metadata release. Not a clock source, freshness TTL or wire reply timeout.
+const READ_RELEASE: std::time::Duration = std::time::Duration::from_millis(250);
+mod financial;
+/// Actual Runtime with explicit local file/witness/clock ports, never a shipping
+/// key-release or hardware entrypoint. Harness controls terminate on private stdin.
+#[cfg(feature = "local-fixture")]
+pub mod qualification;
+struct ReadRuntime {
+    reader: Reader,
+    witness: Arc<dyn ReadWitness>,
+}
+/// Private candidate retained under the global journal read-slot budget. Its
+/// witness check is not a release permit; queued delivery must consume the final
+/// current-generation/time/auth gate on the connection thread.
+pub(crate) struct ReadCandidate {
+    verified: cinder_journal::read::Verified,
+    request: PrivateBytes,
+    encoded: PrivateBytes,
+    evaluated_at: u64,
+    binding: [u8; 32],
+    periodic: bool,
+}
+struct PanicFence<'a> {
+    stop: &'a AtomicBool,
+    reads: Option<&'a ReadRuntime>,
+}
+impl Drop for PanicFence<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.stop.store(true, Ordering::SeqCst);
+            if let Some(reads) = self.reads {
+                reads.reader.close();
+            }
+        }
+    }
+}
+fn lock_bounded<T>(
+    mutex: &Mutex<T>,
+    timeout: std::time::Duration,
+) -> Result<Option<std::sync::MutexGuard<'_, T>>, Error> {
+    let start = std::time::Instant::now();
+    loop {
+        match mutex.try_lock() {
+            Ok(guard) => return Ok(Some(guard)),
+            Err(std::sync::TryLockError::Poisoned(_)) => return Err(Error),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                let Some(remaining) = timeout.checked_sub(start.elapsed()) else {
+                    return Ok(None);
+                };
+                if remaining.is_zero() {
+                    return Ok(None);
+                }
+                std::thread::sleep(remaining.min(std::time::Duration::from_millis(1)));
+                if start.elapsed() >= timeout {
+                    return Ok(None);
+                }
+            }
+        }
+    }
+}
+
+/// A rejected original deposit must not starve subsequent configured locators.
+/// Transport, freshness, current-account and journal failures still fence the worker.
+#[cfg(test)]
+pub(crate) fn poll_deposit<B: Backend, P: Protection, T: crate::chain_rpc::Transport>(
+    chain: &mut chain_funding::Port<T>,
+    store: &mut Journal<B, P>,
+    funding: &Controller,
+    index: &mut usize,
+) -> Result<(), Error> {
+    let count = chain.deposit_count();
+    if count != 0 {
+        match chain.observe_deposit(store, funding, *index)? {
+            chain_funding::Outcome::Pending
+            | chain_funding::Outcome::Rejected
+            | chain_funding::Outcome::Settled => *index = (*index + 1) % count,
+            _ => return Err(Error),
+        }
+    }
+    Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+/// Confidential account-to-payout/auth owner binding, not a public directory.
+pub struct Owner {
+    /// Private accounting identity.
+    pub account: [u8; 32],
+    /// Registered Solana signing/payout wallet.
+    pub wallet: [u8; 32],
+    /// Bound token recipient, not caller-selected per withdrawal.
+    pub tokens: [u8; 32],
+}
+/// Governed backend enrollment bound, not a caller's request to bypass admission.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Onboarding {
+    /// Maximum total accounts, including genesis customers; hard cap is 1024.
+    pub maximum_accounts: u16,
+}
+/// Encrypted configuration payload. Not a public policy API.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Configuration {
+    /// Explicit backend onboarding opt-in; capacity is policy, not wallet inventory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onboarding: Option<Onboarding>,
+    /// Existing canonical journal configuration codec, no alternate ledger.
+    pub ledger: Vec<u8>,
+    /// Governed private customer bindings.
+    pub owners: Vec<Owner>,
+    /// Maximum private authentication lifetime, milliseconds.
+    pub auth_ms: u64,
+    /// Maximum persisted strategy grant lifetime, milliseconds.
+    pub grant_ms: u64,
+    /// Native source index in the decoded configuration.
+    pub source: usize,
+    /// Exact native pooled wallet address.
+    pub account: String,
+    /// Native profile environment identifier.
+    pub environment: String,
+    /// Nonzero immutable qualification revision.
+    pub revision: u64,
+    /// Named qualification artifact, not live authority by itself.
+    pub evidence: String,
+    /// Exact native decimal-grid qualification.
+    pub precision: Level,
+    /// Exact native fill-semantic qualification.
+    pub fills: Level,
+    /// Venue symbols mapped to configured kernel markets.
+    pub markets: Vec<Mapping>,
+    /// Native quote atom decimal scale.
+    pub quote_places: u8,
+    /// Qualified native perp instrument tag.
+    pub perp_tag: u64,
+    /// Loaded execution/credit contract; construction does not activate it.
+    pub execution: Policy,
+    /// Loaded funds route; chain signing requires version 2's separate role.
+    pub route: Route,
+    /// Explicit new-history escrow composition. Existing measured live funding
+    /// approvals do not authorize this mode; fresh activation is separately scoped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escrow: Option<cinder_pacifica::funding::escrow::Routing>,
+    /// Trading-agent epoch, distinct from witness/storage generation.
+    pub trading_epoch: u64,
+    /// Version 2 private chain limits/path. Omitted in old five-role profiles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain: Option<chain_funding::Configuration>,
+    /// Separately governed ONE-time demo collateral allocation. Private owner,
+    /// amount and operation bindings stay in encrypted configuration, not the EIF
+    /// manifest or public health. Absence preserves legacy encoding/authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub demo_allocation: Option<crate::demo_funding::Policy>,
+}
+impl Configuration {
+    /// Consume separated secrets into actual validated controllers and API policy.
+    pub fn construct(self, mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>) -> Result<Loaded, Error> {
+        self.construct_using(&mut keys, None, false)
+    }
+    /// Load versioned public trust from the ACTUAL measured manifest. Secret
+    /// path/limits and separate funds identity contribute to the application hash.
+    pub fn construct_for(
+        self,
+        manifest: &Manifest,
+        mut keys: BTreeMap<Role, Zeroizing<Vec<u8>>>,
+    ) -> Result<Loaded, Error> {
+        manifest.validate()?;
+        if manifest.version >= 7 {
+            return Err(Error);
+        }
+        if self.escrow.is_some()
+            && (manifest.gates.funding
+                || manifest.version == 6
+                || self.demo_allocation.is_some()
+                || manifest.demo_deposit.is_some())
+        {
+            return Err(Error);
+        }
+        let allocation = self.demo_allocation.clone();
+        if manifest.version == 6 && allocation.is_none() {
+            return Err(Error);
+        }
+        let mut loaded =
+            self.construct_using(&mut keys, manifest.chain.as_ref(), manifest.version == 6)?;
+        if let Some(policy) = &manifest.history {
+            loaded.application = loaded.application.with_history(policy)?;
+        }
+        loaded.history = manifest.history.clone();
+        if let Some(policy) = &manifest.demo_deposit {
+            if loaded
+                .chain
+                .as_ref()
+                .is_none_or(|chain| chain.poll_ms() > policy.interval_ms)
+            {
+                return Err(Error);
+            }
+            loaded.application =
+                loaded
+                    .application
+                    .with_demo(policy, &loaded.funding, &loaded.gateway)?;
+        }
+        loaded.demo_deposit = manifest.demo_deposit.clone();
+        if let Some(policy) = allocation {
+            let authorization = crate::demo_funding::Authorization::bind(
+                policy,
+                &loaded.config,
+                &loaded.funding,
+                &loaded.gateway,
+                manifest.demo_deposit.as_ref().ok_or(Error)?,
+                loaded.chain.as_ref().ok_or(Error)?,
+            )?;
+            loaded.application = loaded.application.with_demo_allocation(&authorization);
+            loaded.demo_allocation = Some(authorization);
+        }
+        if let Some(policy) = &manifest.native_capture {
+            let origin =
+                cinder_pacifica::capture::validate_gateway(&loaded.gateway).map_err(|_| Error)?;
+            let capture = crate::native_capture::Loaded::new(origin, policy)?;
+            loaded.application = loaded.application.with_capture(&capture)?;
+            loaded.capture = Some(capture);
+        }
+        Ok(loaded)
+    }
+    fn construct_using(
+        self,
+        keys: &mut BTreeMap<Role, Zeroizing<Vec<u8>>>,
+        peer: Option<&chain_funding::Peer>,
+        demo_ingress_only: bool,
+    ) -> Result<Loaded, Error> {
+        if self.demo_allocation.is_some() && peer.is_none() {
+            return Err(Error);
+        }
+        crate::boot::validate_keys(keys)?;
+        let config = cinder_journal::wire::decode_config(&self.ledger).map_err(|_| Error)?;
+        let source = config.sources.get(self.source).ok_or(Error)?.scope;
+        let profile = Profile {
+            config: config.clone(),
+            source,
+            account: self.account,
+            environment: self.environment,
+            revision: self.revision,
+            evidence: self.evidence,
+            precision: self.precision,
+            fills: self.fills,
+            markets: self.markets,
+            quote_places: self.quote_places,
+            perp_tag: self.perp_tag,
+        };
+        let take = |keys: &mut BTreeMap<Role, Zeroizing<Vec<u8>>>,
+                    role|
+         -> Result<Zeroizing<[u8; 32]>, Error> {
+            let bytes = keys.remove(&role).ok_or(Error)?;
+            Ok(Zeroizing::new(
+                bytes.as_slice().try_into().map_err(|_| Error)?,
+            ))
+        };
+        let storage = take(keys, Role::Storage)?;
+        let gateway = if demo_ingress_only {
+            Gateway::new_read_only(
+                profile.clone(),
+                self.execution.clone(),
+                take(keys, Role::Trading)?,
+                self.trading_epoch,
+            )
+        } else {
+            Gateway::new(
+                profile.clone(),
+                self.execution.clone(),
+                take(keys, Role::Trading)?,
+                self.trading_epoch,
+            )
+        }
+        .map_err(|_| Error)?;
+        let funding = if let Some(routing) = self.escrow {
+            if demo_ingress_only || self.demo_allocation.is_some() {
+                return Err(Error);
+            }
+            Controller::new_escrow(profile, self.route, routing, take(keys, Role::Broker)?)
+        } else if demo_ingress_only {
+            Controller::new_demo_ingress(profile, self.route, take(keys, Role::Broker)?)
+        } else {
+            Controller::new(profile, self.route, take(keys, Role::Broker)?)
+        }
+        .map_err(|_| Error)?;
+        let owners = self
+            .owners
+            .into_iter()
+            .map(|o| {
+                Ok(OwnerBinding {
+                    account: AccountId::new(o.account).map_err(|_| Error)?,
+                    wallet: o.wallet,
+                    tokens: o.tokens,
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let contract = Contract {
+            owners,
+            maximum_auth_lifetime: self.auth_ms,
+            maximum_grant_lifetime: self.grant_ms,
+        };
+        let api = if let Some(policy) = self.onboarding {
+            let r = funding.route();
+            let escrow = funding.escrow_routing().ok_or(Error)?;
+            Service::new_onboarding(
+                contract,
+                RiskAdmission { enabled: false },
+                cinder_api::onboarding::Policy {
+                    maximum_accounts: policy.maximum_accounts,
+                    custody_domain: r.domain,
+                    pool: r.pool,
+                    venue: escrow.venue,
+                    program: r.program,
+                    config: r.config,
+                    route: escrow.route,
+                    mint: r.mint,
+                    decimals: r.decimals,
+                    epoch: r.epoch,
+                    maximum_deposit: r.maximum_movement,
+                },
+            )
+        } else {
+            Service::new(contract, RiskAdmission { enabled: false })
+        }
+        .map_err(|_| Error)?;
+        let chain = match (self.chain, peer) {
+            (None, None) => None,
+            (Some(policy), Some(peer)) => {
+                if self.execution.read_cost < cinder_pacifica::reads::MIN_READ_COST {
+                    return Err(Error);
+                }
+                Some(chain_funding::Loaded::new(
+                    policy,
+                    peer,
+                    take(keys, Role::Funds)?,
+                    &funding,
+                    config.domain.network.bytes(),
+                )?)
+            }
+            _ => return Err(Error),
+        };
+        let application = ApplicationContract::derive(&config, &api, &gateway, &funding)?;
+        let application = if let Some(chain) = &chain {
+            application.with_chain(chain)
+        } else {
+            application
+        };
+        let bytes = keys.remove(&Role::Witness).ok_or(Error)?;
+        let witness = serde_cbor::from_slice(&bytes).map_err(|_| Error)?;
+        if !keys.is_empty() {
+            return Err(Error);
+        }
+        Ok(Loaded {
+            config,
+            api,
+            gateway,
+            funding,
+            storage,
+            witness,
+            application,
+            origin: self.execution.origin,
+            chain,
+            capture: None,
+            history: None,
+            demo_deposit: None,
+            demo_allocation: None,
+        })
+    }
+}
+struct RiskAdmission {
+    enabled: bool,
+}
+impl Admission for RiskAdmission {
+    fn order_holds(
+        &self,
+        state: &State,
+        intent: &orders::Intent,
+    ) -> Result<Vec<Reservation>, cinder_api::Error> {
+        if !self.enabled {
+            return Err(cinder_api::Error::Unavailable);
+        }
+        state
+            .order_reservations(intent)
+            .map_err(|_| cinder_api::Error::Unavailable)
+    }
+}
+/// Validated actual loaded application, with redacted non-exportable signers.
+pub struct Loaded {
+    config: Config,
+    api: Service<RiskAdmission>,
+    gateway: Gateway,
+    funding: Controller,
+    storage: Zeroizing<[u8; 32]>,
+    witness: Credential,
+    application: ApplicationContract,
+    origin: cinder_pacifica::execution::Origin,
+    chain: Option<chain_funding::Loaded>,
+    capture: Option<crate::native_capture::Loaded>,
+    // Retain the exact loaded policy, not just its contribution to the digest.
+    // A caller cannot change backend limits while echoing the old application.
+    history: Option<HistoryPolicy>,
+    demo_deposit: Option<cinder_pacifica::funding::demo::Policy>,
+    demo_allocation: Option<crate::demo_funding::Authorization>,
+}
+/// Public health is deliberately coarse; no balances, customer counts or keys.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Health {
+    /// Private protocol/storage ready, not a promise native trading is enabled.
+    Ready,
+    /// Stop is sticky; this boot cannot accept work or reuse capabilities.
+    Fenced,
+}
+struct Active<B: Backend, P: Protection> {
+    store: Journal<B, P>,
+    gateway: Gateway,
+    funding: Controller,
+    poll_ms: Option<u64>,
+    next_poll: u64,
+    read_kind: usize,
+    deposit_index: usize,
+    demo_deposit: Option<cinder_pacifica::funding::demo::Policy>,
+    demo_allocation: Option<crate::demo_funding::Authorization>,
+}
+struct NativeIo {
+    egress: Egress,
+    chain: Option<chain_funding::Port<crate::chain_rpc::Https>>,
+}
+/// Bounded private API/scheduler composition over one journal and one writer.
+pub struct Runtime<B: Backend + Send, P: Protection + Send> {
+    active: Mutex<Active<B, P>>,
+    // One bounded supervisor I/O owner, never acquired by customer commands or
+    // private reads. Its guard may span I/O; the journal mutation guard may not.
+    io: Mutex<NativeIo>,
+    // Separate finite worker, never a reconnecting scheduler or network queue.
+    capture: Mutex<
+        Option<(
+            crate::native_capture::Port,
+            cinder_pacifica::capture::Limits,
+        )>,
+    >,
+    api: Service<RiskAdmission>,
+    clock: Arc<dyn Clock>,
+    stop: Arc<AtomicBool>,
+    deadline: u64,
+    gates: Gates,
+    reads: Option<ReadRuntime>,
+}
+/// Explicit shipping layout selected by the measured manifest, never by host
+/// object presence or fallback. Legacy versions retain their original backend.
+pub enum Storage {
+    /// Version 1/2 frame objects.
+    Frames(Replicated<S3Replica, S3Replica, DynamoWitness>),
+    /// Version 3 bounded retained packs.
+    Packs(Packed<S3Packs, S3Packs, DynamoWitness>),
+}
+impl Backend for Storage {
+    fn load(&mut self) -> Result<Vec<cinder_journal::Frame>, cinder_journal::Error> {
+        match self {
+            Self::Frames(s) => s.load(),
+            Self::Packs(s) => s.load(),
+        }
+    }
+    fn append(
+        &mut self,
+        expected: Option<cinder_journal::Head>,
+        frame: &cinder_journal::Frame,
+    ) -> Result<(), cinder_journal::Error> {
+        match self {
+            Self::Frames(s) => s.append(expected, frame),
+            Self::Packs(s) => s.append(expected, frame),
+        }
+    }
+    fn check_current(
+        &mut self,
+        expected: cinder_journal::Head,
+    ) -> Result<(), cinder_journal::Error> {
+        match self {
+            Self::Frames(s) => s.check_current(expected),
+            Self::Packs(s) => s.check_current(expected),
+        }
+    }
+}
+/// Both deployment modes use the same authenticated replicas and independent
+/// witness. This opens no ledger and never decides history format from objects.
+pub(crate) fn open_storage(
+    manifest: &Manifest,
+    parent: Credential,
+    private_witness: Credential,
+    stream: Stream,
+    clock: Arc<dyn Clock>,
+) -> Result<
+    (
+        Storage,
+        cinder_journal::replicated::Anchor,
+        Arc<dyn ReadWitness>,
+    ),
+    Error,
+> {
+    if parent.access == private_witness.access {
+        return Err(Error);
+    }
+    let copy = || Credential {
+        access: parent.access.clone(),
+        secret: parent.secret.clone(),
+        token: parent.token.clone(),
+        expires: parent.expires,
+    };
+    let first = Client::new(manifest.first.clone(), copy(), clock.clone())?;
+    let second = Client::new(manifest.second.clone(), copy(), clock.clone())?;
+    let mut witness = DynamoWitness::new(
+        Client::new(manifest.witness.clone(), private_witness, clock)?,
+        stream,
+    )?;
+    let anchor = witness.read(stream).map_err(|_| Error)?;
+    let reader: Arc<dyn ReadWitness> = Arc::new(witness.reader());
+    if anchor.epoch != manifest.epoch {
+        return Err(Error);
+    }
+    let backend = match &manifest.history {
+        None => Storage::Frames(
+            Replicated::new(
+                stream,
+                manifest.epoch,
+                S3Replica::new(first, stream)?,
+                S3Replica::new(second, stream)?,
+                witness,
+            )
+            .map_err(|_| Error)?,
+        ),
+        Some(policy) => Storage::Packs(
+            Packed::with_limits(
+                stream,
+                manifest.epoch,
+                S3Packs::new(first, stream, policy)?,
+                S3Packs::new(second, stream, policy)?,
+                witness,
+                policy.limits()?,
+            )
+            .map_err(|_| Error)?,
+        ),
+    };
+    Ok((backend, anchor, reader))
+}
+impl Loaded {
+    /// Actual application component for trusted provisioning before KMS Encrypt.
+    pub fn commitment(&self) -> [u8; 32] {
+        self.application.digest()
+    }
+    /// Freshness is read from the remote pre-provisioned register, never inferred
+    /// from absent host files. All restore/config checks precede the listener.
+    pub fn open(
+        self,
+        manifest: &Manifest,
+        parent: Credential,
+        clock: Arc<dyn Clock>,
+        stop: Arc<AtomicBool>,
+    ) -> Result<Runtime<Storage, RecordCipher>, Error> {
+        manifest.validate()?;
+        if self.history != manifest.history
+            || self.demo_deposit != manifest.demo_deposit
+            || self.application.digest() != manifest.application
+            || [
+                self.config.domain.network.bytes().as_slice(),
+                &self.config.domain.deployment.bytes(),
+            ]
+            .concat()
+                != manifest.domain
+        {
+            return Err(Error);
+        }
+        match (&self.capture, &manifest.native_capture) {
+            (None, None) => {}
+            (Some(capture), Some(policy)) if capture.matches(policy) => {}
+            _ => return Err(Error),
+        }
+        let now = clock.now()?;
+        let stream = Stream {
+            domain: self.config.domain,
+            id: manifest.stream,
+        };
+        let (backend, anchor, read_witness) =
+            open_storage(manifest, parent, self.witness, stream, clock.clone())?;
+        let cipher = RecordCipher::new(self.storage, manifest.generation, manifest.stream)
+            .map_err(|_| Error)?;
+        let fresh = anchor.head.is_none();
+        let mut store = if fresh {
+            Journal::create(backend, cipher, self.config)
+        } else {
+            Journal::open(backend, cipher, self.config)
+        }
+        .map_err(|_| Error)?;
+        if store.verified_state().map_err(|_| Error)?.logical_time() > now {
+            return Err(Error);
+        }
+        self.api.initialize(&mut store, now).map_err(|_| Error)?;
+        initialize_funding(&self.funding, &mut store, clock.as_ref())?;
+        let deadline = now
+            .checked_add(manifest.gates.maximum_boot_ms)
+            .ok_or(Error)?;
+        let private_clock: Arc<dyn Clock> = Arc::new(LeaseClock {
+            clock: clock.clone(),
+            deadline,
+            stop: stop.clone(),
+        });
+        let poll_ms = self.chain.as_ref().map(chain_funding::Loaded::poll_ms);
+        if let Some(chain) = &self.chain {
+            let peer = manifest.chain.as_ref().ok_or(Error)?;
+            if chain.peer() != (peer.host.as_str(), peer.port) {
+                return Err(Error);
+            }
+        }
+        if manifest.gates.native_reads {
+            self.gateway
+                .initialize_reads(&mut store, commit_id()?, private_clock.now()?)
+                .map_err(|_| Error)?;
+        }
+        let chain = self
+            .chain
+            .map(|chain| chain.open(private_clock.clone()))
+            .transpose()?;
+        let egress = Egress::new(
+            self.origin,
+            Target::new(3, manifest.venue_port)?,
+            Trust::from_der(&manifest.venue_root, manifest.venue_root_hash)?,
+            private_clock.clone(),
+        )?;
+        let capture = self.capture.map(|p| p.open(private_clock)).transpose()?;
+        let reader = store
+            .attach_reader(ReadBinding {
+                stream,
+                epoch: manifest.epoch,
+                api: self
+                    .api
+                    .release_commitment(store.configuration())
+                    .map_err(|_| Error)?,
+            })
+            .map_err(|_| Error)?;
+        Ok(Runtime {
+            active: Mutex::new(Active {
+                store,
+                gateway: self.gateway,
+                funding: self.funding,
+                poll_ms,
+                next_poll: now,
+                read_kind: 0,
+                deposit_index: 0,
+                demo_deposit: self.demo_deposit,
+                demo_allocation: self.demo_allocation,
+            }),
+            io: Mutex::new(NativeIo { egress, chain }),
+            capture: Mutex::new(capture),
+            api: self.api,
+            clock,
+            stop,
+            deadline,
+            gates: manifest.gates.clone(),
+            reads: Some(ReadRuntime {
+                reader,
+                witness: read_witness,
+            }),
+        })
+    }
+}
+struct LeaseClock {
+    clock: Arc<dyn Clock>,
+    deadline: u64,
+    stop: Arc<AtomicBool>,
+}
+impl Clock for LeaseClock {
+    fn now(&self) -> Result<u64, Error> {
+        let now = self.clock.now()?;
+        if self.stop.load(Ordering::SeqCst) || now >= self.deadline {
+            return Err(Error);
+        }
+        Ok(now)
+    }
+}
+fn initialize_funding<B: Backend, P: Protection>(
+    funding: &Controller,
+    store: &mut Journal<B, P>,
+    clock: &dyn Clock,
+) -> Result<(), Error> {
+    if !funding.bound(store, clock.now()?).map_err(|_| Error)? {
+        funding
+            .bind(store, commit_id()?, clock.now()?)
+            .map_err(|_| Error)?;
+    }
+    Ok(())
+}
+fn commit_id() -> Result<CommitId, Error> {
+    let mut id = [0; 32];
+    openssl::rand::rand_bytes(&mut id)?;
+    CommitId::new(id).map_err(|_| Error)
+}
+
+impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
+    /// Explicit one-shot boot worker. Consumes the loaded port before any I/O;
+    /// repeated/concurrent calls cannot reconnect. A fresh boot is a new capture,
+    /// never a replayed native event or resumed financial operation.
+    pub fn capture_once(&self) -> Result<(), Error> {
+        self.capture_using(|port, request, sink| port.capture(request, sink))
+    }
+    fn capture_using(
+        &self,
+        run: impl FnOnce(
+            crate::native_capture::Port,
+            cinder_pacifica::capture::Request,
+            &mut dyn FnMut(cinder_pacifica::capture::Record) -> Result<(), Error>,
+        ) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        let result = (|| {
+            self.active_time()?;
+            let capture = self.capture.lock().map_err(|_| Error)?.take();
+            let Some((port, limits)) = capture else {
+                return Ok(());
+            };
+            self.capture_prepared(limits, |request, sink| run(port, request, sink))
+        })();
+        if result.is_err() {
+            self.fence();
+        }
+        result
+    }
+    fn capture_prepared(
+        &self,
+        limits: cinder_pacifica::capture::Limits,
+        run: impl FnOnce(
+            cinder_pacifica::capture::Request,
+            &mut dyn FnMut(cinder_pacifica::capture::Record) -> Result<(), Error>,
+        ) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        if !self.gates.native_reads {
+            return Err(Error);
+        }
+        let (request, mut archive) = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let at = self.active_time()?;
+            if at
+                .checked_add(limits.maximum_ms)
+                .is_none_or(|end| end > self.deadline)
+            {
+                return Err(Error);
+            }
+            let Active { store, gateway, .. } = &mut *active;
+            if store.verified_state().map_err(|_| Error)?.logical_time() > at {
+                return Err(Error);
+            }
+            if !gateway
+                .read_available(store, at, false)
+                .map_err(|_| Error)?
+            {
+                return Ok(());
+            }
+            cinder_pacifica::capture::prepare(
+                store,
+                gateway,
+                cinder_pacifica::capture::Plan {
+                    reservation: commit_id()?,
+                    capture: commit_id()?,
+                    at,
+                    limits,
+                },
+            )
+            .map_err(|_| Error)?
+        };
+        // No financial journal or general supervisor I/O guard during capture.
+        run(request, &mut |record| {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let at = self.active_time()?;
+            let Active { store, gateway, .. } = &mut *active;
+            if record.observed_at() > at
+                || store.verified_state().map_err(|_| Error)?.logical_time() > at
+            {
+                return Err(Error);
+            }
+            archive
+                .append(store, gateway, commit_id()?, record)
+                .map_err(|_| Error)?;
+            Ok(())
+        })
+    }
+    fn active_time(&self) -> Result<u64, Error> {
+        if self.stop.load(Ordering::SeqCst)
+            || self.reads.as_ref().is_some_and(|r| r.reader.fenced())
+        {
+            self.fence();
+            return Err(Error);
+        }
+        let now = match self.clock.now() {
+            Ok(n) => n,
+            Err(e) => {
+                self.fence();
+                return Err(e);
+            }
+        };
+        if now >= self.deadline {
+            self.fence();
+            return Err(Error);
+        }
+        Ok(now)
+    }
+    /// Stop new sessions and scheduling; shutdown drops loaded key material.
+    pub fn fence(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(reads) = &self.reads {
+            reads.reader.close();
+        }
+    }
+    /// Coarse local status; never exposes customer state or secret errors.
+    pub fn health(&self) -> Health {
+        if self.stop.load(Ordering::SeqCst)
+            || self.reads.as_ref().is_some_and(|r| r.reader.fenced())
+        {
+            Health::Fenced
+        } else {
+            Health::Ready
+        }
+    }
+    /// One bounded scheduler cut. No new policy, automatic funding or synthetic
+    /// native evidence. Restarts do not resend any possibly-exposed attempt.
+    pub fn tick(&self) -> Result<(), Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        let result = (|| {
+            let now = self.active_time()?;
+            // An inactive scheduler owns no external work. Preserve fresh signed
+            // boot time and sticky publication fencing, without doing a complete
+            // remote history check merely to discover all three gates are off.
+            // Active actions/reads still perform their own fresh witness checks.
+            if !self.gates.native_reads && !self.gates.funding && !self.gates.trading {
+                return Ok(());
+            }
+            if self.gates.native_reads {
+                self.tick_observations(now)?;
+            }
+            if !self.gates.funding && !self.gates.trading {
+                return Ok(());
+            }
+            // Serialize finite supervisor ports, not the financial mutation
+            // owner. No RPC, simulation or venue POST carries a journal guard.
+            let Some(mut io) = lock_bounded(&self.io, REQUEST_WAIT)? else {
+                return Ok(());
+            };
+            let NativeIo { egress, chain } = &mut *io;
+            if self.gates.funding {
+                self.tick_funds(chain.as_mut(), egress)?;
+            }
+            if self.gates.trading {
+                self.tick_orders(egress)?;
+            }
+            Ok(())
+        })();
+        if result.is_err() {
+            self.fence();
+        }
+        result
+    }
+    fn tick_observations(&self, now: u64) -> Result<(), Error> {
+        let Some(mut io) = lock_bounded(&self.io, REQUEST_WAIT)? else {
+            // Another bounded supervisor job already owns these finite ports.
+            return Ok(());
+        };
+        let deposit = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            if current < now {
+                return Err(Error);
+            }
+            if current < active.next_poll {
+                return Ok(());
+            }
+            active
+                .funding
+                .release_commitment(active.store.configuration())
+                .map_err(|_| Error)?;
+            if active
+                .store
+                .verified_state()
+                .map_err(|_| Error)?
+                .logical_time()
+                > current
+            {
+                return Err(Error);
+            }
+            active.poll_ms.ok_or(Error)?;
+            match &io.chain {
+                Some(chain) => {
+                    let state = active.store.state().map_err(|_| Error)?;
+                    let locators = chain.locators(state);
+                    let count = locators.len();
+                    if count == 0 {
+                        None
+                    } else {
+                        let index = active.deposit_index % count;
+                        let locator = locators[index].clone();
+                        let escrow = active.funding.escrow_routing().cloned();
+                        let recorded = if escrow.is_some() {
+                            crate::escrow_deposit::recorded(&active.store, &locator)?
+                        } else {
+                            crate::customer_deposit::recorded(&active.store, &locator)?
+                        };
+                        if recorded {
+                            active.deposit_index = (index + 1) % count;
+                            None
+                        } else {
+                            let account = AccountId::new(locator.account).map_err(|_| Error)?;
+                            let route = active
+                                .funding
+                                .route_for(active.store.state().map_err(|_| Error)?, account)
+                                .map_err(|_| Error)?;
+                            Some((index, count, route, escrow, locator))
+                        }
+                    }
+                }
+                _ => None,
+            }
+        };
+        if let Some((index, count, route, escrow, locator)) = deposit {
+            // Original transaction/code/account RPC I/O never holds the writer.
+            let found = io.chain.as_mut().ok_or(Error)?.collect_locator(
+                &route,
+                escrow.is_some(),
+                locator.clone(),
+            )?;
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            let account = AccountId::new(locator.account).map_err(|_| Error)?;
+            if active
+                .store
+                .verified_state()
+                .map_err(|_| Error)?
+                .logical_time()
+                > current
+                || active
+                    .funding
+                    .route_for(active.store.state().map_err(|_| Error)?, account)
+                    .map_err(|_| Error)?
+                    != route
+                || active.funding.escrow_routing() != escrow.as_ref()
+            {
+                return Err(Error);
+            }
+            let Active { store, funding, .. } = &mut *active;
+            match found.complete(store, funding)? {
+                chain_funding::Outcome::Pending
+                | chain_funding::Outcome::Rejected
+                | chain_funding::Outcome::Settled => active.deposit_index = (index + 1) % count,
+                _ => return Err(Error),
+            }
+        }
+        self.poll_native(&mut io.egress)
+    }
+    fn poll_native<T: cinder_pacifica::reads::Transport>(
+        &self,
+        egress: &mut T,
+    ) -> Result<(), Error> {
+        if self
+            .active
+            .lock()
+            .map_err(|_| Error)?
+            .demo_deposit
+            .is_some()
+        {
+            // This explicit measured mode must not create unrelated unresolved
+            // diagnostic inputs or pretend those observations were reconciled.
+            if self.poll_setup(egress)? {
+                self.poll_demo_deposit(egress)
+            } else {
+                Ok(())
+            }
+        } else {
+            self.poll_venue(egress)
+        }
+    }
+    fn poll_setup<T: cinder_pacifica::reads::Transport>(
+        &self,
+        egress: &mut T,
+    ) -> Result<bool, Error> {
+        use cinder_pacifica::{
+            funding::setup::{Poll, Step},
+            reads,
+        };
+        if !self.gates.native_reads || self.gates.trading {
+            return Err(Error);
+        }
+        let prepared = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let now = self.active_time()?;
+            if self.gates.funding && active.demo_allocation.is_none() {
+                return Err(Error);
+            }
+            let Active {
+                store,
+                gateway,
+                funding,
+                demo_deposit,
+                next_poll,
+                poll_ms,
+                ..
+            } = &mut *active;
+            let policy = demo_deposit.as_ref().ok_or(Error)?;
+            if store.verified_state().map_err(|_| Error)?.logical_time() > now {
+                return Err(Error);
+            }
+            if now < *next_poll {
+                return Ok(false);
+            }
+            funding
+                .observe_setup_reads(store, gateway, policy, commit_id()?, now)
+                .map_err(|_| Error)?;
+            match funding
+                .prepare_setup_poll(
+                    store,
+                    gateway,
+                    policy,
+                    Poll {
+                        reservation: commit_id()?,
+                        evidence: commit_id()?,
+                        at: now,
+                    },
+                )
+                .map_err(|_| Error)?
+            {
+                Step::Qualified | Step::DemoQualified => return Ok(true),
+                Step::Request(request, completion) => {
+                    *next_poll = now.checked_add(poll_ms.ok_or(Error)?).ok_or(Error)?;
+                    Some((request, completion, policy.clone()))
+                }
+                Step::Waiting | Step::Exhausted | Step::Observed(_) => {
+                    *next_poll = now.checked_add(poll_ms.ok_or(Error)?).ok_or(Error)?;
+                    None
+                }
+            }
+        };
+        if let Some((request, completion, policy)) = prepared {
+            // Socket work owns no financial mutation lock. Only the prepared
+            // read permit crosses this boundary; completion rechecks this boot.
+            let reply = egress.get(request);
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let now = self.active_time()?;
+            let Active {
+                store,
+                gateway,
+                funding,
+                demo_deposit,
+                ..
+            } = &mut *active;
+            if demo_deposit.as_ref() != Some(&policy)
+                || store.verified_state().map_err(|_| Error)?.logical_time() > now
+                || matches!(&reply, cinder_pacifica::execution::Reply::Response { received_at, .. } if *received_at > now)
+            {
+                return Err(Error);
+            }
+            reads::complete(store, gateway, *completion, reply).map_err(|_| Error)?;
+            funding
+                .observe_setup_reads(store, gateway, &policy, commit_id()?, now)
+                .map_err(|_| Error)?;
+        }
+        Ok(false)
+    }
+    fn poll_demo_deposit<T: cinder_pacifica::reads::Transport>(
+        &self,
+        egress: &mut T,
+    ) -> Result<(), Error> {
+        use cinder_pacifica::{
+            funding::demo::{Poll, Step},
+            reads,
+        };
+        if !self.gates.native_reads || self.gates.trading {
+            return Err(Error);
+        }
+        let prepared = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            if self.gates.funding && active.demo_allocation.is_none() {
+                return Err(Error);
+            }
+            let Active {
+                store,
+                gateway,
+                funding,
+                demo_deposit,
+                next_poll,
+                poll_ms,
+                ..
+            } = &mut *active;
+            let policy = demo_deposit.as_ref().ok_or(Error)?;
+            if store.verified_state().map_err(|_| Error)?.logical_time() > current {
+                return Err(Error);
+            }
+            if current < *next_poll {
+                return Ok(());
+            }
+            *next_poll = current.checked_add(poll_ms.ok_or(Error)?).ok_or(Error)?;
+            let Some(attempt) = funding
+                .demo_deposit_candidate(store, gateway, policy, current)
+                .map_err(|_| Error)?
+            else {
+                return Ok(());
+            };
+            // Retained evidence may already suffice after a crash between archive
+            // and confirmation. Never spend another GET merely to repost credit.
+            if funding
+                .confirm_demo_deposit(store, gateway, policy, attempt, commit_id()?, current)
+                .map_err(|_| Error)?
+            {
+                return Ok(());
+            }
+            if !gateway
+                .read_available(store, current, false)
+                .map_err(|_| Error)?
+            {
+                return Ok(());
+            }
+            match funding
+                .prepare_demo_deposit_poll(
+                    store,
+                    gateway,
+                    policy,
+                    Poll {
+                        attempt,
+                        reservation: commit_id()?,
+                        evidence: commit_id()?,
+                        at: current,
+                    },
+                )
+                .map_err(|_| Error)?
+            {
+                Step::Request(request, completion) => {
+                    Some((request, completion, attempt, policy.clone()))
+                }
+                Step::Waiting | Step::Exhausted | Step::Confirmed => None,
+            }
+        };
+        if let Some((request, completion, attempt, policy)) = prepared {
+            // No journal mutation guard or financial authority crosses this I/O.
+            // Completion rejoins the current writer after concurrent commands.
+            let reply = egress.get(request);
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            let Active {
+                store,
+                gateway,
+                funding,
+                demo_deposit,
+                ..
+            } = &mut *active;
+            if demo_deposit.as_ref() != Some(&policy)
+                || store.verified_state().map_err(|_| Error)?.logical_time() > current
+                || matches!(&reply, cinder_pacifica::execution::Reply::Response { received_at, .. } if *received_at > current)
+            {
+                return Err(Error);
+            }
+            reads::complete(store, gateway, *completion, reply).map_err(|_| Error)?;
+            funding
+                .confirm_demo_deposit(store, gateway, &policy, attempt, commit_id()?, current)
+                .map_err(|_| Error)?;
+        }
+        Ok(())
+    }
+    fn poll_venue<T: cinder_pacifica::reads::Transport>(
+        &self,
+        egress: &mut T,
+    ) -> Result<(), Error> {
+        use cinder_pacifica::{
+            observation::Kind,
+            reads::{self, Diagnostic, DiagnosticPoll, Poll},
+        };
+        let kinds = [
+            Kind::Trades,
+            Kind::Orders,
+            Kind::Positions,
+            Kind::Account,
+            Kind::Funding,
+        ];
+        let diagnostics = [
+            Diagnostic::Settings,
+            Diagnostic::Loan,
+            Diagnostic::BalanceHistory,
+        ];
+        let prepared = {
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            let Active {
+                store,
+                gateway,
+                read_kind,
+                ..
+            } = &mut *active;
+            let state = store.verified_state().map_err(|_| Error)?;
+            if state.logical_time() > current {
+                return Err(Error);
+            }
+            let cleanup = state.frozen();
+            if gateway
+                .read_available(store, current, cleanup)
+                .map_err(|_| Error)?
+            {
+                let reservation = commit_id()?;
+                let evidence = commit_id()?;
+                Some(
+                    if *read_kind < kinds.len() {
+                        let kind = kinds[*read_kind];
+                        let cursor = gateway.read_cursor(store, kind).map_err(|_| Error)?;
+                        reads::prepare_poll(
+                            store,
+                            gateway,
+                            Poll {
+                                kind,
+                                cursor,
+                                reservation,
+                                evidence,
+                                at: self.active_time()?,
+                                cleanup,
+                            },
+                        )
+                    } else {
+                        reads::prepare_diagnostic(
+                            store,
+                            gateway,
+                            DiagnosticPoll {
+                                kind: *diagnostics.get(*read_kind - kinds.len()).ok_or(Error)?,
+                                reservation,
+                                evidence,
+                                at: self.active_time()?,
+                                cleanup,
+                            },
+                        )
+                    }
+                    .map_err(|_| Error)?,
+                )
+            } else {
+                None
+            }
+        };
+        if let Some((request, completion)) = prepared {
+            // One spent permit, one exchange, one completion. No head lease or
+            // signature authority is handed to the external I/O owner.
+            let reply = egress.get(request);
+            let mut active = self.active.lock().map_err(|_| Error)?;
+            let current = self.active_time()?;
+            if active
+                .store
+                .verified_state()
+                .map_err(|_| Error)?
+                .logical_time()
+                > current
+            {
+                return Err(Error);
+            }
+            if matches!(&reply, cinder_pacifica::execution::Reply::Response { received_at, .. } if *received_at > current)
+            {
+                return Err(Error);
+            }
+            let Active {
+                store,
+                gateway,
+                read_kind,
+                ..
+            } = &mut *active;
+            reads::complete(store, gateway, completion, reply).map_err(|_| Error)?;
+            *read_kind = (*read_kind + 1) % (kinds.len() + diagnostics.len());
+        }
+        let mut active = self.active.lock().map_err(|_| Error)?;
+        active.next_poll = self
+            .active_time()?
+            .checked_add(active.poll_ms.ok_or(Error)?)
+            .ok_or(Error)?;
+        Ok(())
+    }
+}
+fn prepare_next_ingress<B: Backend, P: Protection>(
+    store: &mut Journal<B, P>,
+    funding: &Controller,
+    demo: Option<(&Gateway, &cinder_pacifica::funding::demo::Policy)>,
+    at: u64,
+) -> Result<(), Error> {
+    use cinder_kernel::ledger::{Location, funds::Destination};
+    let state = store.verified_state().map_err(|_| Error)?;
+    if state
+        .funds()
+        .iter()
+        .any(|o| !o.terminal && o.attempt.is_some())
+    {
+        return Ok(());
+    }
+    let request = state
+        .funds()
+        .iter()
+        .find(|o| {
+            !o.terminal
+                && !o.faulted
+                && !o.recovery
+                && o.attempt.is_none()
+                && matches!(
+                    (o.intent.source, o.intent.destination),
+                    (Location::Vault, Destination::Location(Location::Broker))
+                        | (Location::Broker, Destination::Location(Location::Venue))
+                )
+        })
+        .map(|o| o.intent.request);
+    if let Some(request) = request {
+        let dispatch = cinder_pacifica::execution::Dispatch {
+            attempt: AttemptKey {
+                request,
+                attempt: AttemptId::new(commit_id()?.bytes()).map_err(|_| Error)?,
+            },
+            commit: commit_id()?,
+            at,
+        };
+        match demo {
+            Some((gateway, policy)) => {
+                funding.prepare_demo_ingress(store, gateway, policy, dispatch)
+            }
+            None => funding.prepare_ingress(store, dispatch),
+        }
+        .map_err(|_| Error)?;
+    }
+    Ok(())
+}
+impl<B: Backend + Send, P: Protection + Send> Runtime<B, P> {
+    fn handle_available(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        if let Some(reads) = &self.reads
+            && cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r| {
+                matches!(
+                    r.command,
+                    cinder_api::wire::Command::Read(_)
+                        | cinder_api::wire::Command::View
+                        | cinder_api::wire::Command::Operation(_)
+                )
+            })
+        {
+            return self.read_available(reads, channel, &request, now);
+        }
+        let result = (|| {
+            self.active_time()?;
+            let Some(mut active) = lock_bounded(&self.active, REQUEST_WAIT)? else {
+                return Ok(None);
+            };
+            // Waiting cannot reuse an expired lease or pre-wait authentication time.
+            let current = self.active_time()?;
+            if current < now {
+                return Err(Error);
+            }
+            if active.store.verified_state().is_err() {
+                self.fence();
+                return Err(Error);
+            }
+            let response = self
+                .api
+                .handle(&mut active.store, channel, &request, current);
+            match response {
+                Ok(r) => r.encode(),
+                Err(e) => e.encode_private(),
+            }
+            .map(Some)
+            .map_err(|_| Error)
+        })();
+        // Contention is not a permanent key revocation. Journal/clock failures
+        // are caught by tick and private API already refuses stale state.
+        result
+    }
+    fn read_failure<T>(&self, failure: ReadFailure) -> Result<Option<T>, Error> {
+        match failure {
+            ReadFailure::Busy | ReadFailure::Raced => Ok(None),
+            ReadFailure::Fenced => {
+                self.fence();
+                Err(Error)
+            }
+        }
+    }
+    fn read_available(
+        &self,
+        reads: &ReadRuntime,
+        channel: &Session,
+        request: &PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        let Some(prepared) = self.prepare_read(reads, channel, request, now, false)? else {
+            return Ok(None);
+        };
+        self.release_read(channel, prepared)
+    }
+    fn prepare_read(
+        &self,
+        reads: &ReadRuntime,
+        channel: &Session,
+        request: &PrivateBytes,
+        now: u64,
+        periodic: bool,
+    ) -> Result<Option<PreparedReply>, Error> {
+        let initial = self.active_time()?;
+        if initial < now {
+            self.fence();
+            return Err(Error);
+        }
+        let ticket = match reads.reader.capture() {
+            Ok(t) => t,
+            Err(e) => return self.read_failure(e),
+        };
+        if let Err(e) =
+            self.api
+                .authenticate_read(ticket.configuration(), channel, request, initial)
+        {
+            return e
+                .encode_private()
+                .map(PreparedReply::immediate)
+                .map(Some)
+                .map_err(|_| Error);
+        }
+        let verified = match reads.reader.verify(ticket, reads.witness.as_ref()) {
+            Ok(v) => v,
+            Err(e) => return self.read_failure(e),
+        };
+        let current = self.active_time()?;
+        if current < initial {
+            self.fence();
+            return Err(Error);
+        }
+        let response = self.api.handle_read(&verified, channel, request, current);
+        let encoded = match response {
+            Ok(r) => r.encode(),
+            Err(e) => e.encode_private(),
+        }
+        .map_err(|_| Error)?;
+        Ok(Some(PreparedReply {
+            inner: Prepared::Accepted(ReadCandidate {
+                verified,
+                request: request.clone(),
+                encoded,
+                evaluated_at: current,
+                binding: cinder_api::ConfidentialChannel::binding(channel),
+                periodic,
+            }),
+        }))
+    }
+    fn release_read(
+        &self,
+        channel: &Session,
+        prepared: PreparedReply,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        let candidate = match prepared.inner {
+            Prepared::Immediate(reply) => {
+                self.active_time()?;
+                return Ok(Some(reply));
+            }
+            Prepared::Accepted(candidate) => candidate,
+            Prepared::Unit(_) => return Err(Error),
+        };
+        let ReadCandidate {
+            verified,
+            request,
+            encoded,
+            evaluated_at,
+            binding,
+            periodic,
+        } = candidate;
+        if binding != cinder_api::ConfidentialChannel::binding(channel)
+            || self
+                .reads
+                .as_ref()
+                .is_none_or(|r| !r.reader.owns(&verified))
+        {
+            return Err(Error);
+        }
+        let until = std::time::Instant::now() + READ_RELEASE;
+        let final_time = self.active_time()?;
+        if final_time < evaluated_at {
+            self.fence();
+            return Err(Error);
+        }
+        // Bound the maximum authorization time before release by a signed sample
+        // plus the ENTIRE budget (including sample/NSM and revalidation work).
+        let upper = final_time
+            .checked_add(READ_RELEASE.as_millis() as u64)
+            .ok_or(Error)?;
+        if upper >= self.deadline {
+            self.fence();
+            return Err(Error);
+        }
+        let revalidated = self
+            .api
+            .revalidate_read(&verified, channel, &request, upper);
+        let encoded = match revalidated {
+            Ok(()) => encoded,
+            Err(e) => e.encode_private().map_err(|_| Error)?,
+        };
+        match verified.release_if_running(until, &self.stop) {
+            Ok(()) => Ok(Some(encoded)),
+            Err(ReadFailure::Busy | ReadFailure::Raced) if !periodic => {
+                cinder_api::Error::Unavailable
+                    .encode_private()
+                    .map(Some)
+                    .map_err(|_| Error)
+            }
+            Err(e) => self.read_failure(e),
+        }
+    }
+}
+impl<B: Backend + Send, P: Protection + Send> Handler for Runtime<B, P> {
+    fn handle(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<PrivateBytes, Error> {
+        match self.handle_available(channel, request, now)? {
+            Some(reply) => Ok(reply),
+            None => cinder_api::Error::Unavailable
+                .encode_private()
+                .map_err(|_| Error),
+        }
+    }
+    fn prepare_handle(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<PreparedReply, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        if let Some(reads) = &self.reads
+            && cinder_api::wire::Request::decode(request.as_bytes()).is_ok_and(|r| {
+                matches!(
+                    r.command,
+                    cinder_api::wire::Command::Read(_)
+                        | cinder_api::wire::Command::View
+                        | cinder_api::wire::Command::Operation(_)
+                )
+            })
+        {
+            match self.prepare_read(reads, channel, &request, now, false)? {
+                Some(prepared) => Ok(prepared),
+                None => cinder_api::Error::Unavailable
+                    .encode_private()
+                    .map(PreparedReply::immediate)
+                    .map_err(|_| Error),
+            }
+        } else {
+            self.handle_available(channel, request, now)?
+                .map(PreparedReply::immediate)
+                .ok_or(Error)
+        }
+    }
+    fn poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        if !cinder_api::wire::Request::decode(request.as_bytes())
+            .is_ok_and(|r| matches!(r.command, cinder_api::wire::Command::Read(_)))
+        {
+            return Err(Error);
+        }
+        match self.prepare_poll(channel, request, now)? {
+            Some(prepared) => self.release_reply(channel, prepared),
+            None => Ok(None),
+        }
+    }
+    fn prepare_poll(
+        &self,
+        channel: &Session,
+        request: PrivateBytes,
+        now: u64,
+    ) -> Result<Option<PreparedReply>, Error> {
+        let _panic = PanicFence {
+            stop: &self.stop,
+            reads: self.reads.as_ref(),
+        };
+        if !cinder_api::wire::Request::decode(request.as_bytes())
+            .is_ok_and(|r| matches!(r.command, cinder_api::wire::Command::Read(_)))
+        {
+            return Err(Error);
+        }
+        match &self.reads {
+            Some(reads) => self.prepare_read(reads, channel, &request, now, true),
+            // Only the retained old-runtime diagnostic uses a missing reader.
+            None => self
+                .handle_available(channel, request, now)
+                .map(|r| r.map(PreparedReply::immediate)),
+        }
+    }
+    fn release_reply(
+        &self,
+        channel: &Session,
+        prepared: PreparedReply,
+    ) -> Result<Option<PrivateBytes>, Error> {
+        self.release_read(channel, prepared)
+    }
+}
+
+#[cfg(test)]
+pub(crate) use crate::test_support as initialization_support;
+
+#[cfg(all(test, feature = "local-fixture"))]
+#[path = "runtime_contention_tests.rs"]
+mod contention_tests;
+
+#[cfg(test)]
+mod initialization_tests {
+    use super::*;
+    use cinder_journal::sqlite::{Migration, SqliteBackend};
+    use cinder_kernel::ledger::{Location, Source};
+    use cinder_pacifica::{execution::Origin, funding::Beneficiary, profile::Grid};
+    use initialization_support::{FixtureProtection, Temp};
+    struct Fixed(Result<u64, Error>);
+    impl Clock for Fixed {
+        fn now(&self) -> Result<u64, Error> {
+            self.0
+        }
+    }
+    #[test]
+    fn request_wait_is_bounded_and_short_poll_contention_does_not_fail_immediately() {
+        use std::{sync::mpsc, time::Duration};
+        let mutex = Mutex::new(0);
+        std::thread::scope(|scope| {
+            let (ready_tx, ready_rx) = mpsc::channel();
+            let (release_tx, release_rx) = mpsc::channel();
+            let shared = &mutex;
+            scope.spawn(move || {
+                let mut guard = shared.lock().unwrap();
+                ready_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                *guard = 1;
+            });
+            ready_rx.recv().unwrap();
+            assert!(lock_bounded(&mutex, Duration::ZERO).unwrap().is_none());
+            scope.spawn(move || {
+                std::thread::sleep(Duration::from_millis(20));
+                release_tx.send(()).unwrap();
+            });
+            assert_eq!(
+                *lock_bounded(&mutex, Duration::from_secs(2))
+                    .unwrap()
+                    .unwrap(),
+                1
+            );
+        });
+        let held = mutex.lock().unwrap();
+        assert!(
+            lock_bounded(&mutex, Duration::from_millis(5))
+                .unwrap()
+                .is_none()
+        );
+        drop(held);
+        std::thread::scope(|scope| {
+            assert!(
+                scope
+                    .spawn(|| {
+                        let _held = mutex.lock().unwrap();
+                        panic!("synthetic poisoned controller");
+                    })
+                    .join()
+                    .is_err()
+            );
+        });
+        assert!(lock_bounded(&mutex, REQUEST_WAIT).is_err());
+    }
+    #[test]
+    fn every_egress_step_rechecks_the_finite_boot_lease_and_stop_flag() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let clock = LeaseClock {
+            clock: Arc::new(Fixed(Ok(100))),
+            deadline: 101,
+            stop: stop.clone(),
+        };
+        assert_eq!(clock.now().unwrap(), 100);
+        stop.store(true, Ordering::SeqCst);
+        assert!(clock.now().is_err());
+        for inner in [Ok(101), Ok(102), Err(Error)] {
+            let clock = LeaseClock {
+                clock: Arc::new(Fixed(inner)),
+                deadline: 101,
+                stop: Arc::new(AtomicBool::new(false)),
+            };
+            assert!(clock.now().is_err());
+        }
+    }
+    #[test]
+    fn restart_repairs_binding_after_committed_genesis_without_rebinding() {
+        let mut config = initialization_support::config();
+        for (tag, location) in [(8, Location::Vault), (9, Location::Broker)] {
+            config.sources.push(Source {
+                scope: EventScope {
+                    namespace: NamespaceId::new([tag; 32]).unwrap(),
+                    ..config.sources[0].scope
+                },
+                location,
+            });
+        }
+        let broker =
+            openssl::pkey::PKey::private_key_from_raw_bytes(&[9; 32], openssl::pkey::Id::ED25519)
+                .unwrap()
+                .raw_public_key()
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let profile = Profile {
+            config: config.clone(),
+            source: config.sources[0].scope,
+            account: "J2xccRtuG43drESLYznHhLhQkLTdfepcKYbiQ9BsJVaf".into(),
+            environment: Origin::Testnet.url().into(),
+            revision: 1,
+            evidence: "offline interrupted-boot fixture; not AWS evidence".into(),
+            precision: Level::Qualified,
+            fills: Level::Qualified,
+            quote_places: 0,
+            perp_tag: 0,
+            markets: vec![Mapping {
+                symbol: "BTC".into(),
+                market: 0,
+                size: Grid { places: 0, step: 1 },
+                price: Grid { places: 0, step: 1 },
+            }],
+        };
+        let route = Route {
+            domain: config.domain.deployment.bytes(),
+            pool: [18; 32],
+            funds: [19; 32],
+            beneficiaries: (1..=2)
+                .map(|n| Beneficiary {
+                    account: [n; 32],
+                    wallet: [n + 10; 32],
+                    tokens: [n + 33; 32],
+                })
+                .collect(),
+            program: [20; 32],
+            config: [21; 32],
+            vault: [22; 32],
+            mint: [23; 32],
+            broker,
+            broker_tokens: [24; 32],
+            venue_program: [25; 32],
+            venue_vault: [26; 32],
+            epoch: 1,
+            decimals: 0,
+            withdrawal: Level::Qualified,
+            chain: Level::Qualified,
+            settings: Level::Qualified,
+            withdrawal_cost: 10,
+            maximum_movement: 1000,
+            maximum_fee: 5,
+            setup_max_age: 10_000,
+        };
+        let funding = Controller::new(profile, route, Zeroizing::new([9; 32])).unwrap();
+        let temp = Temp::new();
+        let journal = Journal::create(
+            SqliteBackend::create(&temp.db).unwrap(),
+            FixtureProtection,
+            config.clone(),
+        )
+        .unwrap();
+        // Genesis is durable, but the process stopped before the route was bound.
+        drop(journal);
+        let mut journal = Journal::open(
+            SqliteBackend::open(&temp.db, Migration::None).unwrap(),
+            FixtureProtection,
+            config,
+        )
+        .unwrap();
+        let head = journal.head();
+        assert!(!funding.bound(&mut journal, 100).unwrap());
+        assert_eq!(journal.head(), head);
+        assert!(funding.funding_need(&mut journal, 100, 1).is_err());
+        assert!(initialize_funding(&funding, &mut journal, &Fixed(Err(Error))).is_err());
+        assert_eq!(journal.head(), head);
+        initialize_funding(&funding, &mut journal, &Fixed(Ok(100))).unwrap();
+        assert!(funding.bound(&mut journal, 100).unwrap());
+        assert!(funding.funding_need(&mut journal, 100, 1).is_ok());
+        assert!(!journal.state().unwrap().native_funding_ready());
+        let head = journal.head();
+        initialize_funding(&funding, &mut journal, &Fixed(Ok(100))).unwrap();
+        assert!(funding.bound(&mut journal, 99).is_err());
+        assert_eq!(journal.head(), head);
+    }
+}

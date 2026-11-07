@@ -1,0 +1,29 @@
+{
+  "data": [{
+    "maker": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "taker": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+    "orderIdMaker": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "orderIdTaker": "8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR",
+    "isBuy": true,
+    "symbol": "BTC-USD",
+    "amount": 0.00002,
+    "price": 100000.0,
+    "makerFee": 0.0,
+    "takerFee": 0.0,
+    "fee": 0.0,
+    "reasonCode": 0,
+    "iso": false,
+    "counterpartyHint": "fixture",
+    "slot": 10710440,
+    "timestamp": 1792501089405512539,
+    "sequence": 0
+  }],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false,
+    "asOfSlot": 10710440,
+    "startSlot": 0,
+    "endSlot": 10710440,
+    "coverage": "unknown"
+  }
+}

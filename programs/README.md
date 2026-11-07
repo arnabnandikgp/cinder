@@ -1,0 +1,63 @@
+# Cinder custody program
+
+This isolated Anchor **1.2.0** workspace contains `cinder-vault`. The
+[custody decision](../docs/architecture/0015-solana-vault.md) specifies its
+accounts, instructions, authority assumptions and financial/privacy boundaries.
+It does not deploy or control a native venue account.
+
+[ADR 0030](../docs/architecture/0030-venue-directed-escrow.md) adds the local
+venue-directed escrow boundary: immutable route, per-owner escrow, permanent
+exact batch, funds-authorized full sweep and owner refund while still pending.
+The default suite tests this against compiled SBF, both race orderings, authority
+and route substitution, freeze/rotation, cap/sequence/overflow, real SPL transfer
+failures, donations and existing normal/recovery payments. The unsigned builders
+are in `clients/vault/src/escrow.ts`. New escrow deposits do not enter the legacy
+common-vault rail or imply native credit; P23C owns journal/Runtime integration.
+No account layout migration or new deployment is included.
+
+From the repository root, with Node 24.21.0, Rust 1.97.1/rustfmt/Clippy,
+Anchor CLI 1.2.0, Agave/SBF 3.1.10/platform-tools 1.52, Surfpool 1.5.0,
+OpenSSL development headers/pkg-config and **wasm-bindgen CLI 0.2.129**:
+
+The default vault suite includes joined HTTP/WebSocket normal lifecycle and recovery tests. It
+therefore also builds the private service and browser WASM core; these are
+required even without `--recovery-only` or `--acceptance-only` (which only narrow the tests run).
+Install the exact wasm-bindgen CLI separately, for example with
+`cargo install wasm-bindgen-cli --version 0.2.129 --locked --root /absolute/path/to/cinder-test-tools`.
+The [vault CI workflow](../.github/workflows/vault.yml) instead provisions a
+checksum-verified release binary and all dependencies before running offline.
+
+```sh
+cargo fetch --locked
+cargo fetch --manifest-path tools/web-channel/Cargo.toml --locked
+cargo fetch --manifest-path programs/Cargo.toml --locked
+npm ci --prefix tools/web-channel --ignore-scripts --no-audit --no-fund
+npm ci --prefix clients/vault --ignore-scripts --no-audit --no-fund
+rustup target add wasm32-unknown-unknown --toolchain 1.97.1
+# Omit this override if the exact CLI is already on PATH:
+export CINDER_WASM_BINDGEN=/absolute/path/to/cinder-test-tools/bin/wasm-bindgen
+"${CINDER_WASM_BINDGEN:-wasm-bindgen}" --version # must print wasm-bindgen 0.2.129
+# One-time platform-tools hydration if not already installed:
+NO_DNA=1 cargo build-sbf --manifest-path programs/cinder-vault/Cargo.toml --tools-version v1.52 --arch v0 -- --locked
+node scripts/check-vault.mjs
+```
+
+If the global Anchor differs, set `CINDER_ANCHOR_TOOL` to a separately installed
+1.2.0 binary. The check will not install/replace global tools. It owns a fresh
+offline Surfpool process on ports 18899/18900 and refuses occupied ports.
+All identities are disposable in-memory local fixtures; no wallet file is loaded.
+The normal financial workspace checks remain `node scripts/check.mjs`.
+
+Do not deploy the fixed local identity or unused generated keypair. External
+deployment requires G03/G05 approval. P17 extends the same program with
+[immutable final recovery claims](../docs/architecture/0017-recovery-claims.md),
+separate operator activation and the existing shared payout counters. P21's
+joined offline tests exercise ledger reconciliation and private claim delivery,
+and use fake evidence for native fencing. Live native-fencing and venue/hardware
+qualification remain P23.
+
+The [P22 normal lifecycle](../docs/architecture/0022-offline-acceptance.md) adds
+actual local vault deposit/release/return/payout checks and real private position
+updates. Native deposit/credit, trading history/funding and withdrawal observations
+are explicitly synthetic. Local SPL burn/mint supplies the fake venue boundary;
+it is not a deployed Pacifica program, bridge payment or testnet trade.

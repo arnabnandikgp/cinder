@@ -1,80 +1,301 @@
-# Development
+# Developing the TEE workspace
 
-## Toolchain
+Start with [current status](status.md) and the
+[handoff](implementation/TRACKER.md). Use the relevant
+[acceptance criteria](implementation/PLAN.md) and
+[component decision](architecture/README.md) for your change; historical session
+logs are not a setup prerequisite.
 
-| Tool | Version |
+## Check and CI map
+
+| Command / hosted job | Coverage |
 | --- | --- |
-| Node | 24.x |
-| Rust | 1.89.0 |
-| Solana / Agave | 3.1.9 |
-| Anchor CLI and `anchor-lang` | 1.0.2 |
-| MagicBlock ER SDK (Rust) | 0.16.2 |
-| MagicBlock ER client (TypeScript) | 0.14.3 |
+| `node scripts/check.mjs --group=contracts` | Documentation links/criteria/handoffs, qualification-tool regressions, test inventory and workspace/dependency boundaries |
+| `node scripts/check.mjs --group=lint` | Formatting, strict default/all-feature Clippy and workspace builds |
+| `node scripts/check.mjs --group=rust` | All-feature debug/release and shipping-default Rust regressions; unknown ignored tests fail the runner |
+| `node scripts/check.mjs --group=client` | Actual fixture service binaries, SDK TypeScript/Node and opaque relay regressions |
+| Offline browser channel qualification | Shared actual Node/Chrome confidential SDK workflows and browser verifier tests |
+| Offline retained history growth | Separate packed-history client/growth/fault acceptance |
+| `node scripts/check-vault.mjs` / Offline Anchor vault | Isolated Anchor build, generated ABI/client checks and local compiled SBF/Surfpool execution |
+| Offline ARM64 default-feature package | Source-only shipping build/image inputs without fixture features; not an AWS launch |
 
-Install dependencies with `yarn install --frozen-lockfile`, then build with
-`yarn build`.
+The no-argument root runner executes its four groups. Browser, packed-history,
+Anchor and ARM64 packaging are separate jobs with their own prerequisites below.
+All eight hosted jobs are offline after dependency/tool hydration. They do not
+establish live funding, native causal completeness, production risk calibration
+or fresh hardware qualification. CI workflows live in `.github/workflows/`.
 
-## Local services
+## Toolchains
 
-`./scripts/stack-local.sh` starts an isolated local environment:
+- Rust **1.97.1**, rustfmt and Clippy: `rust-toolchain.toml` controls this workspace.
+- Node **24.21.0**: `.node-version` controls scripts/CI. Use an existing version
+  manager or the official release binaries; do not change global tools implicitly.
+- A C compiler builds the pinned bundled SQLite dependency; no database server
+  is needed. The qualified fixture-verifier setup uses OpenSSL 3 headers/libraries (`openssl@3` on macOS;
+  `pkg-config libssl-dev` on Ubuntu). npm only installs locked SDK check tools; no API keys, RPC endpoint, wallet, Solana CLI,
+  Anchor, Docker or AWS account is needed for off-chain workspace checks.
 
-| Service | Endpoint |
+On Apple Silicon, if Homebrew selects OpenSSL 4 by default, point the check
+process at the already-installed OpenSSL 3 prefix without changing global tools:
+
+```sh
+OPENSSL_DIR=/opt/homebrew/opt/openssl@3 node scripts/check.mjs
+```
+
+Use the corresponding installed prefix on other hosts. An optional local browser
+check exposed a negative-certificate oracle difference with OpenSSL 4; rebuilding
+the fixture verifier against OpenSSL 3 passed all 14 Node and 14 Chrome channel
+groups. Do not weaken the certificate fixtures to accommodate a different library.
+
+One-time installation of toolchains/CI actions, `cargo fetch --locked` and
+`npm ci --ignore-scripts --prefix clients/private` needs
+network access. After hydration, source build/lint/tests are offline; Cargo runs
+with `--locked --offline`. P05 adds pinned SQLite/hash dependencies outside the
+kernel. The dependency policy checks exact versions/features/build exceptions and
+the full lockfile digest; see [ADR 0005](architecture/0005-durable-journal.md).
+
+```sh
+rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+node --version
+cargo fetch --locked
+npm ci --ignore-scripts --prefix clients/private
+node scripts/check.mjs
+```
+
+The runner fails on a wrong Node/Rust version. It validates docs and package edges,
+runs script regressions, formatting, Clippy, build, all-feature debug/release Rust
+tests, shipping-default Rust tests and strict TypeScript/private SDK tests.
+The client has no runtime npm dependencies. CI uses independent groups of this
+same entrypoint; all groups still run with the no-argument local command.
+For focused property-harness work:
+
+```sh
+node scripts/check.mjs --properties
+cargo fmt --all
+```
+
+No check sends venue requests. Rust tests cover exact financial primitives,
+joined ledger/evidence, canonical identities and local durable crash/replay paths,
+as well as the original toy harness. P05 includes ten actual killed child processes
+and SQLite disk-full tests; it does not qualify power loss or encrypted Nitro
+persistence. Do not count debug/release executions as independent mathematical proofs.
+The original 233 research groups remain separate evidence, not production coverage.
+
+## Files and packages
+
+### Consolidated offline acceptance (P22)
+
+After the root, browser and SBF prerequisites below are hydrated, run
+`node scripts/check-acceptance.mjs`. It runs the three existing offline CI runners,
+checks the fixed-seed/source manifest and reports measured suite budgets. Use
+`--manifest-only` to validate the tracked traceability without starting them.
+See the [joined acceptance contract](architecture/0022-offline-acceptance.md)
+for exact lifecycle oracles, fake-versus-SBF boundaries and verification limits.
+
+### Confidential browser/Node HTTP/WebSocket (P21A)
+
+`crates/web-channel` owns the pinned Snow core; the isolated WASM tool compiles
+the same source. `crates/service::web` invokes the existing private handler and
+journal, while `services/web-relay` routes public framing/ciphertext only. See
+[web architecture](architecture/0021-confidential-web-api.md),
+[private read/socket contract](architecture/private-read-contract.md),
+[SDK](../clients/private/README.md) and
+[offline browser preparation](../tools/web-channel/README.md). The root runner
+includes the relay/Rust regressions; the separate browser job runs shared actual
+Node/Chrome SDK process workflows. No live endpoint or hardware claim follows.
+
+### Solana custody checks (P15)
+
+`programs/` is a separate Anchor 1.2.0 Cargo workspace with its own lockfile;
+`clients/vault/` pins `@anchor-lang/core` 1.2.0 and owns its generated IDL/types.
+Follow [vault setup](../programs/README.md), then run `node scripts/check-vault.mjs`.
+This separate CI job installs checksum-verified Anchor, Agave and Surfpool tools,
+hydrates locked dependencies, and runs signed SBF instructions only in offline
+localhost Surfpool. It never uses a configured CLI wallet or remote account fork.
+It checks IDL/source equality, strict Rust/TypeScript compilation and actual CPI
+rollback. Global tool replacements, external deployments and production key
+release are not automatic setup steps. See [ADR 0015](architecture/0015-solana-vault.md).
+
+### Off-chain ownership
+
+Kernel changes belong in `crates/kernel`; keep network, time, signing, persistence
+and venue SDKs outside it. Port contracts live in `crates/ports`; offline doubles
+in `crates/test-support`. Tests may inspect fake accepted/committed records, but
+controllers must reconcile through actual evidence rather than access that oracle.
+The local journal is `crates/journal`; its tests create and remove only uniquely
+named disposable temporary directories. `test-hooks` is a test-only feature used
+by the all-features runner, not a deployment feature. Its fixture protection is
+deliberately insecure and must never protect real data. P06 supplies an actual AEAD
+record path with a required trusted witness contract; tests of that path use local
+witness doubles, not production-independent infrastructure. See
+[ADR 0006](architecture/0006-encrypted-durability.md). There is no plaintext fallback.
+Add future packages only with documented ownership and an updated dependency guard.
+
+`crates/pacifica` owns native observation codecs and the narrow signing boundary.
+It uses tracked sanitized responses and fake egress for offline qualification;
+native signing is not permission to deploy or load real accounts.
+
+Ordinary tests must use tracked sanitized fixtures. Never mount ignored `work/`,
+wallet directories, cloud credentials or unrelated `stays/` into test containers.
+The exact types and codecs are described in [ADR 0002](architecture/0002-financial-primitives.md).
+Actual Nitro deployment and live native transport remain later qualification gates.
+`--properties` selects workspace tests prefixed `property_`.
+
+### Runnable private slice (P19)
+
+```sh
+cargo build -p cinder-service --all-features --locked --offline
+node scripts/check-private-client.mjs
+```
+
+This invokes separate `cinder-service-fixture`, `cinder-relay` and quote-verifier
+processes through the Node SDK, not just Rust handler calls. `CARGO_TARGET_DIR`,
+if set, selects their build directory. The fixture attester, clock, local witness,
+policy and venue are explicitly synthetic. Tests create/remove uniquely named
+temporary ciphertext replicas, retain a disposable journal key in the trusted
+harness, kill/restart the service and verify no second economic attempt. There
+are no external network requests; localhost sockets are necessary for these tests.
+
+Manual entrypoints: `cinder-relay LISTEN_IP:PORT TARGET_IP:PORT` accepts only
+loopback sockets and prints its bound address. `cinder-service-fixture LISTEN
+EMPTY_OR_EXISTING_FIXTURE_STORE OWNER_PUBLIC_KEY_HEX` additionally reads exactly
+32 journal-key bytes from trusted harness stdin, prints its address/public fixture
+CA, and starts the encrypted handler. Keep stdin open; EOF shuts down both slice
+entrypoints. Do not use real wallet keys/data with either fixture. Tests automate
+this bootstrap; no shell-based key-file example or production secret loader ships.
+
+`cinder-verify-quote` verifies one bounded public-data request on stdin against the
+pinned AWS root. `cinder-verify-fixture ROOT_DER_HEX` is a different binary requiring
+`local-fixture`; it cannot be selected by a production-verifier flag. The default
+build provides relay/verifier and reusable service ports, not a fake production
+enclave entrypoint. See [ADR 0019](architecture/0019-attested-service.md) for wire,
+client trust/distribution and the P20 isolation/freshness boundaries. No browser
+transport, terminal, complete workflow acceptance or hardware qualification is
+claimed by the local slice.
+
+## Routine PR verification
+
+New PRs/stacks target `main`, the canonical TEE trunk; all four maintained
+workflows run for PRs into `main` or a `tee/**` stack branch, and for pushes to
+`main`. The retained `product/tee-v1` snapshot and Phoenix/PER archive are not
+active development trunks. Dated phase/receipt references retain their original
+branch names and source hashes rather than being rewritten as migration evidence.
+
+Run the pinned checks on macOS before opening a routine PR; hosted Linux CI
+provides the normal Linux verification. Do not duplicate every PR run in a local
+container. After a CI failure, inspect the failed job and logs, make a justified
+fix, verify it locally, and push. Allow two such fix-and-push attempts before
+falling back to local Linux reproduction if the failure persists. This is room
+for evidence-based iteration, not a requirement to guess twice or weaken tests.
+
+This policy does not waive explicitly planned Linux, SBF or actual Nitro
+qualification. Those tests run in their owning phases. P01's completed local
+Linux run established the harness baseline; it is not a recurring pre-PR gate.
+
+## Local Linux reproduction on Apple silicon
+
+Use the repository's Apple `container` skill, not Docker Desktop. Native Linux
+checks are relevant to the eventual enclave runtime; they do not qualify Nitro.
+Create an export containing only the intended staged/tracked files. Mount that
+export read-only, never the entire research worktree or host home directory.
+Use the official `rust:1.97.1-slim-bookworm` image and a checksum-verified Node
+24.21.0 Linux ARM64 binary. Record the pulled image digest and kernel/platform in
+the tracker. Pin that digest for reproducing a recorded run; tags may move.
+
+After installing necessary compiler components, run the same check command with
+network disabled, the source mounted read-only and `CARGO_TARGET_DIR` pointed at
+temporary container storage. Do not confuse ARM64 parity with x86-64 CI execution;
+the hosted Linux x86-64 job remains separate evidence. If container tooling is
+unavailable, record it explicitly and never claim local Linux verification.
+
+The [historical P01 reproduction recipe](archive/development/p01-linux-reproduction.md)
+retains its exact image digest, tool hashes and command. It predates registry
+dependencies: current reproduction also requires hydrated, pinned Cargo/npm
+dependencies before networking is disabled. It is not a current bootstrap recipe
+or an enclave image recipe.
+
+## Checks and review
+
+Eight offline checks cover the maintained product sources:
+
+| Check | Coverage / local entrypoint |
 | --- | --- |
-| Solana base validator | `http://127.0.0.1:8899` |
-| Ephemeral rollup | `http://127.0.0.1:7799` |
-| Query Filtering Service | `http://127.0.0.1:6699` |
+| Offline contracts and test inventory | Plan, manifest, dependency and boundary regressions; `node scripts/check.mjs --group=contracts` |
+| Offline Rust lint and build | rustfmt, default/all-feature Clippy and all-target build; `--group=lint` |
+| Offline Rust regressions | All-feature debug/release and shipping-default tests; `--group=rust` |
+| Offline SDK and relay regressions | Strict TypeScript, private SDK/TLS and relay tests; `--group=client` |
+| Offline browser channel qualification | Shared native/WASM core and actual Node/Chrome SDK/C4 workflows; `node tools/web-channel/check.mjs --standard-only` |
+| Offline retained history growth | Local pack candidate, actual Node/Chrome HTTP/WS growth, original-ID restart/revocation; `node tools/web-channel/check.mjs --packed-only` |
+| Offline Anchor vault (SBF + Surfpool) | Locked SBF/IDL and signed localhost transaction workflows; `node scripts/check-vault.mjs` |
+| Offline ARM64 default-feature package | Release executables, application-crate ELF reproducibility and non-Nitro boot refusal; `tools/nitro-runtime/package-check.sh` in isolated ARM64 Linux |
 
-The script uses separate temporary ledgers for the base validator and the ER
-so a new invocation starts from a clean state. Stop the stack with `Ctrl-C`.
+The workspace matrix has `fail-fast: false`; lint, Rust and SDK/relay results do
+not depend on another group's success. Each Rust profile uses `--no-fail-fast`,
+and later profiles still run when an earlier profile fails.
+The browser matrix also uses `fail-fast: false`, common pinned dependency caches
+and independent fifteen-minute job budgets. Its added pack job selects only the
+local candidate; shipping storage remains unchanged. Without a selector, the
+local browser runner executes both profiles. See [ADR 0026](architecture/0026-retained-history-packs.md).
+The independent SDK group explicitly builds its service, opaque relay, fixture
+verifier and production verifier. Its entrypoint checks that all four are
+executable before starting any fixture; it never relies on the lint job or a
+cached application binary to supply prerequisites.
 
-## Tests
+`scripts/test-inventory.mjs` discovers `.test.*` files under the maintained source
+roots and assigns every file to exactly one Node suite. An unassigned test or
+empty suite fails instead of silently disappearing from a hard-coded file list.
+Research, generated output and dependency caches are not product test sources.
+Rust Cargo workspaces discover their own tests, including integration binaries.
+The shared runner requires successful execution of the named acceptance cases,
+not merely their declaration. Node skip/todo and unexpected Rust ignores fail.
+The exact Rust exception list contains seven actual-hardware probes and three
+crash workers that their parent tests invoke; it does not claim those probes ran.
+Node and Chrome must both complete the shared HTTP/WebSocket entrypoints.
+Focused vault flags still qualify only the selected lifecycle, not the full suite.
 
-```bash
-./scripts/test-ledger.sh
-./scripts/test-collateral.sh
+The ARM64 package check uses the pinned public-toolchain image and an exact
+committed source export with read-only vendor/source mounts and no network.
+It does not run AWS, generate an EIF, deploy anything or qualify Nitro hardware.
+Setup downloads toolchains and locked public dependencies before offline checks.
+The ARM64 tool-only image keeps its existing OpenSSL/pkg-config version pins
+available through Debian's dated 2026-10-22 snapshots, not rotating live mirrors.
+APT still verifies Debian signatures and package hashes with the archive keyring.
+Only snapshot metadata expiry is disabled for these deliberately historical
+sources; this does not disable authentication or supply a production image.
+The source file participates in the isolated Cargo cache key alongside the recipe.
 
-# Require the local stack in another terminal.
-./scripts/test-privacy.sh
-./scripts/test-netting.sh
+### CI caching
 
-# Durable journal and crash/restart tests; no RPC or QFS stack required.
-cargo test --locked -p cinder-operator
-```
+Every build job caches dependency intermediates; the metadata-only job caches
+Cargo downloads without a target directory. Pinned `rust-cache` keys separate
+runner OS/architecture, Rust compiler, Cargo manifests/locks, compiler settings
+and job/profile purpose. Root, isolated WASM and Solana workspaces have explicit
+targets. Workspace crates and executable outputs are excluded from saved Rust
+caches. Incremental compilation and dev/test debug symbols are disabled to keep
+builds and caches smaller; release settings are unchanged.
 
-The repository CI also exercises Phoenix integration against a Surfpool fork.
-Those tests depend on a reachable mainnet RPC and are therefore more suitable
-for CI than a quick local check.
+Node jobs cache npm's downloaded packages, keyed by their exact lockfiles; they
+still run `npm ci`, never restore `node_modules`. Pinned Anchor/Surfpool/Agave and
+wasm-bindgen downloads are cached separately and checksum-verified on **every**
+restore. The SBF 1.52 toolchain has its own exact OS/architecture/version key.
+The ARM64 tool-only image uses BuildKit's GitHub cache. Its isolated Cargo target
+is separately keyed by the pinned image recipe, vendor configuration and package
+check script; the application crate is cleaned before the first package build
+and again before the ELF reproducibility comparison, even on a cache hit.
 
-To run that fork locally, supply your own authenticated mainnet RPC URL without
-committing it:
+Cache misses are normal: hydration and every build/check/test command still run.
+Only downloads or dependency compilation may be reused, not test receipts, IDLs,
+fixture journals, provisioning, wallets, credentials or research. GitHub's cache
+scope limits reuse to eligible base/branch/PR caches; caches are an optimization,
+not a source of qualification evidence. Hosted cold/warm timings must be measured
+before claiming a speedup. All cache actions are pinned to immutable revisions.
 
-```bash
-SURFPOOL_RPC_URL="https://your-mainnet-rpc.example" ./scripts/stack-fork.sh
-```
+Hosting these workflows does not enforce branch protection; inspect repository
+rules before asserting a merge gate is configured. Branch rules, uploaded reports,
+coverage percentages and dependency-advisory gates are separate work,
+not part of this CI follow-up. Vercel's legacy website preview is not a financial-
+runtime check. Keep its result visible without fabricating a website on this branch.
 
-CI reads the URL from the `SURFPOOL_RPC_URL` GitHub Actions secret.
-
-The venue, funding and runtime fork tests share a localhost-only Phoenix
-fixture. It activates the local exchange and clears the copied mainnet restart
-acknowledgement, since Surfpool has a different restart lifecycle and no venue
-admin crank. Economic parameters and account bindings are preserved. This
-tests native integration, not the upstream exchange's current availability.
-
-The extended runtime acceptance test starts a separate disposable Phoenix fork
-and a real PER/QFS stack, then runs the autonomous operator:
-
-```bash
-CINDER_R5_FORK=1 CINDER_R6_MAINTENANCE=1 ./scripts/test-runtime-fork.sh
-```
-
-It exercises private trading and exact-signature crash recovery, 24 observed
-hourly funding generations, all-user allocation, actual native settlement,
-restart during a private cash fold, quiet-book liquidation, guarded reserve
-publication, delegated fee readiness, and graceful shutdown. The 24 generations
-are replayed in an accelerated test; this is not a 24-hour soak test.
-
-The fork has no live oracle/funding cranks. Local-only fixtures refresh frozen
-native price-component clocks and update the native funding accumulator. All
-Hawkeye reads, order execution, settlement, private allocation and custody
-transfers use actual programs and accounts, not financial RPC stubs. Disposable
-accounts receive local genesis funding. No transactions go to public networks.
+Before push: run the pinned checks, inspect the explicit staged diff for private
+material, update the phase handoff and verify a clean export without `work/`.
+Do not deploy or run live tests based on P01 test results.

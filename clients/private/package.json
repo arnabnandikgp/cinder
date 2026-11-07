@@ -1,0 +1,6 @@
+{
+  "name": "@cinder/private-client", "version": "0.1.0", "private": true, "type": "module",
+  "engines": { "node": "24.21.0" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "node --test tests/*.test.ts" },
+  "devDependencies": { "@types/node": "24.19.0", "typescript": "7.0.2" }
+}

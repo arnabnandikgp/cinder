@@ -1,0 +1,17 @@
+[package]
+name = "cinder-test-support"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = false
+description = "Offline deterministic fault doubles; not production adapters"
+
+[dependencies]
+cinder-ports.workspace = true
+
+[dev-dependencies]
+cinder-kernel.workspace = true
+
+[lints]
+workspace = true

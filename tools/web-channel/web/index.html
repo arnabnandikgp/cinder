@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Isolated channel qualification</title>
+<pre id="result">Running local synthetic fixtures</pre>
+<script type="module">
+import init, * as core from '/channel.js';
+import { run } from '/suite.mjs';
+import { runAttestation } from '/attestation.js';
+let result;
+try {
+  await init();
+  const corpus = await (await fetch('/fixtures')).json();
+  result = { ok: true, checks: [...await run(core), ...await runAttestation(core, corpus)] };
+} catch (error) {
+  result = { ok: false, error: String(error).slice(0, 256) };
+}
+document.querySelector('#result').textContent = JSON.stringify(result);
+await fetch('/result', { method: 'POST', body: JSON.stringify(result) });
+</script>

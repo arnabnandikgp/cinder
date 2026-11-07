@@ -1,0 +1,177 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { dependencyPolicy, validateKernelSource, validateLockfile, validateWorkspace } from './check-workspace.mjs';
+import { readFileSync } from 'node:fs';
+
+function fixture() {
+  const pkg = name => ({ name, id: name, version: '0.1.0', source: null, targets: [{ kind: ['lib'] }], dependencies: [] });
+  const packages = ['cinder-kernel', 'cinder-ports', 'cinder-test-support', 'cinder-journal', 'cinder-pacifica', 'cinder-api', 'cinder-service', 'cinder-web-channel', 'cinder-bulk'].map(pkg);
+  packages[2].dependencies = [
+    { name: 'cinder-ports', kind: null, path: '/repo/crates/ports', req: '=0.1.0', target: null },
+    { name: 'cinder-kernel', kind: 'dev', path: '/repo/crates/kernel', req: '=0.1.0', target: null },
+  ];
+  packages[3].dependencies = [
+    { ...packages[2].dependencies[1], kind: null },
+    ...['rusqlite', 'sha2', 'chacha20poly1305', 'zeroize'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'rusqlite' ? ['bundled'] : [], uses_default_features: name !== 'rusqlite', optional: false})),
+  ];
+  packages[4].dependencies = [
+    {...packages[2].dependencies[1], kind: null},
+    {name: 'cinder-journal', kind: null, path: '/repo/crates/journal', req: '=0.1.0', target: null},
+    ...['serde', 'serde_json', 'sha2', 'ed25519-dalek', 'bs58', 'zeroize'].map(name => ({name, kind: null, source: dependencyPolicy.registry, req: `=${dependencyPolicy.packages.find(p => p.name === name).version}`, target: null, features: name === 'serde' ? ['derive'] : name === 'ed25519-dalek' ? ['std', 'fast', 'zeroize'] : [], uses_default_features: name !== 'ed25519-dalek', optional: false})),
+  ];
+  packages[5].dependencies = packages[4].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal', 'sha2', 'ed25519-dalek', 'zeroize'].includes(dep.name));
+  packages[6].dependencies = [
+    {name:'cinder-web-channel',kind:null,path:'/repo/crates/web-channel',req:'=0.1.0',target:null},
+    ...packages[5].dependencies.filter(dep => ['cinder-kernel', 'cinder-journal'].includes(dep.name)),
+    {name: 'cinder-api',kind:null,path:'/repo/crates/api',req:'=0.1.0',target:null},
+    {name: 'cinder-pacifica',kind:null,path:'/repo/crates/pacifica',req:'=0.1.0',target:null},
+    {name: 'cinder-bulk',kind:null,path:'/repo/crates/bulk',req:'=0.1.0',target:null},
+    ...['openssl', 'aws-nitro-enclaves-cose', 'aws-nitro-enclaves-nsm-api', 'serde_cbor', 'zeroize'].map(name => ({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p => p.name === name).version}`,target:null,features:[],uses_default_features:true,optional:false})),
+    {name:'socket2',kind:null,source:dependencyPolicy.registry,req:'=0.6.5',target:null,features:['all'],uses_default_features:false,optional:false},
+    {name:'tungstenite',kind:null,source:dependencyPolicy.registry,req:'=0.30.0',target:null,features:['handshake'],uses_default_features:false,optional:false},
+    {name:'log',kind:null,source:dependencyPolicy.registry,req:'=0.4.34',target:null,features:['max_level_off','release_max_level_off'],uses_default_features:true,optional:false},
+    ...['serde','serde_json','base64','aws-sigv4','aws-credential-types'].map(name=>({name,kind:null,source:dependencyPolicy.registry,req:`=${dependencyPolicy.packages.find(p=>p.name===name).version}`,target:null,features:name==='serde'?['derive']:name==='base64'?['alloc']:name==='aws-sigv4'?['sign-http','http1']:[],uses_default_features:!['base64','aws-sigv4'].includes(name),optional:false})),
+  ];
+  packages[7].dependencies = ['snow','zeroize','sha2','getrandom','wasm-bindgen'].map(name => ({
+    name, kind:null, source:dependencyPolicy.registry,
+    req: name === 'getrandom' ? '=0.3.4' : `=${dependencyPolicy.packages.find(p=>p.name===name).version}`,
+    target:['getrandom','wasm-bindgen'].includes(name) ? 'cfg(target_arch = "wasm32")' : null,
+    features:name==='snow'?['use-curve25519','use-chacha20poly1305','use-sha2','use-getrandom']:name==='getrandom'?['wasm_js']:[],
+    uses_default_features:!['snow','sha2'].includes(name), optional:false,
+  }));
+  packages[8].dependencies = packages[4].dependencies.filter(dep => ['cinder-kernel','cinder-journal','serde','serde_json','sha2','bs58','ed25519-dalek','zeroize'].includes(dep.name)).map(dep => dep.name === 'serde_json' ? {...dep,features:['raw_value']} : dep);
+  packages[6].features={default:[], 'local-fixture':[]};
+  packages[6].targets.push(...['cinder-service-fixture','cinder-verify-fixture'].map(name => ({name,kind:['bin'],'required-features':['local-fixture']})));
+  const workspace_members = packages.map(p => p.id);
+  packages.push(...dependencyPolicy.packages.map(p => ({...pkg(p.name), id: `${p.name}@${p.version}`, version: p.version, source: dependencyPolicy.registry, targets: [{kind: ['lib']}, ...(p.buildScript ? [{kind: ['custom-build']}] : [])]})));
+  return { packages, workspace_members, resolve: {nodes: dependencyPolicy.packages.map(p => ({id: `${p.name}@${p.version}`, features: p.features}))} };
+}
+
+test('the intended local graph passes', () => {
+  assert.deepEqual(validateWorkspace(fixture()), []);
+  assert.deepEqual(validateKernelSource('#![no_std]\npub trait Transition {}'), []);
+});
+test('BULK controller keeps exact raw JSON, pinned signing and no reverse runtime edges', () => {
+  const withoutRaw = fixture();
+  withoutRaw.packages[8].dependencies.find(d => d.name === 'serde_json').features=[];
+  assert(validateWorkspace(withoutRaw).some(e => e.includes('adapter dependency')));
+  for (const name of ['cinder-api','cinder-service']) {
+    const graph = fixture();
+    graph.packages[8].dependencies.push({name,kind:null,path:'/repo/extra',req:'=0.1.0',target:null});
+    assert(validateWorkspace(graph).some(e => e.includes('forbidden dependency')));
+  }
+  for (const change of [d=>{d.req='*';},d=>{d.uses_default_features=true;},d=>{d.features.push('hazmat');},d=>{d.target='cfg(unix)';}]) {
+    const graph=fixture();change(graph.packages[8].dependencies.find(d=>d.name==='ed25519-dalek'));
+    assert(validateWorkspace(graph).some(e=>e.includes('adapter dependency')));
+  }
+});
+test('web crypto cannot select a fork, extra resolver, platform fallback or loose pin', () => {
+  for(const mutate of [d=>{d.req='^0.10';},d=>{d.source='git+https://unreviewed.invalid';},d=>{d.features.push('ring-resolver');},d=>{d.uses_default_features=true;}]){
+    const m=fixture();mutate(m.packages[7].dependencies.find(d=>d.name==='snow'));
+    assert.match(validateWorkspace(m).join('\n'),/Noise\/WASM/);
+  }
+  const m=fixture();m.packages[7].dependencies.find(d=>d.name==='getrandom').target=null;
+  assert.match(validateWorkspace(m).join('\n'),/Noise\/WASM/);
+});
+test('kernel cannot acquire a port or third-party edge unnoticed', () => {
+  const metadata = fixture();
+  metadata.packages[0].dependencies.push(metadata.packages[2].dependencies[0]);
+  assert.match(validateWorkspace(metadata).join('\n'), /forbidden dependency edge/);
+});
+test('build dependencies and registry sources reject', () => {
+  const metadata = fixture();
+  metadata.packages[2].dependencies[0].kind = 'build';
+  metadata.packages[2].dependencies[0].source = 'registry+https://example.invalid';
+  assert.equal(validateWorkspace(metadata).length, 2);
+});
+test('loose version and target-specific edges reject', () => {
+  const metadata = fixture();
+  metadata.packages[2].dependencies[0].req = '^0.1';
+  metadata.packages[2].dependencies[1].target = 'cfg(unix)';
+  assert.equal(validateWorkspace(metadata).length, 2);
+});
+test('extra workspace members and external packages require review', () => {
+  const metadata = fixture();
+  metadata.packages.push({ name: 'network-client', id: 'external', source: 'registry', dependencies: [] });
+  assert.match(validateWorkspace(metadata).join('\n'), /unexpected package set/);
+  assert.match(validateWorkspace(metadata).join('\n'), /external source/);
+});
+test('custom build scripts reject', () => {
+  const metadata = fixture();
+  metadata.packages[0].targets.push({ kind: ['custom-build'] });
+  assert.match(validateWorkspace(metadata).join('\n'), /build scripts/);
+});
+test('obvious std escapes and missing boundary reject', () => {
+  assert.equal(validateKernelSource('pub trait Transition {}').length, 1);
+  assert.equal(validateKernelSource('#![no_std]\nextern crate std;').length, 1);
+  assert.equal(validateKernelSource('#![no_std]\nuse std::fs;').length, 1);
+});
+test('submodules need no root attribute but cannot explicitly escape to std', () => {
+  assert.deepEqual(validateKernelSource('use alloc::vec::Vec;', false), []);
+  assert.equal(validateKernelSource('use std::net;', false).length, 1);
+});
+test('storage pins, features and external build scripts cannot expand silently', () => {
+  const metadata = fixture();
+  metadata.packages[3].dependencies[1].uses_default_features = true;
+  assert.match(validateWorkspace(metadata).join('\n'), /configuration not approved/);
+  metadata.resolve.nodes.find(n => n.id.startsWith('rusqlite@')).features = ['bundled', 'load_extension'];
+  assert.match(validateWorkspace(metadata).join('\n'), /unapproved resolved features/);
+  metadata.packages.find(p => p.name === 'sha2').targets.push({kind: ['custom-build']});
+  assert.match(validateWorkspace(metadata).join('\n'), /unapproved external build script/);
+});
+test('registry lock checksums and edges are pinned by an explicit policy digest', () => {
+  const lock = readFileSync(new URL('../Cargo.lock', import.meta.url));
+  assert.deepEqual(validateLockfile(lock), []);
+  assert.equal(validateLockfile(Buffer.concat([lock, Buffer.from('\n')])).length, 1);
+});
+
+test('multiple pinned versions keep distinct graph identities and features', () => {
+  const metadata = fixture();
+  const syn = metadata.packages.filter(p => p.name === 'syn');
+  assert.ok(syn.length >= 2);
+  assert.deepEqual(validateWorkspace(metadata), []);
+  const index = metadata.packages.indexOf(syn[0]);
+  metadata.packages[index] = {...syn[1]};
+  assert.match(validateWorkspace(metadata).join('\n'), /unexpected package set/);
+});
+
+test('fixture trust roots and key providers cannot silently become default entrypoints', () => {
+  const metadata=fixture();metadata.packages[6].features.default=['local-fixture'];
+  assert.match(validateWorkspace(metadata).join('\n'),/fixture feature/);
+  metadata.packages[6].features.default=[];delete metadata.packages[6].targets[1]['required-features'];
+  assert.match(validateWorkspace(metadata).join('\n'),/fixture binary/);
+});
+
+test('NSM driver features, pin and platform cannot silently select another provider', () => {
+  for (const change of [dep => { dep.req = '^0.5'; }, dep => { dep.features = ['test-hooks']; }, dep => { dep.uses_default_features = false; }, dep => { dep.target = 'cfg(unix)'; }]) {
+    const metadata = fixture();
+    change(metadata.packages[6].dependencies.find(dep => dep.name === 'aws-nitro-enclaves-nsm-api'));
+    assert.match(validateWorkspace(metadata).join('\n'), /transport dependency configuration not approved/);
+  }
+});
+
+test('socket ownership wrapper has an exact pin, explicit feature and unconditional edge', () => {
+  for (const change of [dep => { dep.req = '^0.6'; }, dep => { dep.features = []; }, dep => { dep.uses_default_features = true; }, dep => { dep.target = 'cfg(target_os="linux")'; }, dep => { dep.optional = true; }]) {
+    const metadata = fixture();
+    change(metadata.packages[6].dependencies.find(dep => dep.name === 'socket2'));
+    assert.match(validateWorkspace(metadata).join('\n'), /socket dependency configuration not approved/);
+  }
+});
+
+test('cloud signing cannot acquire default providers, SigV4a or optional platform gates',()=>{
+  for (const name of ['aws-sigv4','aws-credential-types','base64','serde']) {
+    for (const change of [d=>{d.req='*';},d=>{d.features.push('unapproved');},d=>{d.optional=true;},d=>{d.target='cfg(unix)';}]) {
+      const m=fixture();change(m.packages[6].dependencies.find(d=>d.name===name));
+      assert.match(validateWorkspace(m).join('\n'),/cloud dependency configuration not approved/);
+    }
+  }
+});
+
+test('native capture retains exact handshake-only dependency and compile-time plaintext-log suppression',()=>{
+  for (const name of ['tungstenite','log']) {
+    for (const change of [d=>{d.req='*';},d=>{d.features=[];},d=>{d.features.push('unapproved');},d=>{d.uses_default_features=!d.uses_default_features;},d=>{d.optional=true;},d=>{d.target='cfg(unix)';}]) {
+      const m=fixture();change(m.packages[6].dependencies.find(d=>d.name===name));
+      assert.match(validateWorkspace(m).join('\n'),/native capture dependency configuration not approved/);
+    }
+  }
+});

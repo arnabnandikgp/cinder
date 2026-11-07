@@ -1,0 +1,21 @@
+[package]
+name = "cinder-pacifica"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = false
+description = "Lossless Pacifica evidence and bounded native execution boundary"
+
+[dependencies]
+cinder-kernel.workspace = true
+cinder-journal = { path = "../journal", version = "=0.1.0" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "fast", "zeroize"] }
+bs58 = "=0.5.1"
+zeroize = "=1.8.2"
+
+[lints]
+workspace = true

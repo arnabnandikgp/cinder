@@ -1,7 +1,0 @@
-[package]
-name = "cinder-common"
-version = "0.1.0"
-description = "Shared Cinder protocol constants and accounting helpers"
-edition = "2021"
-
-[dependencies]

@@ -1,0 +1,16 @@
+[package]
+name = "cinder-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+cinder-kernel.workspace = true
+cinder-journal = { path = "../journal", version = "=0.1.0" }
+sha2 = "=0.10.9"
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "fast", "zeroize"] }
+zeroize = "=1.8.2"
+
+[lints]
+workspace = true

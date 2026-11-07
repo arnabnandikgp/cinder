@@ -1,0 +1,155 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
+import { signingMessage, intentDigest, decodeResponse, PrivateClient, READ_FAMILIES, type Envelope, type Command, type ConfidentialChannel } from '../src/index.ts';
+import { privateIterable } from '../src/private-iteration.ts';
+const id = (n: number) => new Uint8Array(32).fill(n);
+const secret = createPrivateKey({ key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), Buffer.alloc(32, 9)]), format: 'der', type: 'pkcs8' });
+const publicKey = new Uint8Array(createPublicKey(secret).export({ format: 'der', type: 'spki' }).subarray(-32));
+const signer = { publicKey, async signMessage(bytes: Uint8Array) { return new Uint8Array(sign(null, bytes, secret)); } };
+const domain = { network: id(1), deployment: id(2) };
+const ctx = { ...domain, binding: id(8), expiresAt: 100n };
+function envelope(command: Command): Envelope { return { domain, account: id(1), id: id(40), policy: 1, epoch: 1n, signer: publicKey, session: id(8), expiresAt: 100n, command }; }
+const commands: Command[] = [{ kind: 'view' }, { kind: 'operation', target: id(40) },
+  { kind: 'order', market: id(7), lots: -2n, minimum: 90n, maximum: 9007199254740997n, fee: 1n << 100n, tif: 'IOC', reduceOnly: true, goodUntil: 90n },
+  { kind: 'cancel', target: id(40), attempt: id(50), goodUntil: 90n },
+  { kind: 'payout', net: 10n, maximumFee: 2n, allowPartial: true, goodUntil: 90n },
+  { kind: 'grant', grant: { key: publicKey, methods: 7, market: id(7), maximumLots: 2n, maximumFee: 1n, maximumOrders: 1n, expiresAt: 90n } },
+  { kind: 'revoke' }, { kind: 'leverage', market: id(7), leverage: 20000n, goodUntil: 90n }];
+const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
+const reply = new Uint8Array(Buffer.from(readFileSync(new URL('../../../crates/api/tests/fixtures/reply.hex', import.meta.url), 'utf8').trim(), 'hex'));
+const header = new TextEncoder().encode('CINDER-API-REPLY\0\x00\x01').length;
+const input = (command: Command) => ({ id: id(40), epoch: 1n, expiresAt: 100n, command });
+function client(channel: ConfidentialChannel) { return new PrivateClient(channel, signer, { domain, account: id(1), policy: 1 }); }
+
+test('all eight methods match shared Rust bytes, SHA-256 and independent Ed25519 signatures', async () => {
+  const lines = readFileSync(new URL('../../../crates/api/tests/fixtures/vectors.tsv', import.meta.url), 'utf8').trim().split('\n');
+  assert.equal(lines.length, commands.length);
+  for (let i = 0; i < commands.length; i++) {
+    const [kind, wire, hash, digest, signature] = lines[i].split('\t'); const e = envelope(commands[i]); const m = signingMessage(e);
+    assert.equal(e.command.kind, kind); assert.equal(hex(m), wire); assert.equal(createHash('sha256').update(m).digest('hex'), hash);
+    assert.equal(hex(await intentDigest(e)), digest); assert.equal(hex(await signer.signMessage(m)), signature);
+    assert.equal(verify(null, m, createPublicKey(secret), Buffer.from(signature, 'hex')), true);
+  }
+});
+test('economic retry identity is session/epoch independent but financial deadline sensitive', async () => {
+  const e = envelope(commands[2]); const d = await intentDigest(e);
+  const reconnect: Envelope = { ...e, session: id(9), signer: id(12), epoch: 2n, expiresAt: 110n };
+  assert.equal(hex(await intentDigest(reconnect)), hex(d));
+  assert.notEqual(hex(signingMessage({ ...e, session: id(9) })), hex(signingMessage(e)));
+  const c = commands[2]; assert.equal(c.kind, 'order'); if (c.kind !== 'order') return;
+  assert.notEqual(hex(await intentDigest({ ...e, command: { ...c, goodUntil: 91n } })), hex(d));
+});
+test('shared lifecycle reply preserves signed lots, actual payments, fee cap and unknown', () => {
+  const r = decodeResponse(reply); assert.equal(r.kind, 'receipt'); if (r.kind !== 'receipt') return;
+  assert.equal(r.outcome, 'unknown'); assert.equal(r.filled, -1n); assert.equal(r.paid, 4n); assert.equal(r.railFees, 1n);
+  assert.equal(r.feeCap, 10n); assert.equal(r.possiblyExposed, true); assert.equal(r.allowPartial, true);
+  for (const [tag, outcome] of ['rejected', 'accepted', 'dispatched', 'acknowledged', 'partial', 'complete', 'unknown'].entries()) {
+    const b = reply.slice(); b[header + 1 + 64 + 4] = tag;
+    const parsed = decodeResponse(b); assert.equal(parsed.kind, 'receipt'); if (parsed.kind === 'receipt') assert.equal(parsed.outcome, outcome);
+  }
+});
+test('bounded reply parser rejects truncation, trailing data, bad tags and booleans', () => {
+  for (let n = 0; n < reply.length; n++) assert.throws(() => decodeResponse(reply.slice(0, n)), /Invalid private protocol/);
+  assert.throws(() => decodeResponse(new Uint8Array([...reply, 0])));
+  const bad = reply.slice(); bad[bad.length - 1] = 2; assert.throws(() => decodeResponse(bad));
+  bad[header] = 255; assert.throws(() => decodeResponse(bad));
+  assert.throws(() => decodeResponse(new Uint8Array(1_048_577)));
+});
+test('SDK signs exact channel-bound bytes and validates response request/digest', async () => {
+  const c = commands[2]; let calls = 0; let captured: Uint8Array | undefined;
+  const digest = await intentDigest(envelope(c)); const r = reply.slice(); r.set(digest, header + 1 + 32);
+  const sdk = client({ context: () => ctx, async exchange(wire) {
+    calls++; captured = wire;
+    assert.equal(verify(null, wire.subarray(0, -64), createPublicKey(secret), wire.subarray(-64)), true);
+    assert.equal(hex(wire.subarray(0, -64)), hex(signingMessage(envelope(c)))); return r.slice();
+  } });
+  const response = await sdk.request(input(c)); assert.equal(response.kind, 'receipt'); assert.equal(calls, 1);
+  assert.ok(captured?.every(b => b === 0));
+});
+test('unknown transport failure is redacted and never triggers execution retry', async () => {
+  let calls = 0; const sdk = client({ context: () => ctx, async exchange() { calls++; throw new Error('private-native-secret'); } });
+  await assert.rejects(sdk.request(input(commands[2])), e => e instanceof Error && !e.message.includes('secret') && e.message.includes('reconcile'));
+  assert.equal(calls, 1);
+});
+test('wrong domain refuses before signing or exchanging; wrong reply digest/id refuses', async () => {
+  let signed = 0, sent = 0;
+  const sdk = new PrivateClient({ context: () => ({ ...ctx, network: id(3) }), async exchange() { sent++; return reply.slice(); } },
+    { publicKey, async signMessage() { signed++; return new Uint8Array(64); } }, { domain, account: id(1), policy: 1 });
+  await assert.rejects(sdk.request(input(commands[2])), /session mismatch/); assert.equal(signed, 0); assert.equal(sent, 0);
+  await assert.rejects(client({ context: () => ctx, async exchange() { return reply.slice(); } }).request(input(commands[2])), /reconcile/);
+  const wrongId = reply.slice(); wrongId.set(id(41), header + 1);
+  await assert.rejects(client({ context: () => ctx, async exchange() { return wrongId; } }).request(input(commands[1])), /reconcile/);
+});
+test('confidential errors are typed and redacted instead of outer native error bodies', async () => {
+  const bytes = new TextEncoder().encode('CINDER-API-REPLY\0\x00\x01\x02\x03');
+  assert.deepEqual(await client({ context: () => ctx, async exchange() { return bytes.slice(); } }).request(input(commands[2])), { kind: 'error', code: 'conflict' });
+});
+test('finite precision is enforced without floats, negative fees, ambiguous TIF or overflow', () => {
+  const c = commands[2]; if (c.kind !== 'order') return;
+  for (const cmd of [{ ...c, lots: 1n << 63n }, { ...c, fee: -1n }, { ...c, tif: 'market' }, { ...c, fee: 1n << 127n }, { ...c, reduceOnly: 1 }]) {
+    assert.throws(() => signingMessage(envelope(cmd as Command)));
+  }
+  assert.throws(() => signingMessage({ ...envelope(c), epoch: 1 as unknown as bigint }));
+});
+
+test('Node Buffers never alias retained identifiers or zeroized reply scratch', () => {
+  const e = envelope(commands[2]);
+  const b: Envelope = { ...e, domain: { network: Buffer.from(e.domain.network), deployment: Buffer.from(e.domain.deployment) },
+    account: Buffer.from(e.account), id: Buffer.from(e.id), signer: Buffer.from(e.signer), session: Buffer.from(e.session) };
+  const before = Buffer.from(b.session); assert.equal(hex(signingMessage(b)), hex(signingMessage(e))); assert.deepEqual(b.session, before);
+  const bytes = Buffer.from(reply); const out = decodeResponse(bytes); assert.equal(out.kind, 'receipt'); if (out.kind !== 'receipt') throw new Error();
+  const originalId = out.id.slice(), originalDigest = out.digest.slice(); bytes.fill(0);
+  assert.deepEqual(out.id, originalId); assert.deepEqual(out.digest, originalDigest);
+});
+test('all signed read families retain the P18 envelope and exact version/cursor/limit suffix',()=>{
+  const prefix=signingMessage(envelope({kind:'view'})).subarray(0,-1);
+  for(const [tag,family] of READ_FAMILIES.entries()){
+    const wire=signingMessage(envelope({kind:'read',query:{family,limit:64}}));
+    assert.deepEqual(wire.subarray(0,prefix.length),prefix);
+    assert.deepEqual(wire.subarray(prefix.length),Uint8Array.from([8,1,tag,...new Uint8Array(40),0,64]));
+  }
+  for(const limit of [0,65,1.5])assert.throws(()=>signingMessage(envelope({kind:'read',query:{family:'account',limit}})));
+  for(const cursor of [new Uint8Array(39),new Uint8Array(40).fill(0).map((b,i)=>i===0?1:b)])
+    assert.throws(()=>signingMessage(envelope({kind:'read',query:{family:'account',limit:1,cursor}})));
+});
+test('read page decoding distinguishes unknown, explicit zero and settled funding with strict bounds',()=>{
+  const number=(n:bigint,width:number)=>Buffer.from(n.toString(16).padStart(width*2,'0'),'hex');
+  const unit=Buffer.concat([Buffer.from(id(7)),number(1n,4),number(2n,8)]);
+  const unknown=Buffer.concat([unit,Buffer.from([0,0,0])]);
+  const zero=Buffer.concat([unit,Buffer.from([1]),number(0n,16),Buffer.from([1,1]),number(123n,8)]);
+  const page=(rows:Buffer[],next=Buffer.alloc(40),count=BigInt(rows.length))=>new Uint8Array(Buffer.concat([
+    Buffer.from('CINDER-API-REPLY\0\x00\x01'),Buffer.from([3,1,5]),Buffer.from(id(11)),next,number(124n,8),number(count,8),
+    ...rows.flatMap(row=>[number(BigInt(row.length),4),row]) ]));
+  const wire=page([unknown,zero]),parsed=decodeResponse(wire);assert.equal(parsed.kind,'page');
+  if(parsed.kind!=='page')throw Error();
+  const [a,b]=parsed.rows;assert.equal(a.kind,'funding');assert.equal(b.kind,'funding');
+  if(a.kind!=='funding'||b.kind!=='funding')throw Error();
+  assert.equal(a.payment,undefined);assert.equal(a.settled,false);assert.equal(b.payment,0n);assert.equal(b.settled,true);assert.equal(b.observedAt,123n);
+  for(let n=0;n<wire.length;n++)assert.throws(()=>decodeResponse(wire.slice(0,n)));
+  assert.throws(()=>decodeResponse(page([],Buffer.alloc(40),65n)));
+  assert.throws(()=>decodeResponse(page([],Buffer.concat([Buffer.from(id(12)),number(1n,8)]))));
+  const bad=unknown.slice();bad[44]=2;assert.throws(()=>decodeResponse(page([bad])));
+  wire.fill(0);assert.deepEqual(parsed.revision,id(11));assert.deepEqual(b.market,id(7));
+});
+test('ingress rows distinguish inventory, funding restriction and credited history with strict semantics',()=>{
+  const number=(n:bigint,width:number)=>Buffer.from(n.toString(16).padStart(width*2,'0'),'hex');
+  const row=(status:number,recognized:boolean,restricted:bigint)=>Buffer.concat([Buffer.from(id(10)),Buffer.from(id(20)),Buffer.from([status]),number(100n,16),Buffer.from([Number(recognized)]),number(restricted,16)]);
+  const page=(value:Buffer)=>new Uint8Array(Buffer.concat([Buffer.from('CINDER-API-REPLY\0\x00\x01'),Buffer.from([3,1,10]),Buffer.from(id(11)),Buffer.alloc(40),number(124n,8),number(1n,8),number(BigInt(value.length),4),value]));
+  for(const [status,name,recognized,restricted] of [[0,'pending',false,0n],[4,'refunded',false,0n],[5,'funding',true,100n],[6,'credited',true,0n],[7,'returned',true,0n]] as const){
+    const parsed=decodeResponse(page(row(status,recognized,restricted)));assert(parsed.kind==='page'&&parsed.family==='ingress');
+    const r=parsed.rows[0];assert(r.kind==='ingress');assert.equal(r.status,name);assert.equal(r.restricted,restricted);assert.equal(r.recognized,recognized);
+  }
+  for(const value of [row(7,false,0n),row(0,true,0n),row(4,false,1n),row(5,false,100n),row(5,true,101n),row(6,true,1n)])assert.throws(()=>decodeResponse(page(value)));
+  const valid=page(row(5,true,100n));for(let n=0;n<valid.length;n++)assert.throws(()=>decodeResponse(valid.slice(0,n)));
+});
+test('subscription return before first next closes both semantic and transport iterators',async()=>{
+  let started=false,closed=0;
+  const transport=privateIterable(async function*(){started=true;yield new Uint8Array(1);},()=>{closed++;});
+  const sdk=client({context:()=>ctx,async exchange(){throw Error('not used');},async subscribe(){return transport;}});
+  const stream=await sdk.subscribe({id:id(90),epoch:1n,expiresAt:100n,query:{family:'account',limit:1}});
+  const iterator=stream[Symbol.asyncIterator]();await iterator.return?.();
+  assert.equal(started,false);assert.equal(closed,1);
+  assert.throws(()=>stream[Symbol.asyncIterator](),/subscription unavailable/);
+});

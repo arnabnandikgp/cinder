@@ -1,0 +1,53 @@
+{
+  "scope": "2026-10-08 testnet GET shapes; signature and timestamps replaced; no financial authority",
+  "account": {
+    "success": true,
+    "data": {
+      "balance": "20", "account_equity": "20", "cross_account_equity": "20",
+      "spot_market_value": "0", "spot_collateral": "0", "available_to_spend": "20", "available_to_withdraw": "20",
+      "pending_balance": "0", "pending_interest": "0", "total_margin_used": "0", "cross_mmr": "0",
+      "positions_count": 0, "orders_count": 0, "stop_orders_count": 0, "spot_balances": [], "updated_at": 1000
+    },
+    "error": null, "code": null
+  },
+  "deposit": {
+    "success": true,
+    "data": [{"amount": "20", "transaction_id": "SYNTHETIC_SIGNATURE", "created_at": 100}],
+    "has_more": false
+  },
+  "balance_after_withdrawal": {
+    "success": true,
+    "data": [
+      {"amount": "-20", "balance": "0", "pending_balance": "0", "event_type": "withdraw", "created_at": 600},
+      {"amount": "20", "balance": "20", "pending_balance": "0", "event_type": "deposit", "created_at": 400}
+    ],
+    "has_more": false
+  },
+  "settings": {
+    "success": true,
+    "data": {
+      "can_rfq": false,
+      "can_create_covered_exit": false,
+      "auto_lend_disabled": true,
+      "privacy_mode": "none",
+      "margin_settings": [],
+      "spot_settings": []
+    },
+    "error": null,
+    "code": null
+  },
+  "loan": {
+    "success": true,
+    "data": {
+      "borrowed": "0",
+      "pending_interest": "0",
+      "collateral_utilization": "0",
+      "total_interest_earned": "0",
+      "total_interest_paid": "0",
+      "spot_balances": [],
+      "updated_at": 100
+    },
+    "error": null,
+    "code": null
+  }
+}

@@ -1,0 +1,1569 @@
+{
+  "lockfileSha256": "499a0bc11e55484895208e0c3ba0ff69421983f371caf4de6ff063a38bf14eb2",
+  "registry": "registry+https://github.com/rust-lang/crates.io-index",
+  "packages": [
+    {
+      "name": "aead",
+      "version": "0.5.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "getrandom",
+        "rand_core"
+      ]
+    },
+    {
+      "name": "android_system_properties",
+      "version": "0.1.6",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "autocfg",
+      "version": "1.5.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-credential-types",
+      "version": "1.3.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-nitro-enclaves-cose",
+      "version": "0.5.2",
+      "buildScript": false,
+      "features": [
+        "default",
+        "key_openssl_pkey",
+        "openssl"
+      ]
+    },
+    {
+      "name": "aws-nitro-enclaves-nsm-api",
+      "version": "0.5.2",
+      "buildScript": false,
+      "features": [
+        "default",
+        "nix"
+      ]
+    },
+    {
+      "name": "aws-sigv4",
+      "version": "1.5.1",
+      "buildScript": false,
+      "features": [
+        "http1",
+        "sign-http"
+      ]
+    },
+    {
+      "name": "aws-smithy-async",
+      "version": "1.3.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-smithy-http",
+      "version": "0.64.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-smithy-runtime-api",
+      "version": "1.19.0",
+      "buildScript": false,
+      "features": [
+        "client",
+        "default",
+        "http-1x",
+        "http-auth"
+      ]
+    },
+    {
+      "name": "aws-smithy-runtime-api-macros",
+      "version": "1.1.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "aws-smithy-types",
+      "version": "1.8.1",
+      "buildScript": false,
+      "features": [
+        "byte-stream-poll-next",
+        "http-body-1-x"
+      ]
+    },
+    {
+      "name": "base64",
+      "version": "0.23.1",
+      "buildScript": false,
+      "features": [
+        "alloc"
+      ]
+    },
+    {
+      "name": "base64-simd",
+      "version": "0.8.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "detect",
+        "std"
+      ]
+    },
+    {
+      "name": "base64ct",
+      "version": "1.8.3",
+      "buildScript": false,
+      "features": [
+        "alloc"
+      ]
+    },
+    {
+      "name": "bitflags",
+      "version": "1.3.2",
+      "buildScript": false,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "bitflags",
+      "version": "2.13.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "block-buffer",
+      "version": "0.10.4",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "block-buffer",
+      "version": "0.12.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "bs58",
+      "version": "0.5.1",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "bumpalo",
+      "version": "3.20.3",
+      "buildScript": false,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "bytes",
+      "version": "1.12.1",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "bytes-utils",
+      "version": "0.1.4",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "cc",
+      "version": "1.4.7",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.5",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "cfg_aliases",
+      "version": "0.2.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "chacha20",
+      "version": "0.9.1",
+      "buildScript": false,
+      "features": [
+        "zeroize"
+      ]
+    },
+    {
+      "name": "chacha20poly1305",
+      "version": "0.10.1",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "getrandom",
+        "rand_core"
+      ]
+    },
+    {
+      "name": "chrono",
+      "version": "0.4.45",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "clock",
+        "iana-time-zone",
+        "now",
+        "serde",
+        "std",
+        "winapi",
+        "windows-link"
+      ]
+    },
+    {
+      "name": "cipher",
+      "version": "0.4.4",
+      "buildScript": false,
+      "features": [
+        "zeroize"
+      ]
+    },
+    {
+      "name": "cmov",
+      "version": "0.5.4",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "const-oid",
+      "version": "0.9.6",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "const-oid",
+      "version": "0.10.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "core-foundation-sys",
+      "version": "0.8.7",
+      "buildScript": false,
+      "features": [
+        "default",
+        "link"
+      ]
+    },
+    {
+      "name": "cpufeatures",
+      "version": "0.2.17",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "cpufeatures",
+      "version": "0.3.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "crypto-common",
+      "version": "0.1.7",
+      "buildScript": false,
+      "features": [
+        "getrandom",
+        "rand_core",
+        "std"
+      ]
+    },
+    {
+      "name": "crypto-common",
+      "version": "0.2.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "ctutils",
+      "version": "0.4.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "curve25519-dalek",
+      "version": "4.1.3",
+      "buildScript": true,
+      "features": [
+        "alloc",
+        "digest",
+        "precomputed-tables",
+        "zeroize"
+      ]
+    },
+    {
+      "name": "curve25519-dalek-derive",
+      "version": "0.1.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "darling",
+      "version": "0.24.1",
+      "buildScript": false,
+      "features": [
+        "default",
+        "suggestions"
+      ]
+    },
+    {
+      "name": "darling_core",
+      "version": "0.24.1",
+      "buildScript": false,
+      "features": [
+        "strsim",
+        "suggestions"
+      ]
+    },
+    {
+      "name": "darling_macro",
+      "version": "0.24.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "defmt",
+      "version": "1.1.1",
+      "buildScript": true,
+      "features": [
+        "alloc"
+      ]
+    },
+    {
+      "name": "defmt-macros",
+      "version": "1.1.1",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "defmt-parser",
+      "version": "1.0.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "der",
+      "version": "0.7.10",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "oid",
+        "std",
+        "zeroize"
+      ]
+    },
+    {
+      "name": "deranged",
+      "version": "0.5.8",
+      "buildScript": false,
+      "features": [
+        "default",
+        "serde"
+      ]
+    },
+    {
+      "name": "digest",
+      "version": "0.10.7",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "block-buffer",
+        "core-api",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "digest",
+      "version": "0.11.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "block-api",
+        "default",
+        "mac",
+        "oid"
+      ]
+    },
+    {
+      "name": "dyn-clone",
+      "version": "1.0.20",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "ed25519",
+      "version": "2.2.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
+      "name": "ed25519-dalek",
+      "version": "2.2.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "fast",
+        "std",
+        "zeroize"
+      ]
+    },
+    {
+      "name": "either",
+      "version": "1.18.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "equivalent",
+      "version": "1.0.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "fallible-iterator",
+      "version": "0.3.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default"
+      ]
+    },
+    {
+      "name": "fallible-streaming-iterator",
+      "version": "0.1.9",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "fiat-crypto",
+      "version": "0.2.9",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "find-msvc-tools",
+      "version": "0.1.13",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "fnv",
+      "version": "1.0.7",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "foreign-types",
+      "version": "0.3.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "foreign-types-shared",
+      "version": "0.1.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "form_urlencoded",
+      "version": "1.2.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "futures-core",
+      "version": "0.3.34",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "futures-task",
+      "version": "0.3.34",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
+      "name": "futures-util",
+      "version": "0.3.34",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "slab",
+        "std"
+      ]
+    },
+    {
+      "name": "generic-array",
+      "version": "0.14.7",
+      "buildScript": true,
+      "features": [
+        "more_lengths"
+      ]
+    },
+    {
+      "name": "getrandom",
+      "version": "0.2.17",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "half",
+      "version": "1.8.3",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "hashbrown",
+      "version": "0.12.3",
+      "buildScript": false,
+      "features": [
+        "raw"
+      ]
+    },
+    {
+      "name": "hashbrown",
+      "version": "0.17.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "hex",
+      "version": "0.4.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "hmac",
+      "version": "0.13.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "http",
+      "version": "0.2.12",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "http",
+      "version": "1.5.0",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "http-body",
+      "version": "1.1.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "http-body-util",
+      "version": "0.1.5",
+      "buildScript": false,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "hybrid-array",
+      "version": "0.4.15",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "iana-time-zone",
+      "version": "0.1.65",
+      "buildScript": false,
+      "features": [
+        "fallback"
+      ]
+    },
+    {
+      "name": "iana-time-zone-haiku",
+      "version": "0.1.2",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "ident_case",
+      "version": "1.0.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "indexmap",
+      "version": "1.9.3",
+      "buildScript": true,
+      "features": [
+        "serde",
+        "serde-1",
+        "std"
+      ]
+    },
+    {
+      "name": "indexmap",
+      "version": "2.14.2",
+      "buildScript": false,
+      "features": [
+        "serde",
+        "std"
+      ]
+    },
+    {
+      "name": "inout",
+      "version": "0.1.4",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "itoa",
+      "version": "1.0.18",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "jiff",
+      "version": "0.2.37",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std",
+        "tz-system",
+        "tzdb-bundle-platform",
+        "tzdb-concatenated",
+        "tzdb-zoneinfo"
+      ]
+    },
+    {
+      "name": "jiff-core",
+      "version": "0.1.1",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std",
+        "tz-fat"
+      ]
+    },
+    {
+      "name": "jiff-static",
+      "version": "0.2.37",
+      "buildScript": false,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "jiff-tzdb",
+      "version": "0.1.8",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "jiff-tzdb-platform",
+      "version": "0.1.3",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "js-sys",
+      "version": "0.3.106",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std",
+        "unsafe-eval"
+      ]
+    },
+    {
+      "name": "libc",
+      "version": "0.2.189",
+      "buildScript": true,
+      "features": [
+        "default",
+        "extra_traits",
+        "std"
+      ]
+    },
+    {
+      "name": "libsqlite3-sys",
+      "version": "0.38.2",
+      "buildScript": true,
+      "features": [
+        "bundled",
+        "bundled_bindings",
+        "cc",
+        "default",
+        "min_sqlite_version_3_34_1",
+        "pkg-config",
+        "vcpkg"
+      ]
+    },
+    {
+      "name": "log",
+      "version": "0.4.34",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "max_level_off",
+        "release_max_level_off",
+        "std"
+      ]
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
+      "name": "nix",
+      "version": "0.31.3",
+      "buildScript": true,
+      "features": [
+        "default",
+        "ioctl"
+      ]
+    },
+    {
+      "name": "num-conv",
+      "version": "0.2.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "num-integer",
+      "version": "0.1.47",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "num-traits",
+      "version": "0.2.19",
+      "buildScript": true,
+      "features": [
+        "i128",
+        "std"
+      ]
+    },
+    {
+      "name": "once_cell",
+      "version": "1.21.4",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "race",
+        "std"
+      ]
+    },
+    {
+      "name": "opaque-debug",
+      "version": "0.3.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "openssl",
+      "version": "0.10.81",
+      "buildScript": true,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "openssl-macros",
+      "version": "0.1.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "openssl-sys",
+      "version": "0.9.117",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "outref",
+      "version": "0.5.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "percent-encoding",
+      "version": "2.3.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "pin-project-lite",
+      "version": "0.2.17",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "pin-utils",
+      "version": "0.1.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "pkcs8",
+      "version": "0.10.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
+      "name": "pkg-config",
+      "version": "0.3.34",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "poly1305",
+      "version": "0.8.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "portable-atomic",
+      "version": "1.15.0",
+      "buildScript": true,
+      "features": [
+        "require-cas"
+      ]
+    },
+    {
+      "name": "portable-atomic-util",
+      "version": "0.2.8",
+      "buildScript": true,
+      "features": [
+        "alloc"
+      ]
+    },
+    {
+      "name": "powerfmt",
+      "version": "0.2.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107",
+      "buildScript": true,
+      "features": [
+        "default",
+        "proc-macro"
+      ]
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47",
+      "buildScript": true,
+      "features": [
+        "default",
+        "proc-macro"
+      ]
+    },
+    {
+      "name": "rand_core",
+      "version": "0.6.4",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "getrandom",
+        "std"
+      ]
+    },
+    {
+      "name": "ref-cast",
+      "version": "1.0.27",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "ref-cast-impl",
+      "version": "1.0.27",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "rusqlite",
+      "version": "0.40.2",
+      "buildScript": false,
+      "features": [
+        "bundled",
+        "modern_sqlite"
+      ]
+    },
+    {
+      "name": "rustc_version",
+      "version": "0.4.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "rustversion",
+      "version": "1.0.23",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "ryu",
+      "version": "1.0.23",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "schemars",
+      "version": "0.9.0",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "schemars",
+      "version": "1.2.2",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "semver",
+      "version": "1.0.28",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229",
+      "buildScript": true,
+      "features": [
+        "alloc",
+        "default",
+        "derive",
+        "serde_derive",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_bytes",
+      "version": "0.11.19",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_cbor",
+      "version": "0.11.2",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std",
+        "tags"
+      ]
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.229",
+      "buildScript": true,
+      "features": [
+        "alloc",
+        "result",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_derive",
+      "version": "1.0.229",
+      "buildScript": false,
+      "features": [
+        "default"
+      ]
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.151",
+      "buildScript": true,
+      "features": [
+        "alloc",
+        "default",
+        "raw_value",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_repr",
+      "version": "0.1.21",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "serde_with",
+      "version": "3.24.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "macros",
+        "std"
+      ]
+    },
+    {
+      "name": "serde_with_macros",
+      "version": "3.24.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "sha2",
+      "version": "0.10.9",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "sha2",
+      "version": "0.11.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "oid"
+      ]
+    },
+    {
+      "name": "shlex",
+      "version": "2.0.1",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "signature",
+      "version": "2.2.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
+      "name": "slab",
+      "version": "0.4.12",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "smallvec",
+      "version": "1.16.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "socket2",
+      "version": "0.6.5",
+      "buildScript": false,
+      "features": [
+        "all"
+      ]
+    },
+    {
+      "name": "spki",
+      "version": "0.7.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "std"
+      ]
+    },
+    {
+      "name": "strsim",
+      "version": "0.11.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "subtle",
+      "version": "2.6.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "syn",
+      "version": "2.0.119",
+      "buildScript": false,
+      "features": [
+        "clone-impls",
+        "default",
+        "derive",
+        "extra-traits",
+        "full",
+        "parsing",
+        "printing",
+        "proc-macro",
+        "visit-mut"
+      ]
+    },
+    {
+      "name": "syn",
+      "version": "3.0.6",
+      "buildScript": false,
+      "features": [
+        "clone-impls",
+        "default",
+        "derive",
+        "extra-traits",
+        "full",
+        "parsing",
+        "printing",
+        "proc-macro",
+        "visit",
+        "visit-mut"
+      ]
+    },
+    {
+      "name": "thiserror",
+      "version": "2.0.21",
+      "buildScript": true,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "thiserror-impl",
+      "version": "2.0.21",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "time",
+      "version": "0.3.55",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "formatting",
+        "parsing",
+        "serde",
+        "serde-well-known",
+        "std"
+      ]
+    },
+    {
+      "name": "time-core",
+      "version": "0.1.9",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "time-macros",
+      "version": "0.2.32",
+      "buildScript": false,
+      "features": [
+        "formatting",
+        "parsing",
+        "serde"
+      ]
+    },
+    {
+      "name": "tinyvec",
+      "version": "1.13.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "grab_spare_slice",
+        "std"
+      ]
+    },
+    {
+      "name": "tokio",
+      "version": "1.53.1",
+      "buildScript": false,
+      "features": [
+        "default",
+        "sync"
+      ]
+    },
+    {
+      "name": "tracing",
+      "version": "0.1.44",
+      "buildScript": false,
+      "features": [
+        "attributes",
+        "default",
+        "std",
+        "tracing-attributes"
+      ]
+    },
+    {
+      "name": "tracing-attributes",
+      "version": "0.1.31",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "tracing-core",
+      "version": "0.1.36",
+      "buildScript": false,
+      "features": [
+        "once_cell",
+        "std"
+      ]
+    },
+    {
+      "name": "typenum",
+      "version": "1.20.1",
+      "buildScript": false,
+      "features": [
+        "const-generics"
+      ]
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.26",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "universal-hash",
+      "version": "0.5.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "vcpkg",
+      "version": "0.2.15",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "version_check",
+      "version": "0.9.5",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "vsimd",
+      "version": "0.8.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "detect",
+        "std"
+      ]
+    },
+    {
+      "name": "wasi",
+      "version": "0.11.1+wasi-snapshot-preview1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "wasm-bindgen",
+      "version": "0.2.129",
+      "buildScript": true,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "wasm-bindgen-macro",
+      "version": "0.2.129",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "wasm-bindgen-macro-support",
+      "version": "0.2.129",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "wasm-bindgen-shared",
+      "version": "0.2.129",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "windows-core",
+      "version": "0.62.2",
+      "buildScript": false,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "windows-implement",
+      "version": "0.60.2",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "windows-interface",
+      "version": "0.59.3",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "windows-link",
+      "version": "0.2.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "windows-result",
+      "version": "0.4.1",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "windows-strings",
+      "version": "0.5.1",
+      "buildScript": false,
+      "features": [
+        "std"
+      ]
+    },
+    {
+      "name": "windows-sys",
+      "version": "0.61.2",
+      "buildScript": false,
+      "features": [
+        "Win32",
+        "Win32_Foundation",
+        "Win32_Networking",
+        "Win32_Networking_WinSock",
+        "Win32_System",
+        "Win32_System_IO",
+        "Win32_System_Threading",
+        "Win32_System_WindowsProgramming",
+        "default"
+      ]
+    },
+    {
+      "name": "zeroize",
+      "version": "1.8.2",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default"
+      ]
+    },
+    {
+      "name": "zmij",
+      "version": "1.0.23",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "getrandom",
+      "version": "0.3.4",
+      "buildScript": true,
+      "features": [
+        "wasm_js"
+      ]
+    },
+    {
+      "name": "r-efi",
+      "version": "5.3.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "snow",
+      "version": "0.10.0",
+      "buildScript": true,
+      "features": [
+        "chacha20poly1305",
+        "curve25519-dalek",
+        "default-resolver",
+        "getrandom",
+        "sha2",
+        "use-chacha20poly1305",
+        "use-curve25519",
+        "use-getrandom",
+        "use-sha2"
+      ]
+    },
+    {
+      "name": "wasip2",
+      "version": "1.0.4+wasi-0.2.12",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "wit-bindgen",
+      "version": "0.57.1",
+      "buildScript": true,
+      "features": []
+    },
+    {
+      "name": "chacha20",
+      "version": "0.10.2",
+      "buildScript": false,
+      "features": [
+        "rng"
+      ]
+    },
+    {
+      "name": "data-encoding",
+      "version": "2.11.1",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "getrandom",
+      "version": "0.4.3",
+      "buildScript": true,
+      "features": [
+        "std",
+        "sys_rng"
+      ]
+    },
+    {
+      "name": "httparse",
+      "version": "1.10.1",
+      "buildScript": true,
+      "features": [
+        "default",
+        "std"
+      ]
+    },
+    {
+      "name": "r-efi",
+      "version": "6.0.0",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "rand",
+      "version": "0.10.3",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "std",
+        "std_rng",
+        "sys_rng",
+        "thread_rng"
+      ]
+    },
+    {
+      "name": "rand_core",
+      "version": "0.10.1",
+      "buildScript": false,
+      "features": []
+    },
+    {
+      "name": "sha1",
+      "version": "0.11.0",
+      "buildScript": false,
+      "features": [
+        "alloc",
+        "default",
+        "oid"
+      ]
+    },
+    {
+      "name": "tungstenite",
+      "version": "0.30.0",
+      "buildScript": false,
+      "features": [
+        "data-encoding",
+        "handshake",
+        "http",
+        "httparse",
+        "sha1"
+      ]
+    }
+  ]
+}

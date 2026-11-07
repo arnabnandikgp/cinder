@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "has_more": false,
+  "data": [
+    {"history_id":1,"order_id":101,"client_order_id":null,"symbol":"BTC","amount":"0.00014","price":"84008","entry_price":"84008","fee":"0.004704","pnl":"-0.004704","event_type":"fulfill_taker","side":"open_long","cause":"normal","created_at":50},
+    {"history_id":2,"order_id":102,"client_order_id":null,"symbol":"BTC","amount":"0.00014","price":"84008","entry_price":"84008","fee":"0.004704","pnl":"-0.004704","event_type":"fulfill_taker","side":"open_long","cause":"normal","created_at":51},
+    {"history_id":3,"order_id":103,"client_order_id":null,"symbol":"BTC","amount":"0.00014","price":"83952","entry_price":"84008","fee":"0.004701","pnl":"-0.012541","event_type":"fulfill_taker","side":"close_long","cause":"normal","created_at":52},
+    {"history_id":4,"order_id":104,"client_order_id":null,"symbol":"BTC","amount":"0.00014","price":"83952","entry_price":"84008","fee":"0.004701","pnl":"-0.012541","event_type":"fulfill_taker","side":"close_long","cause":"normal","created_at":53},
+    {"history_id":5,"order_id":104,"client_order_id":null,"symbol":"BTC","amount":"0.00014","price":"83952","entry_price":"83952","fee":"0.004701","pnl":"-0.004701","event_type":"fulfill_taker","side":"open_short","cause":"normal","created_at":53},
+    {"history_id":6,"order_id":105,"client_order_id":null,"symbol":"BTC","amount":"0.00014","price":"84008","entry_price":"83952","fee":"0.004704","pnl":"-0.012544","event_type":"fulfill_taker","side":"close_short","cause":"normal","created_at":54}
+  ]
+}
