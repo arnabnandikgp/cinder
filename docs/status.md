@@ -14,6 +14,15 @@ production release. Current execution priority is in the
 pre-promotion snapshot at `7266fd6d86d81586b70ca532a93103e6e51ac02b`.
 This promotion changes the development entrypoint, not financial qualification
 or release approval. Historical branch/source references below remain original.
+Promotion [PR #91](https://github.com/arnabnandikgp/cinder/pull/91) merged at
+`5037a403c45960efb62aa70edd9fc67ab9401138` after eight passing PR checks.
+
+The local product workspace is consolidated into the normal `cinder` checkout.
+The redundant `cinder-tee` worktree is removed; its ignored research and local
+files are preserved in the canonical checkout. Old Phoenix-local artifacts and
+the private migration receipt remain in ignored `work/` namespaces, not Git or
+CI dependencies. Historical absolute paths identify their original locations;
+their contents and qualification meaning have not been rewritten.
 
 Implementation PRs #83, #84, #86, #87 and #88 merged into `product/tee-v1` at
 `fd7014bd9dd1d394c735d6da567318282fdc46c7` after eight passing checks on each
@@ -61,7 +70,7 @@ consumed; the receipt authorizes no new live activity.
 ## Remaining work
 
 The implemented stack and documentation consolidation are merged. The current
-scope is repository trunk promotion only; the following sequence remains proposed,
+scope is local workspace consolidation only; the following sequence remains proposed,
 not started:
 
 1. Promote sanitized active-account response fixtures that reproduce the exact
