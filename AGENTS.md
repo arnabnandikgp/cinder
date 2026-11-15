@@ -1,8 +1,8 @@
 # Cinder contributor guide
 
-The canonical TEE product trunk is `main`; use the active `cinder-tee` worktree.
-The original `cinder` worktree preserves Phoenix/PER on
-`archive/phoenix-per-poc-20261107`, not the current product. Cinder is a private
+The canonical TEE product trunk is `main`; use the normal `cinder` checkout.
+The separate `cinder-tee` worktree has been retired. Phoenix/PER is preserved on
+`archive/phoenix-per-poc-20261107`, not in the active product. Cinder is a private
 perp broker: individual customer entitlements over
 pooled venue execution, Pacifica and opt-in BULK adapters, AWS Nitro runtime.
 Website, terminal and Mintlify repositories are separate workstreams.
