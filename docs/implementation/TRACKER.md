@@ -126,9 +126,15 @@ that merged tree. No implementation PR remains open from that stack.
   The local `.agents` skills remain available; obsolete Phoenix stack metadata
   was backed up and retired. No project files, credentials or research were
   discarded, and no application or financial contract changed.
-- Next: stop after workspace consolidation. The subsequent proposed work is local sanitized
-  regressions, reported-metric precision treatment and funding reconciliation,
-  then joined lifecycle verification. It is not started or authorized here.
+- Consolidation review closeout: [#92](https://github.com/arnabnandikgp/cinder/pull/92)
+  records the canonical-workspace guidance. A fresh post-removal check on
+  2026-11-16 resolved all 327 inventoried symlinks and found no target containing
+  the retired checkout prefix, addressing CodeRabbit's preservation concern.
+  The existing untracked files and ignored research remain local.
+- Next proposed implementation: local sanitized regressions, reported-metric
+  precision treatment and funding reconciliation, then joined lifecycle
+  verification. That work has not started; this bookkeeping closeout changes
+  no financial acceptance criterion and authorizes no new live activity.
 - Deferred: Pacifica missing-credit/live financial qualification, current-image
   full SDK close/cash bridge/admin acceptance, production financial/security
   gates. No new live-run authority follows from a merge.
